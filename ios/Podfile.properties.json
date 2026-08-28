@@ -1,0 +1,11 @@
+{
+  "expo.jsEngine": "hermes",
+  "EX_DEV_CLIENT_NETWORK_INSPECTOR": "true",
+  "expo.inlineModules.watchedDirectories": "[]",
+  "expo.inlineModules.xcodeProjectTargets": "{\"mainTarget\":\"tiebalite\",\"targets\":[]}",
+  "expo-image.disable-libdav1d": "true",
+  "EXPO_USE_PRECOMPILED_MODULES": "false",
+  "ios.useFrameworks": "static",
+  "ios.buildReactNativeFromSource": "true",
+  "apple.ccacheEnabled": "true"
+}

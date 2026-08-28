@@ -1,0 +1,125 @@
+{
+  "expo": {
+    "name": "贴吧Lite",
+    "slug": "tiebalite",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "tiebalite",
+    "userInterfaceStyle": "automatic",
+    "platforms": [
+      "ios"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.tiebalite.app",
+      "icon": "./assets/expo.icon",
+      "supportsTablet": false,
+      "infoPlist": {
+        "CADisableMinimumFrameDurationOnPhone": true,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false,
+          "NSAllowsLocalNetworking": true,
+          "NSExceptionDomains": {
+            "tieba.baidu.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSIncludesSubdomains": true
+            },
+            "c.tieba.baidu.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSIncludesSubdomains": true
+            },
+            "tiebac.baidu.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSIncludesSubdomains": true
+            },
+            "static.tieba.baidu.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSIncludesSubdomains": true
+            },
+            "wapp.baidu.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSIncludesSubdomains": true
+            },
+            "wappass.baidu.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSIncludesSubdomains": true
+            },
+            "passport.baidu.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSIncludesSubdomains": true
+            },
+            "tb1.bdstatic.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSIncludesSubdomains": true
+            }
+          }
+        },
+        "NSPhotoLibraryAddUsageDescription": "TiebaLite 需要保存图片到相册。",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "tiebalite",
+              "tblite"
+            ]
+          }
+        ],
+        "UIApplicationSceneManifest": {
+          "UIApplicationSupportsMultipleScenes": false,
+          "UISceneConfigurations": {
+            "UIWindowSceneSessionRoleApplication": [
+              {
+                "UISceneConfigurationName": "Default Configuration",
+                "UISceneDelegateClassName": "$(PRODUCT_MODULE_NAME).AppDelegate"
+              }
+            ]
+          }
+        },
+        "LSApplicationQueriesSchemes": [
+          "com.baidu.tieba"
+        ],
+        "UIViewControllerBasedStatusBarAppearance": true
+      }
+    },
+    "plugins": [
+      "@preeternal/react-native-cookie-manager",
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#208AEF",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 96,
+          "dark": {
+            "backgroundColor": "#000000",
+            "image": "./assets/images/splash-icon-dark.png"
+          }
+        }
+      ],
+      "expo-secure-store",
+      "expo-audio",
+      "expo-video",
+      "expo-sqlite",
+      "expo-font",
+      "expo-image",
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-system-ui",
+      "expo-web-browser",
+      "expo-asset",
+      [
+        "./plugins/withTiebaLiveActivity",
+        {
+          "widgetName": "TiebaLiveActivity",
+          "deploymentTarget": "16.2",
+          "frequentUpdates": true,
+          "enablePush": false
+        }
+      ],
+      "./plugins/withTiebaNativeBackground"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

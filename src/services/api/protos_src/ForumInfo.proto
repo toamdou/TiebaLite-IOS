@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package tieba;
+
+option java_package = "com.huanchengfly.tieba.post.api.models.protos";
+
+message ForumInfo {
+  int64 id = 1;
+  string name = 2;
+  string first_class = 3;
+  string second_class = 4;
+  int32 is_exists = 5;
+  int32 is_like = 6;
+  int32 user_level = 7;
+  string level_name = 8;
+  int32 member_num = 9;
+  int32 thread_num = 10;
+  int32 post_num = 11;
+  int32 has_frs_star = 12;
+  int32 cur_score = 13;
+  int32 levelup_score = 14;
+  ForumSignInfo sign_in_info = 15;
+  string avatar = 24;
+  string slogan = 25;
+  repeated ForumClassify good_classify = 21;
+  string f_share_img = 78;
+  string forum_share_link = 79;
+}
+
+message ForumSignInfo {
+  ForumSignUser user_info = 1;
+  ForumSignForum forum_info = 2;
+}
+
+message ForumSignUser {
+  int32 is_sign_in = 1;
+  int32 cont_sign_num = 2;
+  int32 user_sign_rank = 3;
+  int32 sign_bonus_point = 4;
+  string sign_time = 5;
+}
+
+message ForumSignForum {
+  int32 sign_rank = 1;
+  int32 member_count = 2;
+  string sign_count = 3;
+}
+
+message ForumClassify {
+  string name = 1;
+  int64 id = 2;
+  int32 class_id = 3;
+  string class_name = 4;
+}

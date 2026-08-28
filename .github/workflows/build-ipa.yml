@@ -1,0 +1,179 @@
+name: Build iOS Unsigned IPA
+
+# 产出未签名 IPA（Artifact + 打 tag 时发布 Release），供 SideStore / AltStore 重签侧载。
+# 未签名 IPA 不能直接安装：重签由用户端的 SideStore / AltStore 完成。
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'Build configuration'
+        type: choice
+        options:
+          - Release
+          - Debug
+        default: Release
+      tag_name:
+        description: '发布到的 tag（如 v1.0.1；留空则只出 Artifact 不发 Release）'
+        type: string
+        required: false
+        default: ''
+      release_title:
+        description: 'Release 标题（留空则用 tag 名）'
+        type: string
+        required: false
+        default: ''
+      release_notes:
+        description: 'Release 说明（发布 Release 时填这里的文本）'
+        type: string
+        required: false
+        default: ''
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Archive & package unsigned IPA
+    # macos-26 自带 Xcode 26.x。如需固定版本可加：
+    #   - uses: maxim-lobanov/setup-xcode@v1
+    #     with:
+    #       xcode-version: '26.2.0'
+    runs-on: macos-26
+    timeout-minutes: 180
+    env:
+      SCHEME: tiebalite
+      WORKSPACE: ios/tiebalite.xcworkspace
+      ARCHIVE_PATH: build/TiebaLite.xcarchive
+      IPA_NAME: TiebaLite-unsigned.ipa
+      CONFIGURATION: ${{ inputs.configuration || 'Release' }}
+      # ccache 接入（2026-08-28）：CI 从源码编译 RN（RCT_USE_PREBUILT_RNCORE=0，
+      # 与本地 Podfile.properties.json 的 buildReactNativeFromSource=true 同模式），
+      # RCT-Folly/glog/hermes 等 C++ 是编译大头，ccache 跨 run 缓存收益最大。
+      # 前提=下方 brew install ccache 步骤保证 /opt/homebrew/bin/ccache 存在
+      # （Podfile 的 C_COMPILER_LAUNCHER 硬编码该路径，缺二进制会全量编译失败）。
+      USE_CCACHE: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          node --version
+          pod --version
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Pods
+            ~/Library/Caches/CocoaPods
+          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-
+
+      - name: Install ccache
+        run: |
+          brew install ccache
+          ccache --version
+
+      # 按 run_id 作 key（每次必存新档），restore-keys 前缀命中最近一次旧档——
+      # ccache 官方推荐的 CI 滚动缓存模式
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Configure ccache
+        run: |
+          ccache --set-config=cache_dir="$HOME/.ccache"
+          # 仓库缓存预算 10GB，RN 全量源码对象留足余量
+          ccache --set-config=max_size=5G
+          # runner 镜像小版本更新换编译器二进制时仍可命中
+          ccache --set-config=compiler_check=content
+          ccache --zero-stats
+          ccache -p
+
+      - name: Install CocoaPods dependencies
+        run: |
+          ok=false
+          for i in 1 2 3; do
+            if RCT_USE_RN_DEP=0 RCT_USE_PREBUILT_RNCORE=0 npx pod-install; then ok=true; break; fi
+            echo "::warning::pod install 失败（第 ${i} 次），15 秒后重试（hermes 下载偶发 SSL 断连，重试即可）"
+            sleep 15
+          done
+          $ok || exit 1
+
+      - name: Archive (code signing disabled)
+        run: |
+          xcodebuild archive \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Show ccache stats
+        run: ccache --show-stats
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH="$(find "$ARCHIVE_PATH/Products/Applications" -maxdepth 1 -name '*.app' | head -n 1)"
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::archive 产物中未找到 .app"
+            exit 1
+          fi
+          mkdir -p build/Payload
+          cp -R "$APP_PATH" build/Payload/
+          # 隐私消毒：把产物内嵌的构建机绝对路径（hermes 字节码记录的
+          # DerivedData 路径等）做等长替换，保证包内不含 runner 用户名
+          python3 ios/privacy-scrub.py build/Payload/*.app
+          ( cd build && zip -qry "$IPA_NAME" Payload )
+          unzip -l "build/$IPA_NAME" | head -20
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TiebaLite-unsigned-${{ github.sha }}
+          path: build/TiebaLite-unsigned.ipa
+          if-no-files-found: error
+
+      # 两种发布路径：
+      # 1. 手动触发且填了 tag_name 输入框 → 在该 tag（不存在则建）发 Release，
+      #    说明文本用 release_notes 输入框的内容
+      # 2. push 了 v* tag → 用 tag 原名发 Release
+      - name: Publish to GitHub Releases
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.tag_name != '') ||
+          startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+          name: ${{ (github.event_name == 'workflow_dispatch' && inputs.release_title != '') && inputs.release_title || (github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name) }}
+          body: ${{ github.event_name == 'workflow_dispatch' && inputs.release_notes || '' }}
+          generate_release_notes: ${{ github.event_name != 'workflow_dispatch' }}
+          files: build/TiebaLite-unsigned.ipa
+          fail_on_unmatched_files: true

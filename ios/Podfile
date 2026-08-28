@@ -1,0 +1,231 @@
+# Set by expo-router. This enables Fabric-only features from react-native-screens
+ENV['RNS_GAMMA_ENABLED'] ||= '1'
+require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
+require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
+
+require 'json'
+podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
+
+def ccache_enabled?(podfile_properties)
+  # Environment variable takes precedence
+  return ENV['USE_CCACHE'] == '1' if ENV['USE_CCACHE']
+
+  # Fall back to Podfile properties
+  podfile_properties['apple.ccacheEnabled'] == 'true'
+end
+
+ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] ||= podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
+ENV['RCT_USE_RN_DEP'] ||= podfile_properties['ios.buildReactNativeFromSource'] == 'true' ? '0' : '1'
+ENV['RCT_USE_PREBUILT_RNCORE'] ||= podfile_properties['ios.buildReactNativeFromSource'] == 'true' ? '0' : '1'
+ENV['RCT_HERMES_V1_ENABLED'] ||= '0' if podfile_properties['expo.useHermesV1'] == 'false'
+# An explicit `ios.usePrecompiledModules: false` must win even when the env var is already set
+# (e.g. EXPO_USE_PRECOMPILED_MODULES exported by EAS Build), so force-disable here before the default.
+ENV['EXPO_USE_PRECOMPILED_MODULES'] = '0' if podfile_properties['EXPO_USE_PRECOMPILED_MODULES'] == 'false'
+ENV['EXPO_USE_PRECOMPILED_MODULES'] ||= '1'
+platform :ios, podfile_properties['ios.deploymentTarget'] || '16.4'
+
+prepare_react_native_project!
+
+target 'tiebalite' do
+  use_expo_modules!
+
+  if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
+    config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
+  else
+    config_command = [
+      'node',
+      '--no-warnings',
+      '--eval',
+      'require(\'expo/bin/autolinking\')',
+      'expo-modules-autolinking',
+      'react-native-config',
+      '--json',
+      '--platform',
+      'ios'
+    ]
+  end
+
+  config = use_native_modules!(config_command)
+
+  # react-native-mmkv 4.3.2（Nitro 版）：expo autolinking 当前扫描不到它
+  # （search/resolve 双命令实测均无此包，2026-08-26），不显式声明则原生侧
+  # 不链接，真机运行时报 "NitroModules Turbo/Native-Module could not be found"。
+  pod 'NitroMmkv', :path => '../node_modules/react-native-mmkv'
+
+  # react-native-nitro-fetch 1.6.2（Nitro 版）：与 react-native-mmkv 同理，
+  # expo autolinking search/resolve 实测均扫不到（2026-08-26），不显式声明
+  # 则 NitroFetch/NativeStorage 原生模块不链接，prefetchOnAppStart 冷启动
+  # 预取队列与 nitro fetch 传输均不可用（import 即抛 ModuleNotFoundError）。
+  # podspec 名 NitroFetch，位于包根目录；无 ReactCommon 头依赖（已排查
+  # ios/cpp/nitrogen 全源），无需加入下方 HEADER_SEARCH_PATHS 注入列表。
+  pod 'NitroFetch', :path => '../node_modules/react-native-nitro-fetch'
+
+  # tieba-proto-nitro（一方 Nitro 混合体）：proto 传输 ArrayBuffer 直入/JSON 投影出。
+  # 自研包位于 modules/，expo autolinking 同样扫不到，须显式声明；依赖 TiebaNative
+  # 复用其管线（TiebaProtoPipeline 公开门面）。
+  # tieba-proto-nitro（一方 Nitro 混合体）已并入 TiebaNative 包
+  # （nitrogen/ 目录 + HybridTiebaProtoNitro.swift），随 Expo autolinking
+  # 自动链接，无需独立 pod 声明。跨包独立声明会触发 Xcode27β 跨 pod
+  # Swift 模块导入断链，勿回退。
+
+  # @renegades/react-native-tickle 0.1.2（Nitro 触觉，Core Haptics）：expo
+  # autolinking 对 nitro 包有漏扫前科（NitroMmkv/NitroFetch 同因显式声明）；
+  # podspec 名 Tickle。不声明则原生侧不链接，JS 侧惰性守卫会让全部触觉
+  # 静默降级为 no-op。
+  pod 'Tickle', :path => '../node_modules/@renegades/react-native-tickle'
+
+  use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
+  use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/..",
+    :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
+  )
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      :ccache_enabled => ccache_enabled?(podfile_properties),
+    )
+
+    # 编译提速（只关 Release）：pods 侧关闭编译期索引（上千个 C++/ObjC 文件
+    # 的额外开销）。Debug 保持索引——日常开发跳转/查看 Pods 源码依赖它。
+    installer.pods_project&.build_configurations&.each do |config|
+      config.build_settings['COMPILER_INDEX_STORE_ENABLE'] = 'NO' if config.name == 'Release'
+    end
+    installer.pods_project&.targets&.each do |target|
+      target.build_configurations&.each do |config|
+        config.build_settings['COMPILER_INDEX_STORE_ENABLE'] = 'NO' if config.name == 'Release'
+      end
+    end
+
+    # ccache：CC 包装成脚本后 Xcode 27 认不出编译器，显式模块依赖扫描会崩
+    # （NitroModules jsinspector-modern 头找不到）。退回传统隐式模块模式。
+    installer.pods_project&.build_configurations&.each do |config|
+      config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+    end
+    installer.pods_project&.targets&.each do |target|
+      target.build_configurations&.each do |config|
+        config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      end
+    end
+    # ⚠️ Swift 侧的显式模块是另一个开关（2026-08-26 实测：swiftc 命令行带
+    # -explicit-module-build，其依赖扫描构建隐式 C++ 模块时逐层丢 xcconfig
+    # 头路径 folly/jsinspector/RCTHost——Nitro 系与含 ExpoModulesCore 的
+    # pod 全中招）。CLANG 开关管不到它，必须单独关：
+    installer.pods_project&.build_configurations&.each do |config|
+      config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+    end
+    installer.pods_project&.targets&.each do |target|
+      target.build_configurations&.each do |config|
+        config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      end
+    end
+
+    # ccache：RN [Ccache] 插件把 CC/LD/CXX/LDPLUSPLUS 设成 ccache-clang*.sh 包装脚本，
+    # Xcode 27 beta 对"非 clang 编译器"不执行脚本（编译静默回退原生 clang、缓存零调用，
+    # 日志却照常回显脚本命令）。统一改回官方 C_COMPILER_LAUNCHER 机制：
+    # CC=真 clang（Xcode 认得）+ launcher 介入，缓存才能真正建立。
+    # 必须放在 react_native_post_install 之后（它的 [Ccache] 段每轮 pod install 都重写）。
+    apply_ccache_launcher = lambda do |project|
+      project.build_configurations.each do |config|
+        %w[CC CXX LD LDPLUSPLUS].each do |key|
+          val = config.build_settings[key]
+          config.build_settings.delete(key) if val.is_a?(String) && val.include?('ccache-clang')
+        end
+        config.build_settings['C_COMPILER_LAUNCHER'] = '/opt/homebrew/bin/ccache'
+        config.build_settings['CXX_COMPILER_LAUNCHER'] = '/opt/homebrew/bin/ccache'
+      end
+      project.save
+    end
+    apply_ccache_launcher.call(installer.pods_project)
+    apply_ccache_launcher.call(Xcodeproj::Project.open(File.join(__dir__, 'tiebalite.xcodeproj')))
+
+    # Nitro 系 pods 的隐式 Clang 模块构建（Swift ClangImporter import NitroModules
+    # 时触发）需要 ReactCommon 根目录：cxxreact 的模块构建要找 jsinspector-modern/*
+    # 头，而模块构建继承的是"触发者"的搜索路径。Nitro 消费者会不断增多
+    # （NitroMmkv/NitroFetch/Tickle…白名单追打两轮后放弃），故全量注入。
+    # ⚠️ 三轮实证教训（2026-08-26 dd-clean）：
+    # ① "$(inherited)" 带引号=引号烤进响应文件变 '-I /path'，打断 libavif——必须裸写；
+    # ② 纯覆写 [$$(inherited),RC] 会抹掉 RN 核心 pods 项目级的既有路径
+    #    （React-Fabric/RCTFabric 等 Headers，RCTHost.mm 挂 'React/RCTFabricSurface.h'）；
+    # ③ 读改写不前置 $(inherited) 则漏掉 xcconfig 层（libavif 的 avif/internal.h）。
+    # 最终形态=[$(inherited)] + 既有项目级路径 + ReactCommon，三层全保。
+    installer.pods_project&.targets&.each do |target|
+      target.build_configurations&.each do |config|
+        rc_paths = [
+          '"$(PODS_ROOT)/../../node_modules/react-native/ReactCommon"',
+          '"$(PODS_ROOT)/../../node_modules/react-native/ReactCommon/react/runtime/platform/ios"',
+          # ── 以下为 xcconfig 层路径的项目级提升实验（⑤号）：
+          #    Swift 扫描器构建隐式模块时只认项目级路径，folly/glog/boost
+          #    等只活在各自 xcconfig 里 → Nitro 系 Swift import 链逐层缺头。
+          '"$(PODS_ROOT)/RCT-Folly"',
+          '"$(PODS_ROOT)/glog"',
+          '"$(PODS_ROOT)/boost"',
+          '"$(PODS_ROOT)/DoubleConversion"',
+          '"$(PODS_ROOT)/fast_float/include"',
+          '"$(PODS_ROOT)/fmt/include"',
+          '"$(PODS_ROOT)/Headers/Public"',
+          '"$(PODS_ROOT)/Headers/Public/boost"',
+          '"$(PODS_ROOT)/Headers/Public/fast_float"',
+          '"$(PODS_ROOT)/Headers/Public/hermes-engine"',
+          '"${PODS_CONFIGURATION_BUILD_DIR}/glog"',
+          '"${PODS_CONFIGURATION_BUILD_DIR}/expo-modules-jsi/apple/Products"',
+          '"$(PODS_ROOT)/hermes-engine/destroot/Library/Frameworks/universal"',
+        ]
+        paths = config.build_settings['HEADER_SEARCH_PATHS']
+        paths = paths.is_a?(Array) ? paths.dup : (paths ? [paths] : [])
+        missing = rc_paths.reject { |p| paths.include?(p) }
+        next if missing.empty?
+        config.build_settings['HEADER_SEARCH_PATHS'] = ['$(inherited)'] + paths + missing
+      end
+    end
+
+    # ── 隐私：源码路径去个人化（2026-08-29）──
+    # Release 产物曾把编译机绝对路径（/Users/<user>/...）嵌进二进制
+    # （LLVM profile 计数器符号 ___profc_/___profd_、ObjC 方法元数据）。
+    # C/ObjC/C++ 用 -ffile-prefix-map 编译期重映射。⚠️ 本工具链（Xcode 27β）
+    # 的 swiftc 不认任何 prefix-map 拼写（实测），Swift 侧与 hermes 字节码的
+    # 路径残留由打包步 ios/privacy-scrub.py 等长替换兜底。
+    # Pods 工程的 SRCROOT=ios/Pods，而 node_modules 绝对路径在应用根目录下，
+    # 故用 Podfile 所在目录的父目录推导应用根；写进生成的 Pods 工程
+    # （该工程不入库，绝对路径不会进仓库）。
+    app_root = File.expand_path('..', __dir__)
+    map_c = "-ffile-prefix-map=#{app_root}=."
+    installer.pods_project&.targets&.each do |target|
+      target.build_configurations&.each do |config|
+        c = config.build_settings['OTHER_CFLAGS']
+        c = c.is_a?(Array) ? c.dup : (c ? [c] : [])
+        config.build_settings['OTHER_CFLAGS'] = c + ['$(inherited)', map_c] unless c.include?(map_c)
+      end
+    end
+    # 主工程（应用 target）：用 ${SRCROOT} 展开，绝对路径不落进被跟踪的
+    # pbxproj。（1.17 的 Installer 无 user_project，直接用 Xcodeproj 改。）
+    require 'xcodeproj'
+    user = Xcodeproj::Project.open(File.join(__dir__, 'tiebalite.xcodeproj'))
+    user.targets.each do |target|
+      target.build_configurations.each do |config|
+        c = config.build_settings['OTHER_CFLAGS']
+        c = c.is_a?(Array) ? c.dup : (c ? [c] : [])
+        c << '-ffile-prefix-map=${SRCROOT}=.' unless c.any? { |f| f.to_s.include?('file-prefix-map') }
+        config.build_settings['OTHER_CFLAGS'] = c
+        # 防御性清理：swiftc 不认 prefix-map（实测），清掉历史运行可能写入的
+        # OTHER_SWIFT_FLAGS 残留（pbxproj 里是字符串形态），避免 Swift target
+        # （TiebaLiveActivity 等）炸驱动。
+        s = config.build_settings['OTHER_SWIFT_FLAGS']
+        if s.is_a?(String) && s.include?('file-prefix-map')
+          cleaned = s.split.reject { |f| f.include?('file-prefix-map') }.join(' ')
+          config.build_settings['OTHER_SWIFT_FLAGS'] = cleaned
+        elsif s.is_a?(Array) && s.any? { |f| f.to_s.include?('file-prefix-map') }
+          config.build_settings['OTHER_SWIFT_FLAGS'] = s.reject { |f| f.to_s.include?('file-prefix-map') }
+        end
+      end
+    end
+    user.save
+  end
+end

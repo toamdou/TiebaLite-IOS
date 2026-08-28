@@ -1,0 +1,15 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- TiebaLite 液态玻璃图标前景层（1024×1024 全出血，透明背景，actool 直接消费）
+       元素结构继承 Kotlin 版 ic_launcher_new_foreground（蓝面板压白气泡 + 两条线），
+       居中放大 + iOS 化：大圆角气泡、半透明玻璃带、胶囊线条、顶部高光。 -->
+  <!-- 白色气泡卡片：顶圆角 80 / 底圆角 40 -->
+  <path d="M200,296 Q200,215 280,215 L744,215 Q824,215 824,296 L824,769 Q824,809 784,809 L240,809 Q200,809 200,769 Z" fill="white" fill-opacity="0.92"/>
+  <!-- 半透明蓝色玻璃带（压气泡顶部，对应 Kotlin 蓝面板） -->
+  <path d="M208,288 Q208,228 268,228 L756,228 Q816,228 816,288 L816,298 Q816,323 791,323 L233,323 Q208,323 208,298 Z" fill="#1E6DF5" fill-opacity="0.5"/>
+  <!-- 玻璃带顶部高光（液态玻璃反光） -->
+  <rect x="240" y="238" width="544" height="32" rx="16" fill="white" fill-opacity="0.3"/>
+  <!-- 深蓝长线（胶囊） -->
+  <rect x="259.5" y="375" width="505" height="48" rx="24" fill="#1E5FBF"/>
+  <!-- 深蓝短线（胶囊） -->
+  <rect x="358" y="459" width="308" height="48" rx="24" fill="#1E5FBF"/>
+</svg>

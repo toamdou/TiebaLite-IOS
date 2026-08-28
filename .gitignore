@@ -1,0 +1,62 @@
+# dependencies
+node_modules/
+
+# expo generated
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# generated native folders
+# ios/ 原生工程已定制并入库（CI 构建依赖），勿改回忽略
+/android
+.kotlin/
+
+# local secrets and signing
+.env*.local
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# tooling and IDE
+.vscode/
+.idea/
+.claude/
+.qoder/
+*.local
+.DS_Store
+
+# swift / xcode
+swift-client/.build/
+swift-client/DerivedData/
+swift-client/*.xcodeproj/
+swift-client/*.xcworkspace/
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.tsbuildinfo
+.metro-health-check*
+
+# mimosa scan/hook state
+.mimosa/
+
+
+# 会话内部产物与本地调试脚本（隐私兜底）
+.zcode/
+probe_*.js
+
+# 所有 Markdown 文件一律不入库（用户规则 2026-08-25）；README.md 例外（GitHub 文档）
+*.md
+!README.md
+src/.mimosa/
+
+# 本地/CI xcodebuild 产物（Pods、build、xcuserdata 由 ios/.gitignore 接管）
+/build/
+
+# 本地开发工具（含本机路径，永不入库）
+/scripts/
