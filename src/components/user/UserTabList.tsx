@@ -224,6 +224,7 @@ export function UserTabList({
   //（subposts/历史/收藏同款处理）。
   return (
     <LegendList
+      recycleItems
       data={items}
       keyExtractor={userKeyExtractor}
       decelerationRate="normal"

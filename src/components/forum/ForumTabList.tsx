@@ -158,6 +158,7 @@ export const ForumTabList = React.memo(function ForumTabList({
 
   return (
     <LegendList
+      recycleItems
       ref={setListRef}
       data={listThreads}
       keyExtractor={threadKeyExtractor}

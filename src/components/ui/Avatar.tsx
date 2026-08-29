@@ -18,6 +18,7 @@ import { Image } from 'expo-image';
 import { useThemeColors } from '@/theme/ThemeContext';
 import { Spacing } from '@/theme';
 import { getAvatarUrl } from '@/utils';
+import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
 
 // ---------- Avatar Props ----------
 export interface AvatarProps {
@@ -113,7 +114,9 @@ export function Avatar({
             }}
             contentFit="cover"
             cachePolicy="memory-disk"
-            transition={200}
+            // 回收复用防闪：首次加载 200ms，之后瞬时（见 imageWarm）
+            transition={isImageWarm(avatarUri) ? 0 : 200}
+            onLoad={() => markImageWarm(avatarUri)}
             // Row-reuse safe: resets stale content before the new avatar
             // loads (Image.md §recyclingKey).
             recyclingKey={avatarUri}

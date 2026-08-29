@@ -206,6 +206,7 @@ export function SearchThreadList({
 
   return (
     <LegendList
+      recycleItems
       data={items}
       keyExtractor={threadKeyExtractor}
       contentContainerStyle={styles.listContent}
@@ -290,6 +291,7 @@ export function SearchForumList({
 
   return (
     <LegendList
+      recycleItems
       data={items}
       keyExtractor={forumKeyExtractor}
       contentContainerStyle={styles.listContent}
@@ -371,6 +373,7 @@ export function SearchUserList({
 
   return (
     <LegendList
+      recycleItems
       data={items}
       keyExtractor={userKeyExtractor}
       contentContainerStyle={styles.listContent}
@@ -429,6 +432,7 @@ export function SearchPostList({
 
   return (
     <LegendList
+      recycleItems
       data={items}
       keyExtractor={postKeyExtractor}
       decelerationRate="normal"
