@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   },
   roleHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   roleDot: { width: 4, height: 14, borderRadius: 2 },
-  roleName: { fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
+  roleName: { fontSize: 15, fontWeight: '700' },
   roleCountChip: { paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: Radius.chip },
   roleCountText: { ...typographyStyles.caption2Bold },
 

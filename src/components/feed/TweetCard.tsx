@@ -779,10 +779,10 @@ const styles = StyleSheet.create({
     marginTop: -6,
     gap: 6,
   },
-  /** 摘要（与标题拆块，2026-08-28）：标题/摘要间 4pt 分层留白 */
+  /** 摘要（与标题拆块，2026-08-28）：标题/摘要间 4pt 分层留白；行距 22=1.47 与帖内/楼中楼正文统一（21 曾是全 app 唯一偏紧处） */
   abstract: {
     ...typographyStyles.subhead,
-    lineHeight: 21,
+    lineHeight: 22,
     marginTop: 4,
   },
   bodyTitle: {

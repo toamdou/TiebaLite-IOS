@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   // 话题横向滚动
   topicSection: { paddingTop: 16, paddingBottom: 6 },
   topicSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, marginBottom: 12 },
-  topicSectionTitle: { ...typographyStyles.title2, letterSpacing: 0 },
+  topicSectionTitle: { ...typographyStyles.title2 },
   topicScrollContent: { paddingHorizontal: 14, gap: 10 },
   topicChip: {
     flexDirection: 'row', alignItems: 'center', gap: 8,

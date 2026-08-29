@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   ruleIndexText: { fontSize: 13, fontWeight: '800' },
-  ruleTitle: { flex: 1, fontSize: 17, fontWeight: '700', lineHeight: 25, letterSpacing: -0.2 },
+  ruleTitle: { flex: 1, fontSize: 17, fontWeight: '700', lineHeight: 25 },
   ruleParagraph: { fontSize: 15, lineHeight: 24, marginTop: 10 },
   richFlow: {
     flexDirection: 'row',

@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
   },
   groupHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   groupDot: { width: 4, height: 14, borderRadius: 2 },
-  groupLabel: { fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
+  groupLabel: { fontSize: 15, fontWeight: '700' },
   groupCountChip: { paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: Radius.chip },
   groupCountText: { ...typographyStyles.caption2Bold },
 

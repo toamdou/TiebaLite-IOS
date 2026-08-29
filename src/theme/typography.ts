@@ -22,19 +22,19 @@ export const typographyStyles = StyleSheet.create({
     fontSize: 34,
     lineHeight: 41,
     fontWeight: '700',
-    letterSpacing: 0,
+    letterSpacing: -0.5,
   },
   title2: {
     fontSize: 22,
     lineHeight: 28,
     fontWeight: '700',
-    letterSpacing: 0,
+    letterSpacing: -0.4,
   },
   title3: {
     fontSize: 20,
     lineHeight: 25,
     fontWeight: '600',
-    letterSpacing: 0,
+    letterSpacing: -0.4,
   },
   headline: {
     fontSize: 17,

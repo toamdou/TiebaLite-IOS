@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     ...RadiusStyle.card,
     overflow: 'hidden',
   },
-  infoTitle: { fontSize: 24, fontWeight: '700', marginTop: Spacing.md, letterSpacing: -0.3 },
+  infoTitle: { fontSize: 24, fontWeight: '700', marginTop: Spacing.md, letterSpacing: -0.4 },
   infoSlogan: {
     fontSize: 13,
     lineHeight: 19,
@@ -344,7 +344,6 @@ const styles = StyleSheet.create({
     marginTop: 22,
     marginBottom: Spacing.sm,
     marginHorizontal: Spacing.xxl,
-    letterSpacing: 0.3,
   },
 
   // Grouped list container (iOS settings style)
