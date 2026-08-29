@@ -8,8 +8,36 @@
 
 import { Appearance, Linking, Alert } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import { router } from 'expo-router';
 import { getPreferences } from '@/services/storage/PreferencesStorage';
 import { getThemeColors } from '@/theme/colors';
+
+/**
+ * 贴吧站内链接直达（2026-08-29 用户反馈）：帖子链接（/p/<tid>）与吧链接
+ * （/f?kw=<吧名>）命中时直接站内跳转，不再开内置浏览器。仅识别无歧义的
+ * 主站路径；短链（t.cn 等）无法静态还原，维持原行为。
+ */
+function tryTiebaInApp(raw: string): boolean {
+  const thread = raw.match(
+    /^https?:\/\/(?:www\.)?tieba\.baidu\.com\/p\/(\d+)/,
+  );
+  if (thread) {
+    router.push(`/thread/${thread[1]}`);
+    return true;
+  }
+  const forum = raw.match(
+    /^https?:\/\/(?:www\.)?tieba\.baidu\.com\/f\?[^#]*\bkw=([^&#]+)/,
+  );
+  if (forum) {
+    try {
+      router.push(`/forum/${encodeURIComponent(decodeURIComponent(forum[1]))}`);
+      return true;
+    } catch {
+      // kw 编码非法：回退原行为
+    }
+  }
+  return false;
+}
 
 /**
  * Open a URL based on the user's `useBuiltInBrowser` preference.
@@ -24,6 +52,8 @@ export async function openLink(
   forceInApp?: boolean,
 ): Promise<void> {
   try {
+    if (tryTiebaInApp(url)) return;
+
     const prefs = await getPreferences();
     const useInApp = forceInApp ?? (prefs.useBuiltInBrowser ?? true);
 
