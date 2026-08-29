@@ -5,8 +5,6 @@ enum TiebaProtoError: LocalizedError {
   case messageNotFound(String)
   case invalidPayload(String)
   case invalidWire(String)
-  /// SwiftProtobuf 生成代码抛出的原始错误（typed throws 包装层，保留原文）
-  case swiftProtobuf(String)
 
   var errorDescription: String? {
     switch self {
@@ -18,8 +16,6 @@ enum TiebaProtoError: LocalizedError {
       return "Invalid protobuf payload: \(reason)"
     case .invalidWire(let reason):
       return "Invalid protobuf wire data: \(reason)"
-    case .swiftProtobuf(let reason):
-      return "SwiftProtobuf: \(reason)"
     }
   }
 }
@@ -66,7 +62,7 @@ final class TiebaProtoRegistry: @unchecked Sendable {
     case notFound
   }
 
-  func initialize(json: String) throws(TiebaProtoError) {
+  func initialize(json: String) throws {
     guard
       let data = json.data(using: .utf8),
       let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -119,14 +115,14 @@ final class TiebaProtoRegistry: @unchecked Sendable {
     }
   }
 
-  func message(path: String) throws(TiebaProtoError) -> TiebaProtoMessage {
+  func message(path: String) throws -> TiebaProtoMessage {
     guard let message = messages[path] else {
       throw TiebaProtoError.messageNotFound(path)
     }
     return message
   }
 
-  func resolveMessage(typeName: String, currentPath: String) throws(TiebaProtoError) -> TiebaProtoMessage {
+  func resolveMessage(typeName: String, currentPath: String) throws -> TiebaProtoMessage {
     let trimmed = typeName.hasPrefix(".") ? String(typeName.dropFirst()) : typeName
     // Absolute paths are already unique; relative names depend on the namespace.
     let key = trimmed.contains(".") ? trimmed : "\(currentPath)|\(trimmed)"
@@ -167,7 +163,7 @@ final class TiebaProtoRegistry: @unchecked Sendable {
     resolveLock.unlock()
   }
 
-  private func resolveRelative(typeName: String, currentPath: String) throws(TiebaProtoError) -> TiebaProtoMessage {
+  private func resolveRelative(typeName: String, currentPath: String) throws -> TiebaProtoMessage {
     var namespace = currentPath
     while true {
       let candidate = namespace.isEmpty ? typeName : "\(namespace).\(typeName)"
@@ -184,7 +180,7 @@ final class TiebaProtoRegistry: @unchecked Sendable {
   }
 
   /// 枚举值表（名字 → 数值）。供 SwiftProtobuf JSON 输出的 enum 值名归一化。
-  func resolveEnumValues(typeName: String, currentPath: String) throws(TiebaProtoError) -> [String: Int] {
+  func resolveEnumValues(typeName: String, currentPath: String) throws -> [String: Int] {
     let trimmed = typeName.hasPrefix(".") ? String(typeName.dropFirst()) : typeName
     let key = trimmed.contains(".") ? trimmed : "\(currentPath)|\(trimmed)"
 
@@ -212,7 +208,7 @@ final class TiebaProtoRegistry: @unchecked Sendable {
     }
   }
 
-  private func resolveEnumValuesUncached(typeName: String, currentPath: String) throws(TiebaProtoError) -> [String: Int] {
+  private func resolveEnumValuesUncached(typeName: String, currentPath: String) throws -> [String: Int] {
     var namespace = currentPath
     while true {
       let candidate = namespace.isEmpty ? typeName : "\(namespace).\(typeName)"

@@ -76,6 +76,7 @@ public final class TiebaNativeModule: Module {
         let jsonData = try JSONSerialization.data(withJSONObject: decoded)
         return String(data: jsonData, encoding: .utf8) ?? "{}"
       }.value
+      return decoded
     }
 
     Function("cancelProtoRequest") { (requestId: String) in

@@ -12,29 +12,20 @@ import SwiftProtobuf
 enum TiebaSwiftProto {
   struct Entry {
     /// wire bytes → proto3 JSON bytes
-    let decodeJSON: (Data) throws(TiebaProtoError) -> Data
+    let decodeJSON: (Data) throws -> Data
     /// proto3 JSON 字符串（可含未知字段/驼峰键）→ wire bytes
-    let encodeWire: (String) throws(TiebaProtoError) -> Data
+    let encodeWire: (String) throws -> Data
   }
 
   private static func entry<T: SwiftProtobuf.Message>(_ type: T.Type) -> Entry {
     Entry(
       decodeJSON: { data in
-        do {
-          return try type.init(serializedData: data).jsonUTF8Bytes()
-        } catch {
-          // typed throws 包装：JS 桥只看 errorDescription，原文保留在参数里
-          throw TiebaProtoError.swiftProtobuf("decode: \(error)")
-        }
+        try type.init(serializedData: data).jsonUTF8Bytes()
       },
       encodeWire: { json in
-        do {
-          var options = SwiftProtobuf.JSONDecodingOptions()
-          options.ignoreUnknownFields = true
-          return try type.init(jsonString: json, options: options).serializedData()
-        } catch {
-          throw TiebaProtoError.swiftProtobuf("encode: \(error)")
-        }
+        var options = SwiftProtobuf.JSONDecodingOptions()
+        options.ignoreUnknownFields = true
+        return try type.init(jsonString: json, options: options).serializedData()
       }
     )
   }
@@ -79,17 +70,12 @@ enum TiebaSwiftProto {
   ]
 
   /// wire bytes → 归一化后的字典（int64→Number、enum 名→值，对齐旧解码器输出形状）
-  static func decode(messagePath: String, bytes: Data) throws(TiebaProtoError) -> [String: Any] {
+  static func decode(messagePath: String, bytes: Data) throws -> [String: Any] {
     guard let entry = entries[messagePath] else {
       throw TiebaProtoError.messageNotFound(messagePath)
     }
     let json = try entry.decodeJSON(bytes)
-    let obj: Any
-    do {
-      obj = try JSONSerialization.jsonObject(with: json)
-    } catch {
-      throw TiebaProtoError.invalidPayload("json: \(error.localizedDescription)")
-    }
+    let obj = try JSONSerialization.jsonObject(with: json)
     return try normalize(obj, messagePath: messagePath) as? [String: Any] ?? [:]
   }
 
@@ -98,24 +84,16 @@ enum TiebaSwiftProto {
   /// SwiftProtobuf 的 proto3-JSON 名按 protobuf ToJsonName 算法生成，
   /// 前导下划线字段会变成 "ClientType" 风格，直接按名匹配会静默丢字段。
   /// encode 前统一把键换成 proto 原名（SwiftProtobuf 接受 proto 名）。
-  static func encodeJSON(messagePath: String, json: String) throws(TiebaProtoError) -> Data {
+  static func encodeJSON(messagePath: String, json: String) throws -> Data {
     guard let entry = entries[messagePath] else {
       throw TiebaProtoError.messageNotFound(messagePath)
     }
     let message = try TiebaProtoRegistry.shared.message(path: messagePath)
-    guard let raw = json.data(using: .utf8) else {
+    guard
+      let raw = json.data(using: .utf8),
+      let obj = try JSONSerialization.jsonObject(with: raw) as? [String: Any]
+    else {
       throw TiebaProtoError.invalidPayload("json parse failed")
-    }
-    let obj: [String: Any]
-    do {
-      guard let parsed = try JSONSerialization.jsonObject(with: raw) as? [String: Any] else {
-        throw TiebaProtoError.invalidPayload("json parse failed")
-      }
-      obj = parsed
-    } catch let error as TiebaProtoError {
-      throw error
-    } catch {
-      throw TiebaProtoError.invalidPayload("json parse failed: \(error.localizedDescription)")
     }
     let renamed = renameKeysIn(obj, message: message)
     let data = try JSONSerialization.data(withJSONObject: renamed)
@@ -170,7 +148,7 @@ enum TiebaSwiftProto {
     "bool", "string", "bytes",
   ]
 
-  private static func normalize(_ value: Any, messagePath: String) throws(TiebaProtoError) -> Any {
+  private static func normalize(_ value: Any, messagePath: String) throws -> Any {
     let message = try TiebaProtoRegistry.shared.message(path: messagePath)
     return normalizeObject(value, message: message)
   }
