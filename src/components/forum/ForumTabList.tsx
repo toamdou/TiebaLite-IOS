@@ -16,7 +16,6 @@ import TweetCard from '@/components/feed/TweetCard';
 import { EntranceRow } from '@/components/feed/EntranceRow';
 import { useBlockFilter } from '@/hooks/useBlockFilter';
 import { useAppPreference } from '@/hooks/useAppPreference';
-import { FEED_ADAPTIVE_RENDER } from '@/constants/listPerf';
 import { useForumStore } from '@/stores/forumStore';
 import { prefetchNextThreads, threadThumbs } from '@/utils/feedMedia';
 import { BlockManager } from '@/utils/BlockManager';
@@ -159,7 +158,6 @@ export const ForumTabList = React.memo(function ForumTabList({
 
   return (
     <LegendList
-      experimental_adaptiveRender={FEED_ADAPTIVE_RENDER}
       ref={setListRef}
       data={listThreads}
       keyExtractor={threadKeyExtractor}

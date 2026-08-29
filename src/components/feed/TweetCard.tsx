@@ -51,7 +51,6 @@ import { formatCount } from '@/utils';
 import { useTimeLabel } from '@/hooks/useTimeLabel';
 import { pickViewerImages } from '@/utils/thumbnail';
 import { useRecyclingState } from '@legendapp/list/react-native';
-import { useAdaptiveRender } from '@legendapp/list/react-native';
 import { stopPropagation } from '@/utils/gesture';
 import type { ThreadInfo } from '@/types';
 import { MediaPager } from '@/components/feed/MediaPager';
@@ -199,9 +198,6 @@ const TweetCard = React.memo(function TweetCard({
   // 不再有"上一条的展开态带到新贴子"的复用串扰（也不需要手动按 id 重置的
   // effect——那个方案在复用首帧会短暂渲染上一条的展开态）。
   const [expanded, setExpanded] = useRecyclingState(false);
-  // LegendList 自适应渲染（experimental_adaptiveRender 挂在三个信息流列表上）：
-  // 快速滚动时 light 模式——媒体条跳过原生右键菜单包装层，减速后恢复。
-  const adaptiveRender = useAdaptiveRender();
 
   // 长文判定：字符加权预判（见 LONG_TEXT_WEIGHTED_CHARS 注释），渲染期纯计算、
   // 无 setState 二次 commit。字号越大每行容字越少，阈值按 fontScale 反比缩放。
@@ -426,7 +422,7 @@ const TweetCard = React.memo(function TweetCard({
               viewportWidth={stripViewportWidth}
               leadInset={stripLeadInset}
               recycleKey={thread.id}
-              contextMenu={imageContextMenu && adaptiveRender === 'normal'}
+              contextMenu={imageContextMenu}
               forumName={thread.forumName}
               onImagePress={handleImagePress}
               onFallbackPress={handleCardPress}
