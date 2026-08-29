@@ -22,6 +22,7 @@ import { Image } from 'expo-image';
 import { useThemeColors } from '@/theme/ThemeContext';
 import {Radius} from '@/theme/spacing';
 import { thumbnailUrl, THUMB_POST } from '@/utils/thumbnail';
+import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
 import { stopPropagation } from '@/utils/gesture';
 import PostImageContextMenu from '@/components/feed/PostImageContextMenu';
 import { SymbolView } from '@/components/ui/SymbolView';
@@ -124,7 +125,10 @@ export const MediaPager = React.memo(function MediaPager({
           cachePolicy="memory-disk"
           placeholder={placeholderBg}
           placeholderContentFit="cover"
-          transition={200}
+          // 回收复用防闪：首次加载保留 200ms 过渡；本会话已加载过的 URI 瞬时换图
+          //（recycleItems 下每行 recyclingKey 变更都会从占位符重走一次 fade）
+          transition={isImageWarm(thumb) ? 0 : 200}
+          onLoad={() => markImageWarm(thumb)}
           recyclingKey={thumb}
         />
         {isVideo ? (
@@ -279,7 +283,8 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
                 cachePolicy="memory-disk"
                 placeholder={placeholderBg}
                 placeholderContentFit="cover"
-                transition={200}
+                transition={isImageWarm(thumb) ? 0 : 200}
+                onLoad={() => markImageWarm(thumb)}
                 recyclingKey={thumb}
               />
               {isLong ? (
