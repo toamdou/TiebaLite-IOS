@@ -51,18 +51,18 @@
 		13B07F961A680F5B00A75B9A /* tiebalite.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = tiebalite.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = tiebalite/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = tiebalite/Info.plist; sourceTree = "<group>"; };
-		2D3C3E3D48A53C2608014064 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = tiebalite/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		2EC0EEA13255462FA21ACE22 /* Info.plist */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; name = Info.plist; path = Info.plist; sourceTree = "<group>"; };
-		3A3326A46CBB4D5FA321BCF2 /* LiveActivityKitAttributes.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = LiveActivityKitAttributes.swift; path = LiveActivityKitAttributes.swift; sourceTree = "<group>"; };
-		79BB9B6BD905421497C83273 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = tiebalite/expo.icon; sourceTree = "<group>"; };
-		904F7EB2711C4E62BAE93F3F /* TiebaLiveActivity.entitlements */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = TiebaLiveActivity.entitlements; path = TiebaLiveActivity.entitlements; sourceTree = "<group>"; };
-		9DA0B98C9DE41BD5266B0C98 /* AppIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = AppIcon.png; path = AppIcon.png; sourceTree = "<group>"; };
-		A6975D10BF8D404883D6E4E0 /* TiebaLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = undefined; name = TiebaLiveActivity.appex; path = TiebaLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2D3C3E3D48A53C2608014064 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = tiebalite/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		2EC0EEA13255462FA21ACE22 /* Info.plist */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		3A3326A46CBB4D5FA321BCF2 /* LiveActivityKitAttributes.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; path = LiveActivityKitAttributes.swift; sourceTree = "<group>"; };
+		79BB9B6BD905421497C83273 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 505440388745; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = tiebalite/expo.icon; sourceTree = "<group>"; };
+		904F7EB2711C4E62BAE93F3F /* TiebaLiveActivity.entitlements */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 505440388745; includeInIndex = 0; lastKnownFileType = unknown; path = TiebaLiveActivity.entitlements; sourceTree = "<group>"; };
+		9DA0B98C9DE41BD5266B0C98 /* AppIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIcon.png; sourceTree = "<group>"; };
+		A6975D10BF8D404883D6E4E0 /* TiebaLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; fileEncoding = 505440388745; includeInIndex = 0; path = TiebaLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = tiebalite/SplashScreen.storyboard; sourceTree = "<group>"; };
 		B1860E3BA23E2D3CF5C896F6 /* Pods_tiebalite.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_tiebalite.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		DCAE6F944F034F06BD5FF636 /* LiveActivityKitLiveActivity.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = LiveActivityKitLiveActivity.swift; path = LiveActivityKitLiveActivity.swift; sourceTree = "<group>"; };
-		E651ADA040DA4044A9115D2A /* LiveActivityKitWidgetBundle.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = LiveActivityKitWidgetBundle.swift; path = LiveActivityKitWidgetBundle.swift; sourceTree = "<group>"; };
+		DCAE6F944F034F06BD5FF636 /* LiveActivityKitLiveActivity.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; path = LiveActivityKitLiveActivity.swift; sourceTree = "<group>"; };
+		E651ADA040DA4044A9115D2A /* LiveActivityKitWidgetBundle.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; path = LiveActivityKitWidgetBundle.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = tiebalite/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* tiebalite-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "tiebalite-Bridging-Header.h"; path = "tiebalite/tiebalite-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -167,7 +167,6 @@
 				F81EA5B3604228BD7A1874DC /* Pods-tiebalite.debug.xcconfig */,
 				0A197E81782BFB9F9F10DA66 /* Pods-tiebalite.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -190,7 +189,6 @@
 				2EC0EEA13255462FA21ACE22 /* Info.plist */,
 				904F7EB2711C4E62BAE93F3F /* TiebaLiveActivity.entitlements */,
 			);
-			name = TiebaLiveActivity;
 			path = TiebaLiveActivity;
 			sourceTree = "<group>";
 		};
