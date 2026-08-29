@@ -215,9 +215,10 @@ export async function userLike(
     }, signal);
     assertProtoSuccess(decoded);
     const data = decoded.data;
-    // UserLikeResponseData 真实字段是 threadInfo（ConcernData[]，内含 threadList: ThreadInfo），
-    // 而非 threadList —— 旧代码读空字段导致关注流恒空。
-    const items = (data?.threadInfo ?? [])
+    // UserLikeResponseData 的 canonical 字段名是 threadList（protos.json name）；
+    // 解码归一化按 canonical 输出后这里以 threadList 为准，`threadInfo` 仅为
+    // 归一化前透传键的旧形状兼容（2026-08-30 键名规整修复）。
+    const items = (data?.threadList ?? data?.threadInfo ?? [])
       .map((c: any): FeedItem | null => {
         const threadRaw = c?.threadList ?? c?.thread_list ?? c;
         if (!threadRaw || typeof threadRaw !== 'object') return null;

@@ -157,9 +157,11 @@ enum TiebaSwiftProto {
     guard let dict = obj as? [String: Any] else { return obj }
     var out: [String: Any] = [:]
     for (key, value) in dict {
-      // SwiftProtobuf JSON 键 = ToJsonName 规则（"_client_type" → "ClientType"），
-      // 可能与 protos.json name 不一致：先用 name 查，再按 protoName 反查。
-      let field = message.fieldByName[key] ?? message.fieldByProtoName[key]
+      // SwiftProtobuf JSON 键 = ToJsonName 规则（"_client_type" → "ClientType"、
+      // "_abstract" → "Abstract"），可能与 protos.json name 不一致：先按 name
+      // 查、再按 protoName 反查、最后按 JSON 键反查（2026-08-30 补：前导下划线
+      // 字段/ snake_case protoName 的 JSON 键两头都不沾，此前透传致 JS 摘要落空）。
+      let field = message.fieldByName[key] ?? message.fieldByProtoName[key] ?? message.fieldByJSONName[key]
       guard let field else {
         // 描述符外字段（生成的 JSON 不会产生，防御性透传）
         out[key] = value

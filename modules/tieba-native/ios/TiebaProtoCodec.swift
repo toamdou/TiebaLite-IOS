@@ -26,6 +26,29 @@ struct TiebaProtoField {
   let type: String
   let repeated: Bool
   let protoName: String
+
+  /// proto3 JSON 键（ToJsonName，与 SwiftProtobuf 输出对齐）：
+  /// "_abstract" → "Abstract"、"thread_info" → "threadInfo"，普通驼峰名恒等。
+  /// 解码反查表按此构建——前导下划线/snake_case 字段的 JSON 键既不等于
+  /// protos.json name 也不等于 protoName，不建表会归一化透传导致 JS 读
+  /// canonical 名落空（信息流摘要空白的根因；_clientType 同族）。
+  static func toJsonName(_ input: String) -> String {
+    var result = ""
+    var capitalizeNext = false
+    for char in input {
+      if char == "_" {
+        capitalizeNext = true
+        continue
+      }
+      if capitalizeNext {
+        result.append(Character(String(char).uppercased()))
+        capitalizeNext = false
+      } else {
+        result.append(char)
+      }
+    }
+    return result
+  }
 }
 
 struct TiebaProtoMessage {
@@ -38,6 +61,11 @@ struct TiebaProtoMessage {
   /// SwiftProtobuf 的 JSON 键可能用 proto 原名（如 "_client_type"），
   /// 解码时按此反查回 canonical name。
   let fieldByProtoName: [String: TiebaProtoField]
+  /// proto3-JSON 键（ToJsonName）→ field 索引。前导下划线字段（"_abstract"
+  /// → "Abstract"）与 snake_case protoName（"thread_info" → "threadInfo"）
+  /// 的 JSON 键两头都不沾，必须经此表反查（信息流摘要空白根因修复，
+  /// 2026-08-30）。
+  let fieldByJSONName: [String: TiebaProtoField]
 }
 
 /// protos.json 描述符注册表（2026-08-29 角色变化）：
@@ -100,15 +128,21 @@ final class TiebaProtoRegistry: @unchecked Sendable {
         }
         var fieldsByName: [String: TiebaProtoField] = [:]
         var fieldsByProtoName: [String: TiebaProtoField] = [:]
+        var fieldsByJSONName: [String: TiebaProtoField] = [:]
         for field in fields.values {
           fieldsByName[field.name] = field
           if !field.protoName.isEmpty && field.protoName != field.name {
             fieldsByProtoName[field.protoName] = field
           }
+          let jsonName = TiebaProtoField.toJsonName(field.protoName)
+          if !jsonName.isEmpty && jsonName != field.name && jsonName != field.protoName {
+            fieldsByJSONName[jsonName] = field
+          }
         }
         messages[fullPath] = TiebaProtoMessage(
           path: fullPath, fields: fields,
-          fieldByName: fieldsByName, fieldByProtoName: fieldsByProtoName
+          fieldByName: fieldsByName, fieldByProtoName: fieldsByProtoName,
+          fieldByJSONName: fieldsByJSONName
         )
       }
       walk(child, path: fullPath)
