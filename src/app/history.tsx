@@ -464,6 +464,7 @@ export default function HistoryPage() {
         <ErrorState message={error} onRetry={handleRetry} />
       ) : (
         <LegendList
+          recycleItems
           data={historyRows}
           keyExtractor={historyKeyExtractor}
           renderItem={renderRow}

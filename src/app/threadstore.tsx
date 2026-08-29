@@ -353,6 +353,7 @@ export default function ThreadStorePage() {
     // （登录引导/加载/错误分支）仍各自保留 Host。
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <LegendList
+        recycleItems
         data={items}
         keyExtractor={favoriteKeyExtractor}
         decelerationRate="normal"

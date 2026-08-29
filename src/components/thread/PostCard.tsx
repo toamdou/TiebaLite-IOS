@@ -34,6 +34,7 @@ import { contentToText, formatCount, buildThreadUrl } from '@/utils';
 import { useTimeLabel } from '@/hooks/useTimeLabel';
 import { useRecyclingState } from '@legendapp/list/react-native';
 import { thumbnailUrl, THUMB_CARD, pickViewerImages } from '@/utils/thumbnail';
+import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
 import { Avatar } from '@/components/ui/Avatar';
 import PostContent from './PostContent';
 import { RichTextRunsText } from './RichTextRunsText';
@@ -121,7 +122,8 @@ function InlineQuoteContent({
                   source={{ uri }}
                   style={s.quoteImageThumbImg}
                   contentFit="cover"
-                  transition={200}
+                  transition={isImageWarm(uri) ? 0 : 200}
+                  onLoad={() => markImageWarm(uri)}
                   cachePolicy="memory-disk"
                   recyclingKey={src}
                 />

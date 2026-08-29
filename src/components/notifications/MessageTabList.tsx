@@ -269,6 +269,7 @@ export function MessageTabList({
         </View>
       ) : (
         <LegendList
+          recycleItems
           data={visibleMessages}
           keyExtractor={messageKeyExtractor}
           renderItem={renderMessageItem}

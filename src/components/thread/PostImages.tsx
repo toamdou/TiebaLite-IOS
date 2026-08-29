@@ -18,6 +18,7 @@ import { useAppPreference } from '@/hooks/useAppPreference';
 import { MediaPager, LONG_IMAGE_RATIO, MEDIA_HEIGHT_MAX } from '@/components/feed/MediaPager';
 import PostImageContextMenu from '@/components/feed/PostImageContextMenu';
 import { thumbnailUrl, THUMB_POST, pickViewerImages } from '@/utils/thumbnail';
+import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
 import { hapticForScene } from '@/theme/hapticsMap';
 import { frameFromPressEvent, type ImageSourceFrame, type ViewerImageMeta } from '@/hooks/useImageViewer';
 import { styles } from './postContentStyles';
@@ -225,7 +226,8 @@ export function ImageSegment({
         cachePolicy="memory-disk" source={{ uri: singleUri }}
         style={[styles.image, dimmed && { opacity: 0.6 }]}
         contentFit={singleIsLong ? 'contain' : 'cover'}
-        transition={200}
+        transition={isImageWarm(singleUri) ? 0 : 200}
+        onLoad={() => markImageWarm(singleUri)}
         recyclingKey={singleUri}
       />
       {singleIsLong ? (

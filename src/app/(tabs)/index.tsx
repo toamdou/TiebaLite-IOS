@@ -573,6 +573,7 @@ function LoggedInHome() {
           <RNHostView>
             <View style={{ flex: 1, width: '100%' }}>
               <LegendList
+                recycleItems
                 ref={forumListRef}
                 key={forumListSingle ? 'forum-list-single' : 'forum-list-grid'}
                 data={sortedForums}
