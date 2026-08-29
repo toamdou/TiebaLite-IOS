@@ -4,7 +4,7 @@
  * - ZoomableImage：单页大图（捏合/双击/平移手势 + active 解码策略）
  * - ThumbnailCell：底部缩略图格（enabled 闸控原生缩略图拉取）
  *
- * 时序敏感块（staticMode / TEARDOWN_GRACE_MS / 状态栏隐藏恢复）仍在
+ * 时序敏感块（TEARDOWN_GRACE_MS / 状态栏隐藏恢复）仍在
  * ImageViewer.tsx 主组件内，勿迁。
  */
 
@@ -14,10 +14,12 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   useAnimatedReaction,
+  useAnimatedScrollHandler,
   withSpring,
   runOnJS,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, type GestureType } from 'react-native-gesture-handler';
+import type { SharedValue } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 
 import { hapticForScene } from '@/theme/hapticsMap';
@@ -26,7 +28,7 @@ import { thumbnailUrl, THUMB_LIST } from '@/utils/thumbnail';
 import { MOMENTUM } from '@/theme/springs';
 
 // 与主组件同款固定窗口尺寸（竖屏取一次；旋转后页面 flex 撑开，钳制按
-// 竖屏数值计算——见主文件 staticMode/teardown 注释，不做 useWindowDimensions）。
+// 竖屏数值计算——见主文件 teardown 注释，不做 useWindowDimensions）。
 const { width: PART_SCREEN_WIDTH, height: PART_SCREEN_HEIGHT } = Dimensions.get('window');
 
 /**
@@ -271,6 +273,9 @@ export const LongImageView = memo(function LongImageView({
   onZoomChange,
   onLoadStart,
   onLoadEnd,
+  scrollNative,
+  scrollY,
+  scrollMax,
 }: {
   baseUri: string;
   originUri?: string;
@@ -283,6 +288,11 @@ export const LongImageView = memo(function LongImageView({
   onZoomChange?: (zoomed: boolean) => void;
   onLoadStart?: () => void;
   onLoadEnd?: () => void;
+  /** 阅读滚动手势的原生包装（父级退出手势与之同流，按边界仲裁滚动/退出） */
+  scrollNative: GestureType;
+  /** 滚动偏移 / 最大可滚量（UI 线程镜像，父级退出手势 onTouchesMove 读取） */
+  scrollY: SharedValue<number>;
+  scrollMax: SharedValue<number>;
 }) {
   // 原图按屏宽适配的显示高度（pt）；无尺寸信息回退屏高（退化为普通页行为）
   const fitHeight =
@@ -421,15 +431,33 @@ export const LongImageView = memo(function LongImageView({
   // 非放大态：ScrollView 下滑阅读；放大态：关滚动走 pan（与 ZoomableImage 同约定）
   const scrollEnabled = !zoomed;
 
+  // 滚动偏移 → 共享值（UI 线程，父级退出手势据此判定滚动/退出边界）
+  const scrollHandler = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
+
+  // 最大可滚量镜像：内容高度超出屏高的部分。父级 onTouchesMove 用它判定
+  // “顶下拉/底上拉”边界；内容不超高（maxScroll=0）时视为双向都可退出。
+  useEffect(() => {
+    scrollMax.value = Math.max(fitHeight - PART_SCREEN_HEIGHT, 0);
+  }, [fitHeight, scrollMax]);
+
   return (
     <GestureDetector gesture={composedGesture}>
       <Animated.View style={[{ width: PART_SCREEN_WIDTH, height: PART_SCREEN_HEIGHT }, animatedStyle]}>
-        <RNScrollView
-          ref={scrollRef}
-          scrollEnabled={scrollEnabled}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ width: PART_SCREEN_WIDTH }}
-        >
+        {/* 原生滚动包装：让外层退出手势与 UIKit 滚动同流（否则滚动抢先吃掉
+            触摸，大图占满屏时无法拖拽退出）；bounces=false 让边界拖拽只由
+            外层跟手退出承担（无 rubber-band 双重位移） */}
+        <GestureDetector gesture={scrollNative}>
+          <Animated.ScrollView
+            ref={scrollRef}
+            scrollEnabled={scrollEnabled}
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScroll={scrollHandler}
+            contentContainerStyle={{ width: PART_SCREEN_WIDTH }}
+          >
           <View style={{ width: PART_SCREEN_WIDTH, height: Math.max(fitHeight, 1) }}>
             {/* 缩略层：小档秒出，完整长图（低清）即可读 */}
             <Image
@@ -456,7 +484,8 @@ export const LongImageView = memo(function LongImageView({
               />
             ) : null}
           </View>
-        </RNScrollView>
+          </Animated.ScrollView>
+        </GestureDetector>
       </Animated.View>
     </GestureDetector>
   );

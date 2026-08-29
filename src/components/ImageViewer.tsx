@@ -24,10 +24,10 @@ import Animated, {
   withTiming,
   cancelAnimation,
   runOnJS,
+  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager-view';
-import { Image } from 'expo-image';
 import { SymbolView } from '@/components/ui/SymbolView';
 import { GlassView } from '@/components/ui/GlassView';
 import { hapticForScene } from '@/theme/hapticsMap';
@@ -52,7 +52,7 @@ import { MOMENTUM, DURATION, EASE_OUT } from '@/theme/springs';
 // （竖屏）。Modal supportedOrientations 含 landscape，旋转后 PagerView 页面
 // 尺寸由 flex 撑开、可正常翻页缩放，但缩放钳制/拖拽飞出距离/背景揭示
 // 等按竖屏数值计算（视觉可接受）。全组件改 useWindowDimensions 的连锁
-// 改动面大且涉及时序敏感区，本轮不做（见 staticMode/teardown 注释）。
+// 改动面大且涉及时序敏感区，本轮不做（见 teardown 注释）。
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 /** 大图长按菜单：保存当前图 / 保存原图（服务器最高质量）/ 分享。
@@ -69,6 +69,10 @@ const BG_REVEAL_DISTANCE = 200;
 const SHRINK_DISTANCE = 320;
 /** 飞回源缩略图动画时长（比普通退场稍缓，Photos 观感） */
 const FLY_BACK_MS = 260;
+/** 退场双轴缓动：x 快出慢收、y 缓起缓落——同一 progress 插值出抛物线轨迹
+    （水平分量先行、垂直分量后至），轨迹自然且两轴全程同步（单驱动无竞态）。 */
+const EXIT_EASE_X = Easing.out(Easing.cubic);
+const EXIT_EASE_Y = Easing.inOut(Easing.quad);
 // 关闭后延迟拆除的宽限期：给 PagerView 内部减速/手势收尾的时间，避免
 // SwiftUI TabView 在动画途中被整树卸载（真机闪退），随后再真正卸载 Modal。
 const TEARDOWN_GRACE_MS = 400;
@@ -123,10 +127,6 @@ export default function ImageViewer({
   // 即闪退」，模拟器时序宽松不易复现）。visible=false 后保持挂载
   // TEARDOWN_GRACE_MS 再卸载；宽限期内内容已强制透明、不响应触摸。
   const [mounted, setMounted] = useState(false);
-  // 静态模式：任何关闭路径（拖拽过阈值 / X 按钮）启动时先卸载 PagerView，
-  // 退出动画改用当前页静态大图——SwiftUI TabView 不再参与手势/动画期，
-  // 从根上消除真机「退出大图即闪退」（TabView 在动画中卸载的竞态）。
-  const [staticMode, setStaticMode] = useState(false);
   const insets = useSafeAreaInsets();
   const pagerRef = useRef<PagerView>(null);
   const thumbnailRef = useRef<ScrollView>(null);
@@ -187,25 +187,41 @@ export default function ImageViewer({
 
   // Overlay opacity animation
   const overlayOpacity = useSharedValue(1);
-  // Drag-to-dismiss translation (Twitter style: translateY + scale-down + background reveal)
+  // Drag-to-dismiss translation（Twitter 式 2D 跟手：Y 为主退出轴，X 同步跟手）
+  const dragTranslateX = useSharedValue(0);
   const dragTranslateY = useSharedValue(0);
   // Entrance animation for the image (scale 0.95→1, opacity 0→1)
   const enterScale = useSharedValue(1);
   const enterOpacity = useSharedValue(1);
-  // Exit animation (scale→0.8 + opacity→0, 180ms) before unmounting
-  const exitScale = useSharedValue(1);
-  const exitOpacity = useSharedValue(1);
+  // 退场统一动画（唯一驱动）：exitProgress 0→1，x/y/scale/圆角/透明度全部由
+  // 同一个 progress 插值（双轴缓动不同 → 抛物线轨迹），杜绝多 timing 竞态顿挫。
+  // 目标参数在手势 onEnd / closeViewer 时写入，动画期间不再读取手势位移。
+  const exitProgress = useSharedValue(0);
+  const exitFromX = useSharedValue(0);
+  const exitFromY = useSharedValue(0);
+  const exitFromScale = useSharedValue(1);
+  const exitToX = useSharedValue(0);
+  const exitToY = useSharedValue(0);
+  const exitToScale = useSharedValue(1);
+  // 手势仲裁：起始点 + 上一帧位移（onTouchesMove 手动激活判定 + 增量跟手）
+  const touchStartX = useSharedValue(0);
+  const touchStartY = useSharedValue(0);
+  const prevTransX = useSharedValue(0);
+  const prevTransY = useSharedValue(0);
+  // 长图页滚动状态（LongImageView 写入）：原生滚动手势包装 + 偏移/最大可滚量。
+  // 外层退出手势与之同流（simultaneous），按边界仲裁"滚动优先 vs 跟手退出"。
+  const longScrollNative = useMemo(() => Gesture.Native(), []);
+  const longScrollY = useSharedValue(0);
+  const longScrollMax = useSharedValue(0);
+  // 手势 worklet 只读镜像（手势 useMemo 不随渲染重建，直接读共享值拿新状态）
+  const currentIdxSV = useSharedValue(initialIndex);
+  const pageCountSV = useSharedValue(images.length);
+  const initialIdxSV = useSharedValue(initialIndex);
+  const isLongPageSV = useSharedValue(false);
 
   // ---------- 飞回源缩略图（iOS Photos 式交互关闭）----------
-  // flyTranslateX / flyScale / flyRadiusFactor / flyOpacity：仅退场动画期间
-  // 生效，目标值在打开时按 sourceFrame 预算好，手势 onEnd（UI 线程）直接取用。
-  const flyTranslateX = useSharedValue(0);
-  const flyScale = useSharedValue(1);
-  const flyRadiusFactor = useSharedValue(1);
-  const flyOpacity = useSharedValue(1);
-  // 拖拽中的 320pt 缩小项：飞行开始时关闭，并把当前缩小值折算进 flyScale，
-  // 保证整个动画轨迹连续（缩放在中途不跳变）。
-  const dragShrinkEnabled = useSharedValue(1);
+  // 飞回目标在打开时按 sourceFrame 预算好，手势 onEnd（UI 线程）直接取用；
+  // 动画本体由上方 exitProgress 统一驱动，这里只存目标矩形。
   // 防抖：退场动画进行中忽略新触摸，避免二次拖拽劫持动画。
   const isDismissing = useSharedValue(false);
   // 飞回目标（JS 预算 → UI 消费）
@@ -239,18 +255,22 @@ export default function ImageViewer({
       setCurrentIndex(initialIndex);
       setShowUI(true);
       setIsZoomed(false);
-      setStaticMode(false);
       overlayOpacity.value = 1;
+      dragTranslateX.value = 0;
       dragTranslateY.value = 0;
-      exitScale.value = 1;
-      exitOpacity.value = 1;
-      // 重置飞回动画状态
+      touchStartX.value = 0;
+      touchStartY.value = 0;
+      prevTransX.value = 0;
+      prevTransY.value = 0;
+      // 重置退场/飞回动画状态
+      exitProgress.value = 0;
+      exitFromX.value = 0;
+      exitFromY.value = 0;
+      exitFromScale.value = 1;
+      exitToX.value = 0;
+      exitToY.value = 0;
+      exitToScale.value = 1;
       isDismissing.value = false;
-      dragShrinkEnabled.value = 1;
-      flyTranslateX.value = 0;
-      flyScale.value = 1;
-      flyRadiusFactor.value = 1;
-      flyOpacity.value = 1;
       // Entrance animation (iOS Photos style). Respect reduced motion.
       if (reduceMotion) {
         enterScale.value = 1;
@@ -262,7 +282,7 @@ export default function ImageViewer({
         enterOpacity.value = withTiming(1, { duration: DURATION.enter });
       }
     }
-  }, [visible, initialIndex, overlayOpacity, dragTranslateY, enterScale, enterOpacity, exitScale, exitOpacity, reduceMotion, isDismissing, dragShrinkEnabled, flyTranslateX, flyScale, flyRadiusFactor, flyOpacity]);
+  }, [visible, initialIndex, overlayOpacity, dragTranslateX, dragTranslateY, touchStartX, touchStartY, prevTransX, prevTransY, enterScale, enterOpacity, exitProgress, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, reduceMotion, isDismissing]);
 
   // 打开时按 sourceFrame 预算飞回目标。列表缩略图与源图同宽高比 ⇒ 由 frame
   // 宽高比即可推出全屏 contain 显示尺寸（无需等原图解码）。
@@ -288,6 +308,18 @@ export default function ImageViewer({
     flyTargetScale.value = targetScale;
     hasFlyTarget.value = true;
   }, [visible, sourceFrame, flyTargetX, flyTargetY, flyTargetScale, hasFlyTarget]);
+
+  // 手势 worklet 镜像：当前页/总页数/长图态（随渲染刷新，手势 useMemo 不重建
+  // 也能在 onTouchesMove / onEnd 里拿到新值）
+  useEffect(() => {
+    currentIdxSV.value = currentIndex;
+    pageCountSV.value = images.length;
+    isLongPageSV.value = isLongImageOf(currentIndex);
+  }, [currentIndex, images.length, isLongImageOf, currentIdxSV, pageCountSV, isLongPageSV]);
+
+  useEffect(() => {
+    initialIdxSV.value = initialIndex;
+  }, [initialIndex, initialIdxSV]);
 
   // Scroll thumbnail strip to current item
   useEffect(() => {
@@ -319,150 +351,227 @@ export default function ImageViewer({
       setMounted(true);
       return;
     }
-    // 兜底强制内容透明：非减少动态路径退场动画已完成（opacity 已 0），
+    // 兜底强制内容透明：非减少动态路径退场动画已完成（progress 已到 1），
     // reduceMotion 路径是瞬间 onClose，这里直接压 0 保证宽限期不可见。
     enterOpacity.value = 0;
-    exitOpacity.value = 0;
-    flyOpacity.value = 0;
+    exitProgress.value = 1;
     const t = setTimeout(() => setMounted(false), TEARDOWN_GRACE_MS);
     return () => clearTimeout(t);
-  }, [visible, enterOpacity, exitOpacity, flyOpacity]);
+  }, [visible, enterOpacity, exitProgress]);
 
   const topBarAnimStyle = useAnimatedStyle(() => {
-    // 拖拽启动时顶栏/缩略条随进度淡出（Twitter 行为）；飞回时随飞回透明度彻底隐去
-    const dragFade = Math.min(Math.abs(dragTranslateY.value) / 140, 1);
-    return { opacity: overlayOpacity.value * (1 - dragFade) * flyOpacity.value };
+    // 拖拽启动时顶栏/缩略条随拖拽距离淡出（Twitter 行为）；退场时随 progress 隐去
+    const dragLen = Math.hypot(dragTranslateX.value, dragTranslateY.value);
+    const dragFade = Math.min(dragLen / 140, 1);
+    return { opacity: overlayOpacity.value * (1 - dragFade) * (1 - exitProgress.value) };
   });
 
   /**
    * 背景揭示（Twitter 拖拽关闭）：
-   * - 黑色遮罩随拖拽距离渐隐（200pt 完全揭示）
-   * - 底层 GlassView 实时模糊后方信息流，透明度随拖拽渐显
-   * - 进场（enterOpacity）/ 退场（exitOpacity）阶段同步淡入淡出
-   * - 飞回阶段（flyOpacity→0）：遮罩完全淡出、模糊完全显现，露出列表缩略图
+   * - 黑色遮罩随拖拽距离渐隐（200pt 完全揭示），退场阶段随 progress 淡出
+   * - 底层 GlassView 实时模糊后方信息流，透明度随拖拽渐显，退场阶段随 progress 全显
+   * - 进场（enterOpacity）阶段同步淡入淡出
    */
   const bgScrimStyle = useAnimatedStyle(() => {
-    const reveal = Math.min(Math.abs(dragTranslateY.value) / BG_REVEAL_DISTANCE, 1);
-    return { opacity: (1 - reveal) * enterOpacity.value * exitOpacity.value * flyOpacity.value };
+    const p = exitProgress.value;
+    const dragLen = Math.hypot(dragTranslateX.value, dragTranslateY.value);
+    const reveal = Math.min(dragLen / BG_REVEAL_DISTANCE, 1);
+    return { opacity: (1 - reveal) * enterOpacity.value * (1 - p) };
   });
 
   const bgBlurStyle = useAnimatedStyle(() => {
-    const reveal = Math.min(Math.abs(dragTranslateY.value) / BG_REVEAL_DISTANCE, 1);
+    const p = exitProgress.value;
+    const dragLen = Math.hypot(dragTranslateX.value, dragTranslateY.value);
+    const reveal = Math.min(dragLen / BG_REVEAL_DISTANCE, 1);
     return {
-      opacity:
-        enterOpacity.value *
-        exitOpacity.value *
-        (reveal + (1 - reveal) * (1 - flyOpacity.value)),
+      opacity: enterOpacity.value * (reveal + (1 - reveal) * p),
     };
   });
 
   /**
-   * 内容统一动效：入场缩放 × 拖拽位移/缩小（1→0.72，320pt 全程）× 退场缩放 × 飞回缩放。
-   * 单一 transform 计算避免多 style 数组 transform 相互覆盖。
-   * 拖拽时同步增大圆角（Twitter 缩小图片的圆角收束感）；飞回时圆角收束到缩略图级别。
+   * 内容统一动效：入场缩放 × 拖拽 2D 位移/缩小（1→0.72，320pt 全程）× 退场位移缩放。
+   * 拖拽期与退场期共用一套共享值，单一 transform 计算避免多 style 数组覆盖。
+   * 拖拽时同步增大圆角（Twitter 缩小图片的圆角收束感）；退场时随 progress 收束到
+   * 缩略图级别圆角。退场 x/y/scale 全部由 exitProgress 同一驱动插值（双轴缓动
+   * 不同 → 抛物线轨迹），保证 120fps 下各属性严格同步、无顿挫。
    */
   const contentStyle = useAnimatedStyle(() => {
-    // dragShrinkEnabled=0（飞回阶段）时关闭距离缩小，由 flyScale 接管至目标值
-    const dragProgress = Math.min(Math.abs(dragTranslateY.value) / SHRINK_DISTANCE, 1);
-    const scale =
-      enterScale.value *
-      (1 - dragShrinkEnabled.value * dragProgress * 0.28) *
-      exitScale.value *
-      flyScale.value;
-    const dragFade = Math.min(Math.abs(dragTranslateY.value) / (SCREEN_HEIGHT * 0.6), 0.25);
+    const p = exitProgress.value;
+    if (p <= 0) {
+      // ── 拖拽跟手态：2D 位移 + 按位移距离缩小 ──
+      const dragLen = Math.hypot(dragTranslateX.value, dragTranslateY.value);
+      const dragProgress = Math.min(dragLen / SHRINK_DISTANCE, 1);
+      const dragFade = Math.min(dragLen / (SCREEN_HEIGHT * 0.6), 0.25);
+      return {
+        transform: [
+          { translateX: dragTranslateX.value },
+          { translateY: dragTranslateY.value },
+          { scale: enterScale.value * (1 - dragProgress * 0.28) },
+        ],
+        borderRadius: 24 * dragProgress,
+        borderCurve: 'continuous',
+        opacity: enterOpacity.value * (1 - dragFade),
+      };
+    }
+    // ── 退场态：单 progress 插值（x 快出慢收、y 缓起缓落 → 抛物线归位/飞出）──
+    const ex = EXIT_EASE_X(p);
+    const ey = EXIT_EASE_Y(p);
+    const x = exitFromX.value + (exitToX.value - exitFromX.value) * ex;
+    const y = exitFromY.value + (exitToY.value - exitFromY.value) * ey;
+    const s = exitFromScale.value + (exitToScale.value - exitFromScale.value) * ey;
     return {
       transform: [
-        { translateX: flyTranslateX.value },
-        { translateY: dragTranslateY.value },
-        { scale },
+        { translateX: x },
+        { translateY: y },
+        { scale: s * enterScale.value },
       ],
-      borderRadius: 24 * dragProgress * flyRadiusFactor.value,
+      // 圆角随退场收束：飞到缩略图时接近缩略图圆角（24 → ~8.4）
+      borderRadius: 24 * (1 - ex * 0.65),
       borderCurve: 'continuous',
-      opacity: enterOpacity.value * exitOpacity.value * (1 - dragFade),
+      opacity: enterOpacity.value * (1 - p),
     };
   });
 
-  // iOS 26 Photos-style close: content scale→0.8 + opacity→0 (180ms) then
-  // unmount. Reduced motion users skip the animation.
+  // iOS 26 Photos-style close: 单 progress 统一退场（原地缩小+淡出 180ms），
+  // 与拖拽退场同一套动画系统。不再切 staticMode 换树——退场动画全程由原
+  // PagerView 画面承担，杜绝换帧空洞；卸载竞态由 TEARDOWN_GRACE_MS 宽限
+  // 兜底（visible=false 后内容强制透明，动画/手势完全结束后再卸载）。
   const closeViewer = useCallback(() => {
-    // 先切换到静态模式：PagerView（SwiftUI TabView）在纯退出动画期卸载，
-    // 不参与主线程动画竞争（真机「退出即闪退」根修，见 staticMode 注释）
-    setStaticMode(true);
     if (reduceMotion) {
       onClose();
       return;
     }
-    cancelAnimation(exitScale);
-    cancelAnimation(exitOpacity);
-    exitScale.value = withTiming(0.8, { duration: DURATION.exit });
-    exitOpacity.value = withTiming(0, { duration: DURATION.exit }, (finished) => {
+    isDismissing.value = true;
+    exitFromX.value = dragTranslateX.value;
+    exitFromY.value = dragTranslateY.value;
+    exitFromScale.value = 1;
+    exitToX.value = dragTranslateX.value;
+    exitToY.value = dragTranslateY.value;
+    exitToScale.value = 0.8;
+    exitProgress.value = withTiming(1, { duration: DURATION.exit, easing: EASE_OUT }, (finished) => {
       if (finished) runOnJS(onClose)();
     });
-  }, [reduceMotion, onClose, exitScale, exitOpacity]);
+  }, [reduceMotion, onClose, isDismissing, dragTranslateX, dragTranslateY, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitProgress]);
 
-  // 交互式拖拽关闭（iOS Photos 风格）：
-  // - 上滑、下滑均驱动关闭（activeOffsetY 已同时接受两个方向）
-  // - 放开时距离或速度过阈值 → 有源矩形则“飞回缩略图”，否则沿手势方向飞出；
-  //   未过阈值 → 弹簧回弹
-  // - 缩放态（isZoomed）下禁用，交给 ZoomableImage 内的平移
-  // 手势 useMemo 包裹（动画食谱 G1）：拖拽中途若页面重渲染（翻页/UI 切换），
-  // 重建手势会重挂识别器、丢掉进行中的拖拽。依赖列 props/state 变化项；
-  // 共享值为稳定 ref，一并列入口维护一致。
-  const dismissGesture = useMemo(
+// 交互式拖拽关闭（iOS Photos 风格，2026-08-29 重构）：
+// - 手动激活仲裁（minDistance 关闭自动激活，onTouchesMove 判定后显式 activate）：
+//   普通页任意方向纵向可退；长图页（读图 ScrollView）仅滚动边界可退——
+//   顶部下拉 / 底部上拉（滚动区内纵向手势归 ScrollView 阅读，不抢）；
+//   PagerView 翻不了的方向（首页右拉 / 末页左拉）横向也可退（左缘滑动退出）。
+// - 2D 跟手：激活后 X/Y 同步跟随手指（增量累计，跨滚动区到边界不跳变）。
+// - 放开时距离或速度过阈值 → 有源矩形则沿抛物线“飞回缩略图”（起点=手势
+//   当前位置），否则沿手势 2D 方向飞出；未过阈值 → 弹簧回弹。
+// - 缩放态（isZoomed）下禁用，交给 ZoomableImage 内的平移。
+const dismissGesture = useMemo(
     () =>
       Gesture.Pan()
         .enabled(!isZoomed)
-        .activeOffsetY([-14, 14])
+        .minDistance(4000)
+        .maxPointers(1)
+        // 长图页与原生滚动同流：UIKit ScrollView 抢先吃触摸时仍能收到事件，
+        // 否则大图占满屏时永远退不出（滚动/退出由 onUpdate 按边界仲裁）
+        .simultaneousWithExternalGesture(longScrollNative)
+        .onTouchesDown((e) => {
+          const t = e.changedTouches[0];
+          touchStartX.value = t.x;
+          touchStartY.value = t.y;
+        })
+        .onTouchesMove((e, mgr) => {
+          if (isDismissing.value) return;
+          const dx = e.changedTouches[0].x - touchStartX.value;
+          const dy = e.changedTouches[0].y - touchStartY.value;
+          let yGo = false;
+          if (isLongPageSV.value) {
+            // 长图页：仅手指方向会把滚动钉在边界（顶下拉/底上拉）时才接管退出
+            const atTop = longScrollY.value <= 0.5;
+            const atBottom = longScrollY.value >= longScrollMax.value - 0.5;
+            yGo = Math.abs(dy) >= 14 && ((dy > 0 && atTop) || (dy < 0 && atBottom));
+          } else {
+            yGo = Math.abs(dy) >= 14;
+          }
+          // 横向：PagerView 无法翻页的方向（首页右拉/末页左拉）接管为退出
+          const xGo =
+            Math.abs(dx) >= 14 &&
+            ((dx > 0 && currentIdxSV.value <= 0) ||
+              (dx < 0 && currentIdxSV.value >= pageCountSV.value - 1));
+          if (yGo || xGo) mgr.activate();
+        })
         .onUpdate((e) => {
           if (isDismissing.value) return;
-          dragTranslateY.value = e.translationY;
+          // 增量跟手：滚动区内的位移不累计（容器归 0、内容正常滚动），
+          // 滚动到边界后继续拉时从 0 起跟——跨区全程无跳变。
+          const dX = e.translationX - prevTransX.value;
+          const dY = e.translationY - prevTransY.value;
+          prevTransX.value = e.translationX;
+          prevTransY.value = e.translationY;
+          let followY = true;
+          if (isLongPageSV.value) {
+            const atTop = longScrollY.value <= 0.5;
+            const atBottom = longScrollY.value >= longScrollMax.value - 0.5;
+            followY =
+              (e.translationY > 2 && atTop) ||
+              (e.translationY < -2 && atBottom) ||
+              (atTop && atBottom);
+          }
+          dragTranslateX.value += dX;
+          if (followY) dragTranslateY.value += dY;
+          else dragTranslateY.value = 0;
         })
         .onEnd((e) => {
           if (isDismissing.value) return;
-          const beyondThreshold =
-            Math.abs(e.translationY) > 140 || Math.abs(e.velocityY) > 900;
+          const dragLen = Math.hypot(dragTranslateX.value, dragTranslateY.value);
+          const beyondThreshold = dragLen > 140 || Math.abs(e.velocityY) > 900;
           if (!beyondThreshold) {
-            // 未过阈值 → 弹簧回弹
+            // 未过阈值 → 弹簧回弹（X/Y 一起回）
+            dragTranslateX.value = withSpring(0, MOMENTUM);
             dragTranslateY.value = withSpring(0, MOMENTUM);
             return;
           }
-          const direction = e.translationY !== 0
-            ? Math.sign(e.translationY)
-            : (Math.sign(e.velocityY) || 1);
           isDismissing.value = true;
-          // 决定关闭：切换静态模式（PagerView 卸载），后续动画由静态大图承担
-          runOnJS(setStaticMode)(true);
           if (reduceMotionSV.value) {
             runOnJS(onClose)();
             return;
           }
-          // 飞回判定需与飞回目标脱钩解耦：flyTarget* 只在打开瞬间按
-          // initialIndex 页预算。滑到其他页后再拖拽关闭时，目标矩形已与该页
-          // 图片脱钩（会“飞”向当初那张缩略图），此时退化为沿手势方向飞出。
-          if (hasFlyTarget.value && currentIndex === initialIndex) {
-            // 飞回被点击缩略图：先把当前拖拽缩小快照进 flyScale 再关闭缩小项
-            // （有效缩放连续不跳变），随后整体动画到源矩形，背景同步淡出
-            const progress = Math.min(Math.abs(dragTranslateY.value) / SHRINK_DISTANCE, 1);
-            const currentShrink = 1 - progress * 0.28;
-            dragShrinkEnabled.value = 0;
-            flyScale.value = currentShrink;
-            flyScale.value = withTiming(flyTargetScale.value, { duration: FLY_BACK_MS, easing: EASE_OUT });
-            flyTranslateX.value = withTiming(flyTargetX.value, { duration: FLY_BACK_MS, easing: EASE_OUT });
-            flyRadiusFactor.value = withTiming(0.35, { duration: FLY_BACK_MS, easing: EASE_OUT });
-            flyOpacity.value = withTiming(0, { duration: FLY_BACK_MS, easing: EASE_OUT });
-            dragTranslateY.value = withTiming(
-              flyTargetY.value,
+          const dragProgress = Math.min(dragLen / SHRINK_DISTANCE, 1);
+          exitFromX.value = dragTranslateX.value;
+          exitFromY.value = dragTranslateY.value;
+          exitFromScale.value = 1 - dragProgress * 0.28;
+          if (hasFlyTarget.value && currentIdxSV.value === initialIdxSV.value) {
+            // 飞回被点击缩略图：从手势当前位置（含横向跟手分量）沿抛物线归位；
+            // 背景同步淡出，露出列表缩略图
+            exitToX.value = flyTargetX.value;
+            exitToY.value = flyTargetY.value;
+            exitToScale.value = flyTargetScale.value;
+            exitProgress.value = withTiming(
+              1,
               { duration: FLY_BACK_MS, easing: EASE_OUT },
               (finished) => {
                 if (finished) runOnJS(onClose)();
               },
             );
           } else {
-            // 无源矩形（如 TweetCard 信息流图）：沿拖拽方向飞出（背景揭示到 100%，
-            // 图片缩小淡出），结束后卸载 —— 方向跟随手势，上滑即飞出屏幕顶部
-            dragTranslateY.value = withTiming(
-              direction * SCREEN_HEIGHT,
-              { duration: DURATION.exit },
+            // 无源矩形（如 TweetCard 信息流图）：沿手势 2D 方向飞出
+            // （方向跟随手势向量，不再固定上下），结束后卸载
+            let dx = e.translationX;
+            let dy = e.translationY;
+            if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+              dx = e.velocityX * 0.05;
+              dy = e.velocityY * 0.05;
+            }
+            const len = Math.hypot(dx, dy);
+            if (len < 1) {
+              dx = 0;
+              dy = 1;
+            } else {
+              dx /= len;
+              dy /= len;
+            }
+            exitToX.value = dx * SCREEN_WIDTH * 1.4;
+            exitToY.value = dy * SCREEN_HEIGHT * 1.4;
+            exitToScale.value = 0.82;
+            exitProgress.value = withTiming(
+              1,
+              { duration: DURATION.exit, easing: EASE_OUT },
               (finished) => {
                 if (finished) runOnJS(onClose)();
               },
@@ -472,21 +581,32 @@ export default function ImageViewer({
     [
       isZoomed,
       onClose,
-      currentIndex,
-      initialIndex,
-      setStaticMode,
       reduceMotionSV,
-      hasFlyTarget,
+      longScrollNative,
+      longScrollY,
+      longScrollMax,
+      isLongPageSV,
+      currentIdxSV,
+      pageCountSV,
+      initialIdxSV,
+      touchStartX,
+      touchStartY,
+      prevTransX,
+      prevTransY,
+      dragTranslateX,
       dragTranslateY,
       isDismissing,
-      dragShrinkEnabled,
-      flyScale,
-      flyTargetScale,
-      flyTranslateX,
+      hasFlyTarget,
       flyTargetX,
-      flyRadiusFactor,
-      flyOpacity,
       flyTargetY,
+      flyTargetScale,
+      exitFromX,
+      exitFromY,
+      exitFromScale,
+      exitToX,
+      exitToY,
+      exitToScale,
+      exitProgress,
     ],
   );
 
@@ -661,17 +781,6 @@ export default function ImageViewer({
 
           {/* Image Gallery — native iOS PagerView */}
           <Animated.View style={[styles.pagerWrap, contentStyle]}>
-          {staticMode ? (
-            /* 静态模式：退出动画期间无 PagerView（SwiftUI TabView 已卸载，
-               卸载冲突是「退出大图即闪退」根因）；用当前页大图承担退出动画。 */
-            <Image
-              source={{ uri: images[currentIndex] }}
-              style={styles.pager}
-              contentFit="contain"
-              transition={0}
-              recyclingKey={`viewer-static-${currentIndex}`}
-            />
-          ) : (
           <PagerView
             ref={pagerRef}
             style={styles.pager}
@@ -705,6 +814,9 @@ export default function ImageViewer({
                       zoomed={isZoomed}
                       onSingleTap={toggleUI}
                       onZoomChange={setIsZoomed}
+                      scrollNative={longScrollNative}
+                      scrollY={longScrollY}
+                      scrollMax={longScrollMax}
                       onLoadStart={() => {
                         if (page.uri !== images[page.index]) {
                           setOriginLoading((prev) => ({ ...prev, [page.index]: true }));
@@ -752,7 +864,6 @@ export default function ImageViewer({
               );
             })}
           </PagerView>
-          )}
         </Animated.View>
 
         {/* Top Bar */}
