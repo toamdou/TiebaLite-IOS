@@ -537,7 +537,7 @@ public final class TiebaNativeModule: Module {
   // 渐变 mask 的名字标记：同一视图重复挂载时直接更新 frame，不重复创建。
   // 参数升级时同步升版本号——复用分支只校验名字与 colors 非空、不比较数值，
   // 不改名则存量旧参数 mask 会经 timer/KVO 路径永久存活。
-  private static let gradientMaskName = "tiebaNavGlassGradient.v10"
+  private static let gradientMaskName = "tiebaNavGlassGradient.v11"
 
   // 共享材质常量：滚动 swizzle / KVO / timer 热路径只做比较与复用，不再分配
   // （此前每次比较或重挂都新建一个 UIBlurEffect，飞速滑动时每帧多次堆分配）。
@@ -639,13 +639,18 @@ public final class TiebaNativeModule: Module {
         }
         // 滚动中被系统重置时即时恢复（KVO 兜底 1.5s timer 的扫描间隙）。
         observeGlassEffect(on: bg)
-        // 渐变分段遮罩（v10，2026-08-26）：v9 平台只到 0.86，栏内按钮
-        // （返回/吧头像等）下沿仍落在渐隐区，视觉上"按钮掉出顶栏"——平台
-        // 段延伸到 0.95，仅最后 ~5% 快速归零（终端 α0，无底边横线）。
+        // 渐变分段遮罩（v11，2026-08-29）：v10 平台段 α 0.50、底部 5% 渐隐，
+        // 真机反馈整条 bar 半透（返回键/右侧按钮行"掉出顶栏"、最下端透明）。
+        // v11 平台段整体 α 1.0（状态区到 0.96 全实——返回键/药丸全部覆盖），
+        // 仅最后 ~4% 快速归零（终端 α0，保留内容平滑透入、无硬底边横线）。
         // 幂等复用：同名 mask 且 colors 未被清空时只同步 frame。UIKit 在
         // 页面切换/布局重建 _UIBarBackground 时可能保留旧 mask 但清空其
         // colors（实测楼中楼页 mask 存在但 colors 空、渐变丢失）——只有
         // 这种损坏态才重建，避免滚动热路径每次 force 都新建 layer。
+        // 首帧竞态：bar 未布局完时 bounds 为零尺寸，此时挂 mask 等于全透明
+        // 顶栏（"第一次打开吧页顶栏透明"根因之一）——bounds 非零才挂，
+        // layoutSubviews hook 会在布局完成后异步补挂（≤1 帧 + force 兜底）。
+        if bg.layer.bounds.width > 0 && bg.layer.bounds.height > 0 {
         if let existing = bg.layer.mask as? CAGradientLayer,
            existing.name == gradientMaskName,
            let colors = existing.colors as? [CGColor], !colors.isEmpty {
@@ -654,20 +659,20 @@ public final class TiebaNativeModule: Module {
           let mask = CAGradientLayer()
           mask.name = gradientMaskName
           mask.colors = [
-            UIColor(white: 1, alpha: 0.70).cgColor,  // loc 0.000 顶端
-            UIColor(white: 1, alpha: 0.50).cgColor,  // loc 0.250 落入平台
-            UIColor(white: 1, alpha: 0.50).cgColor,  // loc 0.950 平台（含全部按钮行）
-            UIColor(white: 1, alpha: 0.30).cgColor,  // loc 0.975 快速衰减
-            UIColor(white: 1, alpha: 0.10).cgColor,  // loc 0.990
-            UIColor(white: 1, alpha: 0.02).cgColor,  // loc 0.998
+            UIColor(white: 1, alpha: 1.0).cgColor,  // loc 0.000 顶端全实
+            UIColor(white: 1, alpha: 1.0).cgColor,  // loc 0.050 状态区/灵动岛
+            UIColor(white: 1, alpha: 1.0).cgColor,  // loc 0.960 平台（返回键/右侧药丸全实）
+            UIColor(white: 1, alpha: 0.65).cgColor,  // loc 0.980 快速衰减
+            UIColor(white: 1, alpha: 0.20).cgColor,  // loc 0.992
             UIColor(white: 1, alpha: 0).cgColor,     // loc 1.000 精确归零
           ]
-          mask.locations = [0, 0.25, 0.95, 0.975, 0.99, 0.998, 1]
+          mask.locations = [0, 0.05, 0.96, 0.98, 0.992, 1]
           mask.startPoint = CGPoint(x: 0.5, y: 0)
           mask.endPoint = CGPoint(x: 0.5, y: 1)
           mask.frame = bg.layer.bounds
           bg.layer.mask = mask
           applied = true
+        }
         }
       }
       // appearance 一律不写（写了会让 UIKit 退出自动玻璃管线，底栏同结论）；
