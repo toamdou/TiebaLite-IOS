@@ -159,7 +159,6 @@ export const ForumTabList = React.memo(function ForumTabList({
 
   return (
     <LegendList
-      recycleItems
       experimental_adaptiveRender={FEED_ADAPTIVE_RENDER}
       ref={setListRef}
       data={listThreads}

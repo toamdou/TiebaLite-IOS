@@ -574,7 +574,6 @@ function LoggedInHome() {
           <RNHostView>
             <View style={{ flex: 1, width: '100%' }}>
               <LegendList
-                recycleItems
                 experimental_adaptiveRender={FEED_ADAPTIVE_RENDER}
                 ref={forumListRef}
                 key={forumListSingle ? 'forum-list-single' : 'forum-list-grid'}

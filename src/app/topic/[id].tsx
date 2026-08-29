@@ -367,7 +367,6 @@ export default function TopicDetailPage() {
     <View style={StyleSheet.flatten([styles.container, { backgroundColor: colors.background }])}>
       <Stack.Screen options={{ title: topicName }} />
       <LegendList
-        recycleItems
         data={threads}
         keyExtractor={threadKeyExtractor}
         renderItem={renderItem}

@@ -448,7 +448,6 @@ export default function ThreadPage() {
       />
 
       <LegendList
-        recycleItems
         ref={postListRef}
         data={replyPosts}
         keyExtractor={replyKeyExtractor}

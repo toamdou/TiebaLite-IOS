@@ -242,7 +242,6 @@ export default function BawuTeamPage() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ title: '吧务团队' }} />
       <LegendList
-        recycleItems
         data={rows}
         keyExtractor={bawuKeyExtractor}
         renderItem={renderItem}

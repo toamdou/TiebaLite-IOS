@@ -26,7 +26,6 @@ import { useThemeColors } from '@/theme/ThemeContext';
 import {RadiusStyle, Radius} from '@/theme/spacing';
 import { typographyStyles } from '@/theme/typography';
 import { thumbnailUrl, THUMB_POST } from '@/utils/thumbnail';
-import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
 import { stopPropagation } from '@/utils/gesture';
 import { hapticForScene } from '@/theme/hapticsMap';
 
@@ -150,8 +149,7 @@ export function CompactFeedRow({
                         style={[styles.mediaThumb, { backgroundColor: placeholderBg }]}
                         contentFit="cover"
                         cachePolicy="memory-disk"
-                        transition={isImageWarm(thumb) ? 0 : 200}
-                        onLoad={() => markImageWarm(thumb)}
+                        transition={200}
                         recyclingKey={thumb}
                       />
                     );

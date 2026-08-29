@@ -479,7 +479,6 @@ export default function ForumMembersPage() {
           <ErrorState title="加载失败" message={rankError} onRetry={() => rankLoad(1)} retryLabel="重试" />
         ) : (
           <LegendList
-            recycleItems
             data={rankItems}
             keyExtractor={rankKeyExtractor}
             renderItem={renderRankItem}
@@ -502,7 +501,6 @@ export default function ForumMembersPage() {
           <ErrorState title="加载失败" message={error} onRetry={handleRefresh} retryLabel="重试" />
         ) : (
           <LegendList
-            recycleItems
             data={rows}
             keyExtractor={memberKeyExtractor}
             renderItem={renderItem}

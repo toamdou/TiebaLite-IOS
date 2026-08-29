@@ -223,7 +223,6 @@ export function SocialTabList({
       {/* 粉丝/关注列表：LegendList 一次渲染足量行完成行高测量，
           行高用实测均值自动处理（同 UserTabList 注释） */}
       <LegendList
-        recycleItems
         ref={listRef}
         data={items}
         keyExtractor={socialKeyExtractor}
