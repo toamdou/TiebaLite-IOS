@@ -8,8 +8,8 @@
  * ImageViewer.tsx 主组件内，勿迁。
  */
 
-import { memo, useCallback, useEffect, useMemo } from 'react';
-import { View, Pressable, StyleSheet, Dimensions } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Pressable, ScrollView as RNScrollView, StyleSheet, Dimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -249,6 +249,219 @@ export const ZoomableImage = memo(function ZoomableImage({
   );
 });
 
+// ---------- LongImageView（长图阅读模式，2026-08-29）----------
+
+/**
+ * 长图页（fit-width 阅读模式，用户规格 2026-08-29）：
+ * 1. 进入即显示小档（srcPic，秒出、完整长图）+ 同步加载动画；
+ * 2. 原图（originSrc）后台加载，onLoadEnd 后淡入替换——此时才显示原图；
+ * 3. 原图自动匹配屏宽（宽=屏宽、高按比例），单指下滑即可读完；
+ * 4. 捏合/双击缩放，放大后 pan 移动（与普通页同一手势模型）。
+ *
+ * 修复的冻结根因：此前长图默认直接解码 originSrc 巨图（可达数百 MB、
+ * 高度超 GPU 纹理上限），主线程上屏即整机卡死。
+ */
+export const LongImageView = memo(function LongImageView({
+  baseUri,
+  originUri,
+  imageWidth,
+  imageHeight,
+  zoomed,
+  onSingleTap,
+  onZoomChange,
+  onLoadStart,
+  onLoadEnd,
+}: {
+  baseUri: string;
+  originUri?: string;
+  /** 原图自然尺寸（px）：fit 高度 = 屏宽 × (h/w) */
+  imageWidth?: number;
+  imageHeight?: number;
+  /** 父级缩放态（同 ZoomableImage 契约：prop 传入驱动 scrollEnabled/pan） */
+  zoomed: boolean;
+  onSingleTap: () => void;
+  onZoomChange?: (zoomed: boolean) => void;
+  onLoadStart?: () => void;
+  onLoadEnd?: () => void;
+}) {
+  // 原图按屏宽适配的显示高度（pt）；无尺寸信息回退屏高（退化为普通页行为）
+  const fitHeight =
+    imageWidth && imageWidth > 0 && imageHeight && imageHeight > 0
+      ? Math.round((PART_SCREEN_WIDTH * imageHeight) / imageWidth)
+      : PART_SCREEN_HEIGHT;
+  const scale = useSharedValue(1);
+  const baseScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const startTranslateX = useSharedValue(0);
+  const startTranslateY = useSharedValue(0);
+  const scrollRef = useRef<RNScrollView>(null);
+  // 原图（originUri）解码完成 → 淡入替换缩略图
+  const [originReady, setOriginReady] = useState(false);
+  const [originFailed, setOriginFailed] = useState(false);
+
+  useEffect(() => {
+    // 行复用/换图重置
+    setOriginReady(false);
+    setOriginFailed(false);
+  }, [baseUri, originUri]);
+
+  const resetTransform = useCallback(() => {
+    scale.value = 1;
+    baseScale.value = 1;
+    translateX.value = 0;
+    translateY.value = 0;
+  }, []);
+
+  useEffect(() => {
+    resetTransform();
+  }, [baseUri, originUri, resetTransform]);
+
+  useAnimatedReaction(
+    () => scale.value > 1.01,
+    (z, previous) => {
+      if (z !== previous) {
+        runOnJS(onZoomChange ?? (() => {}))(z);
+      }
+    },
+  );
+
+  const toggleZoom = useCallback(() => {
+    const target = scale.value > 1.01 ? 1 : 3;
+    scale.value = withSpring(target, MOMENTUM);
+    baseScale.value = target;
+    translateX.value = withSpring(0, MOMENTUM);
+    translateY.value = withSpring(0, MOMENTUM);
+    hapticForScene('toggle');
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  const pinch = useMemo(
+    () =>
+      Gesture.Pinch().onUpdate((e) => {
+        scale.value = Math.min(5, Math.max(1, baseScale.value * e.scale));
+      }).onEnd(() => {
+        baseScale.value = scale.value;
+        if (scale.value <= 1.001) {
+          scale.value = withSpring(1, MOMENTUM);
+          baseScale.value = 1;
+          translateX.value = withSpring(0, MOMENTUM);
+          translateY.value = withSpring(0, MOMENTUM);
+        }
+      }),
+    [scale, baseScale, translateX, translateY],
+  );
+
+  // 放大后 pan：范围按"内容高 × scale − 屏高"（长图内容远高于屏）
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(zoomed)
+        .onStart(() => {
+          startTranslateX.value = translateX.value;
+          startTranslateY.value = translateY.value;
+        })
+        .onUpdate((e) => {
+          const contentH = Math.max(fitHeight, PART_SCREEN_HEIGHT);
+          const maxY = Math.max(0, (contentH * scale.value - PART_SCREEN_HEIGHT) / 2);
+          const maxX = Math.max(0, (PART_SCREEN_WIDTH * scale.value - PART_SCREEN_WIDTH) / 2);
+          translateX.value = Math.min(
+            maxX,
+            Math.max(-maxX, startTranslateX.value + e.translationX),
+          );
+          translateY.value = Math.min(
+            maxY,
+            Math.max(-maxY, startTranslateY.value + e.translationY),
+          );
+        })
+        .onEnd(() => {
+          startTranslateX.value = translateX.value;
+          startTranslateY.value = translateY.value;
+        }),
+    [zoomed, scale, startTranslateX, startTranslateY, translateX, translateY, fitHeight],
+  );
+
+  const doubleTap = useMemo(
+    () =>
+      Gesture.Tap()
+        .numberOfTaps(2)
+        .onEnd((_e, success) => {
+          if (success) runOnJS(toggleZoom)();
+        }),
+    [toggleZoom],
+  );
+
+  const singleTap = useMemo(
+    () =>
+      Gesture.Tap()
+        .numberOfTaps(1)
+        .onEnd((_e, success) => {
+          if (success) runOnJS(onSingleTap)();
+        }),
+    [onSingleTap],
+  );
+
+  const composedGesture = useMemo(
+    () => Gesture.Simultaneous(pinch, pan, Gesture.Exclusive(doubleTap, singleTap)),
+    [pinch, pan, doubleTap, singleTap],
+  );
+
+  const handleOriginLoadEnd = useCallback(() => {
+    setOriginReady(true);
+    onLoadEnd?.();
+  }, [onLoadEnd]);
+
+  // 非放大态：ScrollView 下滑阅读；放大态：关滚动走 pan（与 ZoomableImage 同约定）
+  const scrollEnabled = !zoomed;
+
+  return (
+    <GestureDetector gesture={composedGesture}>
+      <Animated.View style={[{ width: PART_SCREEN_WIDTH, height: PART_SCREEN_HEIGHT }, animatedStyle]}>
+        <RNScrollView
+          ref={scrollRef}
+          scrollEnabled={scrollEnabled}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ width: PART_SCREEN_WIDTH }}
+        >
+          <View style={{ width: PART_SCREEN_WIDTH, height: Math.max(fitHeight, 1) }}>
+            {/* 缩略层：小档秒出，完整长图（低清）即可读 */}
+            <Image
+              source={{ uri: baseUri }}
+              style={partStyles.absoluteFillImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
+              recyclingKey={`long-base-${baseUri}`}
+            />
+            {/* 原图层：后台解码完成后淡入替换；加载期间缩略层照常显示 */}
+            {originUri && !originFailed ? (
+              <Image
+                source={{ uri: originUri }}
+                style={[partStyles.absoluteFillImage, { opacity: originReady ? 1 : 0 }]}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={150}
+                priority="high"
+                recyclingKey={`long-origin-${originUri}`}
+                onLoadStart={onLoadStart}
+                onLoadEnd={handleOriginLoadEnd}
+                onError={() => setOriginFailed(true)}
+              />
+            ) : null}
+          </View>
+        </RNScrollView>
+      </Animated.View>
+    </GestureDetector>
+  );
+});
+
 // ---------- Native Thumbnail Cell ----------
 
 export const ThumbnailCell = memo(function ThumbnailCell({
@@ -292,6 +505,15 @@ export const ThumbnailCell = memo(function ThumbnailCell({
 });
 
 const partStyles = StyleSheet.create({
+  absoluteFillImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
   zoomContainer: {
     width: PART_SCREEN_WIDTH,
     height: PART_SCREEN_HEIGHT,

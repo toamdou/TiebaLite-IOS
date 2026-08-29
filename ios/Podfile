@@ -74,6 +74,11 @@ target 'tiebalite' do
   # 静默降级为 no-op。
   pod 'Tickle', :path => '../node_modules/@renegades/react-native-tickle'
 
+  # SwiftProtobuf（apple 官方运行时）：tieba-native 的 TiebaSwiftProtoCodec
+  # 依赖生成代码（ProtoGenerated/）做 wire 编解码，完全替换 protobufjs。
+  # 运行时版本须与 protoc-gen-swift（brew swift-protobuf 1.38.1）匹配。
+  pod 'SwiftProtobuf', '~> 1.28'
+
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
 

@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package tieba.getDislikeList;
+
+option java_package = "com.huanchengfly.tieba.post.api.models.protos.getDislikeList";
+
+import "CommonRequest.proto";
+import "Error.proto";
+
+message ForumList {
+  int64 forum_id = 1;
+  string forum_name = 2;
+  string avatar = 3;
+  int32 member_count = 4;
+  string slogan = 5;
+  string content = 6;
+  int64 post_num = 7;
+  int64 thread_num = 8;
+}
+
+message GetDislikeListRequestData {
+  tieba.CommonRequest common = 1;
+  int64 user_id = 2;
+  int32 pn = 3;
+  int32 rn = 4;
+}
+
+message GetDislikeListRequest {
+  GetDislikeListRequestData data = 1;
+}
+
+message GetDislikeListResponseData {
+  repeated ForumList forum_list = 1;
+  int32 has_more = 2;
+  int32 cur_page = 3;
+}
+
+message GetDislikeListResponse {
+  tieba.Error error = 1;
+  GetDislikeListResponseData data = 2;
+}

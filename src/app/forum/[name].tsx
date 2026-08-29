@@ -164,6 +164,10 @@ export default function ForumPage() {
   // = 安全区 + 12 ≈ 46pt，位移 120 足够整颗推出屏外（46 + 52 < 120）。
   const fabScale = useSharedValue(1);
   const fabTranslateY = useSharedValue(0);
+  // JS 侧镜像：onScroll 是普通函数（JS 线程），直读 sharedValue 会每次事件
+  // 跨 JS↔UI 同步阻塞（reanimated 官方性能警告）； fabTranslateY 本身保留
+  // shared（600 行 useAnimatedStyle worklet 读），镜像只跟随时写入方向。
+  const fabHiddenRef = useRef(false);
 
   const isFocused = useIsFocused();
   const { reduceMotion } = useReducedMotion();
@@ -332,6 +336,7 @@ export default function ForumPage() {
     animateFab();
     switch (forumFabFunction) {
       case 'back_to_top':
+        fabHiddenRef.current = false;
         fabTranslateY.value = withSpring(0, CHROME_HIDE);
         tabListRefs.current[currentTab]?.scrollToOffset({ offset: 0, animated: true });
         break;
@@ -346,6 +351,7 @@ export default function ForumPage() {
   const navDoubleTapEnabled = useAppPreference('navBarDoubleTapToTop', true);
   useNavDoubleTapToTop(
     () => {
+      fabHiddenRef.current = false;
       fabTranslateY.value = withSpring(0, CHROME_HIDE);
       tabListRefs.current[currentTab]?.scrollToOffset({ offset: 0, animated: true });
     },
@@ -486,7 +492,8 @@ export default function ForumPage() {
         settleScrollToTop();
       }
       // 回顶即恢复 FAB（同帖内底栏「贴顶立即显示」）：防 offset 跳变把 FAB 留在隐藏位
-      if (y <= 1 && fabTranslateY.value !== 0) {
+      if (y <= 1 && fabHiddenRef.current) {
+        fabHiddenRef.current = false;
         fabTranslateY.value = withSpring(0, CHROME_HIDE);
       }
       const delta = y - lastScrollYRef.current;
@@ -498,10 +505,12 @@ export default function ForumPage() {
         }
         if (!fabHiddenBySetting) {
           if (delta > 0) {
-            if (fabTranslateY.value === 0) {
+            if (!fabHiddenRef.current) {
+              fabHiddenRef.current = true;
               fabTranslateY.value = withSpring(FAB_HIDE_OFFSET, CHROME_HIDE);
             }
-          } else if (fabTranslateY.value !== 0) {
+          } else if (fabHiddenRef.current) {
+            fabHiddenRef.current = false;
             fabTranslateY.value = withSpring(0, CHROME_HIDE);
           }
         }

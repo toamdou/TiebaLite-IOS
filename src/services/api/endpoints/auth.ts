@@ -5,7 +5,7 @@ import { protoGetUserInfo } from '../protoClient';
 import { setTbs, getBduss, getUid } from '../authState';
 import { AIOTIEBA_VERSION, SIGN_SECRET } from '../config';
 import type { UserInfo } from '@/types';
-import md5 from 'md5';
+import { md5 } from '../sign';
 // ============================================================
 // Auth — 登录 wire 对齐 aiotieba（Starry-OvO/aiotieba，当前每天被大量
 //   用户使用的第三方参考实现，与百度官方客户端同构）

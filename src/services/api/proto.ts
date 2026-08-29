@@ -1,33 +1,20 @@
 // ============================================================
 // TiebaLite RN — Protobuf Helpers (aligned with Kotlin Wire)
 //
-// 编码在 JS 侧用 protobufjs（预编译的 protos.json descriptor），
-// 解码仍在 native TiebaNative codec（protoClient 内）。
+// 2026-08-29：编码与解码已全部下沉原生（SwiftProtobuf 生成代码，
+// modules/tieba-native/ios/ProtoGenerated）：
+//   - 编码：JS 对象 JSON → TiebaNative.protoEncode → wire base64（同步）。
+//     schema 由生成代码保证，"嵌套 message 被平铺"的旧原生编码器 bug
+//     在生成代码架构下结构性消失；protobufjs 依赖已移除。
+//   - 解码：protoPost 内 TiebaSwiftProto.decode（无白名单投影，全字段），
+//     int64/enum 由描述符归一化回旧形状，映射层零改动。
 // ============================================================
-
-// ⚠️ 编码在 JS 侧用 protobufjs 完成，不再走 native 编码器：
-// native 编码器会把嵌套 message 平铺（FrsPageRequest.data.common 被压成
-// 顶层字段），导致 frsPage/pbPage/profile 的请求结构错乱、服务器返回
-// 210009 系统错误。热榜恰好因字段 id 巧合不受影响。protobufjs 编码输出
-// 已验证与服务器兼容（嵌套正确、error=0）。解码仍走 native（正常）。
-import protobuf from 'protobufjs';
 
 // 模拟设备屏幕参数（round-54 收敛：原散落各处的魔法数统一走 config 常量）
 import { SCR_W, SCR_H, SCR_DIP } from './config';
+import { TiebaNative } from '../../../modules/tieba-native/src/TiebaNative';
 
 type TypeRef = { fullName: string };
-
-let protoRoot: protobuf.Root | null = null;
-
-/** 惰性加载 protobuf descriptor（首次编码时才解析 111KB JSON） */
-function getProtoRoot(): protobuf.Root {
-  if (!protoRoot) {
-    protoRoot = protobuf.Root.fromJSON(
-      require('./protos.json') as unknown as protobuf.INamespace,
-    );
-  }
-  return protoRoot;
-}
 
 /**
  * Create a memoized lazy type accessor. The lookup (and thus the descriptor
@@ -73,23 +60,10 @@ const PbFloorRequest = lazyType('tieba.pbFloor.PbFloorRequest');
  * Mirrors Kotlin `data.encode()`.
  */
 
-/** fromCharCode 分块阈值：apply 参数上限内取大块，把逐字节循环降到块级。 */
-const FROM_CHAR_CODE_CHUNK = 16384;
-
 function encodeProtobuf(type: TypeRef, data: Record<string, unknown>): string {
-  // JS 端 protobufjs 编码（native 编码器嵌套平铺 bug 的绕过方案，见文件头注释）
-  const messageType = getProtoRoot().lookupType(type.fullName);
-  const err = messageType.verify(data);
-  if (err) throw new Error(`protobuf verify ${type.fullName}: ${err}`);
-  const bytes = messageType.encode(messageType.create(data)).finish();
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += FROM_CHAR_CODE_CHUNK) {
-    binary += String.fromCharCode.apply(
-      null,
-      bytes.subarray(i, i + FROM_CHAR_CODE_CHUNK) as unknown as number[],
-    );
-  }
-  return globalThis.btoa(binary);
+  // SwiftProtobuf 原生编码（2026-08-29）：schema 正确性由生成代码保证；
+  // JS 对象 JSON（驼峰键）→ wire bytes → base64。未知字段忽略。
+  return TiebaNative.protoEncode(type.fullName, JSON.stringify(data));
 }
 
 // -----------------------------------------------------------

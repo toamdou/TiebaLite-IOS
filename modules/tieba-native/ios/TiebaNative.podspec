@@ -16,6 +16,7 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
+  s.dependency 'SwiftProtobuf', '~> 1.28'
 
   s.frameworks = ['BackgroundTasks', 'Security', 'ImageIO', 'CoreGraphics', 'UIKit']
   s.libraries = 'sqlite3'

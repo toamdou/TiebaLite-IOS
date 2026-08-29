@@ -3283,6 +3283,7 @@ PODS:
     - libwebp (~> 1.0)
     - SDWebImage/Core (~> 5.17)
   - SocketRocket (0.7.1)
+  - SwiftProtobuf (1.38.1)
   - SwiftUIIntrospect (1.3.0)
   - Tickle (0.1.2):
     - boost
@@ -3316,6 +3317,7 @@ PODS:
     - Yoga
   - TiebaNative (1.0.0):
     - ExpoModulesCore
+    - SwiftProtobuf (~> 1.28)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -3444,6 +3446,7 @@ DEPENDENCIES:
   - RNScreens (from `../node_modules/react-native-screens`)
   - RNWorklets (from `../node_modules/react-native-worklets`)
   - SocketRocket (~> 0.7.1)
+  - SwiftProtobuf (~> 1.28)
   - "Tickle (from `../node_modules/@renegades/react-native-tickle`)"
   - TiebaNative (from `../modules/tieba-native/ios`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
@@ -3458,6 +3461,7 @@ SPEC REPOS:
     - SDWebImageSVGCoder
     - SDWebImageWebPCoder
     - SocketRocket
+    - SwiftProtobuf
     - SwiftUIIntrospect
 
 EXTERNAL SOURCES:
@@ -3839,7 +3843,7 @@ SPEC CHECKSUMS:
   RNCMaskedView: d707a83784c67099b54b37d056ababb2767ce15e
   RNGestureHandler: 89c0c079dc88636fed9580bb581bd7df69ef33d0
   RNPlainText: d58368595fc2ce89ea74f5b0b09a49eb35b726bd
-  RNReanimated: 1a67ec7c458dd04abadba7549d9d5abb24d6ec8a
+  RNReanimated: 56b12744833e5d677b5a2b7fe191913d09618058
   RNScreens: cd316d11b2eadd658804e5d956194d4588d05e2b
   RNWorklets: 57279243f09ce1f3a4fc9cea2ce9b8e379688f30
   SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
@@ -3847,11 +3851,12 @@ SPEC CHECKSUMS:
   SDWebImageSVGCoder: 15a300a97ec1c8ac958f009c02220ac0402e936c
   SDWebImageWebPCoder: e38c0a70396191361d60c092933e22c20d5b1380
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
+  SwiftProtobuf: 409d3aaec90e51b1705b1dd8065b56893450e77c
   SwiftUIIntrospect: fee9aa07293ee280373a591e1824e8ddc869ba5d
   Tickle: e61c7546f709f8e88fd4600d9d09415c1a23831b
-  TiebaNative: 6f4b42ee1cdcac592584ec94a23829c76b4986ec
+  TiebaNative: 9b2dcd100771262eebb472ea74cf9ab99a88eefe
   Yoga: 9690ea6ce9c77aee633f4815cc42202c701edbd8
 
-PODFILE CHECKSUM: 5f895ca2f128e4523ca8502b4bd272f6c1ef124f
+PODFILE CHECKSUM: 7b79697146633dd58bb3d3717c56e5c9fd2b9025
 
 COCOAPODS: 1.17.0

@@ -18,6 +18,10 @@ export interface TiebaNativeModule {
   /** 设置 → 震动反馈总开关：同步给原生，闸住 chrome 按压触觉 */
   setHapticFeedbackEnabled(enabled: boolean): void;
   protoInitialize(json: string): void;
+  /** SwiftProtobuf 原生编码：messagePath + JS 对象 JSON → wire base64（同步） */
+  protoEncode(messagePath: string, json: string): string;
+  /** 原生 MD5：任意字符串 → 32 位小写 hex（签名链用，挪出 JS 线程） */
+  md5Hex(input: string): string;
   protoPost(
     url: string,
     headers: Record<string, string>,

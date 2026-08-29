@@ -25,6 +25,8 @@ struct LiveActivityKitLiveActivity: Widget {
       let tint = LiveActivityKitTheme.color(state.tintColorHex) ?? .blue
       return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
+          // 系统把展开态裁剪成摄像头轮廓（大圆角、连续曲线、不可改），
+          // 内容若贴边会被四角裁掉——统一内缩让内容离开角区（2026-08-29）。
           HStack(spacing: 8) {
             LiveActivityKitTheme.symbol(state.imageName, tint: tint)
             VStack(alignment: .leading, spacing: 1) {
@@ -37,6 +39,7 @@ struct LiveActivityKitLiveActivity: Widget {
                 .lineLimit(1)
             }
           }
+          .padding(.horizontal, 4)
         }
 
         DynamicIslandExpandedRegion(.center) {
@@ -73,6 +76,7 @@ struct LiveActivityKitLiveActivity: Widget {
               .monospacedDigit()
             }
           }
+          .padding(.horizontal, 4)
         }
 
         DynamicIslandExpandedRegion(.bottom) {
@@ -98,6 +102,8 @@ struct LiveActivityKitLiveActivity: Widget {
               }
             }
           }
+          // 底部区横跨全宽，左右两端正好落在系统圆角裁剪区——内缩最关键
+          .padding(.horizontal, 12)
         }
       } compactLeading: {
         HStack(spacing: 5) {

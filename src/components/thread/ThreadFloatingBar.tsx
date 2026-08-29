@@ -4,7 +4,7 @@
  * 拆自 src/app/thread/[id].tsx（4 抽 1 留拆分，#8）。
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
 import { Text } from '../ui/CompatText';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
@@ -38,58 +38,59 @@ export interface FloatingBarAutoHide {
 }
 
 /**
- * 滚动驱动自动隐藏：Shared values（非 React state）保证滚动不触发页面
- * re-render。列表 onScroll 以普通函数语义直接调用（LegendList/ScrollView
- * 均为事件签名)；useAnimatedScrollHandler 返回的对象会触发
- * "TypeError: undefined is not a function"。保持普通函数 + JS 线程设
- * sharedValue（withTiming 动画仍在 UI 线程跑）。
+ * 滚动驱动自动隐藏。列表 onScroll 以普通函数语义直接调用（LegendList/
+ * ScrollView 均为事件签名)；useAnimatedScrollHandler 返回的对象会触发
+ * "TypeError: undefined is not a function"。保持普通函数。
+ * 线程纪律（reanimated 官方性能警告：JS 线程读 sharedValue 会阻塞等 UI 线程）：
+ * - barTranslateY 是唯一 shared value（useAnimatedStyle worklet 读），JS 只写不读；
+ * - 滚动簿记（速度采样/可见态/降动效开关）只在 JS 线程读写，全部用 ref。
  */
 export function useFloatingBarAutoHide(reduceMotion: boolean): FloatingBarAutoHide {
   const barTranslateY = useSharedValue(0);
-  const lastScrollY = useSharedValue(0);
-  const lastScrollTime = useSharedValue(0);
-  const barVisible = useSharedValue(1); // 1 = visible, 0 = hidden
-  const lastScrollProcessedAt = useSharedValue(0);
-  const reduceMotionSV = useSharedValue(reduceMotion);
+  const lastScrollYRef = useRef(0);
+  const lastScrollTimeRef = useRef(0);
+  const barVisibleRef = useRef(1); // 1 = visible, 0 = hidden
+  const lastScrollProcessedAtRef = useRef(0);
+  const reduceMotionRef = useRef(reduceMotion);
 
   useEffect(() => {
-    reduceMotionSV.value = reduceMotion;
-  }, [reduceMotion, reduceMotionSV]);
+    reduceMotionRef.current = reduceMotion;
+  }, [reduceMotion]);
 
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const e = event?.nativeEvent ?? event ?? {};
     const y = e?.contentOffset?.y ?? 0;
     const now = Date.now();
     const animateBar = (visible: boolean) => {
-      barVisible.value = visible ? 1 : 0;
-      barTranslateY.value = reduceMotionSV.value
+      barVisibleRef.current = visible ? 1 : 0;
+      barTranslateY.value = reduceMotionRef.current
         ? (visible ? 0 : 120)
         : withTiming(visible ? 0 : 120, { duration: visible ? DURATION.enter : DURATION.exit });
     };
 
     // Near the top: reveal immediately, never throttle.
     if (y < 10) {
-      lastScrollProcessedAt.value = now;
-      if (barVisible.value === 0) animateBar(true);
+      lastScrollProcessedAtRef.current = now;
+      if (barVisibleRef.current === 0) animateBar(true);
       return;
     }
 
     // Sample velocity at most every 60ms; mid-list scrolls only drive shared values.
-    if (now - lastScrollProcessedAt.value < 60) return;
-    lastScrollProcessedAt.value = now;
+    if (now - lastScrollProcessedAtRef.current < 60) return;
+    lastScrollProcessedAtRef.current = now;
 
-    const dt = now - lastScrollTime.value;
-    const dy = y - lastScrollY.value;
-    lastScrollY.value = y;
-    lastScrollTime.value = now;
+    const dt = now - lastScrollTimeRef.current;
+    const dy = y - lastScrollYRef.current;
+    lastScrollYRef.current = y;
+    lastScrollTimeRef.current = now;
 
     const velocity = dt > 0 ? dy / dt : 0;
-    if (velocity > 0.3 && barVisible.value === 1) {
+    if (velocity > 0.3 && barVisibleRef.current === 1) {
       animateBar(false);
-    } else if (velocity < -0.3 && barVisible.value === 0) {
+    } else if (velocity < -0.3 && barVisibleRef.current === 0) {
       animateBar(true);
     }
-  }, [reduceMotionSV, barVisible, barTranslateY, lastScrollProcessedAt, lastScrollTime, lastScrollY]);
+  }, [barTranslateY]);
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: barTranslateY.value }],

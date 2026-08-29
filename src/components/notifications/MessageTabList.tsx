@@ -27,7 +27,6 @@ import { useTimeLabel } from '@/hooks/useTimeLabel';
 import {
   AvatarPressable,
   EntranceRow,
-  getSegmentLabel,
   getTypeIcon,
   messageKeyExtractor,
   messageRowStyles,
@@ -36,6 +35,13 @@ import {
 } from '@/components/notifications/MessageRow';
 import type { SemanticColors } from '@/theme/colors';
 import type { MessageItem } from '@/types';
+
+/** 分 tab 专属空态文案（2026-08-29 用户反馈：空态要能区分"没消息"） */
+const MESSAGE_EMPTY_STATE: Record<MessageTab, { title: string; description: string }> = {
+  reply: { title: '暂无回复', description: '还没有人回复你的贴子' },
+  at: { title: '暂无@提到我', description: '暂时没有 @你 的内容' },
+  agree: { title: '暂无收到的赞', description: '你收到的赞会显示在这里' },
+};
 
 interface MessageTabListProps {
   tab: MessageTab;
@@ -229,7 +235,17 @@ export function MessageTabList({
 
   return (
     <View style={{ flex: 1 }}>
-      {msgLoading && messages.length === 0 ? (
+      {!isLoggedIn ? (
+        // 未登录：显式说明（此前未登录时 loading 恒 true、骨架屏永转，
+        // "加载失败还是没消息"无从判断——2026-08-29 用户反馈）
+        <View style={[styles.messageEmptyWrap, { minHeight: 320 }]}>
+          <EmptyState
+            title="未登录"
+            description="登录后查看回复、@提到我 与收到的赞"
+            icon="person.crop.circle.badge.questionmark"
+          />
+        </View>
+      ) : msgLoading && messages.length === 0 ? (
         <SkeletonList variant="row" count={8} style={styles.messageSkeleton} />
       ) : msgError && messages.length === 0 ? (
         <ErrorState
@@ -243,8 +259,13 @@ export function MessageTabList({
         // 空态包 ThemedHost（EmptyState 内置）+ 保底高度：裸 ContentUnavailableView
         // 在 SegmentPager 内高度塌缩成一片空白（2026-08-27 真机"消息界面全空白、
         // 无提示"根因）；与个人主页空态 minHeight 隔离同款修复。
+        // 分 tab 专属文案（2026-08-29 用户反馈：空态要能区分"没消息"）。
         <View style={[styles.messageEmptyWrap, { minHeight: 320 }]}>
-          <EmptyState title="暂无消息" description={`暂无${getSegmentLabel(tab)}`} icon="bell" />
+          <EmptyState
+            title={MESSAGE_EMPTY_STATE[tab].title}
+            description={MESSAGE_EMPTY_STATE[tab].description}
+            icon="bell"
+          />
         </View>
       ) : (
         <LegendList

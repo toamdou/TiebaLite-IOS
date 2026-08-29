@@ -37,7 +37,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { useAppPreference } from '@/hooks/useAppPreference';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { ImageSourceFrame, ViewerImageMeta } from '@/hooks/useImageViewer';
-import { buildPageWindow, ZoomableImage, ThumbnailCell } from '@/components/imageviewer/parts';
+import { buildPageWindow, LongImageView, ZoomableImage, ThumbnailCell } from '@/components/imageviewer/parts';
 import { useAuthStore } from '@/stores/authStore';
 import { Toast, type ToastRef } from '@/components/ui/Toast';
 import { TiebaPhotoContextMenu } from '../../modules/tieba-native/src/TiebaPhotoContextMenu';
@@ -680,7 +680,10 @@ export default function ImageViewer({
             onPageSelected={handlePageSelected}
             overdrag
           >
-            {pages.map((page) => (
+            {pages.map((page) => {
+              const longPage = isLongImageOf(page.index);
+              const pageMeta = imageMeta?.[page.index];
+              return (
               <View key={String(page.index)} collapsable={false} style={styles.imagePage}>
                 {/* 大图长按：在长按位置弹出选项框（无放大预览，页面本身已是大图） */}
                 <TiebaPhotoContextMenu
@@ -690,23 +693,46 @@ export default function ImageViewer({
                   onAction={(actionId) => handlePageMenuAction(page.index, actionId)}
                   style={StyleSheet.absoluteFill}
                 >
-                  <ZoomableImage
-                    uri={page.uri}
-                    onSingleTap={toggleUI}
-                    onZoomChange={setIsZoomed}
-                    active={page.active}
-                    zoomed={isZoomed}
-                    onLoadStart={() => {
-                      // 仅当该页显示的是原图（长图默认/手动切换）时转圈：
-                      // 普通档位图沿用原有直出行为，不闪加载动画
-                      if (page.uri !== images[page.index]) {
-                        setOriginLoading((prev) => ({ ...prev, [page.index]: true }));
-                      }
-                    }}
-                    onLoadEnd={() => {
-                      setOriginLoading((prev) => ({ ...prev, [page.index]: false }));
-                    }}
-                  />
+                  {longPage ? (
+                    /* 长图阅读模式（2026-08-29）：小档秒出 + 原图后台加载完淡入；
+                       fit-width + 单指下滑读完；捏合/双击缩放。修复长图默认直接
+                       解码 originSrc 巨图导致的整机冻结。 */
+                    <LongImageView
+                      baseUri={images[page.index]}
+                      originUri={imageOrigins?.[page.index]}
+                      imageWidth={pageMeta?.width}
+                      imageHeight={pageMeta?.height}
+                      zoomed={isZoomed}
+                      onSingleTap={toggleUI}
+                      onZoomChange={setIsZoomed}
+                      onLoadStart={() => {
+                        if (page.uri !== images[page.index]) {
+                          setOriginLoading((prev) => ({ ...prev, [page.index]: true }));
+                        }
+                      }}
+                      onLoadEnd={() => {
+                        setOriginLoading((prev) => ({ ...prev, [page.index]: false }));
+                      }}
+                    />
+                  ) : (
+                    <ZoomableImage
+                      uri={page.uri}
+                      onSingleTap={toggleUI}
+                      onZoomChange={setIsZoomed}
+                      active={page.active}
+                      zoomed={isZoomed}
+                      onLoadStart={() => {
+                        // 仅当该页显示的是原图（长图默认/手动切换）时转圈：
+                        // 普通档位图沿用原有直出行为，不闪加载动画
+                        if (page.uri !== images[page.index]) {
+                          setOriginLoading((prev) => ({ ...prev, [page.index]: true }));
+                        }
+                      }}
+                      onLoadEnd={() => {
+                        setOriginLoading((prev) => ({ ...prev, [page.index]: false }));
+                      }}
+                    />
+                  )}
                 </TiebaPhotoContextMenu>
                 {originLoading[page.index] ? (
                   <View pointerEvents="none" style={styles.originLoadingOverlay}>
@@ -723,7 +749,8 @@ export default function ImageViewer({
                   </Text>
                 ) : null}
               </View>
-            ))}
+              );
+            })}
           </PagerView>
           )}
         </Animated.View>

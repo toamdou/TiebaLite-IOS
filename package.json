@@ -32,8 +32,6 @@
     "expo-system-ui": "~57.0.3",
     "expo-video": "~57.0.3",
     "expo-web-browser": "~57.0.2",
-    "md5": "^2.3.0",
-    "protobufjs": "^8.6.3",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
@@ -63,6 +61,12 @@
     "lint": "expo lint",
     "ios:build": "RCT_USE_RN_DEP=0 RCT_USE_PREBUILT_RNCORE=0 expo run:ios",
     "pods:source": "RCT_USE_RN_DEP=0 RCT_USE_PREBUILT_RNCORE=0 npx pod-install"
+  },
+  "reanimated": {
+    "staticFeatureFlags": {
+      "DISABLE_COMMIT_PAUSING_MECHANISM": true,
+      "IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS": true
+    }
   },
   "private": true,
   "license": "GPL-3.0"

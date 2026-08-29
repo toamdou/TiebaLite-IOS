@@ -24,12 +24,11 @@ public enum TiebaProtoPipeline {
       requestId: requestId,
       timeout: timeoutMs
     )
-    // 与 Expo 通道同构：后台队列解码，投影裁剪到渲染白名单后序列化为 JSON。
+    // 与 Expo 通道同构：后台队列 SwiftProtobuf 解码（全字段，无投影）后序列化为 JSON。
     let decoded = try await Task.detached(priority: .userInitiated) {
-      try TiebaProtoDecoder().decode(messagePath: responseType, bytes: responseData)
+      try TiebaSwiftProto.decode(messagePath: responseType, bytes: responseData)
     }.value
-    let projected = TiebaProtoProjector.shared.project(decoded, messagePath: responseType)
-    let jsonData = try JSONSerialization.data(withJSONObject: projected)
+    let jsonData = try JSONSerialization.data(withJSONObject: decoded)
     return String(data: jsonData, encoding: .utf8) ?? "{}"
   }
 }

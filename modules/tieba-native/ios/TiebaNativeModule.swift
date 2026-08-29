@@ -1,3 +1,4 @@
+import CryptoKit
 import ExpoModulesCore
 import Foundation
 import ObjectiveC
@@ -28,6 +29,20 @@ public final class TiebaNativeModule: Module {
       try TiebaProtoRegistry.shared.initialize(json: json)
     }
 
+    /// SwiftProtobuf 编码：messagePath + JS 对象 JSON（驼峰键，未知字段忽略）
+    /// → wire bytes → base64。替换 JS 侧 protobufjs 编码（2026-08-29）。
+    Function("protoEncode") { (messagePath: String, json: String) throws -> String in
+      let wire = try TiebaSwiftProto.encodeJSON(messagePath: messagePath, json: json)
+      return wire.base64EncodedString()
+    }
+
+    /// 原生 MD5（CryptoKit Insecure.MD5）：32 位小写 hex，与 JS md5 包逐字节一致。
+    /// 签名链（sign.ts / auth.ts）走这里，把纯 JS 哈希挪出 JS 线程。
+    Function("md5Hex") { (input: String) -> String in
+      let digest = Insecure.MD5.hash(data: Data(input.utf8))
+      return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
     AsyncFunction("protoPost") {
       (
         url: String,
@@ -51,17 +66,14 @@ public final class TiebaNativeModule: Module {
         requestId: requestId,
         timeout: timeoutMs ?? 15000
       )
-      // Decode on a background queue, project the tree down to the render
-      // whitelist, then serialize to a JSON string. A flat string crosses the
-      // bridge far cheaper than a deeply nested dictionary, and the projection
-      // prunes content the JS UI never reads (mirrors helpers.ts mapping
-      // whitelist: subPosts capped to 3, firstPostContent dropped, etc.), so
-      // the JS heap only ever holds one projected copy.
+      // Decode on a background queue via SwiftProtobuf generated code
+      // (schema-driven，无白名单投影——全字段输出；int64/enum 归一化到旧形状),
+      // then serialize to a JSON string. A flat string crosses the bridge far
+      // cheaper than a deeply nested dictionary.
       let decoded = try await Task.detached(priority: .userInitiated) {
-        try TiebaProtoDecoder().decode(messagePath: responseType, bytes: responseData)
+        try TiebaSwiftProto.decode(messagePath: responseType, bytes: responseData)
       }.value
-      let projected = TiebaProtoProjector.shared.project(decoded, messagePath: responseType)
-      let jsonData = try JSONSerialization.data(withJSONObject: projected)
+      let jsonData = try JSONSerialization.data(withJSONObject: decoded)
       return String(data: jsonData, encoding: .utf8) ?? "{}"
     }
 

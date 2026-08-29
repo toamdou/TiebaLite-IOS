@@ -7,16 +7,16 @@
 //   4. MD5 hash the result
 // ============================================================
 
-import md5 from 'md5';
+import { TiebaNative } from '../../../modules/tieba-native/src/TiebaNative';
 import { SIGN_SECRET } from './config';
+
+// 2026-08-29：MD5 下沉原生（CryptoKit Insecure.MD5，tieba-native md5Hex）。
+// 此前顺序：手写 ~200 行纯 JS RFC1321 → `md5` 包（Z6-A）。输出同为 32 位
+// 小写 hex，逐字节一致；哈希挪出 JS 线程，滚动中连续请求不再占用 hermes。
+const md5 = (input: string): string => TiebaNative.md5Hex(input);
 
 // api/index barrel 继续导出 md5（既有消费面不变）
 export { md5 };
-
-// thermo 2026-08-26（Z6-A）：此前手写的 ~200 行纯 JS RFC1321 MD5 实现
-// 已替换为社区维护的 `md5` 包（同步 API，与下方同步签名链兼容；
-// expo-crypto 的 digestStringAsync 为异步，不适用）。输出同为 32 位
-// 小写 hex——`md5` 包默认即返回小写 hex，与旧实现逐字节一致。
 
 /**
  * Sort parameter keys alphabetically and return key=value pairs as a string.
