@@ -10,7 +10,11 @@ import UIKit
 ///
 /// 开关状态镜像进 UserDefaults：下次启动 didFinishLaunching 即自启
 /// （armFromMirror），早于 JS hydrate，堵住冷启动最早期退后台的空窗。
-final class TiebaPrivacyShield {
+///
+/// 并发契约：两个公开入口（armFromMirror/setEnabled/setSessionUnlocked）
+/// 自带主线程跳转守卫，NotificationCenter 观察者队列指定 .main——
+/// 全部状态仅主线程读写。Swift 6 下以 @unchecked Sendable 声明该不变量。
+final class TiebaPrivacyShield: @unchecked Sendable {
   static let shared = TiebaPrivacyShield()
 
   private static let mirrorKey = "tiebalite.privacy_shield_enabled"

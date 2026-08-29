@@ -5,6 +5,8 @@ enum TiebaProtoError: LocalizedError {
   case messageNotFound(String)
   case invalidPayload(String)
   case invalidWire(String)
+  /// SwiftProtobuf 生成代码抛出的原始错误（typed throws 包装层，保留原文）
+  case swiftProtobuf(String)
 
   var errorDescription: String? {
     switch self {
@@ -16,6 +18,8 @@ enum TiebaProtoError: LocalizedError {
       return "Invalid protobuf payload: \(reason)"
     case .invalidWire(let reason):
       return "Invalid protobuf wire data: \(reason)"
+    case .swiftProtobuf(let reason):
+      return "SwiftProtobuf: \(reason)"
     }
   }
 }
@@ -44,7 +48,10 @@ struct TiebaProtoMessage {
 /// wire 解码/编码已由 SwiftProtobuf 生成代码接管（TiebaSwiftProtoCodec），
 /// 本注册表仅保留描述符模型，供解码输出的 int64/enum 归一化按 schema
 /// 还原旧解码器的输出形状（数字/枚举值），JS 映射层零改动。
-final class TiebaProtoRegistry {
+/// 并发契约：initialize 一次性建表（启动期，先于任何请求），之后只读；
+/// resolveCache/enumCache 由各自 NSLock 保护（热路径双锁）。Swift 6 下以
+/// @unchecked Sendable 声明该不变量。
+final class TiebaProtoRegistry: @unchecked Sendable {
   static let shared = TiebaProtoRegistry()
 
   private var root: [String: Any] = [:]
@@ -59,7 +66,7 @@ final class TiebaProtoRegistry {
     case notFound
   }
 
-  func initialize(json: String) throws {
+  func initialize(json: String) throws(TiebaProtoError) {
     guard
       let data = json.data(using: .utf8),
       let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -70,10 +77,10 @@ final class TiebaProtoRegistry {
     messages = [:]
     resolveCache = [:]
     enumCache = [:]
-    try walk(object, path: "")
+    walk(object, path: "")
   }
 
-  private func walk(_ object: [String: Any], path: String) throws {
+  private func walk(_ object: [String: Any], path: String) {
     guard let nested = object["nested"] as? [String: Any] else { return }
     for (key, value) in nested {
       let fullPath = path.isEmpty ? key : "\(path).\(key)"
@@ -108,18 +115,18 @@ final class TiebaProtoRegistry {
           fieldByName: fieldsByName, fieldByProtoName: fieldsByProtoName
         )
       }
-      try walk(child, path: fullPath)
+      walk(child, path: fullPath)
     }
   }
 
-  func message(path: String) throws -> TiebaProtoMessage {
+  func message(path: String) throws(TiebaProtoError) -> TiebaProtoMessage {
     guard let message = messages[path] else {
       throw TiebaProtoError.messageNotFound(path)
     }
     return message
   }
 
-  func resolveMessage(typeName: String, currentPath: String) throws -> TiebaProtoMessage {
+  func resolveMessage(typeName: String, currentPath: String) throws(TiebaProtoError) -> TiebaProtoMessage {
     let trimmed = typeName.hasPrefix(".") ? String(typeName.dropFirst()) : typeName
     // Absolute paths are already unique; relative names depend on the namespace.
     let key = trimmed.contains(".") ? trimmed : "\(currentPath)|\(trimmed)"
@@ -160,7 +167,7 @@ final class TiebaProtoRegistry {
     resolveLock.unlock()
   }
 
-  private func resolveRelative(typeName: String, currentPath: String) throws -> TiebaProtoMessage {
+  private func resolveRelative(typeName: String, currentPath: String) throws(TiebaProtoError) -> TiebaProtoMessage {
     var namespace = currentPath
     while true {
       let candidate = namespace.isEmpty ? typeName : "\(namespace).\(typeName)"
@@ -177,7 +184,7 @@ final class TiebaProtoRegistry {
   }
 
   /// 枚举值表（名字 → 数值）。供 SwiftProtobuf JSON 输出的 enum 值名归一化。
-  func resolveEnumValues(typeName: String, currentPath: String) throws -> [String: Int] {
+  func resolveEnumValues(typeName: String, currentPath: String) throws(TiebaProtoError) -> [String: Int] {
     let trimmed = typeName.hasPrefix(".") ? String(typeName.dropFirst()) : typeName
     let key = trimmed.contains(".") ? trimmed : "\(currentPath)|\(trimmed)"
 
@@ -205,7 +212,7 @@ final class TiebaProtoRegistry {
     }
   }
 
-  private func resolveEnumValuesUncached(typeName: String, currentPath: String) throws -> [String: Int] {
+  private func resolveEnumValuesUncached(typeName: String, currentPath: String) throws(TiebaProtoError) -> [String: Int] {
     var namespace = currentPath
     while true {
       let candidate = namespace.isEmpty ? typeName : "\(namespace).\(typeName)"

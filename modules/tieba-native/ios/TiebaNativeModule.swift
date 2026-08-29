@@ -69,12 +69,13 @@ public final class TiebaNativeModule: Module {
       // Decode on a background queue via SwiftProtobuf generated code
       // (schema-driven，无白名单投影——全字段输出；int64/enum 归一化到旧形状),
       // then serialize to a JSON string. A flat string crosses the bridge far
-      // cheaper than a deeply nested dictionary.
+      // cheaper than a deeply nested dictionary. 解码+序列化都在 detached 内
+      // 完成，跨界只传 Sendable 的 String。
       let decoded = try await Task.detached(priority: .userInitiated) {
-        try TiebaSwiftProto.decode(messagePath: responseType, bytes: responseData)
+        let decoded = try TiebaSwiftProto.decode(messagePath: responseType, bytes: responseData)
+        let jsonData = try JSONSerialization.data(withJSONObject: decoded)
+        return String(data: jsonData, encoding: .utf8) ?? "{}"
       }.value
-      let jsonData = try JSONSerialization.data(withJSONObject: decoded)
-      return String(data: jsonData, encoding: .utf8) ?? "{}"
     }
 
     Function("cancelProtoRequest") { (requestId: String) in
@@ -331,10 +332,14 @@ public final class TiebaNativeModule: Module {
 
   // MARK: - 状态栏接管（隐藏 + 样式）
 
-  private static var modalStatusBarHidden = false
-  private static var modalStatusBarSwizzled = false
-  private static var statusBarStyle: UIStatusBarStyle = .default
-  private static var statusBarManagerAdopted = false
+  // ⚠️ Swift 6 并发契约：以下静态状态全部仅主线程读写——swizzle 回调/触摸/
+  // 布局/KVO 都在主线程，载入路径自带主线程守卫或主队列跳转。ObjectiveC
+  // runtime 互操作（imp_implementationWithBlock 等）无法携带隔离标注，
+  // 故统一以 nonisolated(unsafe) 声明非隔离存储，维持原有语义。
+  nonisolated(unsafe) private static var modalStatusBarHidden = false
+  nonisolated(unsafe) private static var modalStatusBarSwizzled = false
+  nonisolated(unsafe) private static var statusBarStyle: UIStatusBarStyle = .default
+  nonisolated(unsafe) private static var statusBarManagerAdopted = false
 
   /// iOS 27 状态栏机制（实测）：
   /// - 隐藏：系统不再查询公开的 prefersStatusBarHidden（全程零查询），改查
@@ -449,7 +454,7 @@ public final class TiebaNativeModule: Module {
     return ()
   }()
 
-  private static var navGlassScrollSwizzled = false
+  nonisolated(unsafe) private static var navGlassScrollSwizzled = false
   private static let navGlassScrollDump: Void = {
     guard !navGlassScrollSwizzled else { return }
     navGlassScrollSwizzled = true
@@ -557,7 +562,7 @@ public final class TiebaNativeModule: Module {
   // 材质视图 KVO 监听 effect，一旦被系统改掉立即重挂，滚动全程保持玻璃。
   // weak 表去重：视图重建（dealloc）后自动释放，表条目失效。
   private static let glassObservedViews = NSHashTable<UIVisualEffectView>.weakObjects()
-  fileprivate static var glassKvoContext = 0
+  nonisolated(unsafe) fileprivate static var glassKvoContext = 0
   private static let glassKvoObserver = NavGlassEffectObserver()
 
   private static func observeGlassEffect(on view: UIVisualEffectView) {
@@ -762,9 +767,9 @@ public final class TiebaNativeModule: Module {
 
   // 事件发送需要模块实例（sendEvent 是实例方法，手势回调是静态上下文）：
   // protoInitialize（启动首个 JS→原生调用）捕获，weak 不延长生命周期。
-  private static weak var navEventModuleInstance: TiebaNativeModule?
+  nonisolated(unsafe) private static weak var navEventModuleInstance: TiebaNativeModule?
   /// 双击门卫 delegate 的关联对象键（见 installNavDoubleTapToTop）。
-  private static var navDoubleTapGateKey: UInt8 = 0
+  nonisolated(unsafe) private static var navDoubleTapGateKey: UInt8 = 0
 
   /// 安装幂等：force 由 timer/KVO 反复跑，按手势类型判重。
   /// 双击识别不拦单击按钮动作——UIControl 在第一击 touch-up 即派发，
@@ -804,11 +809,11 @@ public final class TiebaNativeModule: Module {
   // imageView）而非控件本身，所以 swizzle 挂在 UIView 上：先调原实现，再沿
   // 响应链向上找最近 UIControl；其祖先含 UINavigationBar/UITabBar 才挂光效。
   // 过滤条件之外的视图零开销短路。
-  private static var hdrChromeSwizzled = false
+  nonisolated(unsafe) private static var hdrChromeSwizzled = false
   /// chrome 按压触觉总闸：由 JS 在偏好变化与启动时同步（默认开）。
-  fileprivate static var hapticChromeHapticsEnabled = true
+  nonisolated(unsafe) fileprivate static var hapticChromeHapticsEnabled = true
   /// 应用实际主题（JS 下发）：顶栏 chrome overrideUserInterfaceStyle 用。
-  fileprivate static var chromeDarkMode = false
+  nonisolated(unsafe) fileprivate static var chromeDarkMode = false
   /// 应用主题对应的窗口底色：push 转场期间新屏内容未渲染、透出窗口背景时
   /// 不发白的兜底（深色模式"先白后黑"的最后一环，2026-08-26）。
   private static var chromeWindowColor: UIColor {
@@ -846,8 +851,8 @@ public final class TiebaNativeModule: Module {
   }()
 
   /// 同控件去重：UIView/UIControl 双通道 + 连按重放都从两次降至一次。
-  private static var lastChromeControl: UIControl?
-  private static var lastChromeAt: TimeInterval = 0
+  nonisolated(unsafe) private static var lastChromeControl: UIControl?
+  nonisolated(unsafe) private static var lastChromeAt: TimeInterval = 0
 
   private static func applyChromeHdr(to view: AnyObject) {
     guard let host = view as? UIView else { return }

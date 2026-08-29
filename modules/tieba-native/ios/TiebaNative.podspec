@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.author         = 'TiebaLite'
   s.homepage       = 'https://github.com/tiebalite/tieba-native'
   s.platforms      = { :ios => '16.4' }
-  s.swift_version  = '5.9'
+  s.swift_version  = '5.0'
   s.source         = { :path => '.' }
   s.static_framework = true
 

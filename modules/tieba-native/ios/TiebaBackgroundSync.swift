@@ -6,7 +6,10 @@ import Security
 import UIKit
 import UserNotifications
 
-final class TiebaBackgroundSnapshot {
+/// 后台快照（BDUSS/STOKEN/签到目标等）：JS 桥主线程写入、BGTask 后台读取，
+/// 按设计跨线程。Swift 6 下以 @unchecked Sendable 声明（字段均为 String/
+/// [String] 值类型，Keychain 落盘由本类串行执行）。
+final class TiebaBackgroundSnapshot: @unchecked Sendable {
   static let shared = TiebaBackgroundSnapshot()
 
   private let keychainService = "app"
@@ -198,7 +201,10 @@ public class TiebaBackgroundAppDelegate: ExpoAppDelegateSubscriber {
   }
 }
 
-final class TiebaBackgroundSync {
+/// BGTask 调度器单例：expirationHandler（系统队列）与 Task 工作体（协作池）
+/// 按设计并发，finish 由 completionLock 串行化（setTaskCompleted 恰好一次）。
+/// Swift 6 下以 @unchecked Sendable 声明该不变量。
+final class TiebaBackgroundSync: @unchecked Sendable {
   static let shared = TiebaBackgroundSync()
   static let notificationTaskIdentifier = "com.tiebalite.app.notification-sync"
   static let autoSignTaskIdentifier = "com.tiebalite.app.auto-sign"
@@ -509,10 +515,10 @@ final class TiebaBackgroundSync {
   // 全仓零引用（JS 侧从未接桥，前台签到走自己的协调状态），保留
   // saveLastAutoSignSummary / clearBackgroundSnapshot 的写路径。
   private func dayKey(_ date: Date = Date()) -> String {
-    dayFormatter.string(from: date)
+    Self.dayFormatter.string(from: date)
   }
 
-  private lazy var dayFormatter: DateFormatter = {
+  private static let dayFormatter: DateFormatter = {
     // 与 commonParams 同款：固定 en_US_POSIX + Gregorian，签到"今天"判定
     // 不受地区/日历设置影响。
     let formatter = DateFormatter()

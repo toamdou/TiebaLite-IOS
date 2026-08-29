@@ -90,7 +90,9 @@ enum TiebaSigner {
   }
 }
 
-final class TiebaNativeClient {
+/// 跨线程单例：`tasks` 字典由 `lock` 串行化，URLSession 自身 thread-safe。
+/// Swift 6 下以 @unchecked Sendable 声明该不变量（所有共享状态有锁保护）。
+final class TiebaNativeClient: @unchecked Sendable {
   static let shared = TiebaNativeClient()
 
   private let session: URLSession

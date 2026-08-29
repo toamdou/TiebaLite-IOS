@@ -466,6 +466,7 @@
 				CLANG_ENABLE_EXPLICIT_MODULES = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = tiebalite/tiebalite.entitlements;
+				COMPILATION_CACHE_ENABLE_CACHING = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				CXX_COMPILER_LAUNCHER = /opt/homebrew/bin/ccache;
 				C_COMPILER_LAUNCHER = /opt/homebrew/bin/ccache;
@@ -509,6 +510,7 @@
 				CLANG_ENABLE_EXPLICIT_MODULES = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = tiebalite/tiebalite.entitlements;
+				COMPILATION_CACHE_ENABLE_CACHING = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				CXX_COMPILER_LAUNCHER = /opt/homebrew/bin/ccache;
 				C_COMPILER_LAUNCHER = /opt/homebrew/bin/ccache;
