@@ -1,0 +1,5 @@
+# 生成代码标记（GitHub Linguist 统计口径）：protoc 从 protos_src 生成的
+# SwiftProtobuf 代码不计入语言占比——Swift 占比应反映手写代码（~5k 行）。
+# 权威源在 protos_src 的 .proto；禁止手改本目录（改 schema 重新生成）。
+modules/tieba-native/ios/ProtoGenerated/** linguist-generated=true
+*.pb.swift linguist-generated=true
