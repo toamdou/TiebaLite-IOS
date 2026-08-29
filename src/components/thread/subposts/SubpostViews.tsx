@@ -28,6 +28,7 @@ import { typographyStyles } from '@/theme/typography';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { contentToText, formatCount, summarizeText } from '@/utils';
 import { useTimeLabel } from '@/hooks/useTimeLabel';
+import { levelBadgeColor } from '@/constants/rank';
 import { useAppPreference } from '@/hooks/useAppPreference';
 import { openLink } from '@/utils/linkOpener';
 import type { ImageSourceFrame } from '@/hooks/useImageViewer';
@@ -140,10 +141,8 @@ export const ReplyItem = React.memo(function ReplyItem({
   const fade = useSharedValue(animateIn && !reduceMotion ? 0 : 1);
   const isLz = !!(threadAuthorId && item.authorId === threadAuthorId);
   const hasLevel = (item.authorLevelId ?? 0) > 0;
-  // 等级徽标：主题色浅底 15% + 主题色字（2026-08-28 全局跟主题）
-  const levelBadge = hasLevel
-    ? { backgroundColor: `${colors.primary}26`, color: colors.primary }
-    : null;
+  // 等级徽标：Kotlin 官方等级多色（getIconColorByLevel+greifyColor 复刻）
+  const levelBadge = hasLevel ? levelBadgeColor(item.authorLevelId ?? 0) : null;
   const images = extractImages(item.content);
   // 大图查看器顶栏标题：回复文字前 30 字（超出省略；规则共用 summarizeText，
   // 与 thread/[id].tsx 引用图摘要一致）
@@ -247,7 +246,7 @@ export const ReplyItem = React.memo(function ReplyItem({
             </Link>
 
             {showLevelBadge && hasLevel && levelBadge && (
-              <View style={[s.levelChip, { backgroundColor: levelBadge.backgroundColor }]}>
+              <View style={[s.levelChip, { backgroundColor: levelBadge.bg }]}>
                 <Text style={[s.levelChipText, { color: levelBadge.color }]}>
                   Lv.{item.authorLevelId}
                 </Text>

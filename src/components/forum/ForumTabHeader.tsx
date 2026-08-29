@@ -6,6 +6,7 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Text } from '../ui/CompatText';
+import { levelBadgeColor } from '@/constants/rank';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { HdrPressable } from '@/components/ui/HdrPressable';
@@ -59,8 +60,8 @@ export const ForumTabHeader = React.memo(function ForumTabHeader({
               <Text style={[styles.forumTitle, { color: colors.text }]}>{name}吧</Text>
               {isLoggedIn && currentForum?.isLike && currentForum.levelId != null && currentForum.levelId > 0 && (
                 <View style={styles.forumLevelRow}>
-                  <View style={[styles.levelBadgeSmall, { backgroundColor: `${colors.primary}26` }]}>
-                    <Text style={[styles.levelBadgeSmallText, { color: colors.primary }]}>Lv.{currentForum.levelId}</Text>
+                  <View style={[styles.levelBadgeSmall, { backgroundColor: levelBadgeColor(currentForum.levelId)?.bg }]}>
+                    <Text style={[styles.levelBadgeSmallText, { color: levelBadgeColor(currentForum.levelId)?.color }]}>Lv.{currentForum.levelId}</Text>
                   </View>
                   {currentForum.levelName ? (
                     <Text style={[styles.forumLevelName, { color: colors.textTertiary }]} numberOfLines={1}>

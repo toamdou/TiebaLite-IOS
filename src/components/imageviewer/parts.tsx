@@ -8,23 +8,24 @@
  * ImageViewer.tsx 主组件内，勿迁。
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Pressable, ScrollView as RNScrollView, StyleSheet, Dimensions } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Pressable, StyleSheet, Dimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   useAnimatedReaction,
-  useAnimatedScrollHandler,
   withSpring,
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, type GestureType } from 'react-native-gesture-handler';
 import type { SharedValue } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 
 import { hapticForScene } from '@/theme/hapticsMap';
 import { useNativeThumbnail } from '@/hooks/useNativeThumbnail';
 import { thumbnailUrl, THUMB_LIST } from '@/utils/thumbnail';
+import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
 import { MOMENTUM } from '@/theme/springs';
 
 // 与主组件同款固定窗口尺寸（竖屏取一次；旋转后页面 flex 撑开，钳制按
@@ -90,6 +91,15 @@ export const ZoomableImage = memo(function ZoomableImage({
   const translateY = useSharedValue(0);
   const startTranslateX = useSharedValue(0);
   const startTranslateY = useSharedValue(0);
+  // zoomed 的 UI 线程镜像：pan 手势门控改由共享值在回调内自判，手势本体不随
+  // zoomed 重建——捏合速度快时父级 setIsZoomed 触发重渲染会掐断进行中的捏合
+  // （真机：快速捏合松手后弹回原尺寸的根因）。
+  const zoomedSV = useSharedValue(zoomed);
+  const panStartX = useSharedValue(0);
+  const panStartY = useSharedValue(0);
+  useEffect(() => {
+    zoomedSV.value = zoomed;
+  }, [zoomed, zoomedSV]);
 
   const resetTransform = useCallback(() => {
     scale.value = 1;
@@ -162,7 +172,18 @@ export const ZoomableImage = memo(function ZoomableImage({
   const pan = useMemo(
     () =>
       Gesture.Pan()
-        .enabled(zoomed)
+        // 手动激活：minDistance 关自动激活，onTouchesMove 依 zoomedSV 显式
+        // activate——手势对象稳定不随缩放态重建（快速捏合不被掐断）
+        .minDistance(4000)
+        .maxPointers(1)
+        .onTouchesDown((e) => {
+          const t = e.changedTouches[0];
+          panStartX.value = t.x;
+          panStartY.value = t.y;
+        })
+        .onTouchesMove((_e, mgr) => {
+          if (zoomedSV.value) mgr.activate();
+        })
         .onStart(() => {
           startTranslateX.value = translateX.value;
           startTranslateY.value = translateY.value;
@@ -183,7 +204,7 @@ export const ZoomableImage = memo(function ZoomableImage({
           startTranslateX.value = translateX.value;
           startTranslateY.value = translateY.value;
         }),
-    [zoomed, scale, startTranslateX, startTranslateY, translateX, translateY],
+    [scale, startTranslateX, startTranslateY, translateX, translateY, zoomedSV],
   );
 
   const doubleTap = useMemo(
@@ -229,10 +250,11 @@ export const ZoomableImage = memo(function ZoomableImage({
             style={partStyles.fullImage}
             contentFit="contain"
             preferHighDynamicRange
-            transition={200}
+            transition={isImageWarm(uri) ? 0 : 200}
             cachePolicy="memory-disk"
             priority="high"
             recyclingKey={uri}
+            onLoad={() => markImageWarm(uri)}
             onLoadStart={onLoadStart}
             onLoadEnd={onLoadEnd}
           />
@@ -273,7 +295,7 @@ export const LongImageView = memo(function LongImageView({
   onZoomChange,
   onLoadStart,
   onLoadEnd,
-  scrollNative,
+  readPan,
   scrollY,
   scrollMax,
 }: {
@@ -282,15 +304,15 @@ export const LongImageView = memo(function LongImageView({
   /** 原图自然尺寸（px）：fit 高度 = 屏宽 × (h/w) */
   imageWidth?: number;
   imageHeight?: number;
-  /** 父级缩放态（同 ZoomableImage 契约：prop 传入驱动 scrollEnabled/pan） */
+  /** 父级缩放态（同 ZoomableImage 契约：prop 传入驱动 pan 门控） */
   zoomed: boolean;
   onSingleTap: () => void;
   onZoomChange?: (zoomed: boolean) => void;
   onLoadStart?: () => void;
   onLoadEnd?: () => void;
-  /** 阅读滚动手势的原生包装（父级退出手势与之同流，按边界仲裁滚动/退出） */
-  scrollNative: GestureType;
-  /** 滚动偏移 / 最大可滚量（UI 线程镜像，父级退出手势 onTouchesMove 读取） */
+  /** 阅读滚动 pan（父级创建：与退出手势同流，未缩放时驱动长图上下阅读） */
+  readPan: GestureType;
+  /** 滚动偏移 / 最大可滚量（UI 线程共享值；offset 由 readPan 写入） */
   scrollY: SharedValue<number>;
   scrollMax: SharedValue<number>;
 }) {
@@ -305,7 +327,14 @@ export const LongImageView = memo(function LongImageView({
   const translateY = useSharedValue(0);
   const startTranslateX = useSharedValue(0);
   const startTranslateY = useSharedValue(0);
-  const scrollRef = useRef<RNScrollView>(null);
+  // zoomed 的 UI 线程镜像（同 ZoomableImage：手势本体不随缩放态重建，
+  // 快速捏合不被掐断）
+  const zoomedSV = useSharedValue(zoomed);
+  const panStartX = useSharedValue(0);
+  const panStartY = useSharedValue(0);
+  useEffect(() => {
+    zoomedSV.value = zoomed;
+  }, [zoomed, zoomedSV]);
   // 原图（originUri）解码完成 → 淡入替换缩略图
   const [originReady, setOriginReady] = useState(false);
   const [originFailed, setOriginFailed] = useState(false);
@@ -369,11 +398,21 @@ export const LongImageView = memo(function LongImageView({
     [scale, baseScale, translateX, translateY],
   );
 
-  // 放大后 pan：范围按"内容高 × scale − 屏高"（长图内容远高于屏）
+  // 放大后 pan：范围按"内容高 × scale − 屏高"（长图内容远高于屏）。
+  // 手势本体稳定（zoomedSV 门控 + 手动激活），不随缩放态重建。
   const pan = useMemo(
     () =>
       Gesture.Pan()
-        .enabled(zoomed)
+        .minDistance(4000)
+        .maxPointers(1)
+        .onTouchesDown((e) => {
+          const t = e.changedTouches[0];
+          panStartX.value = t.x;
+          panStartY.value = t.y;
+        })
+        .onTouchesMove((_e, mgr) => {
+          if (zoomedSV.value) mgr.activate();
+        })
         .onStart(() => {
           startTranslateX.value = translateX.value;
           startTranslateY.value = translateY.value;
@@ -395,7 +434,7 @@ export const LongImageView = memo(function LongImageView({
           startTranslateX.value = translateX.value;
           startTranslateY.value = translateY.value;
         }),
-    [zoomed, scale, startTranslateX, startTranslateY, translateX, translateY, fitHeight],
+    [zoomedSV, panStartX, panStartY, scale, startTranslateX, startTranslateY, translateX, translateY, fitHeight],
   );
 
   const doubleTap = useMemo(
@@ -427,45 +466,37 @@ export const LongImageView = memo(function LongImageView({
     setOriginReady(true);
     onLoadEnd?.();
   }, [onLoadEnd]);
+  const insets = useSafeAreaInsets();
 
-  // 非放大态：ScrollView 下滑阅读；放大态：关滚动走 pan（与 ZoomableImage 同约定）
-  const scrollEnabled = !zoomed;
+  // 阅读滚动偏移 → 共享值（UI 线程：readPan 直接写入，父级退出手势同帧读取）。
+  // 内容顶部让出灵动岛/状态栏安全区（2026-08-29 用户要求：大图不被岛遮挡），
+  // 最大可滚量 = 内容高（含顶部安全区）− 屏高。
+  const scrollerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: scrollY.value }],
+  }));
 
-  // 滚动偏移 → 共享值（UI 线程，父级退出手势据此判定滚动/退出边界）
-  const scrollHandler = useAnimatedScrollHandler((e) => {
-    scrollY.value = e.contentOffset.y;
-  });
-
-  // 最大可滚量镜像：内容高度超出屏高的部分。父级 onTouchesMove 用它判定
-  // “顶下拉/底上拉”边界；内容不超高（maxScroll=0）时视为双向都可退出。
   useEffect(() => {
-    scrollMax.value = Math.max(fitHeight - PART_SCREEN_HEIGHT, 0);
-  }, [fitHeight, scrollMax]);
+    scrollMax.value = Math.max(fitHeight + insets.top - PART_SCREEN_HEIGHT, 0);
+  }, [fitHeight, insets.top, scrollMax]);
 
   return (
     <GestureDetector gesture={composedGesture}>
       <Animated.View style={[{ width: PART_SCREEN_WIDTH, height: PART_SCREEN_HEIGHT }, animatedStyle]}>
-        {/* 原生滚动包装：让外层退出手势与 UIKit 滚动同流（否则滚动抢先吃掉
-            触摸，大图占满屏时无法拖拽退出）；bounces=false 让边界拖拽只由
-            外层跟手退出承担（无 rubber-band 双重位移） */}
-        <GestureDetector gesture={scrollNative}>
-          <Animated.ScrollView
-            ref={scrollRef}
-            scrollEnabled={scrollEnabled}
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-            scrollEventThrottle={16}
-            onScroll={scrollHandler}
-            contentContainerStyle={{ width: PART_SCREEN_WIDTH }}
-          >
-          <View style={{ width: PART_SCREEN_WIDTH, height: Math.max(fitHeight, 1) }}>
-            {/* 缩略层：小档秒出，完整长图（低清）即可读 */}
+        {/* 阅读滚动由父级 readPan 驱动（RNGH-RNGH 同流，与退出手势按边界仲裁；
+            不再套原生 ScrollView——UIKit 滚动会抢先吃掉触摸导致边界退出失效） */}
+        <GestureDetector gesture={readPan}>
+          <Animated.View style={[scrollerStyle, { width: PART_SCREEN_WIDTH, height: PART_SCREEN_HEIGHT }]}>
+            <View style={{ width: PART_SCREEN_WIDTH, height: Math.max(fitHeight + insets.top, 1) }}>
+              {/* 内容整体下移安全区顶（首屏不顶到灵动岛/状态栏） */}
+              <View style={{ marginTop: insets.top, width: PART_SCREEN_WIDTH, height: Math.max(fitHeight, 1) }}>
+{/* 缩略层：小档秒出，完整长图（低清）即可读 */}
             <Image
               source={{ uri: baseUri }}
               style={partStyles.absoluteFillImage}
               contentFit="cover"
               cachePolicy="memory-disk"
               transition={0}
+              onLoad={() => markImageWarm(baseUri)}
               recyclingKey={`long-base-${baseUri}`}
             />
             {/* 原图层：后台解码完成后淡入替换；加载期间缩略层照常显示 */}
@@ -475,16 +506,20 @@ export const LongImageView = memo(function LongImageView({
                 style={[partStyles.absoluteFillImage, { opacity: originReady ? 1 : 0 }]}
                 contentFit="cover"
                 cachePolicy="memory-disk"
-                transition={150}
+                transition={isImageWarm(originUri) ? 0 : 150}
                 priority="high"
                 recyclingKey={`long-origin-${originUri}`}
                 onLoadStart={onLoadStart}
-                onLoadEnd={handleOriginLoadEnd}
+                onLoad={() => {
+                  markImageWarm(originUri);
+                  handleOriginLoadEnd();
+                }}
                 onError={() => setOriginFailed(true)}
               />
             ) : null}
+            </View>
           </View>
-          </Animated.ScrollView>
+          </Animated.View>
         </GestureDetector>
       </Animated.View>
     </GestureDetector>

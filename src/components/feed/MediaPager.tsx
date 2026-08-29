@@ -23,6 +23,7 @@ import { useThemeColors } from '@/theme/ThemeContext';
 import {Radius} from '@/theme/spacing';
 import { thumbnailUrl, THUMB_POST } from '@/utils/thumbnail';
 import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
+import { frameFromPressEvent, type ImageSourceFrame } from '@/hooks/useImageViewer';
 import { stopPropagation } from '@/utils/gesture';
 import PostImageContextMenu from '@/components/feed/PostImageContextMenu';
 import { SymbolView } from '@/components/ui/SymbolView';
@@ -78,7 +79,7 @@ export const MediaPager = React.memo(function MediaPager({
   light?: boolean;
   /** 所在吧名（长按保存/分享的水印用） */
   forumName?: string;
-  onImagePress: (index: number) => void;
+  onImagePress: (index: number, sourceFrame?: ImageSourceFrame | null) => void;
   /** 视频 poster 点击兜底（无此回调时点击无操作；PostImages 场景不传） */
   onFallbackPress?: () => void;
 }) {
@@ -112,7 +113,11 @@ export const MediaPager = React.memo(function MediaPager({
     const singleHeight = heightOf(0);
     const thumbEl = (
       <Pressable
-        onPress={() => (isVideo ? onFallbackPress?.() : onImagePress(0))}
+        onPress={(e) =>
+          isVideo
+            ? onFallbackPress?.()
+            : onImagePress(0, frameFromPressEvent(e, { width, height: singleHeight }))
+        }
         onPressIn={stopPropagation}
         onPressOut={stopPropagation}
         accessibilityRole="imagebutton"
@@ -201,7 +206,7 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
   /** 自适应渲染 light 模式：跳过原生右键菜单包装层 */
   light?: boolean;
   forumName?: string;
-  onImagePress: (index: number) => void;
+  onImagePress: (index: number, sourceFrame?: ImageSourceFrame | null) => void;
 }) {
   const { isDark } = useThemeColors();
   const placeholderBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
@@ -269,7 +274,7 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
           const isLong = img.height > 0 && img.width > 0 && img.height / img.width > LONG_IMAGE_RATIO;
           const thumbEl = (
             <Pressable
-              onPress={() => onImagePress(i)}
+              onPress={(e) => onImagePress(i, frameFromPressEvent(e, { width: w, height: stripHeight }))}
               onPressIn={stopPropagation}
               onPressOut={stopPropagation}
               accessibilityRole="imagebutton"

@@ -197,6 +197,7 @@ const SCREENS: readonly ScreenDef[] = [
   { name: 'settings/edit-profile', title: '编辑资料' },
   { name: 'settings/block',        title: '屏蔽设置' },
   { name: 'settings/habit',        title: '使用习惯' },
+  { name: 'settings/haptics',      title: '振动设置' },
   { name: 'settings/image',        title: '图片与流量' },
   { name: 'settings/oksign',       title: '一键签到设置' },
   { name: 'settings/more',         title: '更多设置' },

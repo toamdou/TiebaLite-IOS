@@ -45,9 +45,8 @@ import { usePreferencesStore } from '@/stores/preferencesStore';
 import { useFormTint } from '@/hooks/useFormTint';
 import { useThemeColors } from '@/theme/ThemeContext';
 import { Spacing, typographyStyles } from '@/theme';
-import type { SignProgressItem, SignStatus } from '@/stores/signStore';
+import type { SignProgressItem } from '@/stores/signStore';
 import { SymbolView } from '@/components/ui/SymbolView';
-import { LiveActivityPreview } from '@/components/ui/LiveActivityPreview';
 import { recoverStaleSignLiveActivities } from '@/services/liveActivity';
 import { ThemedHost } from '@/components/ui/ThemedHost';
 
@@ -64,22 +63,9 @@ function parseTimeToDate(time: string): Date {
 }
 
 /**
- * LiveActivityPreview 的完成数：进行中/出错显示真实进度；
- * 完成态且无进度（从未实际签到，如全部已签）显示静态 12/N 占位。
+ * 一键签到设置页（2026-08-29：移除 LiveActivityPreview 预览图形——
+ * 用户要求"删除掉那几张图片"；签到进度展示位置仍可在灵动岛/通知栏间切换）。
  */
-function computePreviewDone(opts: {
-  previewActive: boolean;
-  status: SignStatus;
-  successCount: number;
-  failCount: number;
-  totalCount: number;
-}): number {
-  const { previewActive, status, successCount, failCount, totalCount } = opts;
-  if (previewActive || status === 'error') return successCount + failCount;
-  if (status === 'completed') return totalCount > 0 ? successCount + failCount : 12;
-  return 6;
-}
-
 export default function OKSignSettingsPage() {
   const { colors } = useThemeColors();
   const formTint = useFormTint();
@@ -250,16 +236,6 @@ export default function OKSignSettingsPage() {
   // currentIndex = 已完成数（对齐 Kotlin onProgressFinish 的已完成语义）。
   const signProgress =
     totalCount > 0 ? Math.min(currentIndex / totalCount, 1) : 0;
-  const previewActive = isSigning || status === 'signing';
-  const previewDone = computePreviewDone({
-    previewActive,
-    status,
-    successCount,
-    failCount,
-    totalCount,
-  });
-  const previewTotal = totalCount > 0 ? totalCount : 12;
-  const previewForum = progressList.find((p) => p.status === 'signing')?.forumName;
 
   return (
     <ThemedHost style={{ flex: 1 }}>
@@ -384,19 +360,6 @@ export default function OKSignSettingsPage() {
             <Text>静默显示</Text>
             <Text>签到完成通知不发声，横幅照常显示</Text>
           </Toggle>
-          <RNHostView matchContents>
-            <LiveActivityPreview
-              active={previewActive}
-              enabled={signDisplayMode === 'liveActivity' && liveActivitySignEnabled}
-              done={previewDone}
-              total={previewTotal}
-              currentForumName={previewForum}
-              success={successCount}
-              fail={failCount}
-              exp={totalExp}
-              status={status}
-            />
-          </RNHostView>
         </Section>
 
         <Section title="自动签到">

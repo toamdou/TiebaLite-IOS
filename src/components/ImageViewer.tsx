@@ -22,16 +22,19 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
+  withDecay,
   cancelAnimation,
   runOnJS,
   Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager-view';
+import { Image } from 'expo-image';
 import { SymbolView } from '@/components/ui/SymbolView';
 import { GlassView } from '@/components/ui/GlassView';
 import { hapticForScene } from '@/theme/hapticsMap';
 import { saveImageToGallery, shareFile } from '@/services/media';
+import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
 
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppPreference } from '@/hooks/useAppPreference';
@@ -65,10 +68,14 @@ const VIEWER_IMAGE_ACTIONS = [
 
 /** 拖拽揭示背景：200pt 内黑色遮罩完全渐隐、模糊背景完全显现 */
 const BG_REVEAL_DISTANCE = 200;
-/** 拖拽缩小全程：320pt 时图片缩至约 0.72 */
-const SHRINK_DISTANCE = 320;
-/** 飞回源缩略图动画时长（比普通退场稍缓，Photos 观感） */
-const FLY_BACK_MS = 260;
+/** 拖拽缩小全程：280pt 时图片缩至约 0.75（跟手缩小，松手后经退场动画归位） */
+const SHRINK_DISTANCE = 280;
+/** 拖拽缩小系数（280pt 时 1 → 0.75） */
+const DRAG_SHRINK_FACTOR = 0.25;
+/** 飞回源缩略图动画时长（Photos 观感：跟手松手 → 减速归位，~0.36s 平滑收尾） */
+const FLY_BACK_MS = 360;
+/** 无源矩形沿手势方向飞出的时长 */
+const EXIT_FLING_MS = 300;
 /** 退场双轴缓动：x 快出慢收、y 缓起缓落——同一 progress 插值出抛物线轨迹
     （水平分量先行、垂直分量后至），轨迹自然且两轴全程同步（单驱动无竞态）。 */
 const EXIT_EASE_X = Easing.out(Easing.cubic);
@@ -127,6 +134,10 @@ export default function ImageViewer({
   // 即闪退」，模拟器时序宽松不易复现）。visible=false 后保持挂载
   // TEARDOWN_GRACE_MS 再卸载；宽限期内内容已强制透明、不响应触摸。
   const [mounted, setMounted] = useState(false);
+  // 静态模式：退出动画改用当前页静态大图承担（PagerView/SwiftUI TabView 不参与
+  // 退场 transform——宿主视图变换是 120fps 卡顿源）；切换时 URI 与当前页显示档
+  // 一致 + imageWarm 免过渡，换图像素级无感（不再有裸换树闪白）。
+  const [staticMode, setStaticMode] = useState(false);
   const insets = useSafeAreaInsets();
   const pagerRef = useRef<PagerView>(null);
   const thumbnailRef = useRef<ScrollView>(null);
@@ -141,14 +152,20 @@ export default function ImageViewer({
   const { reduceMotion } = useReducedMotion();
   const lowPowerMode = useLowPowerMode();
 
-  // 长图判据：服务端 isLongPic 优先；缺失时退化服务端同款客户端判据
-  // （Kotlin ForumBeanCaster: 图片高度 > 屏幕精确高度 → is_long_pic=1）。
+  // 长图判据：纯几何——fit-width 显示高度超过屏高才进阅读模式。服务端
+  // isLongPic 标记对"稍高于屏"的图会过宽路由成阅读模式（顶部顶状态栏、
+  // 底部被裁，用户 2026-08-29 反馈"部分图片靠上显示"）；有真实尺寸时以
+  // 几何为准，尺寸未知才信服务端标记。阅读模式自带顶部安全区让位。
   const isLongImageOf = useCallback(
     (index: number): boolean => {
       const meta = imageMeta?.[index];
       if (!meta) return false;
-      if (meta.isLongPic === true) return true;
-      return meta.height > 0 && meta.height > SCREEN_HEIGHT;
+      const w = meta.width;
+      const h = meta.height;
+      if (w > 0 && h > 0) {
+        return (SCREEN_WIDTH * h) / w > SCREEN_HEIGHT + 1;
+      }
+      return meta.isLongPic === true;
     },
     [imageMeta],
   );
@@ -203,14 +220,17 @@ export default function ImageViewer({
   const exitToX = useSharedValue(0);
   const exitToY = useSharedValue(0);
   const exitToScale = useSharedValue(1);
+  // 退场期圆角冻结值（拖拽结束时的圆角；退场期间不再逐帧改 borderRadius——
+  // 大图切圆角每帧重栅格化是退场卡顿源之一）
+  const exitRadius = useSharedValue(0);
   // 手势仲裁：起始点 + 上一帧位移（onTouchesMove 手动激活判定 + 增量跟手）
   const touchStartX = useSharedValue(0);
   const touchStartY = useSharedValue(0);
   const prevTransX = useSharedValue(0);
   const prevTransY = useSharedValue(0);
-  // 长图页滚动状态（LongImageView 写入）：原生滚动手势包装 + 偏移/最大可滚量。
-  // 外层退出手势与之同流（simultaneous），按边界仲裁"滚动优先 vs 跟手退出"。
-  const longScrollNative = useMemo(() => Gesture.Native(), []);
+  // 长图页滚动状态（longReadPan 写入）：偏移/最大可滚量。
+  // 最大可滚量由 LongImageView 按内容高+顶部安全区写入；退出手势据此仲裁
+  // "滚动 vs 退出"（顶下拉/底上拉）。
   const longScrollY = useSharedValue(0);
   const longScrollMax = useSharedValue(0);
   // 手势 worklet 只读镜像（手势 useMemo 不随渲染重建，直接读共享值拿新状态）
@@ -218,12 +238,54 @@ export default function ImageViewer({
   const pageCountSV = useSharedValue(images.length);
   const initialIdxSV = useSharedValue(initialIndex);
   const isLongPageSV = useSharedValue(false);
+  // 缩放态镜像：退出手势/阅读 pan 的门控走共享值，手势本体不随 isZoomed
+  // 重建——快速捏合时父级 setIsZoomed 重渲染不会掐断进行中的捏合（真机：
+  // 快速捏合后松手弹回原尺寸的根因）。
+  const zoomedSV = useSharedValue(isZoomed);
+  useEffect(() => {
+    zoomedSV.value = isZoomed;
+  }, [isZoomed, zoomedSV]);
 
   // ---------- 飞回源缩略图（iOS Photos 式交互关闭）----------
   // 飞回目标在打开时按 sourceFrame 预算好，手势 onEnd（UI 线程）直接取用；
   // 动画本体由上方 exitProgress 统一驱动，这里只存目标矩形。
   // 防抖：退场动画进行中忽略新触摸，避免二次拖拽劫持动画。
   const isDismissing = useSharedValue(false);
+
+  // 长图阅读滚动 pan：与退出手势 RNGH-RNGH 同流（不再套原生 ScrollView——
+  // UIKit 滚动抢先吃触摸、边界仲裁失效是真机"大图退不出"的实证根因）。
+  // offset 由本手势直接写入 longScrollY（UI 线程），退出手势读到的边界状态
+  // 帧帧新鲜；缩放时由 zoomedSV 门控不激活（交给各页内缩放 pan）。
+  const readBase = useSharedValue(0);
+  const longReadPan = useMemo(
+    () =>
+      Gesture.Pan()
+        .minDistance(4000)
+        .maxPointers(1)
+        .onTouchesDown(() => {
+          readBase.value = longScrollY.value;
+        })
+        .onTouchesMove((_e, mgr) => {
+          if (!zoomedSV.value) mgr.activate();
+        })
+        .onUpdate((e) => {
+          const target = readBase.value + e.translationY;
+          longScrollY.value = Math.min(0, Math.max(-longScrollMax.value, target));
+        })
+        .onEnd((e) => {
+          if (isDismissing.value) return;
+          // 钉在边界（顶/底；含无可滚余量）不衰减——由退出手势接棒
+          if (
+            longScrollY.value <= -longScrollMax.value + 0.5 ||
+            longScrollY.value >= -0.5 ||
+            longScrollMax.value <= 0.5
+          ) {
+            return;
+          }
+          longScrollY.value = withDecay({ velocity: e.velocityY, clamp: [-longScrollMax.value, 0] });
+        }),
+    [zoomedSV, longScrollY, longScrollMax, readBase, isDismissing],
+  );
   // 飞回目标（JS 预算 → UI 消费）
   const flyTargetX = useSharedValue(0);
   const flyTargetY = useSharedValue(0);
@@ -255,6 +317,7 @@ export default function ImageViewer({
       setCurrentIndex(initialIndex);
       setShowUI(true);
       setIsZoomed(false);
+      setStaticMode(false);
       overlayOpacity.value = 1;
       dragTranslateX.value = 0;
       dragTranslateY.value = 0;
@@ -270,6 +333,7 @@ export default function ImageViewer({
       exitToX.value = 0;
       exitToY.value = 0;
       exitToScale.value = 1;
+      exitRadius.value = 0;
       isDismissing.value = false;
       // Entrance animation (iOS Photos style). Respect reduced motion.
       if (reduceMotion) {
@@ -282,7 +346,7 @@ export default function ImageViewer({
         enterOpacity.value = withTiming(1, { duration: DURATION.enter });
       }
     }
-  }, [visible, initialIndex, overlayOpacity, dragTranslateX, dragTranslateY, touchStartX, touchStartY, prevTransX, prevTransY, enterScale, enterOpacity, exitProgress, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, reduceMotion, isDismissing]);
+  }, [visible, initialIndex, overlayOpacity, dragTranslateX, dragTranslateY, touchStartX, touchStartY, prevTransX, prevTransY, enterScale, enterOpacity, exitProgress, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, reduceMotion, isDismissing]);
 
   // 打开时按 sourceFrame 预算飞回目标。列表缩略图与源图同宽高比 ⇒ 由 frame
   // 宽高比即可推出全屏 contain 显示尺寸（无需等原图解码）。
@@ -406,7 +470,7 @@ export default function ImageViewer({
         transform: [
           { translateX: dragTranslateX.value },
           { translateY: dragTranslateY.value },
-          { scale: enterScale.value * (1 - dragProgress * 0.28) },
+          { scale: enterScale.value * (1 - dragProgress * DRAG_SHRINK_FACTOR) },
         ],
         borderRadius: 24 * dragProgress,
         borderCurve: 'continuous',
@@ -425,59 +489,61 @@ export default function ImageViewer({
         { translateY: y },
         { scale: s * enterScale.value },
       ],
-      // 圆角随退场收束：飞到缩略图时接近缩略图圆角（24 → ~8.4）
-      borderRadius: 24 * (1 - ex * 0.65),
+      // 退场期圆角冻结在拖拽结束值（逐帧改 borderRadius 会重栅格化大图）
+      borderRadius: exitRadius.value,
       borderCurve: 'continuous',
       opacity: enterOpacity.value * (1 - p),
     };
   });
 
   // iOS 26 Photos-style close: 单 progress 统一退场（原地缩小+淡出 180ms），
-  // 与拖拽退场同一套动画系统。不再切 staticMode 换树——退场动画全程由原
-  // PagerView 画面承担，杜绝换帧空洞；卸载竞态由 TEARDOWN_GRACE_MS 宽限
-  // 兜底（visible=false 后内容强制透明，动画/手势完全结束后再卸载）。
+  // 与拖拽退场同一套动画系统。先切静态模式（轻量 Image 承担退场 transform，
+  // 120fps 平滑）；卸载竞态由 TEARDOWN_GRACE_MS 宽限兜底。
   const closeViewer = useCallback(() => {
     if (reduceMotion) {
       onClose();
       return;
     }
     isDismissing.value = true;
+    setStaticMode(true);
     exitFromX.value = dragTranslateX.value;
     exitFromY.value = dragTranslateY.value;
     exitFromScale.value = 1;
     exitToX.value = dragTranslateX.value;
     exitToY.value = dragTranslateY.value;
     exitToScale.value = 0.8;
+    exitRadius.value = 0;
     exitProgress.value = withTiming(1, { duration: DURATION.exit, easing: EASE_OUT }, (finished) => {
       if (finished) runOnJS(onClose)();
     });
-  }, [reduceMotion, onClose, isDismissing, dragTranslateX, dragTranslateY, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitProgress]);
+  }, [reduceMotion, onClose, isDismissing, setStaticMode, dragTranslateX, dragTranslateY, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, exitProgress]);
 
-// 交互式拖拽关闭（iOS Photos 风格，2026-08-29 重构）：
+// 交互式拖拽关闭（iOS Photos 风格，2026-08-29 重构 v2）：
+// - 手势本体稳定（门控全走共享值，不随 isZoomed 重建——快速捏合不被掐断）；
 // - 手动激活仲裁（minDistance 关闭自动激活，onTouchesMove 判定后显式 activate）：
-//   普通页任意方向纵向可退；长图页（读图 ScrollView）仅滚动边界可退——
-//   顶部下拉 / 底部上拉（滚动区内纵向手势归 ScrollView 阅读，不抢）；
+//   普通页任意方向纵向可退；长图页（阅读滚动 pan 驱动）仅滚动边界可退——
+//   顶部下拉 / 底部上拉（滚动区内纵向手势归阅读滚动，不抢）；
 //   PagerView 翻不了的方向（首页右拉 / 末页左拉）横向也可退（左缘滑动退出）。
-// - 2D 跟手：激活后 X/Y 同步跟随手指（增量累计，跨滚动区到边界不跳变）。
+// - 2D 跟手：激活后 X/Y 同步跟随手指（增量累计，跨滚动区到边界不跳变），
+//   拖动中按距离缩小（跟手缩小，0.25@280pt）。
 // - 放开时距离或速度过阈值 → 有源矩形则沿抛物线“飞回缩略图”（起点=手势
-//   当前位置），否则沿手势 2D 方向飞出；未过阈值 → 弹簧回弹。
-// - 缩放态（isZoomed）下禁用，交给 ZoomableImage 内的平移。
+//   当前位置，终点=源矩形，360ms 减速归位），否则沿手势 2D 方向飞出；
+//   未过阈值 → 弹簧回弹。缩放态（zoomedSV）下禁用，交给页内缩放 pan。
 const dismissGesture = useMemo(
     () =>
       Gesture.Pan()
-        .enabled(!isZoomed)
         .minDistance(4000)
         .maxPointers(1)
-        // 长图页与原生滚动同流：UIKit ScrollView 抢先吃触摸时仍能收到事件，
-        // 否则大图占满屏时永远退不出（滚动/退出由 onUpdate 按边界仲裁）
-        .simultaneousWithExternalGesture(longScrollNative)
+        // 长图页与阅读滚动 pan 同流（RNGH-RNGH）：滚动/退出按边界仲裁
+        .simultaneousWithExternalGesture(longReadPan)
         .onTouchesDown((e) => {
+          if (zoomedSV.value) return;
           const t = e.changedTouches[0];
           touchStartX.value = t.x;
           touchStartY.value = t.y;
         })
         .onTouchesMove((e, mgr) => {
-          if (isDismissing.value) return;
+          if (isDismissing.value || zoomedSV.value) return;
           const dx = e.changedTouches[0].x - touchStartX.value;
           const dy = e.changedTouches[0].y - touchStartY.value;
           let yGo = false;
@@ -497,7 +563,7 @@ const dismissGesture = useMemo(
           if (yGo || xGo) mgr.activate();
         })
         .onUpdate((e) => {
-          if (isDismissing.value) return;
+          if (isDismissing.value || zoomedSV.value) return;
           // 增量跟手：滚动区内的位移不累计（容器归 0、内容正常滚动），
           // 滚动到边界后继续拉时从 0 起跟——跨区全程无跳变。
           const dX = e.translationX - prevTransX.value;
@@ -518,7 +584,7 @@ const dismissGesture = useMemo(
           else dragTranslateY.value = 0;
         })
         .onEnd((e) => {
-          if (isDismissing.value) return;
+          if (isDismissing.value || zoomedSV.value) return;
           const dragLen = Math.hypot(dragTranslateX.value, dragTranslateY.value);
           const beyondThreshold = dragLen > 140 || Math.abs(e.velocityY) > 900;
           if (!beyondThreshold) {
@@ -535,7 +601,11 @@ const dismissGesture = useMemo(
           const dragProgress = Math.min(dragLen / SHRINK_DISTANCE, 1);
           exitFromX.value = dragTranslateX.value;
           exitFromY.value = dragTranslateY.value;
-          exitFromScale.value = 1 - dragProgress * 0.28;
+          exitFromScale.value = 1 - dragProgress * DRAG_SHRINK_FACTOR;
+          exitRadius.value = 24 * dragProgress;
+          // 切除 PagerView（SwiftUI TabView）→ 静态大图：同 URI + imageWarm 免
+          // 过渡，换图像素级无感；退场 transform 落在轻量 Image 上，120fps 平滑
+          runOnJS(setStaticMode)(true);
           if (hasFlyTarget.value && currentIdxSV.value === initialIdxSV.value) {
             // 飞回被点击缩略图：从手势当前位置（含横向跟手分量）沿抛物线归位；
             // 背景同步淡出，露出列表缩略图
@@ -571,7 +641,7 @@ const dismissGesture = useMemo(
             exitToScale.value = 0.82;
             exitProgress.value = withTiming(
               1,
-              { duration: DURATION.exit, easing: EASE_OUT },
+              { duration: EXIT_FLING_MS, easing: EASE_OUT },
               (finished) => {
                 if (finished) runOnJS(onClose)();
               },
@@ -579,10 +649,10 @@ const dismissGesture = useMemo(
           }
         }),
     [
-      isZoomed,
       onClose,
       reduceMotionSV,
-      longScrollNative,
+      zoomedSV,
+      longReadPan,
       longScrollY,
       longScrollMax,
       isLongPageSV,
@@ -607,6 +677,8 @@ const dismissGesture = useMemo(
       exitToY,
       exitToScale,
       exitProgress,
+      exitRadius,
+      setStaticMode,
     ],
   );
 
@@ -781,6 +853,19 @@ const dismissGesture = useMemo(
 
           {/* Image Gallery — native iOS PagerView */}
           <Animated.View style={[styles.pagerWrap, contentStyle]}>
+          {staticMode ? (
+            /* 静态模式：退场动画由当前页静态大图承担（SwiftUI TabView 变换是
+               卡顿源）；URI 与页面实际显示档一致 + imageWarm 免过渡 → 换树无感 */
+            <Image
+              source={{ uri: displayUriOf(currentIndex, images[currentIndex]) }}
+              style={styles.pager}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+              transition={isImageWarm(displayUriOf(currentIndex, images[currentIndex])) ? 0 : 200}
+              onLoad={() => markImageWarm(displayUriOf(currentIndex, images[currentIndex]))}
+              recyclingKey={`viewer-static-${currentIndex}`}
+            />
+          ) : (
           <PagerView
             ref={pagerRef}
             style={styles.pager}
@@ -814,7 +899,7 @@ const dismissGesture = useMemo(
                       zoomed={isZoomed}
                       onSingleTap={toggleUI}
                       onZoomChange={setIsZoomed}
-                      scrollNative={longScrollNative}
+                      readPan={longReadPan}
                       scrollY={longScrollY}
                       scrollMax={longScrollMax}
                       onLoadStart={() => {
@@ -864,6 +949,7 @@ const dismissGesture = useMemo(
               );
             })}
           </PagerView>
+          )}
         </Animated.View>
 
         {/* Top Bar */}

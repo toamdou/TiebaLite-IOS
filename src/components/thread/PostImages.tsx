@@ -182,9 +182,9 @@ export function ImageSegment({
           recycleKey={images[0]?.src || ''}
           contextMenu
           forumName={forumName}
-          onImagePress={(index) => {
+          onImagePress={(index, frame) => {
             hapticForScene('press');
-            onPress?.(pickViewerImages(images, dataSaverMode), index, undefined, origins, contextTitle, viewerMeta);
+            onPress?.(pickViewerImages(images, dataSaverMode), index, frame ?? undefined, origins, contextTitle, viewerMeta);
           }}
         />
       </View>

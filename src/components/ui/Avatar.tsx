@@ -19,6 +19,7 @@ import { useThemeColors } from '@/theme/ThemeContext';
 import { Spacing } from '@/theme';
 import { getAvatarUrl } from '@/utils';
 import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
+import { levelBadgeColor } from '@/constants/rank';
 
 // ---------- Avatar Props ----------
 export interface AvatarProps {
@@ -126,13 +127,13 @@ export function Avatar({
         )}
       </View>
 
-      {/* Level Badge */}
+      {/* Level Badge：Kotlin 官方等级多色（实底色 + 白字，getIconColorByLevel 复刻） */}
       {level !== undefined && level > 0 && (
         <View
           style={[
             styles.levelBadge,
             {
-              backgroundColor: colors.accent,
+              backgroundColor: levelBadgeColor(level)?.solidBg ?? colors.accent,
               minWidth: size * 0.42,
               height: size * 0.36,
               borderRadius: size * 0.18,

@@ -55,7 +55,7 @@ import { stopPropagation } from '@/utils/gesture';
 import type { ThreadInfo } from '@/types';
 import { MediaPager } from '@/components/feed/MediaPager';
 import type { ImagePressHandler } from '@/components/thread/PostImages';
-import type { ViewerImageMeta } from '@/hooks/useImageViewer';
+import type { ViewerImageMeta, ImageSourceFrame } from '@/hooks/useImageViewer';
 
 // ── 设计常量（推特 timeline 规格） ──
 const AVATAR_SIZE = 44;
@@ -219,7 +219,7 @@ const TweetCard = React.memo(function TweetCard({
   const showMedia = !hideMedia && (images.length > 0 || !!videoPoster);
 
   const handleImagePress = useCallback(
-    (index: number) => {
+    (index: number, sourceFrame?: ImageSourceFrame | null) => {
       if (!onImagePress || images.length === 0) {
         handleCardPress();
         return;
@@ -230,6 +230,8 @@ const TweetCard = React.memo(function TweetCard({
       // meta = 逐图长图/查看原图标记 + 真实宽高：查看器据此对长图默认显示原图档
       // （isLongPic/高度判据）、决定是否出现「查看原图」菜单项——与帖内 ImageSegment
       // 传参同构。此前列表侧缺 meta，查看器 isLongImageOf 恒 false，长图只显 bigPic 档。
+      // sourceFrame = 被点击缩略图的屏幕矩形（MediaPager 从按压事件换算）：
+      // 查看器退场时"飞回原位"——以往信息流图无源矩形只能飞出屏。
       const viewerMeta: (ViewerImageMeta | undefined)[] = images.map((m) => ({
         isLongPic: m.isLongPic,
         showOriginalBtn: m.showOriginalBtn,
@@ -239,7 +241,7 @@ const TweetCard = React.memo(function TweetCard({
       onImagePress(
         pickViewerImages(images, dataSaverMode),
         index,
-        undefined,
+        sourceFrame ?? undefined,
         images.map((m) => m.originSrc || m.src),
         thread.title,
         viewerMeta,

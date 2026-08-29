@@ -35,6 +35,7 @@ import { useTimeLabel } from '@/hooks/useTimeLabel';
 import { useRecyclingState } from '@legendapp/list/react-native';
 import { thumbnailUrl, THUMB_CARD, pickViewerImages } from '@/utils/thumbnail';
 import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
+import { levelBadgeColor } from '@/constants/rank';
 import { Avatar } from '@/components/ui/Avatar';
 import PostContent from './PostContent';
 import { RichTextRunsText } from './RichTextRunsText';
@@ -271,10 +272,9 @@ const PostCard = React.memo(function PostCard({
     ]
       .filter(Boolean)
       .join(' · ');
-  // 等级徽标：主题色浅底 15% + 主题色字（2026-08-28 全局跟主题）
-  const levelColor = post.authorLevelId > 0
-    ? { backgroundColor: `${colors.primary}26`, color: colors.primary }
-    : null;
+  // 等级徽标：Kotlin 官方等级多色（getIconColorByLevel+greifyColor 复刻：
+  // Lv1-3 青/4-9 蓝/10-15 橙/16-18 深橙/19+ 灰；等级色字 + 25% 透明底）
+  const levelColor = levelBadgeColor(post.authorLevelId);
   return (
     <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.borderCard }]}>
       {/* 长按已交还系统原生文本选择（自定义 /copy 弹层已删除），
@@ -297,7 +297,7 @@ const PostCard = React.memo(function PostCard({
                         : (post.authorNameShow || post.authorName)}
                     </Text>
                     {showLevelBadge && levelColor && (
-                      <View style={[s.levelBadge, { backgroundColor: levelColor.backgroundColor }]}>
+                      <View style={[s.levelBadge, { backgroundColor: levelColor.bg }]}>
                         <Text style={[s.levelBadgeText, { color: levelColor.color }]}>Lv.{post.authorLevelId}</Text>
                       </View>
                     )}

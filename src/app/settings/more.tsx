@@ -13,7 +13,6 @@ import { clearAllUnifiedStorage, clearLegacyStorage } from '@/services/storage/u
 import { clearBackgroundSnapshot } from '@/services/nativeBackground';
 import { useAuthStore } from '@/stores/authStore';
 import { BlockManager } from '@/utils/BlockManager';
-import { openLink } from '@/utils/linkOpener';
 import { usePreferencesStore } from '@/stores/preferencesStore';
 import { useFormTint } from '@/hooks/useFormTint';
 import { ThemedHost } from '@/components/ui/ThemedHost';
@@ -239,28 +238,12 @@ export default function MoreSettingsPage() {
           </ConfirmationDialog>
         </Section>
 
-        <Section title="外部链接">
-          <Button
-            label="开源仓库"
-            systemImage="chevron.left.forwardslash.chevron.right"
-            onPress={() => openLink('https://github.com/HuanChengFly/TiebaLite')}
-          />
-          <Button
-            label="问题反馈"
-            systemImage="exclamationmark.bubble.fill"
-            onPress={() => openLink('https://github.com/HuanChengFly/TiebaLite/issues')}
-          />
-        </Section>
-
         <Section
           title="更多"
           footer={<Text>系统应用设置可管理通知、权限与后台任务。</Text>}
         >
           <Button onPress={() => navigateToSettingsRoute(router, '/settings/logs')}>
             <Label title="崩溃与卡顿日志" systemImage="exclamationmark.triangle" modifiers={[foregroundStyle('#FF9500')]} />
-          </Button>
-          <Button onPress={() => navigateToSettingsRoute(router, '/settings/about')}>
-            <Label title="关于" systemImage="info.circle" modifiers={[foregroundStyle('#8E8E93')]} />
           </Button>
           <Button onPress={handleOpenSystemSettings}>
             <Label title="系统应用设置" systemImage="gear" modifiers={[foregroundStyle('#007AFF')]} />

@@ -27,6 +27,7 @@ import {RadiusStyle, Radius} from '@/theme/spacing';
 import { typographyStyles } from '@/theme/typography';
 import { thumbnailUrl, THUMB_POST } from '@/utils/thumbnail';
 import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
+import { frameFromPressEvent, type ImageSourceFrame } from '@/hooks/useImageViewer';
 import { stopPropagation } from '@/utils/gesture';
 import { hapticForScene } from '@/theme/hapticsMap';
 
@@ -56,7 +57,11 @@ export interface CompactFeedRowProps {
   /** 可选缩略图 URL 列表（如收藏贴配图）；缺省不渲染媒体区 */
   images?: string[];
   /** 点击缩略图回调（供调用方打开大图查看器）；不传则缩略图不可点 */
-  onImagePress?: (images: string[], index: number) => void;
+  onImagePress?: (
+    images: string[],
+    index: number,
+    sourceFrame?: ImageSourceFrame | null,
+  ) => void;
   /** 底部 meta 行内容（吧名入口 / 楼层 / 回复数等，由调用方组装） */
   meta?: React.ReactNode;
   /** 头部名字行内、用户名右侧的挂件（吧名药丸等小标签） */
@@ -162,7 +167,13 @@ export function CompactFeedRow({
                     return (
                       <Pressable
                         key={`${thumb}-${i}`}
-                        onPress={() => onImagePress(mediaList, i)}
+                        onPress={(e) =>
+                        onImagePress(
+                          mediaList,
+                          i,
+                          frameFromPressEvent(e, { width: MEDIA_THUMB_SIZE, height: MEDIA_THUMB_SIZE }),
+                        )
+                      }
                         onPressIn={stopPropagation}
                         onPressOut={stopPropagation}
                         accessibilityRole="imagebutton"
