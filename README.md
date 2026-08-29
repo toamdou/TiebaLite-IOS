@@ -132,7 +132,7 @@ CI 产出的是**未签名 IPA**，不能直接安装，需要 SideStore / AltSt
 
 ## 📄 许可证
 
-本项目以 [GPL-3.0](LICENSE) 协议开源（与上游 Kotlin 版 TiebaLite 同协议）。
+本项目以 [GPL-3.0](LICENSE) 协议开源。
 
 ## ⚠️ 免责声明
 
