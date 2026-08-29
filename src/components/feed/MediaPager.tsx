@@ -57,6 +57,7 @@ export const MediaPager = React.memo(function MediaPager({
   leadInset,
   recycleKey,
   contextMenu = false,
+  light = false,
   forumName,
   onImagePress,
   onFallbackPress,
@@ -72,6 +73,8 @@ export const MediaPager = React.memo(function MediaPager({
   recycleKey: string;
   /** 图片长按菜单（X 同款），默认关闭 */
   contextMenu?: boolean;
+  /** LegendList 自适应渲染 light 模式（快速滚动）：跳过原生右键菜单包装层 */
+  light?: boolean;
   /** 所在吧名（长按保存/分享的水印用） */
   forumName?: string;
   onImagePress: (index: number) => void;
@@ -97,11 +100,13 @@ export const MediaPager = React.memo(function MediaPager({
 
   // ── 单图 / 视频 poster ──
   if (images.length <= 1) {
-    const uri = images[0]?.src || videoPoster;
+    // 卡片显示用服务端小档（srcPic）：CDN w= 注入停用后 src 即 bigPic(~960px)，
+    // 直接解码整页大图是滚动 hitch 的主因（2026-08-29 仪器归因）；查看器仍走全档。
+    const img0 = images[0];
+    const uri = (img0 && (img0.smallSrc || img0.src)) || videoPoster;
     if (!uri) return null;
     const thumb = thumbnailUrl(uri, THUMB_POST);
-    const isVideo = !images[0] && !!videoPoster;
-    const img0 = images[0];
+    const isVideo = !img0 && !!videoPoster;
     const isLong = !!img0 && img0.height > 0 && img0.width > 0 && img0.height / img0.width > LONG_IMAGE_RATIO;
     const singleHeight = heightOf(0);
     const thumbEl = (
@@ -135,7 +140,7 @@ export const MediaPager = React.memo(function MediaPager({
         ) : null}
       </Pressable>
     );
-    const mediaEl = contextMenu && !isVideo && img0 ? (
+    const mediaEl = contextMenu && !light && !isVideo && img0 ? (
       <PostImageContextMenu full={img0.originSrc} width={img0.width} height={img0.height} forumName={forumName}>
         {thumbEl}
       </PostImageContextMenu>
@@ -157,6 +162,7 @@ export const MediaPager = React.memo(function MediaPager({
       leadInset={leadInset}
       recycleKey={recycleKey}
       contextMenu={contextMenu}
+      light={light}
       forumName={forumName}
       onImagePress={onImagePress}
     />
@@ -178,6 +184,7 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
   leadInset,
   recycleKey,
   contextMenu,
+  light = false,
   forumName,
   onImagePress,
 }: {
@@ -187,6 +194,8 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
   leadInset: number;
   recycleKey: string;
   contextMenu?: boolean;
+  /** 自适应渲染 light 模式：跳过原生右键菜单包装层 */
+  light?: boolean;
   forumName?: string;
   onImagePress: (index: number) => void;
 }) {
@@ -251,7 +260,8 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
       >
         {images.map((img, i) => {
           const w = itemWidths[i];
-          const thumb = thumbnailUrl(img.src, THUMB_POST);
+          // 卡片档用 srcPic 小档（缺失回落 src/bigPic）：同上，避免解码 960px 大图
+          const thumb = thumbnailUrl(img.smallSrc || img.src, THUMB_POST);
           const isLong = img.height > 0 && img.width > 0 && img.height / img.width > LONG_IMAGE_RATIO;
           const thumbEl = (
             <Pressable
@@ -280,7 +290,7 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
               ) : null}
             </Pressable>
           );
-          return contextMenu ? (
+          return contextMenu && !light ? (
             <PostImageContextMenu
               key={`${recycleKey}-${i}`}
               full={img.originSrc}

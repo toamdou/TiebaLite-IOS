@@ -9,7 +9,7 @@
  * - Action bar: 分享 | 评论 … 点赞, separated from content by a hairline border
  */
 
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,7 @@ import {RadiusStyle, Radius} from '@/theme/spacing';
 import { typographyStyles } from '@/theme/typography';
 import { contentToText, formatCount, buildThreadUrl } from '@/utils';
 import { useTimeLabel } from '@/hooks/useTimeLabel';
+import { useRecyclingState } from '@legendapp/list/react-native';
 import { thumbnailUrl, THUMB_CARD, pickViewerImages } from '@/utils/thumbnail';
 import { Avatar } from '@/components/ui/Avatar';
 import PostContent from './PostContent';
@@ -149,7 +150,9 @@ function SubQuoteItem({
   onImagePress?: ImagePressHandler;
 }) {
   const plainText = useMemo(() => contentToText(sp.content) || '[内容已删除]', [sp.content]);
-  const [expanded, setExpanded] = useState(false);
+  // useRecyclingState：楼层行开启 recycleItems 后，复用的行实例会把展开态
+  // 带到新的引用子项上——按 item 身份在渲染期重置，杜绝串扰。
+  const [expanded, setExpanded] = useRecyclingState(false);
 
   // 根容器必须 flex:1：自身是 subPostRow（row）的子项，若无宽度约束
   // 超长文本会按固有宽度排布不换行，整体溢出卡片右边界（真机实测）。

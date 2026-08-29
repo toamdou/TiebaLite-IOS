@@ -36,6 +36,7 @@ import { useForumStore } from '@/stores/forumStore';
 import { useSignStore } from '@/stores/signStore';
 import { usePreferencesStore } from '@/stores/preferencesStore';
 import { useAppPreference } from '@/hooks/useAppPreference';
+import { FEED_ADAPTIVE_RENDER } from '@/constants/listPerf';
 import { getVisitHistory, toForumHistoryItem, type ForumHistoryItem } from '@/services/storage/visitHistory';
 import { formatCount } from '@/utils';
 import { SymbolView } from '@/components/ui/SymbolView';
@@ -573,6 +574,8 @@ function LoggedInHome() {
           <RNHostView>
             <View style={{ flex: 1, width: '100%' }}>
               <LegendList
+                recycleItems
+                experimental_adaptiveRender={FEED_ADAPTIVE_RENDER}
                 ref={forumListRef}
                 key={forumListSingle ? 'forum-list-single' : 'forum-list-grid'}
                 data={sortedForums}

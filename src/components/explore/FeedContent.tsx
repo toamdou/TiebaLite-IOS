@@ -27,6 +27,7 @@ import { useThemeColors } from '@/theme/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
 import { useBlockFilter } from '@/hooks/useBlockFilter';
 import { useAppPreference } from '@/hooks/useAppPreference';
+import { FEED_ADAPTIVE_RENDER } from '@/constants/listPerf';
 import { useImageViewer } from '@/hooks/useImageViewer';
 import { BlockManager } from '@/utils/BlockManager';
 import { LoadType } from '@/types';
@@ -544,6 +545,8 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
               分段切换时 SegmentFade 负责 crossfade，下拉刷新走 refresh 模式。 */}
           <SegmentFade segment={segment}>
             <LegendList
+              recycleItems
+              experimental_adaptiveRender={FEED_ADAPTIVE_RENDER}
               ref={listRef}
               data={decoratedItems}
               renderItem={renderItem}

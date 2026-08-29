@@ -316,6 +316,7 @@ export default function SubPostsPage() {
     <View style={flattenStyle([styles.container, { backgroundColor: colors.systemGroupedBackground }])}>
       <Stack.Screen options={{ title: `第${floor || '?'}楼回复` }} />
       <LegendList
+        recycleItems
         ref={subPostsListRef}
         data={subPosts}
         keyExtractor={subPostKeyExtractor}

@@ -97,6 +97,11 @@ export function usePagedList<T, P = undefined, E = any>({
   const LOAD_MORE_COOLDOWN_MS = 900;
   const pageRef = useRef(initialPage);
   const paramsRef = useRef(params);
+  // items 的同步镜像（供分批 append 规划用；功能上仍以 setItems 函数式去重为准）
+  const itemsRef = useRef<T[]>(initialItems ?? []);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
   useEffect(() => {
     paramsRef.current = params;
   }, [params]);
@@ -133,20 +138,52 @@ export function usePagedList<T, P = undefined, E = any>({
         );
         if (seq !== seqRef.current) return;
         if (mode === 'more') {
-          setItems((prev) => {
-            // 按 id 去重：越界翻页时服务端会回吐与既有列表重复的楼层，重复
-            // key 会让 LegendList 虚拟化错乱并渲染成全屏灰。无 id 的项不去重。
-            const seen = new Set<string>();
-            const merged = [...prev, ...result.items].filter((it: any) => {
-              const id = it?.id;
-              if (id === undefined || id === null) return true;
-              const key = String(id);
-              if (seen.has(key)) return false;
-              seen.add(key);
-              return true;
-            });
-            return merged.slice(-maxItems);
+          // 按 id 去重：越界翻页时服务端会回吐与既有列表重复的楼层，重复
+          // key 会让 LegendList 虚拟化错乱并渲染成全屏灰。无 id 的项不去重。
+          const idOf = (it: any) => {
+            const id = it?.id;
+            return id === undefined || id === null ? null : String(id);
+          };
+          const seen = new Set(itemsRef.current.map(idOf).filter(Boolean) as string[]);
+          const appended = result.items.filter((it: any) => {
+            const key = idOf(it);
+            if (key === null) return true;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
           });
+          // 分批 append（2026-08-29）：整页一次 setItems 会合成一次大 commit
+          //（滚动中连续掉帧的元凶之一）。按帧分片插入，摊平渲染峰值；
+          // seq 守卫保证中途被 refresh/reset/new run 抢占时停止追加。
+          const APPEND_CHUNK = 8;
+          if (appended.length <= APPEND_CHUNK) {
+            setItems((prev) => {
+              const seenAll = new Set(prev.map(idOf).filter(Boolean) as string[]);
+              const merged = [...prev, ...appended.filter((it: any) => {
+                const key = idOf(it);
+                return key === null || !seenAll.has(key);
+              })];
+              return merged.slice(-maxItems);
+            });
+          } else {
+            let offset = 0;
+            const appendChunk = () => {
+              if (seq !== seqRef.current) return;
+              const slice = appended.slice(offset, offset + APPEND_CHUNK);
+              if (slice.length === 0) return;
+              offset += slice.length;
+              setItems((prev) => {
+                const seenAll = new Set(prev.map(idOf).filter(Boolean) as string[]);
+                const merged = [...prev, ...slice.filter((it: any) => {
+                  const key = idOf(it);
+                  return key === null || !seenAll.has(key);
+                })];
+                return merged.slice(-maxItems);
+              });
+              if (offset < appended.length) requestAnimationFrame(appendChunk);
+            };
+            appendChunk();
+          }
         } else {
           setItems(result.items.slice(0, maxItems));
         }
