@@ -31,6 +31,9 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager-view';
 import { Image } from 'expo-image';
+
+// overlay 动画层：expo-image 的 Animated 包装（轻量 Image 承担全部 transform）
+const AnimatedExpoImage = Animated.createAnimatedComponent(Image);
 import { SymbolView } from '@/components/ui/SymbolView';
 import { GlassView } from '@/components/ui/GlassView';
 import { hapticForScene } from '@/theme/hapticsMap';
@@ -74,12 +77,10 @@ const SHRINK_DISTANCE = 280;
 /** 拖拽缩小系数（280pt 时 1 → 0.75） */
 const DRAG_SHRINK_FACTOR = 0.25;
 /** 相册转场统一时长：进入展开/飞回缩略图/飞出/顶栏关闭全部 300ms
-    （用户 2026-08-30 要求：进入与退出同样时长；easeOut 尾段快收敛不拖沓） */
+    （iOS Photos：进入/退出同为轻快 0.3s，图片全程清晰无透明度变化） */
 const VIEWER_TRANSITION_MS = 300;
-/** 退场双轴缓动：x 快出慢收、y 缓起缓落——同一 progress 插值出抛物线轨迹
-    （水平分量先行、垂直分量后至），轨迹自然且两轴全程同步（单驱动无竞态）。 */
-const EXIT_EASE_X = Easing.out(Easing.cubic);
-const EXIT_EASE_Y = Easing.inOut(Easing.quad);
+/** 飞回/退场统一使用 EASE_OUT——x/y/scale 同曲线 → 轨迹为直线（iOS Photos 行为：
+    无抛物线；松手后沿当前方向直线运动。2026-08-30 用户观察定案） */
 // 关闭后延迟拆除的宽限期：给 PagerView 内部减速/手势收尾的时间，避免
 // SwiftUI TabView 在动画途中被整树卸载（真机闪退），随后再真正卸载 Modal。
 const TEARDOWN_GRACE_MS = 400;
@@ -361,6 +362,10 @@ export default function ImageViewer({
       exitToScale.value = 1;
       exitRadius.value = 0;
       isDismissing.value = false;
+      // v4：进入展开在 overlay 动画层上进行（PagerView 隐藏但保持挂载）；
+      // 长图页（fit-width 阅读形态与 overlay contain 不兼容）保持 PagerView
+      // 直显 + 0.95 淡入。
+      setStaticMode(!isLongImageOf(initialIndex));
       // Entrance animation (iOS Photos style). Respect reduced motion.
       // 进入起点由 flyTarget effect 覆盖（有源矩形时从缩略图展开）；
       // 这里先给无源矩形的默认值（0.95 居中淡入）。
@@ -369,18 +374,21 @@ export default function ImageViewer({
         enterOpacity.value = 1;
         enterTransX.value = 0;
         enterTransY.value = 0;
+        setStaticMode(false);
       } else {
         enterScale.value = 0.95;
         enterOpacity.value = 0;
         enterTransX.value = 0;
         enterTransY.value = 0;
-        enterTransX.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
+        // 动画完成（300ms 与 VIEWER_TRANSITION_MS 同步）→ 恢复 PagerView 交互
+        const done = () => setStaticMode(false);
+        enterTransX.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT }, done);
         enterTransY.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
         enterScale.value = withTiming(1, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
         enterOpacity.value = withTiming(1, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
       }
     }
-  }, [visible, initialIndex, overlayOpacity, dragTranslateX, dragTranslateY, touchStartX, touchStartY, prevTransX, prevTransY, enterScale, enterOpacity, enterTransX, enterTransY, exitProgress, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, reduceMotion, isDismissing]);
+  }, [visible, initialIndex, overlayOpacity, dragTranslateX, dragTranslateY, touchStartX, touchStartY, prevTransX, prevTransY, enterScale, enterOpacity, enterTransX, enterTransY, exitProgress, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, reduceMotion, isDismissing, setStaticMode, isLongImageOf]);
 
   // 打开时按 sourceFrame 预算飞回目标。列表缩略图与源图同宽高比 ⇒ 由 frame
   // 宽高比即可推出全屏 contain 显示尺寸（无需等原图解码）。
@@ -419,11 +427,14 @@ export default function ImageViewer({
     enterTransY.value = flyTargetY.value;
     enterScale.value = targetScale;
     enterOpacity.value = 0;
-    enterTransX.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
+    // 展开动画完成 → 恢复 PagerView 交互（覆盖了 visible effect 的同名动画，
+    // 回调必须在这里补，否则 staticMode 停在 true）
+    const done = () => setStaticMode(false);
+    enterTransX.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT }, done);
     enterTransY.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
     enterScale.value = withTiming(1, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
     enterOpacity.value = withTiming(1, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
-  }, [visible, sourceFrame, flyTargetX, flyTargetY, flyTargetScale, hasFlyTarget, enterTransX, enterTransY, enterScale, enterOpacity, reduceMotion]);
+  }, [visible, sourceFrame, flyTargetX, flyTargetY, flyTargetScale, hasFlyTarget, enterTransX, enterTransY, enterScale, enterOpacity, reduceMotion, setStaticMode]);
 
   // 手势 worklet 镜像：当前页/总页数/长图态（随渲染刷新，手势 useMemo 不重建
   // 也能在 onTouchesMove / onEnd 里拿到新值）
@@ -505,21 +516,20 @@ export default function ImageViewer({
   });
 
   /**
-   * 内容统一动效：入场缩放 × 拖拽 2D 位移/缩小（1→0.72，320pt 全程）× 退场位移缩放。
-   * 拖拽期与退场期共用一套共享值，单一 transform 计算避免多 style 数组覆盖。
-   * 拖拽时同步增大圆角（Twitter 缩小图片的圆角收束感）；退场时随 progress 收束到
-   * 缩略图级别圆角。退场 x/y/scale 全部由 exitProgress 同一驱动插值（双轴缓动
-   * 不同 → 抛物线轨迹），保证 120fps 下各属性严格同步、无顿挫。
+   * 内容动效（iOS Photos 对齐，2026-08-30 v4 重做）：
+   * - 图片层只做 transform（展开/跟手/飞回），**opacity 恒 1**——图片在动画
+   *   全程清晰，不模糊不变浅（用户的观察：iOS 只有背景在变，图片不动色）；
+   * - 背景模糊/变浅只发生在 bg 层（bgScrim/bgBlur 按拖拽距离+退场 progress）；
+   * - 退场 x/y/scale 同一曲线（EASE_OUT）插值 → 轨迹是**直线**
+   *   （iOS 无抛物线：松手后沿当前方向直线运动到目标/飞出）；
+   * - 拖拽期圆角冻结（逐帧 borderRadius 每帧重栅格化=卡顿源）。
    */
   const contentStyle = useAnimatedStyle(() => {
     const p = exitProgress.value;
     if (p <= 0) {
       // ── 拖拽跟手态：进入展开位移 + 2D 跟手位移 + 按位移距离缩小 ──
-      // 圆角不随拖动逐帧变化：大图逐帧改 borderRadius 每帧重栅格化是
-      // 拖拽卡顿源（2026-08-30 用户"一卡一卡"），退场期才用冻结圆角值
       const dragLen = Math.hypot(dragTranslateX.value, dragTranslateY.value);
       const dragProgress = Math.min(dragLen / SHRINK_DISTANCE, 1);
-      const dragFade = Math.min(dragLen / (SCREEN_HEIGHT * 0.6), 0.25);
       return {
         transform: [
           { translateX: enterTransX.value + dragTranslateX.value },
@@ -528,15 +538,14 @@ export default function ImageViewer({
         ],
         borderRadius: 0,
         borderCurve: 'continuous',
-        opacity: enterOpacity.value * (1 - dragFade),
+        opacity: 1,
       };
     }
-    // ── 退场态：单 progress 插值（x 快出慢收、y 缓起缓落 → 抛物线归位/飞出）──
-    const ex = EXIT_EASE_X(p);
-    const ey = EXIT_EASE_Y(p);
-    const x = exitFromX.value + (exitToX.value - exitFromX.value) * ex;
-    const y = exitFromY.value + (exitToY.value - exitFromY.value) * ey;
-    const s = exitFromScale.value + (exitToScale.value - exitFromScale.value) * ey;
+    // ── 退场态：单 progress 同曲线插值 → 直线轨迹（起点=手势当前位置）──
+    const e = Easing.out(Easing.cubic)(p);
+    const x = exitFromX.value + (exitToX.value - exitFromX.value) * e;
+    const y = exitFromY.value + (exitToY.value - exitFromY.value) * e;
+    const s = exitFromScale.value + (exitToScale.value - exitFromScale.value) * e;
     return {
       transform: [
         { translateX: x },
@@ -546,13 +555,13 @@ export default function ImageViewer({
       // 退场期圆角冻结在拖拽结束值（逐帧改 borderRadius 会重栅格化大图）
       borderRadius: exitRadius.value,
       borderCurve: 'continuous',
-      opacity: enterOpacity.value * (1 - p),
+      opacity: 1,
     };
   });
 
-  // iOS 26 Photos-style close: 单 progress 统一退场（原地缩小+淡出 180ms），
-  // 与拖拽退场同一套动画系统。先切静态模式（轻量 Image 承担退场 transform，
-  // 120fps 平滑）；卸载竞态由 TEARDOWN_GRACE_MS 宽限兜底。
+  // iOS Photos-style close（v4）：与拖拽退出同一套动画系统——X 关闭也
+  // "飞回"目标（源缩略图 → 底栏缩略条格 → 0.8 缩小淡出），动画在 overlay
+  // 动画层上执行（PagerView 仅隐藏保持挂载）。
   const closeViewer = useCallback(() => {
     if (reduceMotion) {
       onClose();
@@ -564,9 +573,21 @@ export default function ImageViewer({
     exitFromX.value = dragTranslateX.value + enterTransX.value;
     exitFromY.value = dragTranslateY.value + enterTransY.value;
     exitFromScale.value = 1;
-    exitToX.value = dragTranslateX.value;
-    exitToY.value = dragTranslateY.value;
-    exitToScale.value = 0.8;
+    // 三档目标与拖拽退出一致：源缩略图（点击页）→ 缩略条格（翻页后）→
+    // 原地缩小淡出（单图无落点）
+    if (hasFlyTarget.value && currentIdxSV.value === initialIdxSV.value) {
+      exitToX.value = flyTargetX.value;
+      exitToY.value = flyTargetY.value;
+      exitToScale.value = flyTargetScale.value;
+    } else if (images.length > 1) {
+      exitToX.value = thumbTargetX.value;
+      exitToY.value = thumbTargetY.value;
+      exitToScale.value = thumbTargetScale.value;
+    } else {
+      exitToX.value = dragTranslateX.value;
+      exitToY.value = dragTranslateY.value;
+      exitToScale.value = 0.8;
+    }
     exitRadius.value = 0;
     exitProgress.value = withDelay(
       16,
@@ -574,7 +595,7 @@ export default function ImageViewer({
         if (finished) runOnJS(onClose)();
       }),
     );
-  }, [reduceMotion, onClose, isDismissing, setStaticMode, dragTranslateX, dragTranslateY, enterTransX, enterTransY, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, exitProgress]);
+  }, [reduceMotion, onClose, isDismissing, setStaticMode, dragTranslateX, dragTranslateY, enterTransX, enterTransY, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, exitProgress, hasFlyTarget, currentIdxSV, initialIdxSV, flyTargetX, flyTargetY, flyTargetScale, images.length, thumbTargetX, thumbTargetY, thumbTargetScale]);
 
 // 交互式拖拽关闭（iOS Photos 风格，2026-08-29 重构 v2 / 08-30 增补）：
 // - 手势本体稳定（门控全走共享值，不随 isZoomed 重建——快速捏合不被掐断）；
@@ -937,29 +958,21 @@ const dismissGesture = useMemo(
           {/* 背景层 2：黑色遮罩（静止时全黑，拖拽时渐隐揭示模糊背景） */}
           <Animated.View style={[styles.bgLayer, styles.bgScrim, bgScrimStyle]} pointerEvents="none" />
 
-          {/* Image Gallery — native iOS PagerView */}
-          <Animated.View style={[styles.pagerWrap, contentStyle]}>
-          {staticMode ? (
-            /* 静态模式：退场动画由当前页静态大图承担（SwiftUI TabView 变换是
-               卡顿源）；URI 与页面实际显示档一致 + imageWarm 免过渡 → 换树无感 */
-            <Image
-              source={{ uri: displayUriOf(currentIndex, images[currentIndex]) }}
-              style={styles.pager}
-              contentFit="contain"
-              cachePolicy="memory-disk"
-              transition={isImageWarm(displayUriOf(currentIndex, images[currentIndex])) ? 0 : 200}
-              onLoad={() => markImageWarm(displayUriOf(currentIndex, images[currentIndex]))}
-              recyclingKey={`viewer-static-${currentIndex}`}
-            />
-          ) : (
-          <PagerView
-            ref={pagerRef}
-            style={styles.pager}
-            initialPage={pageWindowAnchor}
-            scrollEnabled={!isZoomed}
-            onPageSelected={handlePageSelected}
-            overdrag
-          >
+          {/* Image Gallery — native iOS PagerView
+              v4（2026-08-30）：PagerView 永不卸载、不参与任何 transform——
+              动画（进入展开/拖拽跟手/退场飞回）全部由 overlay 静态大图承担：
+              轻量 Image 单层 transform 是 120fps 顺手活，SwiftUI TabView 多页
+              宿主变换才是掉帧源。staticMode=true 时 PagerView 仅 opacity 0
+              （保持挂载/解码推进），overlay 盖在其上动画。 */}
+          <View style={styles.pagerWrap}>
+            <PagerView
+              ref={pagerRef}
+              style={[styles.pager, staticMode && styles.pagerWhileStatic]}
+              initialPage={pageWindowAnchor}
+              scrollEnabled={!isZoomed}
+              onPageSelected={handlePageSelected}
+              overdrag
+            >
             {pages.map((page) => {
               const longPage = isLongImageOf(page.index);
               const pageMeta = imageMeta?.[page.index];
@@ -1031,12 +1044,24 @@ const dismissGesture = useMemo(
                     {watermarkText}
                   </Text>
                 ) : null}
-              </View>
-              );
-            })}
+</View>
+            );
+          })}
           </PagerView>
-          )}
-        </Animated.View>
+          {/* overlay 动画层：staticMode 时盖住 PagerView 承担全部 transform
+              （进入/拖拽/退场）；同 URI + imageWarm 免过渡，与页内图无感互换 */}
+          {staticMode ? (
+            <AnimatedExpoImage
+              source={{ uri: displayUriOf(currentIndex, images[currentIndex]) }}
+              style={[styles.pager, styles.pagerOverlay, contentStyle]}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+              transition={isImageWarm(displayUriOf(currentIndex, images[currentIndex])) ? 0 : 200}
+              onLoad={() => markImageWarm(displayUriOf(currentIndex, images[currentIndex]))}
+              recyclingKey={`viewer-static-${currentIndex}`}
+            />
+          ) : null}
+        </View>
 
         {/* Top Bar */}
         <Animated.View
@@ -1175,6 +1200,18 @@ const styles = StyleSheet.create({
   pagerWrap: {
     flex: 1,
     overflow: 'hidden',
+  },
+  /* overlay 动画层：绝对铺满 pagerWrap，staticMode 期间承担全部 transform */
+  pagerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  /* staticMode 期间 PagerView 仅隐藏（保持挂载/解码），不让它参与动画 */
+  pagerWhileStatic: {
+    opacity: 0,
   },
   imagePage: {
     width: SCREEN_WIDTH,

@@ -368,7 +368,7 @@ function SortFilterBar({
         <View
           style={[
             styles.toolMenuWrap,
-            { top: top + 42 },
+            { top: 44 },
             kind === 'filter' ? styles.toolMenuWrapRight : null,
           ]}
         >
