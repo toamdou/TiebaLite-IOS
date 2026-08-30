@@ -1,15 +1,60 @@
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- TiebaLite 液态玻璃图标前景层（1024×1024 全出血，透明背景，actool 直接消费）
-       元素结构继承 Kotlin 版 ic_launcher_new_foreground（蓝面板压白气泡 + 两条线），
-       居中放大 + iOS 化：大圆角气泡、半透明玻璃带、胶囊线条、顶部高光。 -->
-  <!-- 白色气泡卡片：顶圆角 80 / 底圆角 40 -->
-  <path d="M200,296 Q200,215 280,215 L744,215 Q824,215 824,296 L824,769 Q824,809 784,809 L240,809 Q200,809 200,769 Z" fill="white" fill-opacity="0.92"/>
-  <!-- 半透明蓝色玻璃带（压气泡顶部，对应 Kotlin 蓝面板） -->
-  <path d="M208,288 Q208,228 268,228 L756,228 Q816,228 816,288 L816,298 Q816,323 791,323 L233,323 Q208,323 208,298 Z" fill="#1E6DF5" fill-opacity="0.5"/>
-  <!-- 玻璃带顶部高光（液态玻璃反光） -->
-  <rect x="240" y="238" width="544" height="32" rx="16" fill="white" fill-opacity="0.3"/>
-  <!-- 深蓝长线（胶囊） -->
-  <rect x="259.5" y="375" width="505" height="48" rx="24" fill="#1E5FBF"/>
-  <!-- 深蓝短线（胶囊） -->
-  <rect x="358" y="459" width="308" height="48" rx="24" fill="#1E5FBF"/>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 仅预览用：上架时导出无圆角正方形，系统会自动裁切 -->
+    <clipPath id="iosMask">
+      <rect width="1024" height="1024" rx="228"/>
+    </clipPath>
+
+    <!-- 底色：近白的冷蓝灰，对角渐变 -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FBFDFF"/>
+      <stop offset="1" stop-color="#E8EFFA"/>
+    </linearGradient>
+
+    <!-- 主体：135° 蓝渐变，光从左上来 -->
+    <linearGradient id="bubbleGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5E9BFF"/>
+      <stop offset="1" stop-color="#2257E2"/>
+    </linearGradient>
+
+    <filter id="softBlur" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="70"/>
+    </filter>
+
+    <!-- 蓝色投影：比黑色投影更有"品牌感" -->
+    <filter id="bubbleShadow" x="-30%" y="-20%" width="160%" height="150%">
+      <feDropShadow dx="0" dy="26" stdDeviation="36" flood-color="#1B49C8" flood-opacity="0.28"/>
+    </filter>
+
+    <clipPath id="bubbleClip">
+      <path d="M290,296 H734 A88,88 0 0 1 822,384 V592 A88,88 0 0 1 734,680 H470
+               L370,814 Q354,836 340,814 L310,680 H290 A88,88 0 0 1 202,592 V384
+               A88,88 0 0 1 290,296 Z"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#iosMask)">
+    <!-- 1. 底：浅色渐变 + 气泡后的柔光晕（把主体"托"起来） -->
+    <rect width="1024" height="1024" fill="url(#bgGrad)"/>
+    <circle cx="512" cy="500" r="420" fill="#D9E7FF" fill-opacity="0.5" filter="url(#softBlur)"/>
+
+    <!-- 2. 主体：蓝渐变气泡，宽 620（占画布 60%），尾巴左下 -->
+    <path d="M290,296 H734 A88,88 0 0 1 822,384 V592 A88,88 0 0 1 734,680 H470
+             L370,814 Q354,836 340,814 L310,680 H290 A88,88 0 0 1 202,592 V384
+             A88,88 0 0 1 290,296 Z"
+          fill="url(#bubbleGrad)" filter="url(#bubbleShadow)"/>
+
+    <!-- 顶光：让蓝色有体积，不是一块平色 -->
+    <g clip-path="url(#bubbleClip)">
+      <path d="M202,384 A88,88 0 0 1 290,296 H734 A88,88 0 0 1 822,384 V438 Q512,486 202,438 Z"
+            fill="#FFFFFF" fill-opacity="0.16"/>
+    </g>
+
+    <!-- 3. 帖子骨架：头像 / 昵称 / 标题 / 两行正文，统一 80 内边距 -->
+    <circle cx="312" cy="402" r="30" fill="#FFFFFF"/>
+    <rect x="366" y="386" width="150" height="32" rx="16" fill="#FFFFFF" fill-opacity="0.45"/>
+    <rect x="282" y="468" width="460" height="44" rx="22" fill="#FFFFFF"/>
+    <rect x="282" y="536" width="376" height="32" rx="16" fill="#FFFFFF" fill-opacity="0.55"/>
+    <rect x="282" y="592" width="292" height="32" rx="16" fill="#FFFFFF" fill-opacity="0.32"/>
+  </g>
 </svg>
