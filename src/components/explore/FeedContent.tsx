@@ -366,19 +366,22 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
     };
   }, [active, handleRefresh]);
 
-  // 聚焦自动刷新改为 stale-while-revalidate：数据 5 分钟内新鲜就不重拉
-  // （旧实现每次切回 Tab 都全量刷新 page 1，流量/耗电/列表跳动三重代价）。
+// 聚焦自动刷新改为 stale-while-revalidate：数据 5 分钟内新鲜就不重拉
+  //（旧实现每次切回 Tab 都全量刷新 page 1，流量/耗电/列表跳动三重代价）。
+  // 开关语义=exploreAutoRefresh 同时约束推荐流与关注流：关闭后已有数据的
+  // 焦点恢复不自动重拉（关注流的无条件刷新分支为 2026-08-29 修复——此前
+  // 退后台很久回前台点动态必刷，与设置不符）；但 items 为空（首挂载/无数据）
+  // 时仍必须拉——关注流无 SWR seed，若也卡住开关，关掉自动刷新后关注流
+  // 永远是空白页。手动下拉/双击刷新不受影响。
   useFocusEffect(
     useCallback(() => {
       const stale = Date.now() - lastLoadedAtRef.current > FOCUS_REFRESH_STALE_MS;
-      if (stale) {
-        if (exploreAutoRefresh && segment !== 'concern') {
-          startLoad(1);
-        } else if (segment === 'concern' && isLoggedIn) {
+      if (stale && (exploreAutoRefresh || items.length === 0)) {
+        if (segment !== 'concern' || isLoggedIn) {
           startLoad(1);
         }
       }
-    }, [exploreAutoRefresh, segment, isLoggedIn, startLoad]),
+    }, [exploreAutoRefresh, segment, isLoggedIn, startLoad, items.length]),
   );
 
   const handleLoadMore = useCallback(() => {
