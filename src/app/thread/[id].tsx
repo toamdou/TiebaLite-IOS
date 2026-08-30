@@ -555,6 +555,7 @@ export default function ThreadPage() {
         imageOrigins={imageViewer.imageViewerOrigins}
         contextTitle={imageViewer.imageViewerContextTitle}
         imageMeta={imageViewer.imageViewerMeta}
+        imagePreviews={imageViewer.imageViewerPreviews}
       />
 
       <Toast ref={toastRef} />

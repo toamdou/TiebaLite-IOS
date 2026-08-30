@@ -67,3 +67,19 @@ export function pickViewerImages(
     return i.src || i.originSrc || '';
   });
 }
+
+/**
+ * 查看器 overlay 动画层的预览档（与 pickViewerImages 下标一一对应）：
+ * 列表卡片显示的是 smallSrc（srcPic 降档），该 URL 在 expo-image 缓存里
+ * 必然命中——转场动画（300ms）期间先显示它垫底，大图档（bigPic/原图）
+ * 解码完成（300-500ms）后淡入替换，动画全程有图。GIF 与原档一致。
+ */
+export function pickViewerPreviews(
+  images: { src?: string; originSrc?: string; smallSrc?: string }[],
+): (string | undefined)[] {
+  return images.map((i) => {
+    const gifUri = i.originSrc || i.src || '';
+    if (/\.gif(?:\?|#|$)/i.test(gifUri)) return gifUri;
+    return i.smallSrc || i.src || i.originSrc || undefined;
+  });
+}

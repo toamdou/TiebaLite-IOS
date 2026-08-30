@@ -57,6 +57,8 @@ export function useImageViewer() {
   const [imageViewerContextTitle, setImageViewerContextTitle] = useState<string | null>(null);
   /** 并行原图数组（长按「保存原图」用；与 images 下标一一对应） */
   const [imageViewerOrigins, setImageViewerOrigins] = useState<(string | undefined)[]>([]);
+  /** 预览档数组（overlay 动画层垫底秒显；与 images 下标一一对应，可缺省） */
+  const [imageViewerPreviews, setImageViewerPreviews] = useState<(string | undefined)[]>([]);
   /** 大图元数据（长图标记/查看原图入口/真实宽高；与 images 下标一一对应，可缺省） */
   const [imageViewerMeta, setImageViewerMeta] = useState<(ViewerImageMeta | undefined)[]>([]);
 
@@ -67,6 +69,7 @@ export function useImageViewer() {
     origins?: (string | undefined)[],
     contextTitle?: string | null,
     meta?: (ViewerImageMeta | undefined)[],
+    previews?: (string | undefined)[],
   ) => {
     setImageViewerImages(images);
     setImageViewerIndex(index);
@@ -74,6 +77,7 @@ export function useImageViewer() {
     setImageViewerContextTitle(contextTitle ?? null);
     setImageViewerOrigins(origins ?? []);
     setImageViewerMeta(meta ?? []);
+    setImageViewerPreviews(previews ?? []);
     setImageViewerVisible(true);
   }, []);
 
@@ -86,6 +90,7 @@ export function useImageViewer() {
     imageViewerSourceFrame,
     imageViewerContextTitle,
     imageViewerOrigins,
+    imageViewerPreviews,
     imageViewerMeta,
     handleImagePress,
     closeImageViewer,

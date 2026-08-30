@@ -411,6 +411,7 @@ export default function ThreadStorePage() {
         imageOrigins={imageViewer.imageViewerOrigins}
         contextTitle={imageViewer.imageViewerContextTitle}
         imageMeta={imageViewer.imageViewerMeta}
+        imagePreviews={imageViewer.imageViewerPreviews}
       />
     </View>
   );

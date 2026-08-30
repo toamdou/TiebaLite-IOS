@@ -352,6 +352,7 @@ export default function SubPostsPage() {
         imageOrigins={imageViewer.imageViewerOrigins}
         contextTitle={imageViewer.imageViewerContextTitle}
         imageMeta={imageViewer.imageViewerMeta}
+        imagePreviews={imageViewer.imageViewerPreviews}
       />
     </View>
   );

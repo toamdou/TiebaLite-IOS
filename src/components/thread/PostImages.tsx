@@ -17,7 +17,7 @@ import { useThemeColors } from '@/theme/ThemeContext';
 import { useAppPreference } from '@/hooks/useAppPreference';
 import { MediaPager, LONG_IMAGE_RATIO, MEDIA_HEIGHT_MAX } from '@/components/feed/MediaPager';
 import PostImageContextMenu from '@/components/feed/PostImageContextMenu';
-import { thumbnailUrl, THUMB_POST, pickViewerImages } from '@/utils/thumbnail';
+import { thumbnailUrl, THUMB_POST, pickViewerImages, pickViewerPreviews } from '@/utils/thumbnail';
 import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
 import { hapticForScene } from '@/theme/hapticsMap';
 import { frameFromPressEvent, type ImageSourceFrame, type ViewerImageMeta } from '@/hooks/useImageViewer';
@@ -38,6 +38,7 @@ export type ImagePressHandler = (
   origins?: (string | undefined)[],
   contextTitle?: string | null,
   meta?: (ViewerImageMeta | undefined)[],
+  previews?: (string | undefined)[],
 ) => void;
 
 /** 帖内抽取出的图片段（服务端长图/查看原图标记由 mapProtoContent 装配） */
@@ -184,7 +185,7 @@ export function ImageSegment({
           forumName={forumName}
           onImagePress={(index, frame) => {
             hapticForScene('press');
-            onPress?.(pickViewerImages(images, dataSaverMode), index, frame ?? undefined, origins, contextTitle, viewerMeta);
+            onPress?.(pickViewerImages(images, dataSaverMode), index, frame ?? undefined, origins, contextTitle, viewerMeta, pickViewerPreviews(images));
           }}
         />
       </View>
@@ -219,6 +220,7 @@ export function ImageSegment({
           origins,
           contextTitle,
           viewerMeta,
+          pickViewerPreviews(images),
         );
       }}
     >

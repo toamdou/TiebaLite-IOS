@@ -32,13 +32,10 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager-view';
 import { Image } from 'expo-image';
 
-// overlay 动画层：expo-image 的 Animated 包装（轻量 Image 承担全部 transform）
-const AnimatedExpoImage = Animated.createAnimatedComponent(Image);
 import { SymbolView } from '@/components/ui/SymbolView';
 import { GlassView } from '@/components/ui/GlassView';
 import { hapticForScene } from '@/theme/hapticsMap';
 import { saveImageToGallery, shareFile } from '@/services/media';
-import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
 
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppPreference } from '@/hooks/useAppPreference';
@@ -99,6 +96,11 @@ export interface ImageViewerProps {
   sourceFrame?: ImageSourceFrame | null;
   /** 并行原图数组（长按「保存原图」用；缺省该项退化为保存当前图） */
   imageOrigins?: (string | undefined)[];
+  /** 逐图预览档 URL（列表刚显示的小档，SDWebImage 缓存命中秒显；与 images
+      下标一一对应，可缺省）。overlay 动画层用它在动画期间垫底——大图档
+      （bigPic/原图）首次解码 300-500ms，远慢于 300ms 转场，无垫底则动画
+      全程空白（用户实测「进入动画只有 1 帧」）。 */
+  imagePreviews?: (string | undefined)[];
   /** 顶栏标题：帖子图片=帖子标题；回复/楼中楼图片=回复文字前 30 字 */
   contextTitle?: string | null;
   /** 逐图元数据（服务端长图/查看原图标记 + 真实宽高；与 images 下标一一对应）。
@@ -116,6 +118,7 @@ export default function ImageViewer({
   forumName,
   sourceFrame,
   imageOrigins,
+  imagePreviews,
   contextTitle,
   imageMeta,
 }: ImageViewerProps) {
@@ -380,8 +383,14 @@ export default function ImageViewer({
         enterOpacity.value = 0;
         enterTransX.value = 0;
         enterTransY.value = 0;
-        // 动画完成（300ms 与 VIEWER_TRANSITION_MS 同步）→ 恢复 PagerView 交互
-        const done = () => setStaticMode(false);
+        // 动画完成（300ms 与 VIEWER_TRANSITION_MS 同步）→ 恢复 PagerView 交互。
+        // 必须检查 finished：两个 effect 先后对 enterTransX 启动 withTiming，
+        // 先启动的被覆盖时会以 finished=false 回调——若不区分，展开动画启动
+        // 瞬间 staticMode 就被关掉，动画在隐藏的 overlay 上白跑（用户实测
+        // 「进入动画只有 1 帧」的根因，2026-08-30）。
+        const done = (finished?: boolean) => {
+          if (finished) setStaticMode(false);
+        };
         enterTransX.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT }, done);
         enterTransY.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
         enterScale.value = withTiming(1, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
@@ -428,8 +437,11 @@ export default function ImageViewer({
     enterScale.value = targetScale;
     enterOpacity.value = 0;
     // 展开动画完成 → 恢复 PagerView 交互（覆盖了 visible effect 的同名动画，
-    // 回调必须在这里补，否则 staticMode 停在 true）
-    const done = () => setStaticMode(false);
+    // 回调必须在这里补，否则 staticMode 停在 true）；finished 守卫与
+    // visible effect 相同——本动画也可能被再次覆盖（快速重复打开时）。
+    const done = (finished?: boolean) => {
+      if (finished) setStaticMode(false);
+    };
     enterTransX.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT }, done);
     enterTransY.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
     enterScale.value = withTiming(1, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
@@ -506,14 +518,11 @@ export default function ImageViewer({
     return { opacity: (1 - reveal) * enterOpacity.value * (1 - p) };
   });
 
-  const bgBlurStyle = useAnimatedStyle(() => {
-    const p = exitProgress.value;
-    const dragLen = Math.hypot(dragTranslateX.value, dragTranslateY.value);
-    const reveal = Math.min(dragLen / BG_REVEAL_DISTANCE, 1);
-    return {
-      opacity: enterOpacity.value * (reveal + (1 - reveal) * p),
-    };
-  });
+  // 背景模糊层恒显（不再逐帧动画）：全屏 UIBlurEffect 的 opacity 每帧变化 =
+  // 每帧重采样整屏模糊，是拖拽/退场掉帧的主要来源（用户实测「拖动掉帧极其
+  // 严重」「退出卡死」）。视觉等价方案：模糊层永远可见，明暗渐变全部由上方
+  // 黑色 scrim 承担（单层合成，GPU 便宜）——静止全黑、拖拽渐透露模糊、
+  // 退场渐隐，与旧公式（blur 渐显 + scrim 渐隐）观感一致。
 
   /**
    * 内容动效（iOS Photos 对齐，2026-08-30 v4 重做）：
@@ -536,9 +545,10 @@ export default function ImageViewer({
           { translateY: enterTransY.value + dragTranslateY.value },
           { scale: enterScale.value * (1 - dragProgress * DRAG_SHRINK_FACTOR) },
         ],
+        // 圆角/边框曲线只在变化帧下发（退场开始一次），动画期不动 borderRadius
+        // ——大图切圆角每帧重栅格化是退场卡顿源之一。
         borderRadius: 0,
         borderCurve: 'continuous',
-        opacity: 1,
       };
     }
     // ── 退场态：单 progress 同曲线插值 → 直线轨迹（起点=手势当前位置）──
@@ -555,7 +565,6 @@ export default function ImageViewer({
       // 退场期圆角冻结在拖拽结束值（逐帧改 borderRadius 会重栅格化大图）
       borderRadius: exitRadius.value,
       borderCurve: 'continuous',
-      opacity: 1,
     };
   });
 
@@ -947,14 +956,15 @@ const dismissGesture = useMemo(
           {/* 状态栏隐藏/恢复走原生（TiebaNative.setModalStatusBarHidden）：iOS 27
               RN StatusBar 是 no-op 且 setStyle 会红屏；这里不放 StatusBar */}
 
-          {/* 背景层 1：实时毛玻璃（模糊后方信息流，拖拽时渐显；GlassView 内置降级策略） */}
-          <Animated.View style={[styles.bgLayer, bgBlurStyle]} pointerEvents="none">
+          {/* 背景层 1：实时毛玻璃（恒显；明暗渐变由黑 scrim 承担，见
+              bgScrimStyle 注释——blur opacity 逐帧动画=每帧重采样，掉帧源） */}
+          <View style={styles.bgLayer} pointerEvents="none">
             <GlassView
               theme="dark"
               glassEffectStyle="regular"
               style={StyleSheet.absoluteFill}
             />
-          </Animated.View>
+          </View>
           {/* 背景层 2：黑色遮罩（静止时全黑，拖拽时渐隐揭示模糊背景） */}
           <Animated.View style={[styles.bgLayer, styles.bgScrim, bgScrimStyle]} pointerEvents="none" />
 
@@ -1048,19 +1058,40 @@ const dismissGesture = useMemo(
             );
           })}
           </PagerView>
-          {/* overlay 动画层：staticMode 时盖住 PagerView 承担全部 transform
-              （进入/拖拽/退场）；同 URI + imageWarm 免过渡，与页内图无感互换 */}
-          {staticMode ? (
-            <AnimatedExpoImage
-              source={{ uri: displayUriOf(currentIndex, images[currentIndex]) }}
-              style={[styles.pager, styles.pagerOverlay, contentStyle]}
+          {/* overlay 动画层（常驻，staticMode 仅瞬时切显隐——不换树、无解码
+              等待）：transform 全部落在纯 RN Animated.View 容器（Reanimated
+              最优路径，不再逐帧驱动 expo-image 视图）；容器内两层内容：
+              预览档垫底（列表小档缓存秒显，动画全程有图，杜绝「动画 1 帧」）
+              + 大图（解码完成 150ms 淡入，与容器 transform 分属不同视图，
+              无 CA 动画竞争——旧版 transition=200 与 Reanimated 同层竞争是
+              退出「整个应用卡死」的根因之一）。进入/拖拽/退场动画期间
+              staticMode=true（overlay 可见）；常态 opacity 0（PagerView
+              交互恢复正常）。 */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.pager,
+              styles.pagerOverlay,
+              staticMode ? styles.pagerOverlayActive : null,
+              contentStyle,
+            ]}
+          >
+            <Image
+              source={{ uri: imagePreviews?.[currentIndex] ?? images[currentIndex] }}
+              style={StyleSheet.absoluteFill}
               contentFit="contain"
+              transition={0}
+              recyclingKey={`viewer-preview-${currentIndex}`}
+            />
+            <Image
+              source={{ uri: displayUriOf(currentIndex, images[currentIndex]) }}
+              style={StyleSheet.absoluteFill}
+              contentFit="contain"
+              transition={150}
               cachePolicy="memory-disk"
-              transition={isImageWarm(displayUriOf(currentIndex, images[currentIndex])) ? 0 : 200}
-              onLoad={() => markImageWarm(displayUriOf(currentIndex, images[currentIndex]))}
               recyclingKey={`viewer-static-${currentIndex}`}
             />
-          ) : null}
+          </Animated.View>
         </View>
 
         {/* Top Bar */}
@@ -1201,13 +1232,18 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  /* overlay 动画层：绝对铺满 pagerWrap，staticMode 期间承担全部 transform */
+  /* overlay 动画层：绝对铺满 pagerWrap，常态 opacity 0（PagerView 交互），
+     staticMode 期间 pagerOverlayActive 置 1 承担全部 transform */
   pagerOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    opacity: 0,
+  },
+  pagerOverlayActive: {
+    opacity: 1,
   },
   /* staticMode 期间 PagerView 仅隐藏（保持挂载/解码），不让它参与动画 */
   pagerWhileStatic: {

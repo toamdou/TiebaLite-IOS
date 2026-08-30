@@ -405,6 +405,7 @@ export default function SearchPage() {
         imageOrigins={imageViewer.imageViewerOrigins}
         contextTitle={imageViewer.imageViewerContextTitle}
         imageMeta={imageViewer.imageViewerMeta}
+        imagePreviews={imageViewer.imageViewerPreviews}
       />
     </View>
   );

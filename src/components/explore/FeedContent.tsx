@@ -579,6 +579,7 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
             imageOrigins={imageViewer.imageViewerOrigins}
             contextTitle={imageViewer.imageViewerContextTitle}
             imageMeta={imageViewer.imageViewerMeta}
+            imagePreviews={imageViewer.imageViewerPreviews}
           />
         </View>
       </RNHostView>

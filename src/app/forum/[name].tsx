@@ -822,6 +822,7 @@ export default function ForumPage() {
           imageOrigins={imageViewer.imageViewerOrigins}
           contextTitle={imageViewer.imageViewerContextTitle}
           imageMeta={imageViewer.imageViewerMeta}
+          imagePreviews={imageViewer.imageViewerPreviews}
         />
 
         {/* ── Good Classify Picker Modal ── */}

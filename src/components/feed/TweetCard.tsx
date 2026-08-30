@@ -50,7 +50,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useAppPreference } from '@/hooks/useAppPreference';
 import { formatCount } from '@/utils';
 import { useTimeLabel } from '@/hooks/useTimeLabel';
-import { pickViewerImages } from '@/utils/thumbnail';
+import { pickViewerImages, pickViewerPreviews } from '@/utils/thumbnail';
 import { useRecyclingState } from '@legendapp/list/react-native';
 import { stopPropagation } from '@/utils/gesture';
 import type { ThreadInfo } from '@/types';
@@ -249,6 +249,7 @@ const TweetCard = React.memo(function TweetCard({
         images.map((m) => m.originSrc || m.src),
         thread.title,
         viewerMeta,
+        pickViewerPreviews(images),
       );
     },
     [onImagePress, images, handleCardPress, dataSaverMode, thread.title],

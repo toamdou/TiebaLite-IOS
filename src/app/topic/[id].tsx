@@ -399,6 +399,7 @@ export default function TopicDetailPage() {
         imageOrigins={imageViewer.imageViewerOrigins}
         contextTitle={imageViewer.imageViewerContextTitle}
         imageMeta={imageViewer.imageViewerMeta}
+        imagePreviews={imageViewer.imageViewerPreviews}
       />
     </View>
   );
