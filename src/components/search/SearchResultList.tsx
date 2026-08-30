@@ -5,7 +5,7 @@
  * behavior) and empty/footer states consistent across search flows.
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -20,6 +20,7 @@ import { LegendList } from '@legendapp/list/react-native';
 import { SymbolView } from '@/components/ui/SymbolView';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import TweetCard, { type TweetCardProps } from '@/components/feed/TweetCard';
+import { EntranceRow } from '@/components/feed/EntranceRow';
 import { htmlToText } from '@/utils/htmlSummary';
 import {
   SearchForumCard,
@@ -131,20 +132,28 @@ export function SearchThreadList({
   useEffect(() => {
     useForumAvatarStore.getState().ensureAvatars(items);
   }, [items]);
+  // 首屏批次入场（全 App 统一 EntranceRow 效果）：仅首次数据到达播放，
+  // 分页/刷新/回收复用不重播（entranceDoneRef 冻结）
+  const entranceDoneRef = useRef(false);
+  useEffect(() => {
+    if (items.length > 0) entranceDoneRef.current = true;
+  }, [items.length]);
   const renderItem = useCallback(
-    ({ item }: { item: SearchThreadResult }) => {
+    ({ item, index }: { item: SearchThreadResult; index: number }) => {
       const avatarKey = forumAvatarKey(item);
       const avatar = avatarKey ? avatarMap[avatarKey]?.avatar ?? '' : '';
       return (
-        <TweetCard
-          thread={searchThreadToThreadInfo(item, avatar)}
-          timeType="create"
-          showForumPill
-          imageContextMenu
-          onImagePress={onImagePress}
-          onLike={onLike ? () => onLike(item) : undefined}
-          onShare={onShare ? () => onShare(item) : undefined}
-        />
+        <EntranceRow index={index} animateEntry={!entranceDoneRef.current}>
+          <TweetCard
+            thread={searchThreadToThreadInfo(item, avatar)}
+            timeType="create"
+            showForumPill
+            imageContextMenu
+            onImagePress={onImagePress}
+            onLike={onLike ? () => onLike(item) : undefined}
+            onShare={onShare ? () => onShare(item) : undefined}
+          />
+        </EntranceRow>
       );
     },
     [colors, onPressItem, onLike, onShare, onImagePress, avatarMap],
@@ -214,7 +223,7 @@ export function SearchThreadList({
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       onEndReached={onEndReached}
-      onEndReachedThreshold={0.3}
+      onEndReachedThreshold={0.7}
       ListHeaderComponent={header as React.ReactElement | null}
       ListEmptyComponent={listEmpty}
       ListFooterComponent={listFooter}
@@ -241,13 +250,19 @@ export function SearchForumList({
   error?: string;
   onRetry?: () => void;
 }) {
+  const entranceDoneRef = useRef(false);
+  useEffect(() => {
+    if (items.length > 0) entranceDoneRef.current = true;
+  }, [items.length]);
   const renderItem = useCallback(
-    ({ item }: { item: SearchForumResult }) => (
-      <SearchForumCard
-        item={item}
-        colors={colors}
-        onPressItem={onPressItem}
-      />
+    ({ item, index }: { item: SearchForumResult; index: number }) => (
+      <EntranceRow index={index} animateEntry={!entranceDoneRef.current}>
+        <SearchForumCard
+          item={item}
+          colors={colors}
+          onPressItem={onPressItem}
+        />
+      </EntranceRow>
     ),
     [colors, onPressItem],
   );
@@ -323,13 +338,19 @@ export function SearchUserList({
   error?: string;
   onRetry?: () => void;
 }) {
+  const entranceDoneRef = useRef(false);
+  useEffect(() => {
+    if (items.length > 0) entranceDoneRef.current = true;
+  }, [items.length]);
   const renderItem = useCallback(
-    ({ item }: { item: SearchUserResult }) => (
-      <SearchUserCard
-        item={item}
-        colors={colors}
-        onPressItem={onPressItem}
-      />
+    ({ item, index }: { item: SearchUserResult; index: number }) => (
+      <EntranceRow index={index} animateEntry={!entranceDoneRef.current}>
+        <SearchUserCard
+          item={item}
+          colors={colors}
+          onPressItem={onPressItem}
+        />
+      </EntranceRow>
     ),
     [colors, onPressItem],
   );
@@ -448,7 +469,7 @@ export function SearchPostList({
         />
       }
       onEndReached={onEndReached}
-      onEndReachedThreshold={0.3}
+      onEndReachedThreshold={0.7}
       ListFooterComponent={listFooter}
       ItemSeparatorComponent={postListSeparator}
       keyboardShouldPersistTaps="handled"

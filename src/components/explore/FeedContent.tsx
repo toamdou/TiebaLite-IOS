@@ -556,7 +556,7 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
               contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }}
               decelerationRate="normal"
               onEndReached={handleLoadMore}
-              onEndReachedThreshold={0.4}
+              onEndReachedThreshold={0.7}
               ListFooterComponent={listFooter}
               refreshControl={
                 <RefreshControl
@@ -635,7 +635,8 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
 }
 
 const styles = StyleSheet.create({
-  feedSkeleton: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 },
+  // 容器契约与列表一致：卡片贴边 10pt、列表 paddingVertical 8（2026-08-29 错位修复）
+  feedSkeleton: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 24 },
   // 不感兴趣原因 chips
   dislikeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingVertical: 4 },
   dislikeChip: {

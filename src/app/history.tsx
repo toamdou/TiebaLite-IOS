@@ -38,6 +38,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { CompactFeedRow } from '@/components/feed/CompactFeedRow';
 import TweetCard from '@/components/feed/TweetCard';
+import { EntranceRow } from '@/components/feed/EntranceRow';
 import ImageViewer from '@/components/ImageViewer';
 import { NAV_BAR_H } from '@/constants/layout';
 import { useThemeColors } from '@/theme/ThemeContext';
@@ -372,8 +373,15 @@ export default function HistoryPage() {
     [router, performDelete, backfillAuthorInfo, imageViewer.handleImagePress, feedActions.share, avatarMap],
   );
 
+  // 首屏批次入场（全 App 统一 EntranceRow 效果）：仅首次数据到达播放，
+  // 分组标题行不动画（renderRow 只包 item 分支）
+  const entranceDoneRef = useRef(false);
+  useEffect(() => {
+    if (historyRows.length > 0) entranceDoneRef.current = true;
+  }, [historyRows.length]);
+
   const renderRow = useCallback(
-    ({ item }: { item: HistoryRow }) => {
+    ({ item, index }: { item: HistoryRow; index: number }) => {
       if (item.kind === 'header') {
         return (
           <View style={[styles.sectionHeader, { backgroundColor: colors.background }]}>
@@ -384,7 +392,11 @@ export default function HistoryPage() {
         );
       }
       if (item.kind !== 'item') return null;
-      return renderHistoryItem(item.item);
+      return (
+        <EntranceRow index={index} animateEntry={!entranceDoneRef.current}>
+          {renderHistoryItem(item.item)}
+        </EntranceRow>
+      );
     },
     [colors, renderHistoryItem],
   );
@@ -575,7 +587,9 @@ function SwipeToDeleteRow({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  skeletonWrap: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md },
+  // 骨架容器与列表容器契约一致（列表无水平 padding、卡片贴边 10pt，
+  // listContent paddingTop 2）：首行位置与缩进与真实列表对齐（2026-08-29 错位修复）
+  skeletonWrap: { paddingHorizontal: 10, paddingTop: 2 },
   // 液态玻璃「清除全部」胶囊（clear 玻璃 + 原生交互；realTime=false 显式
   // 静态：小按钮不值得占每屏实时玻璃预算）
   // alignSelf flex-start：宿主内 RN 视图直挂屏幕根节点（默认 alignItems

@@ -283,7 +283,7 @@ export function MessageTabList({
             />
           }
           onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.4}
+          onEndReachedThreshold={0.7}
           drawDistance={300}
         />
       )}

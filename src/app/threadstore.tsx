@@ -36,6 +36,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import TweetCard from '@/components/feed/TweetCard';
+import { EntranceRow } from '@/components/feed/EntranceRow';
 import { NAV_BAR_H } from '@/constants/layout';
 import { Button } from '@/components/ui/Button';
 import { useThemeColors } from '@/theme/ThemeContext';
@@ -265,26 +266,35 @@ export default function ThreadStorePage() {
     }
   }, [undoRemoved, setItems]);
 
+  // 首屏批次入场（全 App 统一 EntranceRow 效果）：仅首次数据到达播放，
+  // 分页/刷新/回收复用不重播（entranceDoneRef 冻结）
+  const entranceDoneRef = useRef(false);
+  useEffect(() => {
+    if (items.length > 0) entranceDoneRef.current = true;
+  }, [items.length]);
+
   const renderItem = useCallback(
-    ({ item }: { item: FavoriteThread }) => {
+    ({ item, index }: { item: FavoriteThread; index: number }) => {
       const favoritesImages = favImages[String(item.id)];
       const avatarKey = forumAvatarKey(item);
       const forumAvatar = avatarKey ? avatarMap[avatarKey]?.avatar ?? '' : '';
       return (
-        <SwipeToUncollectRow onUncollect={() => handleRemove(item)}>
-          <TweetCard
-            thread={favoriteToThreadInfo(item, favoritesImages, forumAvatar)}
-            timeType="last"
-            showForumPill
-            hideActions
-            imageContextMenu
-            onImagePress={imageViewer.handleImagePress}
-            onOpenThread={() => {
-              hapticForScene('press');
-              router.push({ pathname: '/thread/[id]', params: { id: item.id, fromFavorites: '1' } });
-            }}
-          />
-        </SwipeToUncollectRow>
+        <EntranceRow index={index} animateEntry={!entranceDoneRef.current}>
+          <SwipeToUncollectRow onUncollect={() => handleRemove(item)}>
+            <TweetCard
+              thread={favoriteToThreadInfo(item, favoritesImages, forumAvatar)}
+              timeType="last"
+              showForumPill
+              hideActions
+              imageContextMenu
+              onImagePress={imageViewer.handleImagePress}
+              onOpenThread={() => {
+                hapticForScene('press');
+                router.push({ pathname: '/thread/[id]', params: { id: item.id, fromFavorites: '1' } });
+              }}
+            />
+          </SwipeToUncollectRow>
+        </EntranceRow>
       );
     },
     [router, handleRemove, favImages, imageViewer, avatarMap],
@@ -329,7 +339,7 @@ export default function ThreadStorePage() {
       <ThemedHost style={{ flex: 1 }}>
         <View style={[styles.container, { backgroundColor: colors.background }]}>
           <View style={styles.skeletonWrap}>
-            <SkeletonList variant="row" count={8} />
+            <SkeletonList variant="thread" count={6} />
           </View>
         </View>
       </ThemedHost>
@@ -379,7 +389,7 @@ export default function ThreadStorePage() {
           />
         }
         onEndReached={loadMore}
-        onEndReachedThreshold={0.3}
+        onEndReachedThreshold={0.7}
         ListFooterComponent={renderFooter}
       />
       {/* Undo Toast：浮动在列表底部，不再遮挡列表头数据（P2 最小修复） */}
@@ -409,7 +419,9 @@ export default function ThreadStorePage() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  skeletonWrap: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md },
+  // 骨架容器与列表容器契约一致（列表卡片贴边 10pt、listContent paddingTop sm）：
+  // 首行 y 偏移与水平缩进与真实列表对齐，替换瞬间不跳位（2026-08-29 错位修复）
+  skeletonWrap: { paddingHorizontal: 10, paddingTop: Spacing.sm },
   listContent: { paddingTop: Spacing.sm },
   emptyList: { flex: 1 },
   // 左滑「取消收藏」动作条（history.tsx 左滑删除同款：固定宽红色钮）

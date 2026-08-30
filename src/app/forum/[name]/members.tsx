@@ -490,7 +490,7 @@ export default function ForumMembersPage() {
             ListEmptyComponent={rankListEmpty}
             ListFooterComponent={rankListFooter}
             onEndReached={handleRankLoadMore}
-            onEndReachedThreshold={0.4}
+            onEndReachedThreshold={0.7}
             drawDistance={250}
           />
         )

@@ -95,6 +95,11 @@ export function usePagedList<T, P = undefined, E = any>({
   // 刷页。用户稍作滚动（离开底部）后再接近底部时自然命中下一批。
   const lastLoadMoreAtRef = useRef(0);
   const LOAD_MORE_COOLDOWN_MS = 900;
+  // 连续空追加计数：服务端越界页/回吐重复楼层时 appended 为空（全被去重），
+  // 若服务端 hasMore 恒 1 会形成"每 900ms 一页"的无声空翻循环；连续空页
+  // 达到上限即判尽（hasMore=false），翻页循环停止（2026-08-29）。
+  const emptyMoreRunsRef = useRef(0);
+  const EMPTY_MORE_LIMIT = 2;
   const pageRef = useRef(initialPage);
   const paramsRef = useRef(params);
   // items 的同步镜像（供分批 append 规划用；功能上仍以 setItems 函数式去重为准）
@@ -152,6 +157,17 @@ export function usePagedList<T, P = undefined, E = any>({
             seen.add(key);
             return true;
           });
+          // 空追加判尽：连续空页（越界越界页回吐/全部重复）达到上限即停，
+          // 避免提前触发（threshold 提高后）带来的无声空翻循环吞资源。
+          if (appended.length === 0) {
+            emptyMoreRunsRef.current += 1;
+            if (emptyMoreRunsRef.current >= EMPTY_MORE_LIMIT) {
+              setHasMore(false);
+              hasMoreRef.current = false;
+            }
+          } else {
+            emptyMoreRunsRef.current = 0;
+          }
           // 分批 append（2026-08-29）：整页一次 setItems 会合成一次大 commit
           //（滚动中连续掉帧的元凶之一）。按帧分片插入，摊平渲染峰值；
           // seq 守卫保证中途被 refresh/reset/new run 抢占时停止追加。
@@ -247,6 +263,7 @@ export function usePagedList<T, P = undefined, E = any>({
     // 冷却守卫一并复位：reset 后立即 loadMore 不应被上一次的冷却时间拦截
     //（见全量审查 #9）
     lastLoadMoreAtRef.current = 0;
+    emptyMoreRunsRef.current = 0;
     setItems([]);
     setPage(initialPage);
     pageRef.current = initialPage;

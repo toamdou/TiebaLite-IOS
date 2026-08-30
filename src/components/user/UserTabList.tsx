@@ -8,7 +8,7 @@
  * profile card is passed in as `header` (ListHeaderComponent).
  */
 
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -28,6 +28,7 @@ import { SkeletonList } from '@/components/ui/Skeleton';
 import { LoadMoreFooter } from '@/components/ui/LoadMoreFooter';
 import { showToast } from '@/components/ui/Toast';
 import TweetCard from '@/components/feed/TweetCard';
+import { EntranceRow } from '@/components/feed/EntranceRow';
 
 import {Spacing, typographyStyles, RadiusStyle} from '@/theme';
 import type { SemanticColors } from '@/theme';
@@ -163,12 +164,22 @@ export function UserTabList({
     await loadMore();
   }, [hasMore, loadingMore, loading, loadMore]);
 
+  // 首屏批次入场（全 App 统一 EntranceRow 效果）：仅首次数据到达播放，
+  // 分页/刷新/回收复用不重播（entranceDoneRef 冻结）
+  const entranceDoneRef = useRef(false);
+  useEffect(() => {
+    if (items.length > 0) entranceDoneRef.current = true;
+  }, [items.length]);
+
   const renderItem = useCallback(
-    ({ item }: { item: any }) => {
-      if (tab === 'forums') {
-        return <ForumRow item={item} colors={colors} />;
-      }
-      return <ThreadRow item={item} uid={uid} profileUser={profileUser} />;
+    ({ item, index }: { item: any; index: number }) => {
+      const row =
+        tab === 'forums' ? (
+          <ForumRow item={item} colors={colors} />
+        ) : (
+          <ThreadRow item={item} uid={uid} profileUser={profileUser} />
+        );
+      return <EntranceRow index={index} animateEntry={!entranceDoneRef.current}>{row}</EntranceRow>;
     },
     [tab, colors, uid, profileUser],
   );
@@ -249,7 +260,7 @@ export function UserTabList({
         />
       }
       onEndReached={handleLoadMore}
-      onEndReachedThreshold={0.3}
+      onEndReachedThreshold={0.7}
       ListFooterComponent={listFooter}
       ItemSeparatorComponent={tab === 'forums' ? ProfileItemSeparator : undefined}
     />

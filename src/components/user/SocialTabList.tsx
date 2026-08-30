@@ -243,7 +243,7 @@ export function SocialTabList({
           />
         }
         onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.3}
+        onEndReachedThreshold={0.7}
         ListFooterComponent={listFooter}
         ItemSeparatorComponent={ProfileItemSeparator}
       />
