@@ -88,17 +88,13 @@ export const ZoomableImage = memo(function ZoomableImage({
   gesturePulse: SharedValue<number>;
 }) {
   // ── 缩放核心 = react-native-zoom-reanimated（2026-08-30 替换手写实现）──
-  // focal 捏合（rubber band + 动态焦点）、双击缩放、pan（带边界回弹/动量）
-  // 由库内部维护。**库的放大态边缘滑图（enableGallerySwipe）已禁用**：
-  // 用户实证（2026-08-30）它经 parentScrollRef 驱动原生 PagerView setPage
-  // 会造成「两指准备捏合即回退第一张」「捏合中页面乱跳乱闪」以及「放大态
-  // 滑到边缘触发切页 → 页面重挂 → 缩放被重置回 1」。翻页由 PagerView
-  // 原生横向滑动承担（scale==1 时）；放大态溢出边缘仅橡皮筋回弹。
-  // 我们保留：
+  // focal 捏合（rubber band + 动态焦点）、双击缩放、pan（带边界回弹/动量）、
+  // 放大态边缘滑图（enableGallerySwipe：放大后左右滑动不恢复缩放直接切图，
+  // 用户指定保留）全部由库内部维护。我们保留：
   // - 单击 chrome 开关（与 noop 双击 Exclusive 互斥，双击不误触）
   // - zoomed 镜像：scale>1.01 → onZoomChange（JS：pager 门控/UI 态），
   //   以及 isZoomedIn → zoomMirror（UI 线程：退出手势门控，零往返）
-  // - 换图/换页重置（zoomOut）
+  // - 换图重置（zoomOut，仅 uri 变化触发）
   // 未放大态库的 pan 直接 fail → 父级拖拽关闭/长图阅读 pan 完全不变。
   const {
     zoomGesture,
@@ -112,7 +108,7 @@ export const ZoomableImage = memo(function ZoomableImage({
   } = useZoomGesture({
     minScale: 1,
     maxScale: 5,
-    enableGallerySwipe: false,
+    enableGallerySwipe: gallerySwipe,
     parentScrollRef: galleryScrollRef,
     currentIndex: galleryIndex,
     itemWidth: galleryItemWidth,
@@ -154,11 +150,20 @@ export const ZoomableImage = memo(function ZoomableImage({
     },
   );
 
-  // 换图/换页重置（库的 zoomOut：弹簧回到初始）。active 切换即重置，
-  // 与旧 resetTransform 语义一致。
+  // 换图重置（库的 zoomOut：弹簧回到初始）。**只依赖 uri**——曾依赖
+  // active/zoomOut：缩放状态翻转 → 父级重渲染 → 引用抖动 → 整窗三页并发
+  // zoomOut() → 放大态 scale 被不断打回 1（用户实测「滑到边缘图片回归
+  // 正常大小」，2026-08-30 日志 zoom-reset 三连发实证）。翻页换图 uri
+  // 必变，active 语义由 uri 覆盖。
   useEffect(() => {
+    console.warn(
+      '[viewer-dbg]',
+      new Date().toISOString().slice(11, 23),
+      'zoom-reset',
+      { uri: uri?.slice(-24) },
+    );
     zoomOut();
-  }, [uri, active, zoomOut]);
+  }, [uri]);
 
   // 单击 chrome 开关 + 双击触感：与库双击（负责缩放）并存。noop 双击只
   // 参与 Exclusive 协调（保证双击时单击不误触）并在成功时补触感——
@@ -305,7 +310,7 @@ export const LongImageView = memo(function LongImageView({
   } = useZoomGesture({
     minScale: 1,
     maxScale: 5,
-    enableGallerySwipe: false, // 禁用放大态边缘滑图（根因见 ZoomableImage 同处注释）
+    enableGallerySwipe: gallerySwipe,
     parentScrollRef: galleryScrollRef,
     currentIndex: galleryIndex,
     itemWidth: galleryItemWidth,
@@ -341,10 +346,17 @@ export const LongImageView = memo(function LongImageView({
     setOriginFailed(false);
   }, [baseUri, originUri]);
 
-  // 换图/换页重置缩放（同 ZoomableImage）
+  // 换图重置缩放（同 ZoomableImage）：只依赖图源 URI——曾依赖
+  // originUri/zoomOut 引用（首帧 originUri 可能异步到达 → 重置链抖动）。
   useEffect(() => {
+    console.warn(
+      '[viewer-dbg]',
+      new Date().toISOString().slice(11, 23),
+      'zoom-reset',
+      { uri: baseUri?.slice(-24) },
+    );
     zoomOut();
-  }, [baseUri, originUri, zoomOut]);
+  }, [baseUri]);
 
   // zoomed 镜像 → 父级 dismiss/pager 门控（阈值 1.01，与旧实现一致）
   useAnimatedReaction(

@@ -151,11 +151,17 @@ export default function ImageViewer({
   // 照片级图库滑动适配器（react-native-zoom-reanimated parentScrollRef）：
   // 库 overflow 溢出时按 offset 换算目标页，驱动原生 PagerView 切页。
   // staticMode/未挂载时 pagerRef.current 为空 → 库侧守卫自然忽略。
+  // **同页请求忽略**（2026-08-30）：库在捏合/两指触摸时也会产生「当前页微
+  // 溢出」的滚动请求（初始帧/手指微动），若照单全收会在缩放时反复 setPage
+  // 同页 → PagerView 抖动乱闪；只响应真正跨页的请求。
+  const currentIdxRef = useRef(currentIndex);
+  currentIdxRef.current = currentIndex;
   const galleryScrollRef = useRef<ScrollableRef>({
     scrollToOffset: ({ offset, animated }) => {
       const pager = pagerRef.current;
       if (!pager) return;
       const idx = Math.max(0, Math.min(images.length - 1, Math.round(offset / SCREEN_WIDTH)));
+      if (idx === currentIdxRef.current) return;
       if (animated === false) pager.setPageWithoutAnimation(idx);
       else pager.setPage(idx);
     },
