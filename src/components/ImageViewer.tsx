@@ -16,6 +16,7 @@ import {
   Alert,
   ActivityIndicator,
   Pressable,
+  useWindowDimensions,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -151,19 +152,39 @@ export default function ImageViewer({
   // 照片级图库滑动适配器（react-native-zoom-reanimated parentScrollRef）：
   // 库 overflow 溢出时按 offset 换算目标页，驱动原生 PagerView 切页。
   // staticMode/未挂载时 pagerRef.current 为空 → 库侧守卫自然忽略。
-  // **同页请求忽略**（2026-08-30）：库在捏合/两指触摸时也会产生「当前页微
-  // 溢出」的滚动请求（初始帧/手指微动），若照单全收会在缩放时反复 setPage
-  // 同页 → PagerView 抖动乱闪；只响应真正跨页的请求。
+  // **不要用模块级 SCREEN_WIDTH 换算页**（2026-08-30 日志实证：Dim 常量
+  // 被转屏状态污染成 ~874pt 后，库请求 offset=401（1×402-1pt 微溢出）竟
+  // 被 round 成第 0 页 → setPage(0) → 「两指准备放大就跳回第一张」）。
+  // 用 useWindowDimensions 实时宽 + 就近页容差判定：
+  // - 页面 = round(offset / liveW)
+  // - |offset 与最近整页中心| 偏差 < 16% liveW → 视为同页微溢出/回弹，
+  //   不切页（捏合两指时库会持续发当前页 ± 数 pt 的漂移请求）
+  // 只响应确凿跨页请求。
+  const { width: liveWindowWidth } = useWindowDimensions();
+  const liveWRef = useRef(liveWindowWidth);
+  liveWRef.current = liveWindowWidth;
   const currentIdxRef = useRef(currentIndex);
   currentIdxRef.current = currentIndex;
   const galleryScrollRef = useRef<ScrollableRef>({
     scrollToOffset: ({ offset, animated }) => {
       const pager = pagerRef.current;
       if (!pager) return;
-      const idx = Math.max(0, Math.min(images.length - 1, Math.round(offset / SCREEN_WIDTH)));
-      if (idx === currentIdxRef.current) return;
-      if (animated === false) pager.setPageWithoutAnimation(idx);
-      else pager.setPage(idx);
+      const cur = currentIdxRef.current;
+      const w = liveWRef.current || SCREEN_WIDTH;
+      const pageFloat = offset / w;
+      const nearest = Math.round(pageFloat);
+      const frac = Math.abs(pageFloat - nearest);
+      if (frac >= 0.16) return; // 半途位置（异常请求），忽略
+      console.warn(
+        '[viewer-dbg]',
+        new Date().toISOString().slice(11, 23),
+        'gal-scroll',
+        { offset: Math.round(offset), idx: nearest, cur, animated, w },
+      );
+      if (nearest === cur) return;
+      if (nearest < 0 || nearest >= images.length) return;
+      if (animated === false) pager.setPageWithoutAnimation(nearest);
+      else pager.setPage(nearest);
     },
   });
   const thumbnailRef = useRef<ScrollView>(null);
@@ -898,6 +919,12 @@ const dismissGesture = useMemo(
 
   const handlePageSelected = useCallback(
     (e: PagerViewOnPageSelectedEvent) => {
+      console.warn(
+        '[viewer-dbg]',
+        new Date().toISOString().slice(11, 23),
+        'page-sel',
+        { pos: e.nativeEvent.position, start: pageWindowStart },
+      );
       hapticForScene('toggle');
       setCurrentIndex(e.nativeEvent.position + pageWindowStart);
     },
