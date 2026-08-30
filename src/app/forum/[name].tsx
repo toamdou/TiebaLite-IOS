@@ -794,6 +794,7 @@ export default function ForumPage() {
               style={styles.fab}
             >
               <HdrPressable
+                effect="hdr"
                 onPress={handleFabPress}
                 style={styles.fabPressable}
                 flashRadius={Radius.capsule}

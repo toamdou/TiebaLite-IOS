@@ -7,8 +7,12 @@
 // 只做静态白闪。
 // 2026-08-28 用户反馈：白色斜向扫光带深浅色模式下都突兀，已全局删除。
 //
-// effect="subtle"：帖子/搜索结果卡片专用（用户反馈卡片发光/字体变浅要去掉，
-// 又反馈按压动画太花里胡哨）——无任何按压视觉变化。
+// 2026-08-30 用户定案：**默认 subtle（全应用无高光扫过）**；仅保留名单
+// 显式 effect="hdr"（左上角返回=原生 back、右上角吧头像、吧页 FAB、底栏
+// 四 tab=原生 NativeTabs——均由系统/显式 hdr 承担）。
+//
+// effect="subtle"（默认）：无任何按压视觉变化，零开销直出（不创建
+// shared value / worklet / 覆盖层视图）。
 // ============================================================
 
 /* eslint-disable react-hooks/immutability -- Reanimated shared values are mutable refs; React Compiler cannot model them. */
@@ -24,15 +28,16 @@ export interface HdrPressableProps extends PressableProps {
   flashRadius?: number;
   /** 外扩光晕超出按钮边界的距离（pt），默认 9 */
   glowOutset?: number;
-  /** 反馈效果：'hdr'=白闪+光晕（默认，按钮）；'subtle'=极轻点按（卡片） */
+  /** 反馈效果：'subtle'=无按压视觉（**默认**，全应用）；'hdr'=白闪+光晕
+      （仅保留名单：吧头像预览、吧页 FAB 等显式声明） */
   effect?: 'hdr' | 'subtle';
 }
 
 export function HdrPressable(props: HdrPressableProps) {
-  // subtle 路径（帖子/搜索结果卡片，无任何按压视觉）零开销直出：
-  // 不创建 shared value / worklet / 覆盖层视图。LegendList 默认不回收行
+  // 默认 subtle：全应用无高光扫过（用户 2026-08-30 定案）；subtle 路径零开销
+  // 直出：不创建 shared value / worklet / 覆盖层视图。LegendList 默认不回收行
   //（recycleItems 关），飞速滑动时每行都是新挂载，卡片行省掉的是纯常驻成本。
-  if (props.effect === 'subtle') {
+  if (props.effect !== 'hdr') {
     const { effect: _effect, flashRadius: _flashRadius, glowOutset: _glowOutset, ...rest } = props;
     return <Pressable {...rest} />;
   }

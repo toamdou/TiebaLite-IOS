@@ -47,6 +47,7 @@ function ForumAvatarWithHdr({
 
   return (
     <HdrPressable
+      effect="hdr"
       style={styles.forumAvatarBtn}
       flashRadius={15}
       glowOutset={10}
