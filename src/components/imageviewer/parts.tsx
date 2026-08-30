@@ -152,6 +152,21 @@ export const ZoomableImage = memo(function ZoomableImage({
       }
     },
   );
+  // ⚠️ 取证（2026-08-30）：scale 从放大态突降到 1（「滑到边缘自动恢复原大小」
+  // 的复位瞬间）——记录突变轨迹与时间，定位库内部触发者
+  useAnimatedReaction(
+    () => scale.value,
+    (s, prev) => {
+      if ((prev ?? 1) > 1.05 && s <= 1.02) {
+        runOnJS(console.warn)(
+          '[viewer-dbg]',
+          new Date().toISOString().slice(11, 23),
+          'scale-drop',
+          { s: Math.round(s * 100) / 100, prev: Math.round((prev ?? 1) * 100) / 100 },
+        );
+      }
+    },
+  );
 
   // 换图重置（库的 zoomOut：弹簧回到初始）。**只依赖 uri**——曾依赖
   // active/zoomOut：缩放状态翻转 → 父级重渲染 → 引用抖动 → 整窗三页并发
