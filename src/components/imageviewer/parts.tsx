@@ -151,6 +151,10 @@ export const ZoomableImage = memo(function ZoomableImage({
           if (__DEV__) runOnJS(__pinchLog)('start', 0);
         })
         .onUpdate((e) => {
+          // 两指变一指瞬间 e.scale 会剧烈回落（focal 距离剧变）——若放行，
+          // 放大中的图片会先骤缩再松手弹回 1（用户"先放大又缩小回原大小"）；
+          // 指针数 <2 时冻结缩放（iOS Photos 同款：一指抬起即停止跟手）
+          if (e.numberOfPointers < 2) return;
           scale.value = Math.min(5, Math.max(1, baseScale.value * e.scale));
         })
         .onEnd(() => {
@@ -384,9 +388,12 @@ export const LongImageView = memo(function LongImageView({
 
   const pinch = useMemo(
     () =>
-      Gesture.Pinch().onUpdate((e) => {
-        scale.value = Math.min(5, Math.max(1, baseScale.value * e.scale));
-      }).onEnd(() => {
+      Gesture.Pinch()
+        .onUpdate((e) => {
+          // 同 ZoomableImage：两指变一指冻结缩放（防 e.scale 骤降把放大弹回）
+          if (e.numberOfPointers < 2) return;
+          scale.value = Math.min(5, Math.max(1, baseScale.value * e.scale));
+        }).onEnd(() => {
         baseScale.value = scale.value;
         if (scale.value <= 1.001) {
           scale.value = withSpring(1, MOMENTUM);

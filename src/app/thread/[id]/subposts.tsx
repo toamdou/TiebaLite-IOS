@@ -329,7 +329,7 @@ export default function SubPostsPage() {
         contentContainerStyle={[styles.listContent, { paddingTop: insets.top + 66, paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
         onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.7}
+        onEndReachedThreshold={0.5}
         drawDistance={500}
         // 首屏大批量（pbFloor 一次返回全部楼中楼）：drawDistance 提供首屏外的
         // 预渲染缓冲，导航动画中不会出现"只挂 1 个 cell、其余留白"。行高无需

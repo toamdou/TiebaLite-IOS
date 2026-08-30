@@ -389,7 +389,7 @@ export default function ThreadStorePage() {
           />
         }
         onEndReached={loadMore}
-        onEndReachedThreshold={0.7}
+        onEndReachedThreshold={0.3}
         ListFooterComponent={renderFooter}
       />
       {/* Undo Toast：浮动在列表底部，不再遮挡列表头数据（P2 最小修复） */}

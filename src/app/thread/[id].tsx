@@ -464,7 +464,7 @@ export default function ThreadPage() {
           { paddingTop: insets.top + 66, paddingBottom: insets.bottom + (showShortcutInThread ? 80 : 12) },
         ]}
         onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.7}
+        onEndReachedThreshold={0.3}
         ListFooterComponent={renderFooter}
         refreshControl={
           <RefreshControl

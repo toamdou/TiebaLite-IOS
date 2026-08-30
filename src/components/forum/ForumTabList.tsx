@@ -183,7 +183,7 @@ export const ForumTabList = React.memo(function ForumTabList({
       }
       ListFooterComponent={listFooter}
       onEndReached={onLoadMore}
-      onEndReachedThreshold={0.7}
+      onEndReachedThreshold={0.3}
       onScroll={onScroll}
       scrollEventThrottle={64}
       onMomentumScrollEnd={(e: any) => onScroll(e as any)}

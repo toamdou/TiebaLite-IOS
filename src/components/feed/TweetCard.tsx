@@ -789,7 +789,6 @@ const styles = StyleSheet.create({
   },
   bodyTitle: {
     ...typographyStyles.headline,
-    fontWeight: '700',
   },
   showMoreBtn: {
     marginTop: 2,

@@ -223,7 +223,7 @@ export function SearchThreadList({
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       onEndReached={onEndReached}
-      onEndReachedThreshold={0.7}
+      onEndReachedThreshold={0.3}
       ListHeaderComponent={header as React.ReactElement | null}
       ListEmptyComponent={listEmpty}
       ListFooterComponent={listFooter}
@@ -469,7 +469,7 @@ export function SearchPostList({
         />
       }
       onEndReached={onEndReached}
-      onEndReachedThreshold={0.7}
+      onEndReachedThreshold={0.3}
       ListFooterComponent={listFooter}
       ItemSeparatorComponent={postListSeparator}
       keyboardShouldPersistTaps="handled"

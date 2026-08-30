@@ -72,10 +72,10 @@ const BG_REVEAL_DISTANCE = 200;
 const SHRINK_DISTANCE = 280;
 /** 拖拽缩小系数（280pt 时 1 → 0.75） */
 const DRAG_SHRINK_FACTOR = 0.25;
-/** 飞回源缩略图动画时长（Photos 观感：跟手松手 → 减速归位，~0.36s 平滑收尾） */
-const FLY_BACK_MS = 360;
+/** 飞回源缩略图动画时长（Photos 观感：跟手松手 → 减速归位，~0.42s 平滑收尾） */
+const FLY_BACK_MS = 420;
 /** 无源矩形沿手势方向飞出的时长 */
-const EXIT_FLING_MS = 300;
+const EXIT_FLING_MS = 360;
 /** 退场双轴缓动：x 快出慢收、y 缓起缓落——同一 progress 插值出抛物线轨迹
     （水平分量先行、垂直分量后至），轨迹自然且两轴全程同步（单驱动无竞态）。 */
 const EXIT_EASE_X = Easing.out(Easing.cubic);
@@ -152,10 +152,12 @@ export default function ImageViewer({
   const { reduceMotion } = useReducedMotion();
   const lowPowerMode = useLowPowerMode();
 
-  // 长图判据：纯几何——fit-width 显示高度超过屏高才进阅读模式。服务端
+  // 长图判据：纯几何——fit-width 显示高度明显超过屏高才进阅读模式。服务端
   // isLongPic 标记对"稍高于屏"的图会过宽路由成阅读模式（顶部顶状态栏、
   // 底部被裁，用户 2026-08-29 反馈"部分图片靠上显示"）；有真实尺寸时以
-  // 几何为准，尺寸未知才信服务端标记。阅读模式自带顶部安全区让位。
+  // 几何为准，尺寸未知才信服务端标记。阈值 1.3 倍屏高：仅"明显长"的图进
+  // 阅读模式，略超屏的普通图保持捏合缩放浏览（用户 2026-08-30 反馈：未标
+  // 长图的图被误判成长图、上下滑退不出）。
   const isLongImageOf = useCallback(
     (index: number): boolean => {
       const meta = imageMeta?.[index];
@@ -163,7 +165,7 @@ export default function ImageViewer({
       const w = meta.width;
       const h = meta.height;
       if (w > 0 && h > 0) {
-        return (SCREEN_WIDTH * h) / w > SCREEN_HEIGHT + 1;
+        return (SCREEN_WIDTH * h) / w > SCREEN_HEIGHT * 1.3;
       }
       return meta.isLongPic === true;
     },
@@ -286,11 +288,31 @@ export default function ImageViewer({
         }),
     [zoomedSV, longScrollY, longScrollMax, readBase, isDismissing],
   );
-  // 飞回目标（JS 预算 → UI 消费）
+  // 飞回目标（JS 预算 → UI 消费）：源缩略图矩形（点击页）或底栏缩略条格
+  //（翻页后的当前页，iOS Photos 同款：从哪翻走飞回哪）
   const flyTargetX = useSharedValue(0);
   const flyTargetY = useSharedValue(0);
   const flyTargetScale = useSharedValue(1);
   const hasFlyTarget = useSharedValue(false);
+  const thumbTargetX = useSharedValue(0);
+  const thumbTargetY = useSharedValue(0);
+  const thumbTargetScale = useSharedValue(1);
+
+  // 底栏缩略条格（56×56、间距 6、水平 padding 16、底 padding max(insets.bottom,16)）
+  // 作为退场目标；翻页后点击页的源矩形已不再对应屏幕，回缩略条格更符合直觉。
+  useEffect(() => {
+    if (images.length <= 1) return;
+    const idx = currentIndex;
+    const meta = imageMeta?.[idx];
+    let aspect = 1;
+    if (meta && meta.width > 0 && meta.height > 0) aspect = meta.width / meta.height;
+    const displayW = Math.min(SCREEN_WIDTH, SCREEN_HEIGHT * aspect);
+    const s = displayW > 0 ? 56 / displayW : 0.2;
+    thumbTargetScale.value = s;
+    thumbTargetX.value = Spacing.md + idx * 62 + 28 - (s * SCREEN_WIDTH) / 2;
+    thumbTargetY.value =
+      SCREEN_HEIGHT - (Math.max(insets.bottom, 16) + 28) - (s * SCREEN_HEIGHT) / 2;
+  }, [currentIndex, images.length, imageMeta, insets.bottom, thumbTargetX, thumbTargetY, thumbTargetScale]);
   // 减少动态：把 reduceMotion 镜像到 UI 线程（手势 onEnd 里判断）
   const reduceMotionSV = useSharedValue(reduceMotion);
 
@@ -518,46 +540,54 @@ export default function ImageViewer({
     });
   }, [reduceMotion, onClose, isDismissing, setStaticMode, dragTranslateX, dragTranslateY, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, exitProgress]);
 
-// 交互式拖拽关闭（iOS Photos 风格，2026-08-29 重构 v2）：
+// 交互式拖拽关闭（iOS Photos 风格，2026-08-29 重构 v2 / 08-30 增补）：
 // - 手势本体稳定（门控全走共享值，不随 isZoomed 重建——快速捏合不被掐断）；
-// - 手动激活仲裁（minDistance 关闭自动激活，onTouchesMove 判定后显式 activate）：
-//   普通页任意方向纵向可退；长图页（阅读滚动 pan 驱动）仅滚动边界可退——
-//   顶部下拉 / 底部上拉（滚动区内纵向手势归阅读滚动，不抢）；
-//   PagerView 翻不了的方向（首页右拉 / 末页左拉）横向也可退（左缘滑动退出）。
-// - 2D 跟手：激活后 X/Y 同步跟随手指（增量累计，跨滚动区到边界不跳变），
-//   拖动中按距离缩小（跟手缩小，0.25@280pt）。
-// - 放开时距离或速度过阈值 → 有源矩形则沿抛物线“飞回缩略图”（起点=手势
-//   当前位置，终点=源矩形，360ms 减速归位），否则沿手势 2D 方向飞出；
+// - minDistance=10 自动激活兜底（不再依赖纯手动 activate：嵌套 PagerView
+//   环境下手动模式会偶发收不到 touchesMove，普通图纵滑退不出——用户实测）；
+//   激活后 onUpdate 里仲裁：长图页滚动区内纵向不跟手（滚动归阅读 pan，
+//   贴顶下拉/贴底上拉才接管退出）；横向仅 PagerView 翻不了的方向（首页右
+//   拉/末页左拉）跟手，其余横向拖动（翻页）X 归零不污染。
+//   长图边界判定符号注意：scrollY ∈ [-max, 0]（向下滚为负），贴底 =
+//   scrollY ≥ -max+0.5（旧版写成 ≥ max-0.5 恒不成立 → 底部退不出）。
+// - 放开时距离或速度过阈值 → 三档退场目标：源缩略图矩形（点击页）→ 底栏
+//   缩略条格（翻页后当前页）→ 沿手势方向缩小淡出（单图无缩略条）；
 //   未过阈值 → 弹簧回弹。缩放态（zoomedSV）下禁用，交给页内缩放 pan。
 const dismissGesture = useMemo(
     () =>
       Gesture.Pan()
-        .minDistance(4000)
+        .minDistance(10)
         .maxPointers(1)
-        // 长图页与阅读滚动 pan 同流（RNGH-RNGH）：滚动/退出按边界仲裁
         .simultaneousWithExternalGesture(longReadPan)
         .onTouchesDown((e) => {
           if (zoomedSV.value) return;
           const t = e.changedTouches[0];
           touchStartX.value = t.x;
           touchStartY.value = t.y;
+          prevTransX.value = 0;
+          prevTransY.value = 0;
+        })
+        .onStart((e) => {
+          // 自动激活（minDistance 10）时 translation 已累计了按下到激活点的
+          // 位移：以激活点为增量基线，onUpdate 从 0 起跟手（无首帧跳变）。
+          prevTransX.value = e.translationX;
+          prevTransY.value = e.translationY;
         })
         .onTouchesMove((e, mgr) => {
           if (isDismissing.value || zoomedSV.value) return;
+          // 兜底手动激活：minDistance=10 已能自动激活，这里只做激活前仲裁
+          //（长图页非边界纵向、翻页横向不抢）
           const dx = e.changedTouches[0].x - touchStartX.value;
           const dy = e.changedTouches[0].y - touchStartY.value;
           let yGo = false;
           if (isLongPageSV.value) {
-            // 长图页：仅手指方向会把滚动钉在边界（顶下拉/底上拉）时才接管退出
             const atTop = longScrollY.value <= 0.5;
-            const atBottom = longScrollY.value >= longScrollMax.value - 0.5;
-            yGo = Math.abs(dy) >= 14 && ((dy > 0 && atTop) || (dy < 0 && atBottom));
+            const atBottom = longScrollY.value >= -longScrollMax.value + 0.5;
+            yGo = Math.abs(dy) >= 10 && ((dy > 0 && atTop) || (dy < 0 && atBottom));
           } else {
-            yGo = Math.abs(dy) >= 14;
+            yGo = Math.abs(dy) >= 10;
           }
-          // 横向：PagerView 无法翻页的方向（首页右拉/末页左拉）接管为退出
           const xGo =
-            Math.abs(dx) >= 14 &&
+            Math.abs(dx) >= 10 &&
             ((dx > 0 && currentIdxSV.value <= 0) ||
               (dx < 0 && currentIdxSV.value >= pageCountSV.value - 1));
           if (yGo || xGo) mgr.activate();
@@ -570,18 +600,22 @@ const dismissGesture = useMemo(
           const dY = e.translationY - prevTransY.value;
           prevTransX.value = e.translationX;
           prevTransY.value = e.translationY;
+          // 横向：仅 PagerView 翻不了的方向（首页右拉/末页左拉）跟手退出，
+          // 其余横向拖动是翻页，X 归零不污染退场位移
+          const xGo =
+            (dX > 0 && currentIdxSV.value <= 0) ||
+            (dX < 0 && currentIdxSV.value >= pageCountSV.value - 1);
+          dragTranslateX.value = xGo ? dragTranslateX.value + dX : 0;
           let followY = true;
           if (isLongPageSV.value) {
             const atTop = longScrollY.value <= 0.5;
-            const atBottom = longScrollY.value >= longScrollMax.value - 0.5;
+            const atBottom = longScrollY.value >= -longScrollMax.value + 0.5;
             followY =
               (e.translationY > 2 && atTop) ||
               (e.translationY < -2 && atBottom) ||
               (atTop && atBottom);
           }
-          dragTranslateX.value += dX;
-          if (followY) dragTranslateY.value += dY;
-          else dragTranslateY.value = 0;
+          dragTranslateY.value = followY ? dragTranslateY.value + dY : 0;
         })
         .onEnd((e) => {
           if (isDismissing.value || zoomedSV.value) return;
@@ -606,22 +640,21 @@ const dismissGesture = useMemo(
           // 切除 PagerView（SwiftUI TabView）→ 静态大图：同 URI + imageWarm 免
           // 过渡，换图像素级无感；退场 transform 落在轻量 Image 上，120fps 平滑
           runOnJS(setStaticMode)(true);
-          if (hasFlyTarget.value && currentIdxSV.value === initialIdxSV.value) {
-            // 飞回被点击缩略图：从手势当前位置（含横向跟手分量）沿抛物线归位；
-            // 背景同步淡出，露出列表缩略图
+          // 退场目标三档：源缩略图（点击页）→ 底栏缩略条格（翻页后）→
+          // 单图无条沿手势方向缩小淡出。全程 x/y 双轴不同缓动 → 抛物线轨迹。
+          const isInitialPage = currentIdxSV.value === initialIdxSV.value;
+          if (hasFlyTarget.value && isInitialPage) {
             exitToX.value = flyTargetX.value;
             exitToY.value = flyTargetY.value;
             exitToScale.value = flyTargetScale.value;
-            exitProgress.value = withTiming(
-              1,
-              { duration: FLY_BACK_MS, easing: EASE_OUT },
-              (finished) => {
-                if (finished) runOnJS(onClose)();
-              },
-            );
+          } else if (pageCountSV.value > 1) {
+            // 翻页后飞回当前页缩略条格（iOS Photos 从哪走回哪）
+            exitToX.value = thumbTargetX.value;
+            exitToY.value = thumbTargetY.value;
+            exitToScale.value = thumbTargetScale.value;
           } else {
-            // 无源矩形（如 TweetCard 信息流图）：沿手势 2D 方向飞出
-            // （方向跟随手势向量，不再固定上下），结束后卸载
+            // 无任何落点（单图且无源矩形）：沿手势方向移动 + 缩小 + 淡出，
+            // 让"返回"过程可见（不再瞬间飞出屏幕边缘）
             let dx = e.translationX;
             let dy = e.translationY;
             if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
@@ -636,17 +669,20 @@ const dismissGesture = useMemo(
               dx /= len;
               dy /= len;
             }
-            exitToX.value = dx * SCREEN_WIDTH * 1.4;
-            exitToY.value = dy * SCREEN_HEIGHT * 1.4;
-            exitToScale.value = 0.82;
-            exitProgress.value = withTiming(
-              1,
-              { duration: EXIT_FLING_MS, easing: EASE_OUT },
-              (finished) => {
-                if (finished) runOnJS(onClose)();
-              },
-            );
+            exitToX.value = dx * SCREEN_WIDTH * 0.9;
+            exitToY.value = dy * SCREEN_HEIGHT * 0.9;
+            exitToScale.value = 0.6;
           }
+          exitProgress.value = withTiming(
+            1,
+            {
+              duration: hasFlyTarget.value || pageCountSV.value > 1 ? FLY_BACK_MS : EXIT_FLING_MS,
+              easing: EASE_OUT,
+            },
+            (finished) => {
+              if (finished) runOnJS(onClose)();
+            },
+          );
         }),
     [
       onClose,
@@ -670,6 +706,9 @@ const dismissGesture = useMemo(
       flyTargetX,
       flyTargetY,
       flyTargetScale,
+      thumbTargetX,
+      thumbTargetY,
+      thumbTargetScale,
       exitFromX,
       exitFromY,
       exitFromScale,

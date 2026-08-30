@@ -381,7 +381,7 @@ export default function TopicDetailPage() {
           />
         }
         onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.7}
+        onEndReachedThreshold={0.3}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={listEmpty}
         ListFooterComponent={listFooter}

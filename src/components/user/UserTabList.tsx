@@ -260,7 +260,7 @@ export function UserTabList({
         />
       }
       onEndReached={handleLoadMore}
-      onEndReachedThreshold={0.7}
+      onEndReachedThreshold={0.3}
       ListFooterComponent={listFooter}
       ItemSeparatorComponent={tab === 'forums' ? ProfileItemSeparator : undefined}
     />

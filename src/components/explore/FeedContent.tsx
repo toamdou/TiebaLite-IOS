@@ -559,7 +559,7 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
               contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }}
               decelerationRate="normal"
               onEndReached={handleLoadMore}
-              onEndReachedThreshold={0.7}
+              onEndReachedThreshold={0.4}
               ListFooterComponent={listFooter}
               refreshControl={
                 <RefreshControl
