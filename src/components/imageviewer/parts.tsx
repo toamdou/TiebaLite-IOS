@@ -8,7 +8,7 @@
  * ImageViewer.tsx 主组件内，勿迁。
  */
 
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { View, Pressable, StyleSheet, Dimensions, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -24,7 +24,6 @@ import { Image } from 'expo-image';
 
 import { hapticForScene } from '@/theme/hapticsMap';
 import { useNativeThumbnail } from '@/hooks/useNativeThumbnail';
-import { thumbnailUrl, THUMB_LIST } from '@/utils/thumbnail';
 import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
 
 // 与主组件同款固定窗口尺寸（竖屏取一次；旋转后页面 flex 撑开，钳制按
@@ -121,9 +120,13 @@ export const ZoomableImage = memo(function ZoomableImage({
   useEffect(() => {
     activeSV.value = active;
     if (active) {
+      // 翻页返回曾缩放的页：复位缩放（iOS Photos——缩放不跨页保持）。
+      // isZoomedIn 门控保证只有真放大过的页触发，未缩放页零成本
+      // （不会重演 fc315b8 修掉的「active 翻转→整窗三页并发 zoomOut」）。
+      if (isZoomedIn.value) zoomOut();
       zoomMirror.value = isZoomedIn.value;
     }
-  }, [active, activeSV, zoomMirror, isZoomedIn]);
+  }, [active, activeSV, zoomMirror, isZoomedIn, zoomOut]);
   useAnimatedReaction(
     () => isZoomedIn.value,
     (z) => {
@@ -156,12 +159,14 @@ export const ZoomableImage = memo(function ZoomableImage({
   // 正常大小」，2026-08-30 日志 zoom-reset 三连发实证）。翻页换图 uri
   // 必变，active 语义由 uri 覆盖。
   useEffect(() => {
-    console.warn(
-      '[viewer-dbg]',
-      new Date().toISOString().slice(11, 23),
-      'zoom-reset',
-      { uri: uri?.slice(-24) },
-    );
+    if (__DEV__) {
+      console.warn(
+        '[viewer-dbg]',
+        new Date().toISOString().slice(11, 23),
+        'zoom-reset',
+        { uri: uri?.slice(-24) },
+      );
+    }
     zoomOut();
   }, [uri]);
 
@@ -192,10 +197,11 @@ export const ZoomableImage = memo(function ZoomableImage({
     [zoomGesture, tapCombo],
   );
 
-  // 内存策略：仅当前页（active）解码原图（高优先级、带磁盘缓存上限），
-  // 非激活页只放一张 360px 服务端缩略图，滑到跟前再换原图——避免整条
-  // 图片横向滑动把全部原图塞进内存。
-  const thumbUri = thumbnailUrl(uri, THUMB_LIST);
+  // 内存策略（2026-08-30 改真·按需）：仅当前页（active）解码图片。贴吧
+  // CDN 尺寸注入已停用（thumbnailUrl 只做 ATS 协议升级），旧「非激活页放
+  // 360px 缩略图」实际渲染的是同一原 URL = 窗口内三页全部预解码，与
+  // 「每次只加载一个」冲突。现在非激活页空占位零解码；翻页激活时同 URL
+  // 内存缓存命中即时出图（同会话看过即秒显），首次看图按需解码一次。
 
   return (
     <GestureDetector gesture={composedGesture}>
@@ -220,14 +226,7 @@ export const ZoomableImage = memo(function ZoomableImage({
               onLoadEnd={onLoadEnd}
             />
           ) : (
-            <Image
-              source={{ uri: thumbUri }}
-              style={partStyles.fullImage}
-              contentFit="contain"
-              transition={120}
-              cachePolicy="memory-disk"
-              recyclingKey={thumbUri}
-            />
+            <View style={partStyles.fullImage} />
           )}
         </Animated.View>
       </View>
@@ -240,7 +239,7 @@ export const ZoomableImage = memo(function ZoomableImage({
 /**
  * 长图页（fit-width 阅读模式，用户规格 2026-08-29）：
  * 1. 进入即显示小档（srcPic，秒出、完整长图）+ 同步加载动画；
- * 2. 原图（originSrc）后台加载，onLoadEnd 后淡入替换——此时才显示原图；
+ * 2. 原图（originSrc）后台加载，解码完成经 transition 在底图上淡入；
  * 3. 原图自动匹配屏宽（宽=屏宽、高按比例），单指下滑即可读完；
  * 4. 捏合/双击缩放，放大后 pan 移动（与普通页同一手势模型）。
  *
@@ -336,25 +335,25 @@ export const LongImageView = memo(function LongImageView({
       }
     },
   );
-  // 原图（originUri）解码完成 → 淡入替换缩略图
-  const [originReady, setOriginReady] = useState(false);
+  // 原图（originUri）解码失败标记：失败后不挂原图层（保持小档可读）
   const [originFailed, setOriginFailed] = useState(false);
 
   useEffect(() => {
     // 行复用/换图重置
-    setOriginReady(false);
     setOriginFailed(false);
   }, [baseUri, originUri]);
 
   // 换图重置缩放（同 ZoomableImage）：只依赖图源 URI——曾依赖
   // originUri/zoomOut 引用（首帧 originUri 可能异步到达 → 重置链抖动）。
   useEffect(() => {
-    console.warn(
-      '[viewer-dbg]',
-      new Date().toISOString().slice(11, 23),
-      'zoom-reset',
-      { uri: baseUri?.slice(-24) },
-    );
+    if (__DEV__) {
+      console.warn(
+        '[viewer-dbg]',
+        new Date().toISOString().slice(11, 23),
+        'zoom-reset',
+        { uri: baseUri?.slice(-24) },
+      );
+    }
     zoomOut();
   }, [baseUri]);
 
@@ -393,10 +392,6 @@ export const LongImageView = memo(function LongImageView({
     [zoomGesture, tapCombo],
   );
 
-  const handleOriginLoadEnd = useCallback(() => {
-    setOriginReady(true);
-    onLoadEnd?.();
-  }, [onLoadEnd]);
   const insets = useSafeAreaInsets();
 
   // 阅读滚动偏移 → 共享值（UI 线程：readPan 直接写入，父级退出手势同帧读取）。
@@ -447,16 +442,19 @@ export const LongImageView = memo(function LongImageView({
             {originUri && !originFailed ? (
               <Image
                 source={{ uri: originUri }}
-                style={[partStyles.absoluteFillImage, { opacity: originReady ? 1 : 0 }]}
+                style={partStyles.absoluteFillImage}
                 contentFit="cover"
                 cachePolicy="memory-disk"
+                // 不再用 style opacity 门控：opacity 0 容器会把 expo-image 的
+                // transition 淡入压到不可见、onLoad 后硬切（视觉硬跳变）。
+                // 原图层常显，靠自带 transition 在底图（小档）上自然淡入。
                 transition={isImageWarm(originUri) ? 0 : 150}
                 priority="high"
                 recyclingKey={`long-origin-${originUri}`}
                 onLoadStart={onLoadStart}
                 onLoad={() => {
                   markImageWarm(originUri);
-                  handleOriginLoadEnd();
+                  onLoadEnd?.();
                 }}
                 onError={() => setOriginFailed(true)}
               />

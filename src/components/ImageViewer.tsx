@@ -100,10 +100,9 @@ export interface ImageViewerProps {
   sourceFrame?: ImageSourceFrame | null;
   /** 并行原图数组（长按「保存原图」用；缺省该项退化为保存当前图） */
   imageOrigins?: (string | undefined)[];
-  /** 逐图预览档 URL（列表刚显示的小档，SDWebImage 缓存命中秒显；与 images
-      下标一一对应，可缺省）。overlay 动画层用它在动画期间垫底——大图档
-      （bigPic/原图）首次解码 300-500ms，远慢于 300ms 转场，无垫底则动画
-      全程空白（用户实测「进入动画只有 1 帧」）。 */
+  /** 逐图预览档 URL（列表刚显示的小档；与 images 下标一一对应，可缺省）。
+      2026-08-30 起不再被 overlay 消费（overlay 单图=当前显示档，内存缓存
+      命中即出图）；保留接口避免调用点连锁改动。 */
   imagePreviews?: (string | undefined)[];
   /** 顶栏标题：帖子图片=帖子标题；回复/楼中楼图片=回复文字前 30 字 */
   contextTitle?: string | null;
@@ -123,7 +122,6 @@ export default function ImageViewer({
   // 简化后不再使用（进入/飞回动画已删）；调用点仍传，暂保留收参避免连锁改动
   sourceFrame: _sourceFrame,
   imageOrigins,
-  imagePreviews,
   contextTitle,
   imageMeta,
 }: ImageViewerProps) {
@@ -165,6 +163,11 @@ export default function ImageViewer({
   liveWRef.current = liveWindowWidth;
   const currentIdxRef = useRef(currentIndex);
   currentIdxRef.current = currentIndex;
+  // 窗口起始/大小镜像（adapter 是 useRef 一次性实例，scrollToOffset 调用
+  // 时才读这里的最新窗口值；初始 {0,0}，pages memo 之后每渲染更新一次）
+  const pageWindowRef = useRef({ start: 0, count: 0 });
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
   const galleryScrollRef = useRef<ScrollableRef>({
     scrollToOffset: ({ offset, animated }) => {
       const pager = pagerRef.current;
@@ -175,16 +178,27 @@ export default function ImageViewer({
       const nearest = Math.round(pageFloat);
       const frac = Math.abs(pageFloat - nearest);
       if (frac >= 0.16) return; // 半途位置（异常请求），忽略
-      console.warn(
-        '[viewer-dbg]',
-        new Date().toISOString().slice(11, 23),
-        'gal-scroll',
-        { offset: Math.round(offset), idx: nearest, cur, animated, w },
-      );
+      if (__DEV__) {
+        console.warn(
+          '[viewer-dbg]',
+          new Date().toISOString().slice(11, 23),
+          'gal-scroll',
+          { offset: Math.round(offset), idx: nearest, cur, animated, w },
+        );
+      }
       if (nearest === cur) return;
-      if (nearest < 0 || nearest >= images.length) return;
-      if (animated === false) pager.setPageWithoutAnimation(nearest);
-      else pager.setPage(nearest);
+      if (nearest < 0 || nearest >= imagesRef.current.length) return;
+      // 窗口化 PagerView：setPage 吃子列表局部 tag（绝对下标在窗口起始 >0
+      // 时越界 → SwiftUI TabView 静默忽略、页不切，但库的 snap 决策仍会
+      // reset 缩放 →「滑到边缘页没动、放大被复位」）。窗内用局部索引直切；
+      // 窗外重建窗口，由齐窗 effect（setPageWithoutAnimation(anchor)）对齐。
+      const { start, count } = pageWindowRef.current;
+      if (nearest >= start && nearest < start + count) {
+        if (animated === false) pager.setPageWithoutAnimation(nearest - start);
+        else pager.setPage(nearest - start);
+      } else {
+        setCurrentIndex(nearest);
+      }
     },
   });
   const thumbnailRef = useRef<ScrollView>(null);
@@ -198,8 +212,10 @@ export default function ImageViewer({
   // - probe 行（JS 线程每 100ms 采样）→ 进度值停住=动画推进停止；中断=JS 卡死
   // - frame 行（UI 线程 useFrameCallback 每 8 帧汇总帧间隔）→ avgMs≈16.7 满帧，
   //   暴涨段=掉帧发生的位置；frame 行停=UI 线程卡死
+  // 取证日志通道（2026-08-30 转场卡死埋点）：Release 零输出（__DEV__ 门控），
+  // dev 构建保留供真机排障；验完即删。
   const dbg = useCallback((...a: unknown[]) => {
-    console.warn('[viewer-dbg]', new Date().toISOString().slice(11, 23), ...a);
+    if (__DEV__) console.warn('[viewer-dbg]', new Date().toISOString().slice(11, 23), ...a);
   }, []);
   const lastRenderLogRef = useRef(0);
 
@@ -253,6 +269,7 @@ export default function ImageViewer({
     [images, currentIndex, lowPowerMode, displayUriOf],
   );
   const { pages, start: pageWindowStart, anchor: pageWindowAnchor } = pageWindow;
+  pageWindowRef.current = { start: pageWindowStart, count: pages.length };
   // 缩略条展示全部图片（仅大图 PagerView 走窗口化），实现长图集可直接跳到远端图。
 
   // 水印文案解析已收敛到 utils/watermark（thermo Z2-C）
@@ -919,16 +936,11 @@ const dismissGesture = useMemo(
 
   const handlePageSelected = useCallback(
     (e: PagerViewOnPageSelectedEvent) => {
-      console.warn(
-        '[viewer-dbg]',
-        new Date().toISOString().slice(11, 23),
-        'page-sel',
-        { pos: e.nativeEvent.position, start: pageWindowStart },
-      );
+      dbg('page-sel', { pos: e.nativeEvent.position, start: pageWindowStart });
       hapticForScene('toggle');
       setCurrentIndex(e.nativeEvent.position + pageWindowStart);
     },
-    [pageWindowStart],
+    [pageWindowStart, dbg],
   );
 
   const handleThumbnailPress = useCallback(
@@ -1205,15 +1217,12 @@ const dismissGesture = useMemo(
             );
           })}
           </PagerView>
-          {/* overlay 动画层（常驻，staticMode 仅瞬时切显隐——不换树、无解码
-              等待）：transform 全部落在纯 RN Animated.View 容器（Reanimated
-              最优路径，不再逐帧驱动 expo-image 视图）；容器内两层内容：
-              预览档垫底（列表小档缓存秒显，动画全程有图，杜绝「动画 1 帧」）
-              + 大图（解码完成 150ms 淡入，与容器 transform 分属不同视图，
-              无 CA 动画竞争——旧版 transition=200 与 Reanimated 同层竞争是
-              退出「整个应用卡死」的根因之一）。进入/拖拽/退场动画期间
-              staticMode=true（overlay 可见）；常态 opacity 0（PagerView
-              交互恢复正常）。 */}
+          {/* overlay 动画层（常驻单图，staticMode 仅瞬时切显隐）：transform
+              全落在纯 RN Animated.View 容器。2026-08-30 删预览垫底层——
+              双图全量解码与「每次只加载一个」冲突；且进入动画已删，overlay
+              只在拖拽/退场承担画面，此时图 = 当前页显示档（displayUriOf），
+              与 PagerView 内当前页同 URL → 内存缓存命中即显、零额外解码。
+              transition 0：缓存命中无需淡入，避免与退场 transform 竞争。 */}
           <Animated.View
             pointerEvents="none"
             style={[
@@ -1224,17 +1233,10 @@ const dismissGesture = useMemo(
             ]}
           >
             <Image
-              source={{ uri: imagePreviews?.[currentIndex] ?? images[currentIndex] }}
-              style={StyleSheet.absoluteFill}
-              contentFit="contain"
-              transition={0}
-              recyclingKey={`viewer-preview-${currentIndex}`}
-            />
-            <Image
               source={{ uri: displayUriOf(currentIndex, images[currentIndex]) }}
               style={StyleSheet.absoluteFill}
               contentFit="contain"
-              transition={150}
+              transition={0}
               cachePolicy="memory-disk"
               recyclingKey={`viewer-static-${currentIndex}`}
             />
