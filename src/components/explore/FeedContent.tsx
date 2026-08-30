@@ -575,6 +575,7 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
             initialIndex={imageViewer.imageViewerIndex}
             visible={imageViewer.imageViewerVisible}
             onClose={imageViewer.closeImageViewer}
+            sourceFrame={imageViewer.imageViewerSourceFrame}
             imageOrigins={imageViewer.imageViewerOrigins}
             contextTitle={imageViewer.imageViewerContextTitle}
             imageMeta={imageViewer.imageViewerMeta}

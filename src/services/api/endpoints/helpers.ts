@@ -149,6 +149,12 @@ export function mapMediaList(raw: any): MediaInfo[] {
     ));
     if (!src) continue;
     const smallRaw = String(m.srcPic ?? m.src_pic ?? '');
+    // 动图判定：贴吧 GIF 的动图原链在 originPic（可数 MB 级 .gif），bigPic
+    // 派生可能是静态 jpg——只看 URL 后缀（服务端无 isGif 字段；showOriginalBtn
+    // 对 GIF 恒 0 反向佐证）。查看器据此对 GIF 强制原档播放动画。
+    const isGif = /\.gif(?:\?|#|$)/i.test(
+      String(m.originPic ?? m.origin_pic ?? m.bigPic ?? m.big_pic ?? m.src ?? ''),
+    );
     result.push({
       type: isVideo ? 'video' : 'image',
       src,
@@ -171,6 +177,7 @@ export function mapMediaList(raw: any): MediaInfo[] {
       // （= 客户端 ForumBeanCaster 以 height > 屏幕精确高度 判定），showOriginalBtn GIF 恒为 0。
       isLongPic: (m.isLongPic ?? m.is_long_pic) === 1,
       showOriginalBtn: (m.showOriginalBtn ?? m.show_original_btn) === 1,
+      isGif,
       duration: m.duration != null ? Number(m.duration) : undefined,
     });
   }

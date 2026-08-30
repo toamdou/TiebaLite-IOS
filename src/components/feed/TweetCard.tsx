@@ -38,6 +38,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { SymbolView } from '@/components/ui/SymbolView';
+import { setThreadSnapshot } from '@/utils/threadSnapshot';
 import { HdrPressable } from '@/components/ui/HdrPressable';
 import { hapticForScene } from '@/theme/hapticsMap';
 import { rtBeginLikeCharge, rtEndLikeCharge } from '@/theme/hapticsRealtime';
@@ -180,6 +181,9 @@ const TweetCard = React.memo(function TweetCard({
     if (Date.now() < chipPressBlockUntilRef.current) return;
     if (__DEV__) console.warn(`[card] card-press id=${thread.id}`);
     hapticForScene('press');
+    // 已知数据快照：帖子页首帧用列表数据占位（标题/作者/摘要/首图），
+    // 不等帖子首包——iOS 系统应用同款（2026-08-30）
+    setThreadSnapshot(thread);
     if (onOpenThread) {
       onOpenThread();
       return;
@@ -418,7 +422,7 @@ const TweetCard = React.memo(function TweetCard({
           {/* 媒体区：单图按宽高比 / 多图分页滑动 / 视频 poster + 播放角标 */}
           {showMedia ? (
             <MediaPager
-              images={images.map((m) => ({ src: m.src, originSrc: m.originSrc || m.src, smallSrc: m.smallSrc, width: m.width, height: m.height }))}
+              images={images.map((m) => ({ src: m.src, originSrc: m.originSrc || m.src, smallSrc: m.smallSrc, width: m.width, height: m.height, isGif: m.isGif }))}
               videoPoster={images.length === 0 ? videoPoster : undefined}
               width={mediaWidth}
               viewportWidth={stripViewportWidth}
@@ -789,6 +793,7 @@ const styles = StyleSheet.create({
   },
   bodyTitle: {
     ...typographyStyles.headline,
+    fontWeight: '500',
   },
   showMoreBtn: {
     marginTop: 2,

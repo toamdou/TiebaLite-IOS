@@ -57,6 +57,10 @@ export function pickViewerImages(
   mode: ViewerImageMode,
 ): string[] {
   return images.map((i) => {
+    // GIF 强制原档：动图原链（.gif）才能播放动画；bigPic 派生可能是静态
+    // jpg，走 high/lite 档会让大图"动图变静图"（用户 2026-08-30 反馈）
+    const gifUri = i.originSrc || i.src || '';
+    if (/\.gif(?:\?|#|$)/i.test(gifUri)) return gifUri;
     if (mode === 'origin') return i.originSrc || i.src || '';
     if (mode === 'lite') return i.smallSrc || i.src || i.originSrc || '';
     // high：大图（bigPic）

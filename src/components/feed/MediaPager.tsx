@@ -49,6 +49,8 @@ export interface PagerImage {
   smallSrc?: string;
   width: number;
   height: number;
+  /** 动图（GIF）：右下角 GIF 徽标 */
+  isGif?: boolean;
 }
 
 export const MediaPager = React.memo(function MediaPager({
@@ -145,6 +147,11 @@ export const MediaPager = React.memo(function MediaPager({
           <View style={styles.longBadge} pointerEvents="none">
             <SymbolView name="arrow.down" size={10} tintColor="#FFFFFF" />
             <Text style={styles.longBadgeText}>长图</Text>
+          </View>
+        ) : null}
+        {!isVideo && img0?.isGif ? (
+          <View style={styles.longBadge} pointerEvents="none">
+            <Text style={styles.longBadgeText}>GIF</Text>
           </View>
         ) : null}
       </Pressable>
@@ -296,6 +303,11 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
                 <View style={styles.longBadge} pointerEvents="none">
                   <SymbolView name="arrow.down" size={10} tintColor="#FFFFFF" />
                   <Text style={styles.longBadgeText}>长图</Text>
+                </View>
+              ) : null}
+              {img.isGif ? (
+                <View style={styles.longBadge} pointerEvents="none">
+                  <Text style={styles.longBadgeText}>GIF</Text>
                 </View>
               ) : null}
             </Pressable>

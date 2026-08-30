@@ -514,6 +514,7 @@ export default function HistoryPage() {
         initialIndex={imageViewer.imageViewerIndex}
         visible={imageViewer.imageViewerVisible}
         onClose={imageViewer.closeImageViewer}
+        sourceFrame={imageViewer.imageViewerSourceFrame}
       />
           </View>
         </RNHostView>

@@ -14,12 +14,13 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, DeviceEventEmitter, RefreshControl } from 'react-native';
+import { View, StyleSheet, DeviceEventEmitter, RefreshControl, Text, Dimensions } from 'react-native';
 import { ConfirmationDialog, Button as SWButton, Text as SWText } from '@expo/ui/swift-ui';
 import { useSharedValue, withTiming } from 'react-native-reanimated';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
 import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { cacheParentPost } from '@/stores/parentPostCache';
 import { Toast, type ToastRef } from '@/components/ui/Toast';
 import { ThemedHost } from '@/components/ui/ThemedHost';
@@ -33,12 +34,15 @@ import { ThreadJumpDialog } from '@/components/thread/ThreadJumpDialog';
 import { StaggerItem } from '@/components/thread/ThreadStagger';
 import { LoadMoreFooter } from '@/components/ui/LoadMoreFooter';
 import { SkeletonList } from '../../components/ui/Skeleton';
+import { Avatar } from '@/components/ui/Avatar';
 import { useThemeColors } from '@/theme/ThemeContext';
+import { RadiusStyle } from '@/theme';
 import { EASE_OUT, DURATION } from '@/theme/springs';
 import { hapticForScene } from '@/theme/hapticsMap';
 import { useAuthStore } from '@/stores/authStore';
 import { useMediaBus } from '@/stores/mediaBusStore';
 import { mediaKeysOf } from '@/utils/feedMedia';
+import { consumeThreadSnapshot } from '@/utils/threadSnapshot';
 import { useBlockFilter } from '@/hooks/useBlockFilter';
 import { useAppPreference } from '@/hooks/useAppPreference';
 import { useNavDoubleTapToTop } from '@/hooks/useNavDoubleTapToTop';
@@ -74,6 +78,9 @@ export default function ThreadPage() {
   const { id, postId, seeLz: initialSeeLz, fromFavorites } = useLocalSearchParams<{
     id: string; postId?: string; seeLz?: string; fromFavorites?: string;
   }>();
+  // 列表→详情已知数据快照：仅首帧消费一次（useMemo 依赖不变不再读），
+  // 帖子首包返回后由完整 PostCard 替换；深链/冷启无快照=原整页骨架
+  const knownSnapshot = useMemo(() => consumeThreadSnapshot(String(id ?? '')), [id]);
   const insets = useSafeAreaInsets();
   const { colors } = useThemeColors();
   const { reduceMotion } = useReducedMotion();
@@ -413,8 +420,9 @@ export default function ThreadPage() {
   if (loading && posts.length === 0) {
     return (
       <View style={flattenStyle([styles.container, { backgroundColor: colors.background }])}>
-        <Stack.Screen options={{ title: thread?.title || '帖子' }} />
+        <Stack.Screen options={{ title: knownSnapshot?.title || thread?.title || '帖子' }} />
         <View style={styles.loadingSkeleton}>
+          {knownSnapshot ? <KnownPostHeader thread={knownSnapshot} colors={colors} /> : null}
           <SkeletonList count={5} variant="post" />
         </View>
       </View>
@@ -543,6 +551,7 @@ export default function ThreadPage() {
         visible={imageViewer.imageViewerVisible}
         onClose={imageViewer.closeImageViewer}
         forumName={thread?.forumName}
+        sourceFrame={imageViewer.imageViewerSourceFrame}
         imageOrigins={imageViewer.imageViewerOrigins}
         contextTitle={imageViewer.imageViewerContextTitle}
         imageMeta={imageViewer.imageViewerMeta}
@@ -555,12 +564,90 @@ export default function ThreadPage() {
 
 // Styles
 
+// ── 已知主贴区（initialKnown 快照占位，2026-08-30）──
+// 列表→详情携带已知数据（标题/作者/摘要/首图）的首帧渲染：帖子首包返回前
+// 不再整页空白/纯骨架；服务端详情返回后由完整 PostCard 整体替换。
+const KNOWN_PAGE_W = Dimensions.get('window').width - 32;
+
+function KnownPostHeader({ thread, colors }: { thread: ThreadInfo; colors: any }) {
+  const insets = useSafeAreaInsets();
+  const firstImage = (thread.mediaList ?? []).find((m) => m.type === 'image');
+  let imgHeight = 0;
+  if (firstImage && firstImage.width > 0 && firstImage.height > 0) {
+    imgHeight = Math.min(Math.max((KNOWN_PAGE_W * firstImage.height) / firstImage.width, 1), 320);
+  }
+  return (
+    <View style={{ paddingTop: insets.top + 66 }}>
+      <View style={[styles.knownCard, { backgroundColor: colors.card }]}>
+        <Text style={[styles.knownTitle, { color: colors.text }]} numberOfLines={3}>
+          {thread.title}
+        </Text>
+        <View style={styles.knownAuthorRow}>
+          <Avatar
+            source={thread.authorPortrait || undefined}
+            initials={(thread.authorName || '吧').charAt(0)}
+            size={36}
+          />
+          <Text style={[styles.knownAuthorName, { color: colors.textSecondary }]} numberOfLines={1}>
+            {thread.authorName}
+          </Text>
+        </View>
+        {thread.abstract ? (
+          <Text style={[styles.knownAbstract, { color: colors.textSecondary }]} numberOfLines={2}>
+            {thread.abstract}
+          </Text>
+        ) : null}
+        {firstImage && imgHeight > 0 ? (
+          <Image
+            source={{ uri: firstImage.smallSrc || firstImage.src }}
+            style={[styles.knownImage, { height: imgHeight }]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={120}
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   listContent: { paddingHorizontal: 0, paddingTop: 8 },
   loadingSkeleton: {
     flex: 1,
     paddingTop: 12,
+  },
+  knownCard: {
+    marginHorizontal: 16,
+    padding: 16,
+    gap: 12,
+    ...RadiusStyle.card,
+  },
+  knownTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  knownAuthorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  knownAuthorName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  knownAbstract: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  knownImage: {
+    width: '100%',
+    borderRadius: 10,
+    borderCurve: 'continuous',
+    backgroundColor: 'rgba(128,128,128,0.15)',
   },
   postSep: { height: 1 },
 });

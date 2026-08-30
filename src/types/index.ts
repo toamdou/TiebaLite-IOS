@@ -245,6 +245,9 @@ export interface MediaInfo {
   isLongPic?: boolean;
   /** 服务端「显示查看原图按钮」标记（Media.show_original_btn，proto 字段 20；GIF 为 0） */
   showOriginalBtn?: boolean;
+  /** 动图（GIF）：按 URL 后缀判定（服务端动图原链带 .gif；bigPic 派生可能是
+      静态 jpg，查看器对 GIF 强制原档播放动画，预览卡显示 GIF 徽标） */
+  isGif?: boolean;
 }
 
 // ---------- Feed / Personalized ----------

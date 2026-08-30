@@ -11,14 +11,11 @@ import {
   View,
   StyleSheet,
   Alert,
+  Text,
 } from 'react-native';
-import { Picker, Text as SWText, VStack, HStack, RNHostView } from '@expo/ui/swift-ui';
+import { VStack, RNHostView } from '@expo/ui/swift-ui';
 import {
-  accessibilityLabel,
   frame,
-  padding,
-  pickerStyle,
-  tag,
 } from '@expo/ui/swift-ui/modifiers';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import type { SearchBarCommands } from 'react-native-screens';
@@ -30,12 +27,15 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { SearchPostList } from '@/components/search/SearchResultList';
 import { useThemeColors } from '@/theme/ThemeContext';
-import { Spacing } from '@/theme';
+import { Spacing, RadiusStyle, Radius } from '@/theme';
 import { SkeletonList } from '../../../components/ui/Skeleton';
 import { searchPost } from '@/services/api/endpoints/search';
 import { usePagedList } from '@/hooks/usePagedList';
 import { useSearchHistory } from '@/hooks/useSearchHistory';
 import type { SearchPostResult } from '@/types';
+import { SymbolView } from '@/components/ui/SymbolView';
+import { HdrPressable } from '@/components/ui/HdrPressable';
+import { GlassView } from '@/components/ui/GlassView';
 
 // ---------- Constants ----------
 // 取值对齐 Kotlin ForumSearchPostSortType / ForumSearchPostFilterType
@@ -65,6 +65,9 @@ export default function ForumSearchPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortType, setSortType] = useState('1'); // st: 1=按时间（默认）2=按相关性
   const [filterType, setFilterType] = useState('2'); // tt: 2=全部（默认）1=仅主题贴
+  // 自绘排序/筛选下拉（RN 层 zIndex 高于结果列表；SwiftUI Menu 弹出曾被
+  // RNHostView 盖住——用户 2026-08-30 反馈选项框在卡片之下）
+  const [menuOpen, setMenuOpen] = useState<'sort' | 'filter' | null>(null);
   const [searchedKeyword, setSearchedKeyword] = useState('');
   const [searched, setSearched] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(true);
@@ -221,59 +224,33 @@ export default function ForumSearchPage() {
   );
 
   return (
-    // 页面级 ThemedHost（ignoreSafeArea 让 VStack 从 y=0 起）：排序/筛选必须是
-    // Host 直接后代（HStack 排版）——嵌套 ThemedHost 进 RN 行会测量错位、两钮
-    // 重叠，且嵌套 SwiftUI Menu 真机点击无响应（explore/主搜索页同款范式）。
+    // 页面级 ThemedHost（ignoreSafeArea 让 VStack 从 y=0 起）：RN 内容经
+    // RNHostView 从顶部延伸；排序/筛选自绘行在 RN 层内（面板 zIndex 60
+    // 高于结果列表，SwiftUI Menu 嵌 RN 树被盖的旧问题不再有）
     <ThemedHost style={{ flex: 1 }} ignoreSafeArea="container">
       <VStack spacing={0} modifiers={[frame({ maxWidth: 10000, maxHeight: 10000 })]}>
-        {/* 排序/筛选行：从搜索栏底（insets.top + 108）开始 */}
-        <HStack
-          spacing={10}
-          modifiers={[
-            padding({ horizontal: Spacing.lg, top: insets.top + SEARCH_BAR_HEIGHT, bottom: Spacing.xs }),
-            frame({ maxWidth: 10000, alignment: 'leading' }),
-          ]}
-        >
-          <Picker<string>
-            selection={sortType}
-            label={SORT_OPTIONS.find((opt) => opt.value === sortType)?.label ?? '排序'}
-            onSelectionChange={(value) => {
-              hapticForScene('toggle');
-              setSortType(String(value));
-            }}
-            modifiers={[
-              pickerStyle('menu'),
-              frame({ minWidth: 104 }),
-              accessibilityLabel('帖子排序'),
-            ]}
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <SWText key={opt.value} modifiers={[tag(opt.value)]}>{opt.label}</SWText>
-            ))}
-          </Picker>
-          <Picker<string>
-            selection={filterType}
-            label={FILTER_OPTIONS.find((opt) => opt.value === filterType)?.label ?? '筛选'}
-            onSelectionChange={(value) => {
-              hapticForScene('toggle');
-              setFilterType(String(value));
-            }}
-            modifiers={[
-              pickerStyle('menu'),
-              frame({ minWidth: 104 }),
-              accessibilityLabel('帖子筛选'),
-            ]}
-          >
-            {FILTER_OPTIONS.map((opt) => (
-              <SWText key={opt.value} modifiers={[tag(opt.value)]}>{opt.label}</SWText>
-            ))}
-          </Picker>
-        </HStack>
-
-        {/* RN 内容（历史/骨架/错误/空态/结果列表）：位于控件行下方，无需再让位搜索栏 */}
+        {/* RN 内容（工具行/历史/骨架/错误/空态/结果列表） */}
         <RNHostView>
           <View style={[styles.container, { backgroundColor: colors.background }]}>
             <Stack.Screen options={{ headerSearchBarOptions: searchBarOptions }} />
+            {/* 排序/筛选自绘行：从搜索栏底让位（insets.top + 108） */}
+            <SortFilterBar
+              sortType={sortType}
+              filterType={filterType}
+              menuOpen={menuOpen}
+              onToggle={(kind) => {
+                hapticForScene('press');
+                setMenuOpen((prev) => (prev === kind ? null : kind));
+              }}
+              onSelect={(kind, value) => {
+                hapticForScene('toggle');
+                setMenuOpen(null);
+                if (kind === 'sort') setSortType(value);
+                else setFilterType(value);
+              }}
+              top={insets.top + SEARCH_BAR_HEIGHT}
+              colors={colors}
+            />
             {/* Search History (only before first search)；复用全站搜索页同款区块 */}
             {!searched && (
               <View style={styles.historyWrap}>
@@ -326,11 +303,156 @@ export default function ForumSearchPage() {
   );
 }
 
+// ---------- 排序/筛选自绘下拉（RN 层 zIndex 高于结果列表；吧页 ForumSortBar 同款） ----------
+function SortFilterBar({
+  sortType,
+  filterType,
+  menuOpen,
+  onToggle,
+  onSelect,
+  top,
+  colors,
+}: {
+  sortType: string;
+  filterType: string;
+  menuOpen: 'sort' | 'filter' | null;
+  onToggle: (kind: 'sort' | 'filter') => void;
+  onSelect: (kind: 'sort' | 'filter', value: string) => void;
+  top: number;
+  colors: any;
+}) {
+  const kind = menuOpen;
+  const options = kind === 'sort' ? SORT_OPTIONS : FILTER_OPTIONS;
+  const selectedValue = kind === 'sort' ? sortType : filterType;
+  return (
+    <View style={[styles.toolRow, { paddingTop: top }]}>
+      <HdrPressable
+        effect="subtle"
+        style={({ pressed }) => [styles.toolBtn, { opacity: pressed ? 0.7 : 1 }]}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="帖子排序"
+        onPress={() => onToggle('sort')}
+      >
+        <SymbolView name="arrow.up.arrow.down" size={14} weight="semibold" tintColor={colors.primary} />
+        <Text style={[styles.toolBtnText, { color: colors.primary }]}>
+          {SORT_OPTIONS.find((o) => o.value === sortType)?.label ?? '排序'}
+        </Text>
+        <SymbolView
+          name={menuOpen === 'sort' ? 'chevron.up' : 'chevron.down'}
+          size={12}
+          weight="semibold"
+          tintColor={colors.primary}
+        />
+      </HdrPressable>
+      <HdrPressable
+        effect="subtle"
+        style={({ pressed }) => [styles.toolBtn, { opacity: pressed ? 0.7 : 1 }]}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="帖子筛选"
+        onPress={() => onToggle('filter')}
+      >
+        <SymbolView name="line.3.horizontal.decrease.circle" size={15} weight="semibold" tintColor={colors.primary} />
+        <Text style={[styles.toolBtnText, { color: colors.primary }]}>
+          {FILTER_OPTIONS.find((o) => o.value === filterType)?.label ?? '筛选'}
+        </Text>
+        <SymbolView
+          name={menuOpen === 'filter' ? 'chevron.up' : 'chevron.down'}
+          size={12}
+          weight="semibold"
+          tintColor={colors.primary}
+        />
+      </HdrPressable>
+      {kind ? (
+        <View
+          style={[
+            styles.toolMenuWrap,
+            { top: top + 42 },
+            kind === 'filter' ? styles.toolMenuWrapRight : null,
+          ]}
+        >
+          <GlassView
+            borderRadius={Radius.card}
+            glassEffectStyle="regular"
+            tintColor={colors.card}
+            style={styles.toolMenu}
+          >
+            {options.map((opt) => {
+              const selected = selectedValue === opt.value;
+              return (
+                <HdrPressable
+                  key={opt.value}
+                  effect="subtle"
+                  style={({ pressed }) => [
+                    styles.toolMenuItem,
+                    { opacity: pressed ? 0.6 : 1 },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={opt.label}
+                  onPress={() => onSelect(kind, opt.value)}
+                >
+                  <Text style={[styles.toolMenuItemText, { color: selected ? colors.primary : colors.text }]}>
+                    {opt.label}
+                  </Text>
+                  {selected && (
+                    <SymbolView name="checkmark" size={15} weight="semibold" tintColor={colors.primary} />
+                  )}
+                </HdrPressable>
+              );
+            })}
+          </GlassView>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 // ---------- Styles ----------
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  // 排序/筛选工具行与下拉面板（zIndex 高于结果列表，选项框不被卡片盖）
+  toolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xs,
+  },
+  toolBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: 10,
+    ...RadiusStyle.chip,
+  },
+  toolBtnText: { fontWeight: '500', fontSize: 13 },
+  toolMenuWrap: {
+    position: 'absolute',
+    left: Spacing.lg,
+    zIndex: 60,
+  },
+  // 筛选钮位置更靠右：面板右对齐到筛选钮附近
+  toolMenuWrapRight: {
+    left: Spacing.lg + 118,
+  },
+  toolMenu: {
+    minWidth: 148,
+    ...RadiusStyle.card,
+    overflow: 'hidden',
+    paddingVertical: 4,
+  },
+  toolMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  toolMenuItemText: { fontWeight: '500', fontSize: 15 },
   historyWrap: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,

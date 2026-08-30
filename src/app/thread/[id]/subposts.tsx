@@ -348,6 +348,7 @@ export default function SubPostsPage() {
         visible={imageViewer.imageViewerVisible}
         onClose={imageViewer.closeImageViewer}
         forumName={decodedForumName}
+        sourceFrame={imageViewer.imageViewerSourceFrame}
         imageOrigins={imageViewer.imageViewerOrigins}
         contextTitle={imageViewer.imageViewerContextTitle}
         imageMeta={imageViewer.imageViewerMeta}
