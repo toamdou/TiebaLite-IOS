@@ -1,5 +1,6 @@
 import Foundation
 import SwiftProtobuf
+import TiebaProtoGenerated
 
 /// SwiftProtobuf 完全替换层（2026-08-29）：
 /// - wire 解码/编码全部走 protoc 生成的强类型代码（tbclient 权威 schema，

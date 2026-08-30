@@ -17,11 +17,15 @@ Pod::Spec.new do |s|
 
   s.dependency 'ExpoModulesCore'
   s.dependency 'SwiftProtobuf', '~> 1.28'
+  # 生成代码（ProtoGenerated/）已拆到独立 pod TiebaProtoGenerated
+  #（modules/tieba-proto/ios，267 文件预编译为静态库，日常增量不再整批重编）
+  s.dependency 'TiebaProtoGenerated'
 
   s.frameworks = ['BackgroundTasks', 'Security', 'ImageIO', 'CoreGraphics', 'UIKit']
   s.libraries = 'sqlite3'
 
-  s.source_files = "**/*.{h,m,swift}"
+  # 排除生成代码（已移入 ../tieba-proto/ios/ProtoGenerated）
+  s.source_files = "**/*.{h,m,swift}", "!ProtoGenerated/**/*"
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'SWIFT_COMPILATION_MODE' => 'wholemodule'
