@@ -38,8 +38,16 @@ public final class TiebaSegmentedControlView: ExpoView {
 
   public required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
+    // 液态玻璃修复（2026-08-30，expo/expo#45365 同根因）：UIView 默认
+    // isOpaque == true——合成器认为本层不透明，会跳过其身后内容的合成，
+    // iOS 26+ 分段控件的玻璃药丸拿不到采样素材，退化为平淡纯色胶囊。
+    // 宿主与控件显式透明链（expo-ui 的 SwiftUI 宿主正是缺这一步）。
+    isOpaque = false
+    backgroundColor = .clear
     addSubview(control)
     control.translatesAutoresizingMaskIntoConstraints = false
+    control.isOpaque = false
+    control.backgroundColor = .clear
     NSLayoutConstraint.activate([
       control.leadingAnchor.constraint(equalTo: leadingAnchor),
       control.trailingAnchor.constraint(equalTo: trailingAnchor),
