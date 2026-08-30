@@ -9,16 +9,15 @@
  */
 
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Pressable, StyleSheet, Dimensions } from 'react-native';
+import { View, Pressable, StyleSheet, Dimensions, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
-  useSharedValue,
   useAnimatedStyle,
   useAnimatedReaction,
-  withSpring,
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, type GestureType } from 'react-native-gesture-handler';
 import type { SharedValue } from 'react-native-reanimated';
+import { useZoomGesture, type ScrollableRef } from 'react-native-zoom-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 
@@ -26,7 +25,6 @@ import { hapticForScene } from '@/theme/hapticsMap';
 import { useNativeThumbnail } from '@/hooks/useNativeThumbnail';
 import { thumbnailUrl, THUMB_LIST } from '@/utils/thumbnail';
 import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
-import { MOMENTUM } from '@/theme/springs';
 
 // 与主组件同款固定窗口尺寸（竖屏取一次；旋转后页面 flex 撑开，钳制按
 // 竖屏数值计算——见主文件 teardown 注释，不做 useWindowDimensions）。
@@ -57,64 +55,57 @@ export function buildPageWindow(images: string[], current: number, windowSize = 
 
 // ---------- ZoomableImage ----------
 
-/** 捏合手势取证（DEV only，worklet 经 runOnJS 回调）：
-    用户反馈「缩放手势用不了/松开恢复原大小」时，此日志可区分
-    手势未触发（无 start 行）vs 触发但逻辑复位（end scale 值）。 */
-function __pinchLog(phase: 'start' | 'end', scale: number): void {
-  if (__DEV__) console.warn(`[viewer] pinch ${phase} scale=${scale.toFixed(3)}`);
-}
-
 export const ZoomableImage = memo(function ZoomableImage({
   uri,
   onSingleTap,
   onZoomChange,
   active,
-  zoomed,
   onLoadStart,
   onLoadEnd,
+  gallerySwipe,
+  galleryScrollRef,
+  galleryIndex,
+  galleryItemWidth,
 }: {
   uri: string;
   onSingleTap: () => void;
   onZoomChange?: (zoomed: boolean) => void;
   active: boolean;
-  /** 父级缩放态（Pinch/双击后为 true）。作为 prop 传入而非内部闭包：
-      ZoomableImage 是 memo 的，父组件 setState 不会让子重渲染，
-      若 pan.enabled 读取内部缓存值会永远停在 false——放大后无法拖动。 */
-  zoomed: boolean;
   /** 大图 uri 开始加载（原图切换时外层显示圆形 loading） */
   onLoadStart?: () => void;
   onLoadEnd?: () => void;
+  /** 照片级图库滑动：放大态拖到边缘溢出时切页（react-native-zoom-reanimated） */
+  gallerySwipe: boolean;
+  galleryScrollRef: React.RefObject<ScrollableRef>;
+  galleryIndex: number;
+  galleryItemWidth: number;
 }) {
-  const scale = useSharedValue(1);
-  const baseScale = useSharedValue(1);
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const startTranslateX = useSharedValue(0);
-  const startTranslateY = useSharedValue(0);
-  // zoomed 的 UI 线程镜像：pan 手势门控改由共享值在回调内自判，手势本体不随
-  // zoomed 重建——捏合速度快时父级 setIsZoomed 触发重渲染会掐断进行中的捏合
-  // （真机：快速捏合松手后弹回原尺寸的根因）。
-  const zoomedSV = useSharedValue(zoomed);
-  const panStartX = useSharedValue(0);
-  const panStartY = useSharedValue(0);
-  useEffect(() => {
-    zoomedSV.value = zoomed;
-  }, [zoomed, zoomedSV]);
-
-  const resetTransform = useCallback(() => {
-    scale.value = 1;
-    baseScale.value = 1;
-    translateX.value = 0;
-    translateY.value = 0;
-  }, [scale, baseScale, translateX, translateY]);
-
-  useEffect(() => {
-    resetTransform();
-  }, [uri, active, resetTransform]);
+  // ── 缩放核心 = react-native-zoom-reanimated（2026-08-30 替换手写实现）──
+  // focal 捏合（rubber band + 动态焦点）、双击缩放、pan（带边界回弹/动量）、
+  // 照片级图库滑动（放大态溢出边缘切页）全部由库内部维护；我们保留：
+  // - 单击 chrome 开关（与 noop 双击 Exclusive 互斥，双击不误触）
+  // - zoomed 镜像（scale>1.01 → onZoomChange，父级 dismiss/pager 门控不变）
+  // - 换图/换页重置（zoomOut）
+  // 未放大态库的 pan 直接 fail → 父级拖拽关闭/长图阅读 pan 完全不变。
+  const {
+    zoomGesture,
+    contentContainerAnimatedStyle,
+    onLayout,
+    onLayoutContent,
+    scale,
+    zoomOut,
+  } = useZoomGesture({
+    minScale: 1,
+    maxScale: 5,
+    enableGallerySwipe: gallerySwipe,
+    parentScrollRef: galleryScrollRef,
+    currentIndex: galleryIndex,
+    itemWidth: galleryItemWidth,
+    doubleTapConfig: { defaultScale: 3, minZoomScale: 1, maxZoomScale: 5 },
+  });
 
   // Notify the parent only when the zoomed threshold changes, not per frame.
-  // 阈值 1.01：旧值 1.05 导致轻微捏合（如 1.03）松手即弹回原尺寸——用户
-  // 要求"稍微拉伸也应保持放大"（2026-08-27 真机反馈）。
+  // 阈值 1.01（与旧实现一致）：轻微捏合（如 1.03）保持放大不弹回。
   useAnimatedReaction(
     () => scale.value > 1.01,
     (zoomed, previous) => {
@@ -124,120 +115,37 @@ export const ZoomableImage = memo(function ZoomableImage({
     },
   );
 
-  const toggleZoom = useCallback(() => {
-    const target = scale.value > 1.01 ? 1 : 3;
-    scale.value = withSpring(target, MOMENTUM);
-    baseScale.value = target;
-    translateX.value = withSpring(0, MOMENTUM);
-    translateY.value = withSpring(0, MOMENTUM);
-    hapticForScene('toggle');
-  }, [scale, baseScale, translateX, translateY]);
+  // 换图/换页重置（库的 zoomOut：弹簧回到初始）。active 切换即重置，
+  // 与旧 resetTransform 语义一致。
+  useEffect(() => {
+    zoomOut();
+  }, [uri, active, zoomOut]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-  }));
-
-  // 手势用 useMemo 包裹（Expo 动画食谱 G1）：避免每次渲染重建入口导致识别器
-  // 重挂、丢掉进行中的捏合/拖拽。依赖只含 props 与共享值引用（均为稳定 ref）。
-  const pinch = useMemo(
+  // 单击 chrome 开关 + 双击触感：与库双击（负责缩放）并存。noop 双击只
+  // 参与 Exclusive 协调（保证双击时单击不误触）并在成功时补触感——
+  // 库的双击不带动效触感，这里补回旧实现的手感。
+  const tapCombo = useMemo(
     () =>
-      Gesture.Pinch()
-        .onStart(() => {
-          'worklet';
-          if (__DEV__) runOnJS(__pinchLog)('start', 0);
-        })
-        .onUpdate((e) => {
-          // 两指变一指瞬间 e.scale 会剧烈回落（focal 距离剧变）——若放行，
-          // 放大中的图片会先骤缩再松手弹回 1（用户"先放大又缩小回原大小"）；
-          // 指针数 <2 时冻结缩放（iOS Photos 同款：一指抬起即停止跟手）
-          if (e.numberOfPointers < 2) return;
-          scale.value = Math.min(5, Math.max(1, baseScale.value * e.scale));
-        })
-        .onEnd(() => {
-          if (__DEV__) runOnJS(__pinchLog)('end', scale.value);
-          baseScale.value = scale.value;
-          // 只有完全归位（≈1）才弹簧复位；任何 >1 的捏合结果松手即保持
-          // （2026-08-28：旧阈值 1.01 本意是给 1.03 之类轻微捏合留保持余量，
-          // 但 onUpdate 已被 clamp 到 ≥1，松手读到的值只可能 ≥1）
-          if (scale.value <= 1.001) {
-            scale.value = withSpring(1, MOMENTUM);
-            baseScale.value = 1;
-            translateX.value = withSpring(0, MOMENTUM);
-            translateY.value = withSpring(0, MOMENTUM);
-          }
-        }),
-    [scale, baseScale, translateX, translateY],
-  );
-
-  const pan = useMemo(
-    () =>
-      Gesture.Pan()
-        // 手动激活：minDistance 关自动激活，onTouchesMove 依 zoomedSV 显式
-        // activate——手势对象稳定不随缩放态重建（快速捏合不被掐断）
-        .minDistance(4000)
-        .maxPointers(1)
-        .onTouchesDown((e) => {
-          const t = e.changedTouches[0];
-          panStartX.value = t.x;
-          panStartY.value = t.y;
-        })
-        .onTouchesMove((_e, mgr) => {
-          if (zoomedSV.value) mgr.activate();
-        })
-        .onStart(() => {
-          startTranslateX.value = translateX.value;
-          startTranslateY.value = translateY.value;
-        })
-        .onUpdate((e) => {
-          const maxX = Math.max(0, (PART_SCREEN_WIDTH * scale.value - PART_SCREEN_WIDTH) / 2);
-          const maxY = Math.max(0, (PART_SCREEN_HEIGHT * scale.value - PART_SCREEN_HEIGHT) / 2);
-          translateX.value = Math.min(
-            maxX,
-            Math.max(-maxX, startTranslateX.value + e.translationX),
-          );
-          translateY.value = Math.min(
-            maxY,
-            Math.max(-maxY, startTranslateY.value + e.translationY),
-          );
-        })
-        .onEnd(() => {
-          startTranslateX.value = translateX.value;
-          startTranslateY.value = translateY.value;
-        }),
-    [scale, startTranslateX, startTranslateY, translateX, translateY, zoomedSV],
-  );
-
-  const doubleTap = useMemo(
-    () =>
-      Gesture.Tap()
-        .numberOfTaps(2)
-        .onEnd((_e, success) => {
-          if (success) {
-            runOnJS(toggleZoom)();
-          }
-        }),
-    [toggleZoom],
-  );
-
-  const singleTap = useMemo(
-    () =>
-      Gesture.Tap()
-        .numberOfTaps(1)
-        .onEnd((_e, success) => {
-          if (success) {
-            runOnJS(onSingleTap)();
-          }
-        }),
+      Gesture.Exclusive(
+        Gesture.Tap()
+          .numberOfTaps(2)
+          .onEnd((_e, success) => {
+            'worklet';
+            if (success) runOnJS(hapticForScene)('toggle');
+          }),
+        Gesture.Tap()
+          .numberOfTaps(1)
+          .onEnd((_e, success) => {
+            'worklet';
+            if (success) runOnJS(onSingleTap)();
+          }),
+      ),
     [onSingleTap],
   );
 
   const composedGesture = useMemo(
-    () => Gesture.Simultaneous(pinch, pan, Gesture.Exclusive(doubleTap, singleTap)),
-    [pinch, pan, doubleTap, singleTap],
+    () => Gesture.Simultaneous(zoomGesture, tapCombo),
+    [zoomGesture, tapCombo],
   );
 
   // 内存策略：仅当前页（active）解码原图（高优先级、带磁盘缓存上限），
@@ -247,32 +155,38 @@ export const ZoomableImage = memo(function ZoomableImage({
 
   return (
     <GestureDetector gesture={composedGesture}>
-      <Animated.View style={[partStyles.zoomContainer, animatedStyle]}>
-        {active ? (
-          <Image
-            source={{ uri }}
-            style={partStyles.fullImage}
-            contentFit="contain"
-            preferHighDynamicRange
-            transition={isImageWarm(uri) ? 0 : 200}
-            cachePolicy="memory-disk"
-            priority="high"
-            recyclingKey={uri}
-            onLoad={() => markImageWarm(uri)}
-            onLoadStart={onLoadStart}
-            onLoadEnd={onLoadEnd}
-          />
-        ) : (
-          <Image
-            source={{ uri: thumbUri }}
-            style={partStyles.fullImage}
-            contentFit="contain"
-            transition={120}
-            cachePolicy="memory-disk"
-            recyclingKey={thumbUri}
-          />
-        )}
-      </Animated.View>
+      <View style={partStyles.zoomContainer} onLayout={onLayout} collapsable={false}>
+        <Animated.View
+          style={contentContainerAnimatedStyle as unknown as StyleProp<ViewStyle>}
+          onLayout={onLayoutContent}
+          collapsable={false}
+        >
+          {active ? (
+            <Image
+              source={{ uri }}
+              style={partStyles.fullImage}
+              contentFit="contain"
+              preferHighDynamicRange
+              transition={isImageWarm(uri) ? 0 : 200}
+              cachePolicy="memory-disk"
+              priority="high"
+              recyclingKey={uri}
+              onLoad={() => markImageWarm(uri)}
+              onLoadStart={onLoadStart}
+              onLoadEnd={onLoadEnd}
+            />
+          ) : (
+            <Image
+              source={{ uri: thumbUri }}
+              style={partStyles.fullImage}
+              contentFit="contain"
+              transition={120}
+              cachePolicy="memory-disk"
+              recyclingKey={thumbUri}
+            />
+          )}
+        </Animated.View>
+      </View>
     </GestureDetector>
   );
 });
@@ -294,7 +208,6 @@ export const LongImageView = memo(function LongImageView({
   originUri,
   imageWidth,
   imageHeight,
-  zoomed,
   onSingleTap,
   onZoomChange,
   onLoadStart,
@@ -302,14 +215,16 @@ export const LongImageView = memo(function LongImageView({
   readPan,
   scrollY,
   scrollMax,
+  gallerySwipe,
+  galleryScrollRef,
+  galleryIndex,
+  galleryItemWidth,
 }: {
   baseUri: string;
   originUri?: string;
   /** 原图自然尺寸（px）：fit 高度 = 屏宽 × (h/w) */
   imageWidth?: number;
   imageHeight?: number;
-  /** 父级缩放态（同 ZoomableImage 契约：prop 传入驱动 pan 门控） */
-  zoomed: boolean;
   onSingleTap: () => void;
   onZoomChange?: (zoomed: boolean) => void;
   onLoadStart?: () => void;
@@ -319,26 +234,37 @@ export const LongImageView = memo(function LongImageView({
   /** 滚动偏移 / 最大可滚量（UI 线程共享值；offset 由 readPan 写入） */
   scrollY: SharedValue<number>;
   scrollMax: SharedValue<number>;
+  /** 照片级图库滑动（同 ZoomableImage 契约） */
+  gallerySwipe: boolean;
+  galleryScrollRef: React.RefObject<ScrollableRef>;
+  galleryIndex: number;
+  galleryItemWidth: number;
 }) {
   // 原图按屏宽适配的显示高度（pt）；无尺寸信息回退屏高（退化为普通页行为）
   const fitHeight =
     imageWidth && imageWidth > 0 && imageHeight && imageHeight > 0
       ? Math.round((PART_SCREEN_WIDTH * imageHeight) / imageWidth)
       : PART_SCREEN_HEIGHT;
-  const scale = useSharedValue(1);
-  const baseScale = useSharedValue(1);
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const startTranslateX = useSharedValue(0);
-  const startTranslateY = useSharedValue(0);
-  // zoomed 的 UI 线程镜像（同 ZoomableImage：手势本体不随缩放态重建，
-  // 快速捏合不被掐断）
-  const zoomedSV = useSharedValue(zoomed);
-  const panStartX = useSharedValue(0);
-  const panStartY = useSharedValue(0);
-  useEffect(() => {
-    zoomedSV.value = zoomed;
-  }, [zoomed, zoomedSV]);
+  // ── 缩放核心 = react-native-zoom-reanimated（与 ZoomableImage 同一套）──
+  // 长图场景：未放大时库 pan 判 fail → 阅读由父级 readPan 驱动（本组件
+  // 不参与）；放大后库 pan 按"内容高 × scale − 屏高"自动边界（含回弹/
+  // 动量），既有长图阅读/退出手势契约不变。
+  const {
+    zoomGesture,
+    contentContainerAnimatedStyle,
+    onLayout,
+    onLayoutContent,
+    scale,
+    zoomOut,
+  } = useZoomGesture({
+    minScale: 1,
+    maxScale: 5,
+    enableGallerySwipe: gallerySwipe,
+    parentScrollRef: galleryScrollRef,
+    currentIndex: galleryIndex,
+    itemWidth: galleryItemWidth,
+    doubleTapConfig: { defaultScale: 3, minZoomScale: 1, maxZoomScale: 5 },
+  });
   // 原图（originUri）解码完成 → 淡入替换缩略图
   const [originReady, setOriginReady] = useState(false);
   const [originFailed, setOriginFailed] = useState(false);
@@ -349,17 +275,12 @@ export const LongImageView = memo(function LongImageView({
     setOriginFailed(false);
   }, [baseUri, originUri]);
 
-  const resetTransform = useCallback(() => {
-    scale.value = 1;
-    baseScale.value = 1;
-    translateX.value = 0;
-    translateY.value = 0;
-  }, []);
-
+  // 换图/换页重置缩放（同 ZoomableImage）
   useEffect(() => {
-    resetTransform();
-  }, [baseUri, originUri, resetTransform]);
+    zoomOut();
+  }, [baseUri, originUri, zoomOut]);
 
+  // zoomed 镜像 → 父级 dismiss/pager 门控（阈值 1.01，与旧实现一致）
   useAnimatedReaction(
     () => scale.value > 1.01,
     (z, previous) => {
@@ -369,104 +290,29 @@ export const LongImageView = memo(function LongImageView({
     },
   );
 
-  const toggleZoom = useCallback(() => {
-    const target = scale.value > 1.01 ? 1 : 3;
-    scale.value = withSpring(target, MOMENTUM);
-    baseScale.value = target;
-    translateX.value = withSpring(0, MOMENTUM);
-    translateY.value = withSpring(0, MOMENTUM);
-    hapticForScene('toggle');
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-  }));
-
-  const pinch = useMemo(
+  // 单击 chrome 开关 + 双击触感（同 ZoomableImage；库双击负责缩放）
+  const tapCombo = useMemo(
     () =>
-      Gesture.Pinch()
-        .onUpdate((e) => {
-          // 同 ZoomableImage：两指变一指冻结缩放（防 e.scale 骤降把放大弹回）
-          if (e.numberOfPointers < 2) return;
-          scale.value = Math.min(5, Math.max(1, baseScale.value * e.scale));
-        }).onEnd(() => {
-        baseScale.value = scale.value;
-        if (scale.value <= 1.001) {
-          scale.value = withSpring(1, MOMENTUM);
-          baseScale.value = 1;
-          translateX.value = withSpring(0, MOMENTUM);
-          translateY.value = withSpring(0, MOMENTUM);
-        }
-      }),
-    [scale, baseScale, translateX, translateY],
-  );
-
-  // 放大后 pan：范围按"内容高 × scale − 屏高"（长图内容远高于屏）。
-  // 手势本体稳定（zoomedSV 门控 + 手动激活），不随缩放态重建。
-  const pan = useMemo(
-    () =>
-      Gesture.Pan()
-        .minDistance(4000)
-        .maxPointers(1)
-        .onTouchesDown((e) => {
-          const t = e.changedTouches[0];
-          panStartX.value = t.x;
-          panStartY.value = t.y;
-        })
-        .onTouchesMove((_e, mgr) => {
-          if (zoomedSV.value) mgr.activate();
-        })
-        .onStart(() => {
-          startTranslateX.value = translateX.value;
-          startTranslateY.value = translateY.value;
-        })
-        .onUpdate((e) => {
-          const contentH = Math.max(fitHeight, PART_SCREEN_HEIGHT);
-          const maxY = Math.max(0, (contentH * scale.value - PART_SCREEN_HEIGHT) / 2);
-          const maxX = Math.max(0, (PART_SCREEN_WIDTH * scale.value - PART_SCREEN_WIDTH) / 2);
-          translateX.value = Math.min(
-            maxX,
-            Math.max(-maxX, startTranslateX.value + e.translationX),
-          );
-          translateY.value = Math.min(
-            maxY,
-            Math.max(-maxY, startTranslateY.value + e.translationY),
-          );
-        })
-        .onEnd(() => {
-          startTranslateX.value = translateX.value;
-          startTranslateY.value = translateY.value;
-        }),
-    [zoomedSV, panStartX, panStartY, scale, startTranslateX, startTranslateY, translateX, translateY, fitHeight],
-  );
-
-  const doubleTap = useMemo(
-    () =>
-      Gesture.Tap()
-        .numberOfTaps(2)
-        .onEnd((_e, success) => {
-          if (success) runOnJS(toggleZoom)();
-        }),
-    [toggleZoom],
-  );
-
-  const singleTap = useMemo(
-    () =>
-      Gesture.Tap()
-        .numberOfTaps(1)
-        .onEnd((_e, success) => {
-          if (success) runOnJS(onSingleTap)();
-        }),
+      Gesture.Exclusive(
+        Gesture.Tap()
+          .numberOfTaps(2)
+          .onEnd((_e, success) => {
+            'worklet';
+            if (success) runOnJS(hapticForScene)('toggle');
+          }),
+        Gesture.Tap()
+          .numberOfTaps(1)
+          .onEnd((_e, success) => {
+            'worklet';
+            if (success) runOnJS(onSingleTap)();
+          }),
+      ),
     [onSingleTap],
   );
 
   const composedGesture = useMemo(
-    () => Gesture.Simultaneous(pinch, pan, Gesture.Exclusive(doubleTap, singleTap)),
-    [pinch, pan, doubleTap, singleTap],
+    () => Gesture.Simultaneous(zoomGesture, tapCombo),
+    [zoomGesture, tapCombo],
   );
 
   const handleOriginLoadEnd = useCallback(() => {
@@ -487,13 +333,26 @@ export const LongImageView = memo(function LongImageView({
   }, [fitHeight, insets.top, scrollMax]);
 
   return (
-    <GestureDetector gesture={composedGesture}>
-      <Animated.View style={[{ width: PART_SCREEN_WIDTH, height: PART_SCREEN_HEIGHT }, animatedStyle]}>
-        {/* 阅读滚动由父级 readPan 驱动（RNGH-RNGH 同流，与退出手势按边界仲裁；
-            不再套原生 ScrollView——UIKit 滚动会抢先吃掉触摸导致边界退出失效） */}
-        <GestureDetector gesture={readPan}>
-          <Animated.View style={[scrollerStyle, { width: PART_SCREEN_WIDTH, height: PART_SCREEN_HEIGHT }]}>
-            <View style={{ width: PART_SCREEN_WIDTH, height: Math.max(fitHeight + insets.top, 1) }}>
+    <View
+      style={{ width: PART_SCREEN_WIDTH, height: PART_SCREEN_HEIGHT }}
+      onLayout={onLayout}
+      collapsable={false}
+    >
+      <GestureDetector gesture={composedGesture}>
+        {/* 库的缩放容器（transform 全在 contentContainerAnimatedStyle）：
+            内容 = 阅读层（readPan + scroller）整体参与缩放/pan */}
+        <Animated.View
+          style={[
+            { width: PART_SCREEN_WIDTH, height: Math.max(fitHeight + insets.top, PART_SCREEN_HEIGHT) },
+            contentContainerAnimatedStyle as unknown as StyleProp<ViewStyle>,
+          ]}
+          onLayout={onLayoutContent}
+          collapsable={false}
+        >
+          {/* 阅读滚动由父级 readPan 驱动（RNGH-RNGH 同流，与退出手势按边界仲裁；
+              不再套原生 ScrollView——UIKit 滚动会抢先吃掉触摸导致边界退出失效） */}
+          <GestureDetector gesture={readPan}>
+            <Animated.View style={[scrollerStyle, { width: PART_SCREEN_WIDTH, height: Math.max(fitHeight + insets.top, 1) }]}>
               {/* 内容整体下移安全区顶（首屏不顶到灵动岛/状态栏） */}
               <View style={{ marginTop: insets.top, width: PART_SCREEN_WIDTH, height: Math.max(fitHeight, 1) }}>
 {/* 缩略层：小档秒出，完整长图（低清）即可读 */}
@@ -525,11 +384,11 @@ export const LongImageView = memo(function LongImageView({
               />
             ) : null}
             </View>
-          </View>
           </Animated.View>
         </GestureDetector>
       </Animated.View>
     </GestureDetector>
+    </View>
   );
 });
 
