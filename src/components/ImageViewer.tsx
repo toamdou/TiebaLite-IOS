@@ -20,10 +20,10 @@ import {
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useFrameCallback,
   withSpring,
   withTiming,
   withDecay,
-  withDelay,
   cancelAnimation,
   runOnJS,
   Easing,
@@ -46,6 +46,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Toast, type ToastRef } from '@/components/ui/Toast';
 import { TiebaPhotoContextMenu } from '../../modules/tieba-native/src/TiebaPhotoContextMenu';
 import { TiebaNative } from '../../modules/tieba-native/src/TiebaNative';
+import type { ScrollableRef } from 'react-native-zoom-reanimated';
 import { useLowPowerMode } from '../../modules/tieba-system/src';
 import { readableError } from '@/utils/errorMessage';
 import { resolveWatermarkText } from '@/utils/watermark';
@@ -116,7 +117,8 @@ export default function ImageViewer({
   visible,
   onClose,
   forumName,
-  sourceFrame,
+  // 简化后不再使用（进入/飞回动画已删）；调用点仍传，暂保留收参避免连锁改动
+  sourceFrame: _sourceFrame,
   imageOrigins,
   imagePreviews,
   contextTitle,
@@ -144,10 +146,33 @@ export default function ImageViewer({
   const [staticMode, setStaticMode] = useState(false);
   const insets = useSafeAreaInsets();
   const pagerRef = useRef<PagerView>(null);
+  // 照片级图库滑动适配器（react-native-zoom-reanimated parentScrollRef）：
+  // 库 overflow 溢出时按 offset 换算目标页，驱动原生 PagerView 切页。
+  // staticMode/未挂载时 pagerRef.current 为空 → 库侧守卫自然忽略。
+  const galleryScrollRef = useRef<ScrollableRef>({
+    scrollToOffset: ({ offset, animated }) => {
+      const pager = pagerRef.current;
+      if (!pager) return;
+      const idx = Math.max(0, Math.min(images.length - 1, Math.round(offset / SCREEN_WIDTH)));
+      if (animated === false) pager.setPageWithoutAnimation(idx);
+      else pager.setPage(idx);
+    },
+  });
   const thumbnailRef = useRef<ScrollView>(null);
   // 首次挂载时 initialPage prop 已定位到窗口 anchor，无需再同步；
   // 之后的 window 重建（currentIndex 变化）才需要 setPageWithoutAnimation 对齐。
   const pagerInitializedRef = useRef(false);
+
+  // ── 转场卡死取证（2026-08-30 临时埋点，验完即删）──
+  // 复现后 Metro 日志看 [viewer-dbg] 序列：
+  // - 事件行（open/flyTarget/enter-done/close-x/drag-*）带毫秒时间戳 → 时序
+  // - probe 行（JS 线程每 100ms 采样）→ 进度值停住=动画推进停止；中断=JS 卡死
+  // - frame 行（UI 线程 useFrameCallback 每 8 帧汇总帧间隔）→ avgMs≈16.7 满帧，
+  //   暴涨段=掉帧发生的位置；frame 行停=UI 线程卡死
+  const dbg = useCallback((...a: unknown[]) => {
+    console.warn('[viewer-dbg]', new Date().toISOString().slice(11, 23), ...a);
+  }, []);
+  const lastRenderLogRef = useRef(0);
 
   // Watermark preference
   const imageWatermarkEnabled = useAppPreference('imageWatermarkEnabled', false);
@@ -296,37 +321,81 @@ export default function ImageViewer({
         }),
     [zoomedSV, longScrollY, longScrollMax, readBase, isDismissing],
   );
-  // 飞回目标（JS 预算 → UI 消费）：源缩略图矩形（点击页）或底栏缩略条格
-  //（翻页后的当前页，iOS Photos 同款：从哪翻走飞回哪）
-  const flyTargetX = useSharedValue(0);
-  const flyTargetY = useSharedValue(0);
-  const flyTargetScale = useSharedValue(1);
-  const hasFlyTarget = useSharedValue(false);
-  const thumbTargetX = useSharedValue(0);
-  const thumbTargetY = useSharedValue(0);
-  const thumbTargetScale = useSharedValue(1);
-
-  // 底栏缩略条格（56×56、间距 6、水平 padding 16、底 padding max(insets.bottom,16)）
-  // 作为退场目标；翻页后点击页的源矩形已不再对应屏幕，回缩略条格更符合直觉。
-  useEffect(() => {
-    if (images.length <= 1) return;
-    const idx = currentIndex;
-    const meta = imageMeta?.[idx];
-    let aspect = 1;
-    if (meta && meta.width > 0 && meta.height > 0) aspect = meta.width / meta.height;
-    const displayW = Math.min(SCREEN_WIDTH, SCREEN_HEIGHT * aspect);
-    const s = displayW > 0 ? 56 / displayW : 0.2;
-    thumbTargetScale.value = s;
-    thumbTargetX.value = Spacing.md + idx * 62 + 28 - (s * SCREEN_WIDTH) / 2;
-    thumbTargetY.value =
-      SCREEN_HEIGHT - (Math.max(insets.bottom, 16) + 28) - (s * SCREEN_HEIGHT) / 2;
-  }, [currentIndex, images.length, imageMeta, insets.bottom, thumbTargetX, thumbTargetY, thumbTargetScale]);
   // 减少动态：把 reduceMotion 镜像到 UI 线程（手势 onEnd 里判断）
   const reduceMotionSV = useSharedValue(reduceMotion);
 
   useEffect(() => {
     reduceMotionSV.value = reduceMotion;
   }, [reduceMotion, reduceMotionSV]);
+
+  // ── 双通道动画探针（取证临时）──
+  // UI 线程通道：useFrameCallback 每帧回调，累计帧间隔（timeSincePreviousFrame），
+  // 每 8 帧 runOnJS 打一次 avgMs——满帧 ~16.7ms；avgMs 暴涨/断流即掉帧/卡死。
+  // 常闭（active=false），probeAnimation / 拖拽起止开关。
+  const frameProbeActive = useSharedValue(false);
+  const frameProbeTag = useSharedValue('');
+  const frameProbeAcc = useSharedValue(0);
+  const frameProbeCount = useSharedValue(0);
+  // UI 线程心跳：frameProbe 每帧写入最近帧回调时间戳；JS probe 由此计算
+  // uiAge（距上次 UI 帧回调的毫秒数）——uiAge 持续增大 = UI 线程卡死/动画
+  // 驱动停，是「整个应用卡死」的直接证据（2026-08-30：第二次拖拽后 frame
+  // 日志断流 13 秒，JS probe 仍活着）。
+  const frameProbeStamp = useSharedValue(0);
+  const frameProbe = useFrameCallback((info) => {
+    if (!frameProbeActive.value) return;
+    frameProbeStamp.value = info.timestamp;
+    frameProbeAcc.value += info.timeSincePreviousFrame ?? 16.7;
+    frameProbeCount.value += 1;
+    if (frameProbeCount.value >= 8) {
+      const avg = frameProbeAcc.value / frameProbeCount.value;
+      frameProbeAcc.value = 0;
+      frameProbeCount.value = 0;
+      runOnJS(dbg)('frame', { tag: frameProbeTag.value, avgMs: avg });
+    }
+  }, false);
+
+  const frameProbeStart = useCallback(
+    (tag: string) => {
+      frameProbeTag.value = tag;
+      frameProbeAcc.value = 0;
+      frameProbeCount.value = 0;
+      frameProbeActive.value = true;
+      frameProbe.setActive(true);
+    },
+    [frameProbe, frameProbeActive, frameProbeTag, frameProbeAcc, frameProbeCount],
+  );
+  const frameProbeStop = useCallback(() => {
+    frameProbeActive.value = false;
+    frameProbe.setActive(false);
+  }, [frameProbe, frameProbeActive]);
+
+  // 动画进程采样（取证）：动画启动处调用，双通道并行——
+  // UI 线程帧率（上方 frameProbe）+ JS 线程每 100ms 打各动画共享值。
+  // 卡死时：probe 持续但数值不动 → 动画驱动/UI 线程卡；probe 中断 → JS 卡。
+  const probeAnimation = useCallback(
+    (tag: string) => {
+      frameProbeStart(tag);
+      let n = 0;
+      const iv = setInterval(() => {
+        n += 1;
+        const stamp = frameProbeStamp.value;
+        dbg('probe', tag, {
+          n,
+          exit: exitProgress.value,
+          ex: enterTransX.value,
+          ey: enterTransY.value,
+          es: enterScale.value,
+          eo: enterOpacity.value,
+          uiAge: stamp > 0 ? Math.round(Date.now() - stamp / 1000) : -1,
+        });
+        if (n >= 8) {
+          clearInterval(iv);
+          frameProbeStop();
+        }
+      }, 100);
+    },
+    [dbg, frameProbeStart, frameProbeStop, frameProbeStamp, exitProgress, enterTransX, enterTransY, enterScale, enterOpacity],
+  );
 
   useEffect(() => {
     cancelAnimation(overlayOpacity);
@@ -347,7 +416,6 @@ export default function ImageViewer({
       setCurrentIndex(initialIndex);
       setShowUI(true);
       setIsZoomed(false);
-      setStaticMode(false);
       overlayOpacity.value = 1;
       dragTranslateX.value = 0;
       dragTranslateY.value = 0;
@@ -365,88 +433,28 @@ export default function ImageViewer({
       exitToScale.value = 1;
       exitRadius.value = 0;
       isDismissing.value = false;
-      // v4：进入展开在 overlay 动画层上进行（PagerView 隐藏但保持挂载）；
-      // 长图页（fit-width 阅读形态与 overlay contain 不兼容）保持 PagerView
-      // 直显 + 0.95 淡入。
-      setStaticMode(!isLongImageOf(initialIndex));
-      // Entrance animation (iOS Photos style). Respect reduced motion.
-      // 进入起点由 flyTarget effect 覆盖（有源矩形时从缩略图展开）；
-      // 这里先给无源矩形的默认值（0.95 居中淡入）。
+      // 简化方案（2026-08-30 用户决定）：移除进入展开/飞回动画——PagerView
+      // 直显，不再有 overlay 进入动画（多轮实证 Reanimated withTiming 在
+      // 本环境不稳定：覆盖竞态/伪帧立即完成/worklet 启动不推进）。
+      setStaticMode(false);
+      // 容器淡入（背景渐黑 + 内容渐现）：enterOpacity 同时驱动 modalContainer
+      // 与黑色遮罩——进入 0→1（250ms，JS 线程启动=已验证成功路径）；
+      // reduceMotion / 关闭态直接落位。**必须每次打开重置**：teardown 会把
+      // enterOpacity 压 0，不重置则第二次打开背景不黑（用户实测）。
       if (reduceMotion) {
-        enterScale.value = 1;
         enterOpacity.value = 1;
-        enterTransX.value = 0;
-        enterTransY.value = 0;
-        setStaticMode(false);
       } else {
-        enterScale.value = 0.95;
         enterOpacity.value = 0;
-        enterTransX.value = 0;
-        enterTransY.value = 0;
-        // 动画完成（300ms 与 VIEWER_TRANSITION_MS 同步）→ 恢复 PagerView 交互。
-        // 必须检查 finished：两个 effect 先后对 enterTransX 启动 withTiming，
-        // 先启动的被覆盖时会以 finished=false 回调——若不区分，展开动画启动
-        // 瞬间 staticMode 就被关掉，动画在隐藏的 overlay 上白跑（用户实测
-        // 「进入动画只有 1 帧」的根因，2026-08-30）。
-        const done = (finished?: boolean) => {
-          if (finished) setStaticMode(false);
-        };
-        enterTransX.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT }, done);
-        enterTransY.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
-        enterScale.value = withTiming(1, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
-        enterOpacity.value = withTiming(1, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
+        enterOpacity.value = withTiming(1, { duration: 250, easing: EASE_OUT });
       }
+      dbg('open', {
+        initialIndex,
+        isLong: isLongImageOf(initialIndex),
+        reduceMotion,
+      });
     }
-  }, [visible, initialIndex, overlayOpacity, dragTranslateX, dragTranslateY, touchStartX, touchStartY, prevTransX, prevTransY, enterScale, enterOpacity, enterTransX, enterTransY, exitProgress, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, reduceMotion, isDismissing, setStaticMode, isLongImageOf]);
+  }, [visible, initialIndex, overlayOpacity, dragTranslateX, dragTranslateY, touchStartX, touchStartY, prevTransX, prevTransY, exitProgress, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, enterOpacity, reduceMotion, isDismissing, setStaticMode, isLongImageOf, dbg]);
 
-  // 打开时按 sourceFrame 预算飞回目标。列表缩略图与源图同宽高比 ⇒ 由 frame
-  // 宽高比即可推出全屏 contain 显示尺寸（无需等原图解码）。
-  // 目标变换按 contentStyle 的 [translate, scale] 顺序（屏幕空间平移）推导：
-  //   scale = fw / 显示宽；tx = frame 中心X - scale·W/2；ty = frame 中心Y - scale·H/2
-  // 该值同时是进入动画起点：有源矩形时大图从缩略图位置/尺寸"展开"到全屏
-  //（Photos 同款进入），无源矩形保持 0.95 居中淡入（上一 effect 的默认值）。
-  useEffect(() => {
-    if (!visible || !sourceFrame || sourceFrame.width <= 0 || sourceFrame.height <= 0) {
-      hasFlyTarget.value = false;
-      return;
-    }
-    const fw = sourceFrame.width;
-    const fh = sourceFrame.height;
-    const aspect = fw / fh;
-    // 当前页图片在全屏内 contain 的显示宽度（与 frame 同宽高比）
-    const displayW = Math.min(SCREEN_WIDTH, SCREEN_HEIGHT * aspect);
-    if (displayW <= 0) {
-      hasFlyTarget.value = false;
-      return;
-    }
-    const targetScale = fw / displayW;
-    flyTargetX.value = sourceFrame.x + fw / 2 - (targetScale * SCREEN_WIDTH) / 2;
-    flyTargetY.value = sourceFrame.y + fh / 2 - (targetScale * SCREEN_HEIGHT) / 2;
-    flyTargetScale.value = targetScale;
-    hasFlyTarget.value = true;
-    // 进入展开：图片从缩略图位置放大到全屏（与退场同目标、反向插值）。
-    // 动画仅在"点击页"时执行（翻页后的进入已完成）；reduceMotion 直接落位。
-    if (reduceMotion) {
-      enterTransX.value = 0;
-      enterTransY.value = 0;
-      enterScale.value = 1;
-      return;
-    }
-    enterTransX.value = flyTargetX.value;
-    enterTransY.value = flyTargetY.value;
-    enterScale.value = targetScale;
-    enterOpacity.value = 0;
-    // 展开动画完成 → 恢复 PagerView 交互（覆盖了 visible effect 的同名动画，
-    // 回调必须在这里补，否则 staticMode 停在 true）；finished 守卫与
-    // visible effect 相同——本动画也可能被再次覆盖（快速重复打开时）。
-    const done = (finished?: boolean) => {
-      if (finished) setStaticMode(false);
-    };
-    enterTransX.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT }, done);
-    enterTransY.value = withTiming(0, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
-    enterScale.value = withTiming(1, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
-    enterOpacity.value = withTiming(1, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT });
-  }, [visible, sourceFrame, flyTargetX, flyTargetY, flyTargetScale, hasFlyTarget, enterTransX, enterTransY, enterScale, enterOpacity, reduceMotion, setStaticMode]);
 
   // 手势 worklet 镜像：当前页/总页数/长图态（随渲染刷新，手势 useMemo 不重建
   // 也能在 onTouchesMove / onEnd 里拿到新值）
@@ -490,13 +498,17 @@ export default function ImageViewer({
       setMounted(true);
       return;
     }
+    dbg('teardown-start');
     // 兜底强制内容透明：非减少动态路径退场动画已完成（progress 已到 1），
     // reduceMotion 路径是瞬间 onClose，这里直接压 0 保证宽限期不可见。
     enterOpacity.value = 0;
     exitProgress.value = 1;
-    const t = setTimeout(() => setMounted(false), TEARDOWN_GRACE_MS);
+    const t = setTimeout(() => {
+      dbg('teardown-done');
+      setMounted(false);
+    }, TEARDOWN_GRACE_MS);
     return () => clearTimeout(t);
-  }, [visible, enterOpacity, exitProgress]);
+  }, [visible, enterOpacity, exitProgress, dbg]);
 
   const topBarAnimStyle = useAnimatedStyle(() => {
     // 拖拽启动时顶栏/缩略条随拖拽距离淡出（Twitter 行为）；退场时随 progress 隐去
@@ -504,6 +516,14 @@ export default function ImageViewer({
     const dragFade = Math.min(dragLen / 140, 1);
     return { opacity: overlayOpacity.value * (1 - dragFade) * (1 - exitProgress.value) };
   });
+
+  // 容器淡入淡出（简化后唯一的进入/退出动画）：opacity 由 enterOpacity 驱动
+  // ——打开 0→1（背景渐黑+内容渐现）、X 关闭 1→0。仅 JS 线程启动 withTiming
+  // （历史实证 worklet 启动不推进）；拖拽退出不动 enterOpacity（保持 1），
+  // 由 exitProgress 驱动内容飞出 + 黑幕淡出。
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: enterOpacity.value,
+  }));
 
   /**
    * 背景揭示（Twitter 拖拽关闭）：
@@ -568,43 +588,87 @@ export default function ImageViewer({
     };
   });
 
-  // iOS Photos-style close（v4）：与拖拽退出同一套动画系统——X 关闭也
-  // "飞回"目标（源缩略图 → 底栏缩略条格 → 0.8 缩小淡出），动画在 overlay
-  // 动画层上执行（PagerView 仅隐藏保持挂载）。
+  // 退场动画统一入口（JS 线程启动；X 关闭与手势退出共用）：
+  // - 在 **JS 线程**调用 withTiming——与进入动画（effect 里启动）同一条成功
+  //   路径。日志实证（2026-08-30）：在手势 worklet（onEnd）里直接启动的
+  //   withTiming 会偶发完全不推进（exit 恒 0 + UI 帧回调断流），而 JS 线程
+  //   启动的进入动画每次都正常。
+  // - 看门狗兜底：120ms 后 progress 仍未推进（UI 动画驱动异常）→ 改由 JS
+  //   定时器逐帧写 exitProgress（EASE_OUT 近似），保证退出动画必定完成、
+  //   界面必定关闭——从机制上杜绝「退出卡死」。
+  const startExitAnimation = useCallback(
+    (opts: {
+      fromX: number;
+      fromY: number;
+      fromScale: number;
+      toX: number;
+      toY: number;
+      toScale: number;
+      radius: number;
+      tag: string;
+    }) => {
+      const { fromX, fromY, fromScale, toX, toY, toScale, radius, tag } = opts;
+      exitFromX.value = fromX;
+      exitFromY.value = fromY;
+      exitFromScale.value = fromScale;
+      exitToX.value = toX;
+      exitToY.value = toY;
+      exitToScale.value = toScale;
+      exitRadius.value = radius;
+      // 主路径：JS 线程启动 withTiming
+      exitProgress.value = withTiming(
+        1,
+        { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT },
+        (finished) => {
+          if (finished) runOnJS(onClose)();
+        },
+      );
+      // 看门狗：120ms 内 UI 动画未推进 → JS 逐帧驱动兜底
+      const t0 = Date.now();
+      const watchdog = setTimeout(() => {
+        if (exitProgress.value > 0.05) return; // 动画在推进，正常
+        dbg('exit-watchdog-fallback', { tag });
+        const dur = VIEWER_TRANSITION_MS;
+        const drive = setInterval(() => {
+          const t = Math.min(1, (Date.now() - t0 + 120) / dur);
+          const e = 1 - Math.pow(1 - t, 3); // EASE_OUT 近似
+          exitProgress.value = e;
+          if (t >= 1) {
+            clearInterval(drive);
+            onClose();
+          }
+        }, 16);
+      }, 120);
+      probeAnimation(tag);
+      return watchdog;
+    },
+    [exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, exitProgress, onClose, dbg, probeAnimation],
+  );
+
+  // X 关闭（简化 2026-08-30）：不做飞回动画——容器 250ms 渐淡出后关闭，
+  // 由 teardown 宽限期平滑拆除（PagerView 内部滚动收尾，防卸载闪退）。
   const closeViewer = useCallback(() => {
+    dbg('close-x', {
+      n: images.length,
+      dragX: dragTranslateX.value,
+      dragY: dragTranslateY.value,
+    });
+    isDismissing.value = true;
     if (reduceMotion) {
       onClose();
       return;
     }
-    isDismissing.value = true;
-    setStaticMode(true);
-    // 起点=当前所见（含进入展开残留位移：进入动画中直接点 X 关闭不跳变）
-    exitFromX.value = dragTranslateX.value + enterTransX.value;
-    exitFromY.value = dragTranslateY.value + enterTransY.value;
-    exitFromScale.value = 1;
-    // 三档目标与拖拽退出一致：源缩略图（点击页）→ 缩略条格（翻页后）→
-    // 原地缩小淡出（单图无落点）
-    if (hasFlyTarget.value && currentIdxSV.value === initialIdxSV.value) {
-      exitToX.value = flyTargetX.value;
-      exitToY.value = flyTargetY.value;
-      exitToScale.value = flyTargetScale.value;
-    } else if (images.length > 1) {
-      exitToX.value = thumbTargetX.value;
-      exitToY.value = thumbTargetY.value;
-      exitToScale.value = thumbTargetScale.value;
-    } else {
-      exitToX.value = dragTranslateX.value;
-      exitToY.value = dragTranslateY.value;
-      exitToScale.value = 0.8;
-    }
-    exitRadius.value = 0;
-    exitProgress.value = withDelay(
-      16,
-      withTiming(1, { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT }, (finished) => {
+    // 淡出（JS 线程启动）+ 超时兜底：动画异常（withTiming 不推进的历史
+    // 问题）时 400ms 后强制关闭，杜绝「点 X 关不掉」。
+    enterOpacity.value = withTiming(
+      0,
+      { duration: 250, easing: EASE_OUT },
+      (finished) => {
         if (finished) runOnJS(onClose)();
-      }),
+      },
     );
-  }, [reduceMotion, onClose, isDismissing, setStaticMode, dragTranslateX, dragTranslateY, enterTransX, enterTransY, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, exitProgress, hasFlyTarget, currentIdxSV, initialIdxSV, flyTargetX, flyTargetY, flyTargetScale, images.length, thumbTargetX, thumbTargetY, thumbTargetScale]);
+    setTimeout(onClose, 420);
+  }, [dbg, images.length, dragTranslateX, dragTranslateY, isDismissing, reduceMotion, enterOpacity, onClose]);
 
 // 交互式拖拽关闭（iOS Photos 风格，2026-08-29 重构 v2 / 08-30 增补）：
 // - 手势本体稳定（门控全走共享值，不随 isZoomed 重建——快速捏合不被掐断）；
@@ -633,10 +697,16 @@ const dismissGesture = useMemo(
           prevTransY.value = 0;
         })
         .onStart((e) => {
+          // 退场动画进行中忽略新拖拽（2026-08-30：第二次拖拽在 isDismissing
+          // 期再次 onStart 会叠加 setStaticMode/探针，状态错乱）
+          if (isDismissing.value) return;
           // 自动激活（minDistance 10）时 translation 已累计了按下到激活点的
           // 位移：以激活点为增量基线，onUpdate 从 0 起跟手（无首帧跳变）。
           prevTransX.value = e.translationX;
           prevTransY.value = e.translationY;
+          runOnJS(dbg)('drag-start', { isLong: isLongPageSV.value, zoomed: zoomedSV.value });
+          // 拖拽跟手期帧率采样（同探针通道；onEnd 关闭）
+          runOnJS(frameProbeStart)('drag');
           // 拖拽即切静态大图（仅非长图页）：PagerView（SwiftUI TabView）宿主
           // transform 是 120fps 卡顿源，拖拽跟手全程落在轻量 Image 上；
           // 长图页保持阅读形态，退场时才切（onEnd 里）。回弹时切回 PagerView。
@@ -694,70 +764,64 @@ const dismissGesture = useMemo(
           if (!beyondThreshold) {
             // 未过阈值 → 弹簧回弹（X/Y 一起回）；拖拽期间切的静态大图换回
             // PagerView（恢复翻页/缩放，长图页本就没切）
+            runOnJS(dbg)('drag-end-spring', { len: dragLen, vy: e.velocityY });
+            runOnJS(frameProbeStop)();
             runOnJS(setStaticMode)(false);
             dragTranslateX.value = withSpring(0, MOMENTUM);
             dragTranslateY.value = withSpring(0, MOMENTUM);
             return;
           }
           isDismissing.value = true;
+          runOnJS(frameProbeStop)();
+          runOnJS(dbg)('drag-end-exit', {
+            len: dragLen,
+            vy: e.velocityY,
+            isLong: isLongPageSV.value,
+          });
           if (reduceMotionSV.value) {
             runOnJS(onClose)();
             return;
           }
           const dragProgress = Math.min(dragLen / SHRINK_DISTANCE, 1);
-          // 退场起点=当前所见：拖拽位移 + 进入展开残留位移（进入动画未完成
-          // 时退出不跳变）；scale 由 enterScale（进入中途值）乘以下面系数
-          exitFromX.value = dragTranslateX.value + enterTransX.value;
-          exitFromY.value = dragTranslateY.value + enterTransY.value;
-          exitFromScale.value = 1 - dragProgress * DRAG_SHRINK_FACTOR;
-          exitRadius.value = 24 * dragProgress;
+          // 退场起点=当前跟手位置；scale 按拖拽距离缩小系数（跟手态即时生效）
+          const fromX = dragTranslateX.value;
+          const fromY = dragTranslateY.value;
+          const fromScale = 1 - dragProgress * DRAG_SHRINK_FACTOR;
+          const radius = 24 * dragProgress;
           // 切除 PagerView（SwiftUI TabView）→ 静态大图：同 URI + imageWarm 免
           // 过渡，换图像素级无感；退场 transform 落在轻量 Image 上，120fps 平滑
           runOnJS(setStaticMode)(true);
-          // 退场目标三档：源缩略图（点击页）→ 底栏缩略条格（翻页后）→
-          // 单图无条沿手势方向缩小淡出。全程 x/y 双轴不同缓动 → 抛物线轨迹。
-          const isInitialPage = currentIdxSV.value === initialIdxSV.value;
-          if (hasFlyTarget.value && isInitialPage) {
-            exitToX.value = flyTargetX.value;
-            exitToY.value = flyTargetY.value;
-            exitToScale.value = flyTargetScale.value;
-          } else if (pageCountSV.value > 1) {
-            // 翻页后飞回当前页缩略条格（iOS Photos 从哪走回哪）
-            exitToX.value = thumbTargetX.value;
-            exitToY.value = thumbTargetY.value;
-            exitToScale.value = thumbTargetScale.value;
-          } else {
-            // 无任何落点（单图且无源矩形）：沿手势方向移动 + 缩小 + 淡出，
-            // 让"返回"过程可见（不再瞬间飞出屏幕边缘）
-            let dx = e.translationX;
-            let dy = e.translationY;
-            if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
-              dx = e.velocityX * 0.05;
-              dy = e.velocityY * 0.05;
-            }
-            const len = Math.hypot(dx, dy);
-            if (len < 1) {
-              dx = 0;
-              dy = 1;
-            } else {
-              dx /= len;
-              dy /= len;
-            }
-            exitToX.value = dx * SCREEN_WIDTH * 0.9;
-            exitToY.value = dy * SCREEN_HEIGHT * 0.9;
-            exitToScale.value = 0.6;
+          // 简化退出（2026-08-30 用户决定）：不做飞回目标——沿松手方向
+          // 直线飞出屏幕边缘（方向=位移，位移过小则取抛速方向）
+          let dx = e.translationX;
+          let dy = e.translationY;
+          if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+            dx = e.velocityX * 0.05;
+            dy = e.velocityY * 0.05;
           }
-          exitProgress.value = withDelay(
-            16, // 等 staticMode 换树完成（PagerView→静态 Image）再启动退场，
-            // 动画全程落在轻量 Image 上；首帧不出现宿主视图变换的顿挫
-            withTiming(
-              1,
-              { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT },
-              (finished) => {
-                if (finished) runOnJS(onClose)();
-              },
-            ),
-          );
+          const len = Math.hypot(dx, dy);
+          if (len < 1) {
+            dx = 0;
+            dy = 1;
+          } else {
+            dx /= len;
+            dy /= len;
+          }
+          const toX = dx * SCREEN_WIDTH * 1.2;
+          const toY = dy * SCREEN_HEIGHT * 1.2;
+          // 动画统一由 JS 线程启动（startExitAnimation 内部带看门狗兜底——
+          // 日志实证 worklet 里直接 withTiming 会偶发不推进，JS 启动是
+          // 与进入动画相同的成功路径）
+          runOnJS(startExitAnimation)({
+            fromX,
+            fromY,
+            fromScale,
+            toX,
+            toY,
+            toScale: 0.5,
+            radius,
+            tag: 'exit-drag',
+          });
         }),
     [
       onClose,
@@ -779,13 +843,6 @@ const dismissGesture = useMemo(
       enterTransX,
       enterTransY,
       isDismissing,
-      hasFlyTarget,
-      flyTargetX,
-      flyTargetY,
-      flyTargetScale,
-      thumbTargetX,
-      thumbTargetY,
-      thumbTargetScale,
       exitFromX,
       exitFromY,
       exitFromScale,
@@ -795,6 +852,11 @@ const dismissGesture = useMemo(
       exitProgress,
       exitRadius,
       setStaticMode,
+      dbg,
+      probeAnimation,
+      frameProbeStart,
+      frameProbeStop,
+      startExitAnimation,
     ],
   );
 
@@ -936,6 +998,23 @@ const dismissGesture = useMemo(
 
   if (images.length === 0) return null;
 
+  // 渲染风暴取证（节流 250ms）：JS 线程卡死前的最后阶段往往伴随高频重渲染，
+  // 此日志高频出现即渲染风暴实锤（临时埋点，验完即删）。
+  if (__DEV__) {
+    const now = Date.now();
+    if (now - lastRenderLogRef.current > 250) {
+      lastRenderLogRef.current = now;
+      console.warn('[viewer-dbg]', new Date().toISOString().slice(11, 23), 'render', {
+        visible,
+        mounted,
+        staticMode,
+        currentIndex,
+        isZoomed,
+        exiting: isDismissing.value,
+      });
+    }
+  }
+
   return (
     <Modal
       visible={mounted}
@@ -951,7 +1030,11 @@ const dismissGesture = useMemo(
       <SafeAreaProvider style={styles.viewerRoot}>
         <GestureDetector gesture={dismissGesture}>
           <Animated.View
-            style={[styles.modalContainer, { pointerEvents: visible ? 'auto' : 'none' }]}
+            style={[
+              styles.modalContainer,
+              { pointerEvents: visible ? 'auto' : 'none' },
+              containerStyle,
+            ]}
           >
           {/* 状态栏隐藏/恢复走原生（TiebaNative.setModalStatusBarHidden）：iOS 27
               RN StatusBar 是 no-op 且 setStyle 会红屏；这里不放 StatusBar */}
@@ -1005,12 +1088,15 @@ const dismissGesture = useMemo(
                       originUri={imageOrigins?.[page.index]}
                       imageWidth={pageMeta?.width}
                       imageHeight={pageMeta?.height}
-                      zoomed={isZoomed}
                       onSingleTap={toggleUI}
                       onZoomChange={setIsZoomed}
                       readPan={longReadPan}
                       scrollY={longScrollY}
                       scrollMax={longScrollMax}
+                      gallerySwipe
+                      galleryScrollRef={galleryScrollRef}
+                      galleryIndex={currentIndex}
+                      galleryItemWidth={SCREEN_WIDTH}
                       onLoadStart={() => {
                         if (page.uri !== images[page.index]) {
                           setOriginLoading((prev) => ({ ...prev, [page.index]: true }));
@@ -1026,7 +1112,10 @@ const dismissGesture = useMemo(
                       onSingleTap={toggleUI}
                       onZoomChange={setIsZoomed}
                       active={page.active}
-                      zoomed={isZoomed}
+                      gallerySwipe
+                      galleryScrollRef={galleryScrollRef}
+                      galleryIndex={currentIndex}
+                      galleryItemWidth={SCREEN_WIDTH}
                       onLoadStart={() => {
                         // 仅当该页显示的是原图（长图默认/手动切换）时转圈：
                         // 普通档位图沿用原有直出行为，不闪加载动画
