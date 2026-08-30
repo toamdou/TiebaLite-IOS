@@ -1,5 +1,4 @@
 import Foundation
-import TiebaProtoGenerated
 
 enum TiebaProtoError: LocalizedError {
   case invalidDescriptor

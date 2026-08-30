@@ -3318,9 +3318,6 @@ PODS:
   - TiebaNative (1.0.0):
     - ExpoModulesCore
     - SwiftProtobuf (~> 1.28)
-    - TiebaProtoGenerated
-  - TiebaProtoGenerated (1.0.0):
-    - SwiftProtobuf (~> 1.28)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -3452,7 +3449,6 @@ DEPENDENCIES:
   - SwiftProtobuf (~> 1.28)
   - "Tickle (from `../node_modules/@renegades/react-native-tickle`)"
   - TiebaNative (from `../modules/tieba-native/ios`)
-  - TiebaProtoGenerated (from `../modules/tieba-proto/ios`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -3720,8 +3716,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@renegades/react-native-tickle"
   TiebaNative:
     :path: "../modules/tieba-native/ios"
-  TiebaProtoGenerated:
-    :path: "../modules/tieba-proto/ios"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
@@ -3860,10 +3854,9 @@ SPEC CHECKSUMS:
   SwiftProtobuf: 409d3aaec90e51b1705b1dd8065b56893450e77c
   SwiftUIIntrospect: fee9aa07293ee280373a591e1824e8ddc869ba5d
   Tickle: e61c7546f709f8e88fd4600d9d09415c1a23831b
-  TiebaNative: a9fbc4a5a4615940a00502b204939d27898d9bb2
-  TiebaProtoGenerated: 603f38c80e282c20d01bcd0c67195cdd11d25943
+  TiebaNative: e062c0455ef705d2df2437d2222f11e6e2b89f62
   Yoga: 9690ea6ce9c77aee633f4815cc42202c701edbd8
 
-PODFILE CHECKSUM: 06478a3ac3667ff6d52602e4f172e3283a96803d
+PODFILE CHECKSUM: 8fb514f48417620186dffdd8a9be60c6036593f9
 
 COCOAPODS: 1.17.0

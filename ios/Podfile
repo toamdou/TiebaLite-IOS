@@ -79,12 +79,6 @@ target 'tiebalite' do
   # 运行时版本须与 protoc-gen-swift（brew swift-protobuf 1.38.1）匹配。
   pod 'SwiftProtobuf', '~> 1.28'
 
-  # TiebaProtoGenerated（自研生成代码 pod）：267 个 protoc 生成 Swift 文件，
-  # 从 TiebaNative 拆出独立静态库（2026-08-30）——日常增量不再整批重编，
-  # 未来可预编译产物直链。autolinking 扫不到（无 expo-module.config.json），
-  # 必须显式声明；TiebaNative 通过 s.dependency 依赖。
-  pod 'TiebaProtoGenerated', :path => '../modules/tieba-proto/ios'
-
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
 
