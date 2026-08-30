@@ -20,10 +20,12 @@ import {
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedReaction,
   useFrameCallback,
   withSpring,
   withTiming,
   withDecay,
+  withDelay,
   cancelAnimation,
   runOnJS,
   Easing,
@@ -273,13 +275,27 @@ export default function ImageViewer({
   const pageCountSV = useSharedValue(images.length);
   const initialIdxSV = useSharedValue(initialIndex);
   const isLongPageSV = useSharedValue(false);
-  // 缩放态镜像：退出手势/阅读 pan 的门控走共享值，手势本体不随 isZoomed
-  // 重建——快速捏合时父级 setIsZoomed 重渲染不会掐断进行中的捏合（真机：
-  // 快速捏合后松手弹回原尺寸的根因）。
-  const zoomedSV = useSharedValue(isZoomed);
+  // 缩放态镜像：UI 线程直读——页面级钩子的 isZoomedIn 经 active 门控镜像
+  // 写入（无 JS 往返，快速捏合不被中断）。退出手势/阅读 pan 的门控读本值。
+  const zoomedSV = useSharedValue(false);
+  // 手势脉冲（页面级 zoomGestureLastTime 变化时 +1，UI 线程）：驱动顶栏
+  // 自动收起——手势结束后 2.6s 渐隐（iOS Photos 行为），再手势重新计时。
+  const gesturePulse = useSharedValue(0);
+  const uiVisibleSV = useSharedValue(showUI);
   useEffect(() => {
-    zoomedSV.value = isZoomed;
-  }, [isZoomed, zoomedSV]);
+    uiVisibleSV.value = showUI;
+  }, [showUI, uiVisibleSV]);
+  // 手势结束 → 排一个延迟收起（仅 UI 可见且未在退场时）；单击 toggle 走
+  // 既有 showUI 效果（cancelAnimation + 重置 opacity，自动取消待执行收起）。
+  useAnimatedReaction(
+    () => gesturePulse.value,
+    (p, prev) => {
+      if (p === prev) return;
+      if (uiVisibleSV.value && exitProgress.value === 0) {
+        overlayOpacity.value = withDelay(2600, withTiming(0, { duration: 220 }));
+      }
+    },
+  );
 
   // ---------- 飞回源缩略图（iOS Photos 式交互关闭）----------
   // 飞回目标在打开时按 sourceFrame 预算好，手势 onEnd（UI 线程）直接取用；
@@ -438,14 +454,14 @@ export default function ImageViewer({
       // 本环境不稳定：覆盖竞态/伪帧立即完成/worklet 启动不推进）。
       setStaticMode(false);
       // 容器淡入（背景渐黑 + 内容渐现）：enterOpacity 同时驱动 modalContainer
-      // 与黑色遮罩——进入 0→1（250ms，JS 线程启动=已验证成功路径）；
+      // 与黑色遮罩——进入 0→1（350ms 舒缓，JS 线程启动=已验证成功路径）；
       // reduceMotion / 关闭态直接落位。**必须每次打开重置**：teardown 会把
       // enterOpacity 压 0，不重置则第二次打开背景不黑（用户实测）。
       if (reduceMotion) {
         enterOpacity.value = 1;
       } else {
         enterOpacity.value = 0;
-        enterOpacity.value = withTiming(1, { duration: 250, easing: EASE_OUT });
+        enterOpacity.value = withTiming(1, { duration: 350, easing: EASE_OUT });
       }
       dbg('open', {
         initialIndex,
@@ -645,7 +661,7 @@ export default function ImageViewer({
     [exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, exitProgress, onClose, dbg, probeAnimation],
   );
 
-  // X 关闭（简化 2026-08-30）：不做飞回动画——容器 250ms 渐淡出后关闭，
+  // X 关闭（简化 2026-08-30）：不做飞回动画——容器 350ms 渐淡出后关闭，
   // 由 teardown 宽限期平滑拆除（PagerView 内部滚动收尾，防卸载闪退）。
   const closeViewer = useCallback(() => {
     dbg('close-x', {
@@ -659,15 +675,15 @@ export default function ImageViewer({
       return;
     }
     // 淡出（JS 线程启动）+ 超时兜底：动画异常（withTiming 不推进的历史
-    // 问题）时 400ms 后强制关闭，杜绝「点 X 关不掉」。
+    // 问题）时 520ms 后强制关闭，杜绝「点 X 关不掉」。
     enterOpacity.value = withTiming(
       0,
-      { duration: 250, easing: EASE_OUT },
+      { duration: 350, easing: EASE_OUT },
       (finished) => {
         if (finished) runOnJS(onClose)();
       },
     );
-    setTimeout(onClose, 420);
+    setTimeout(onClose, 520);
   }, [dbg, images.length, dragTranslateX, dragTranslateY, isDismissing, reduceMotion, enterOpacity, onClose]);
 
 // 交互式拖拽关闭（iOS Photos 风格，2026-08-29 重构 v2 / 08-30 增补）：
@@ -740,9 +756,14 @@ const dismissGesture = useMemo(
           const dY = e.translationY - prevTransY.value;
           prevTransX.value = e.translationX;
           prevTransY.value = e.translationY;
-          // 横向：仅 PagerView 翻不了的方向（首页右拉/末页左拉）跟手退出，
-          // 其余横向拖动是翻页，X 归零不污染退场位移
+          // 横向跟手：斜向拖动（X 分量 ≲ Y 分量）→ X 自由跟随（用户实测
+          // 「不能随手势自由拖动」= 非边缘页横动被归 0）；纯横向（X 主导）
+          // → 仍只跟边缘页（其余交 PagerView 翻页，不污染退场位移）。
+          const diag =
+            Math.abs(dX) <= Math.abs(dY) * 1.5 ||
+            Math.abs(dX) <= Math.abs(dY);
           const xGo =
+            diag ||
             (dX > 0 && currentIdxSV.value <= 0) ||
             (dX < 0 && currentIdxSV.value >= pageCountSV.value - 1);
           dragTranslateX.value = xGo ? dragTranslateX.value + dX : 0;
@@ -1097,6 +1118,8 @@ const dismissGesture = useMemo(
                       galleryScrollRef={galleryScrollRef}
                       galleryIndex={currentIndex}
                       galleryItemWidth={SCREEN_WIDTH}
+                      zoomMirror={zoomedSV}
+                      gesturePulse={gesturePulse}
                       onLoadStart={() => {
                         if (page.uri !== images[page.index]) {
                           setOriginLoading((prev) => ({ ...prev, [page.index]: true }));
@@ -1116,6 +1139,8 @@ const dismissGesture = useMemo(
                       galleryScrollRef={galleryScrollRef}
                       galleryIndex={currentIndex}
                       galleryItemWidth={SCREEN_WIDTH}
+                      zoomMirror={zoomedSV}
+                      gesturePulse={gesturePulse}
                       onLoadStart={() => {
                         // 仅当该页显示的是原图（长图默认/手动切换）时转圈：
                         // 普通档位图沿用原有直出行为，不闪加载动画

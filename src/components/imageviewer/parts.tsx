@@ -11,6 +11,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Pressable, StyleSheet, Dimensions, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
+  useSharedValue,
   useAnimatedStyle,
   useAnimatedReaction,
   runOnJS,
@@ -66,6 +67,8 @@ export const ZoomableImage = memo(function ZoomableImage({
   galleryScrollRef,
   galleryIndex,
   galleryItemWidth,
+  zoomMirror,
+  gesturePulse,
 }: {
   uri: string;
   onSingleTap: () => void;
@@ -79,12 +82,22 @@ export const ZoomableImage = memo(function ZoomableImage({
   galleryScrollRef: React.RefObject<ScrollableRef>;
   galleryIndex: number;
   galleryItemWidth: number;
+  /** 缩放态镜像（父级持值，UI 线程直读）：本页 active 时把 isZoomedIn 写入 */
+  zoomMirror: SharedValue<boolean>;
+  /** 手势脉冲（父级持值）：本页 active 时 gesture 触发 +1 → 父级排 UI 自动收起 */
+  gesturePulse: SharedValue<number>;
 }) {
   // ── 缩放核心 = react-native-zoom-reanimated（2026-08-30 替换手写实现）──
-  // focal 捏合（rubber band + 动态焦点）、双击缩放、pan（带边界回弹/动量）、
-  // 照片级图库滑动（放大态溢出边缘切页）全部由库内部维护；我们保留：
+  // focal 捏合（rubber band + 动态焦点）、双击缩放、pan（带边界回弹/动量）
+  // 由库内部维护。**库的放大态边缘滑图（enableGallerySwipe）已禁用**：
+  // 用户实证（2026-08-30）它经 parentScrollRef 驱动原生 PagerView setPage
+  // 会造成「两指准备捏合即回退第一张」「捏合中页面乱跳乱闪」以及「放大态
+  // 滑到边缘触发切页 → 页面重挂 → 缩放被重置回 1」。翻页由 PagerView
+  // 原生横向滑动承担（scale==1 时）；放大态溢出边缘仅橡皮筋回弹。
+  // 我们保留：
   // - 单击 chrome 开关（与 noop 双击 Exclusive 互斥，双击不误触）
-  // - zoomed 镜像（scale>1.01 → onZoomChange，父级 dismiss/pager 门控不变）
+  // - zoomed 镜像：scale>1.01 → onZoomChange（JS：pager 门控/UI 态），
+  //   以及 isZoomedIn → zoomMirror（UI 线程：退出手势门控，零往返）
   // - 换图/换页重置（zoomOut）
   // 未放大态库的 pan 直接 fail → 父级拖拽关闭/长图阅读 pan 完全不变。
   const {
@@ -92,17 +105,43 @@ export const ZoomableImage = memo(function ZoomableImage({
     contentContainerAnimatedStyle,
     onLayout,
     onLayoutContent,
+    isZoomedIn,
+    zoomGestureLastTime,
     scale,
     zoomOut,
   } = useZoomGesture({
     minScale: 1,
     maxScale: 5,
-    enableGallerySwipe: gallerySwipe,
+    enableGallerySwipe: false,
     parentScrollRef: galleryScrollRef,
     currentIndex: galleryIndex,
     itemWidth: galleryItemWidth,
     doubleTapConfig: { defaultScale: 3, minZoomScale: 1, maxZoomScale: 5 },
   });
+
+  // 镜像门控：仅本页 active 时写入父级共享值（防翻页后残留页再次写回）。
+  // 换页瞬间值对齐靠 active effect（JS 侧快照），手势期间全程 UI 线程。
+  const activeSV = useSharedValue(active);
+  useEffect(() => {
+    activeSV.value = active;
+    if (active) {
+      zoomMirror.value = isZoomedIn.value;
+    }
+  }, [active, activeSV, zoomMirror, isZoomedIn]);
+  useAnimatedReaction(
+    () => isZoomedIn.value,
+    (z) => {
+      if (activeSV.value) zoomMirror.value = z;
+    },
+  );
+  useAnimatedReaction(
+    () => zoomGestureLastTime.value,
+    (t, prev) => {
+      if (activeSV.value && t !== prev) {
+        gesturePulse.value = gesturePulse.value + 1;
+      }
+    },
+  );
 
   // Notify the parent only when the zoomed threshold changes, not per frame.
   // 阈值 1.01（与旧实现一致）：轻微捏合（如 1.03）保持放大不弹回。
@@ -219,6 +258,8 @@ export const LongImageView = memo(function LongImageView({
   galleryScrollRef,
   galleryIndex,
   galleryItemWidth,
+  zoomMirror,
+  gesturePulse,
 }: {
   baseUri: string;
   originUri?: string;
@@ -239,6 +280,9 @@ export const LongImageView = memo(function LongImageView({
   galleryScrollRef: React.RefObject<ScrollableRef>;
   galleryIndex: number;
   galleryItemWidth: number;
+  /** 缩放态镜像 / 手势脉冲（同 ZoomableImage 契约） */
+  zoomMirror: SharedValue<boolean>;
+  gesturePulse: SharedValue<number>;
 }) {
   // 原图按屏宽适配的显示高度（pt）；无尺寸信息回退屏高（退化为普通页行为）
   const fitHeight =
@@ -254,17 +298,39 @@ export const LongImageView = memo(function LongImageView({
     contentContainerAnimatedStyle,
     onLayout,
     onLayoutContent,
+    isZoomedIn,
+    zoomGestureLastTime,
     scale,
     zoomOut,
   } = useZoomGesture({
     minScale: 1,
     maxScale: 5,
-    enableGallerySwipe: gallerySwipe,
+    enableGallerySwipe: false, // 禁用放大态边缘滑图（根因见 ZoomableImage 同处注释）
     parentScrollRef: galleryScrollRef,
     currentIndex: galleryIndex,
     itemWidth: galleryItemWidth,
     doubleTapConfig: { defaultScale: 3, minZoomScale: 1, maxZoomScale: 5 },
   });
+  // 镜像（长图页无 active 概念：未触达的页不会产生手势，常开即可）：
+  // 换图/重挂时 JS 侧对齐一次（baseUri 变 = 新页实例复用 → 重对齐防残留），
+  // 手势期间全程 UI 线程写入。
+  useEffect(() => {
+    zoomMirror.value = isZoomedIn.value;
+  }, [zoomMirror, isZoomedIn, baseUri]);
+  useAnimatedReaction(
+    () => isZoomedIn.value,
+    (z) => {
+      zoomMirror.value = z;
+    },
+  );
+  useAnimatedReaction(
+    () => zoomGestureLastTime.value,
+    (t, prev) => {
+      if (t !== prev) {
+        gesturePulse.value = gesturePulse.value + 1;
+      }
+    },
+  );
   // 原图（originUri）解码完成 → 淡入替换缩略图
   const [originReady, setOriginReady] = useState(false);
   const [originFailed, setOriginFailed] = useState(false);
