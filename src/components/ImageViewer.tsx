@@ -50,6 +50,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { ImageSourceFrame, ViewerImageMeta } from '@/hooks/useImageViewer';
 import { LongImageView, ZoomableImage, ThumbnailCell } from '@/components/imageviewer/parts';
 import { viewerStyles as styles } from '@/components/imageviewer/styles';
+import { revealOnOpen, getArmedFramesSnapshot, flushHShiftOnOpen } from '@/hooks/useViewerSourceReveal';
 import { useAuthStore } from '@/stores/authStore';
 import { Toast, type ToastRef } from '@/components/ui/Toast';
 import { TiebaPhotoContextMenu } from '../../modules/tieba-native/src/TiebaPhotoContextMenu';
@@ -83,6 +84,56 @@ const BG_REVEAL_DISTANCE = 200;
 const SHRINK_DISTANCE = 180;
 /** 拖拽缩小系数（180pt 时 1 → 0.7） */
 const DRAG_SHRINK_FACTOR = 0.3;
+/** Twitter 式跟手限位（2026-08-31 v1）：图片不无限随手指移动——
+    纵向最多跟手屏高 38%，横向最多 80pt；超过后图片"钉住"，背景揭示与
+    缩放继续由 raw 累计驱动（Twitter 行为）。 */
+const MAX_DRAG_Y_FACTOR = 0.38;
+const MAX_DRAG_X = 80;
+/** 退场动态时长（飞出按剩余距离/松手速度，clamp [350,1100]ms，见 prepareFlyOut） */
+
+/** 档1（唯一）飞出：沿松手方向直线飞出的目标与时长（模块级纯函数，**显式 worklet**——
+    在手势 worklet 内被调用：Reanimated 转换器对跨线程调用的非标记函数
+    运行时可能抛 "non-worklet function" 异常，导致退场动画不启动、图片
+    卡在松手位置（2026-08-31 用户实测卡住）。）
+    方向=位移（过小取抛速方向）；时长与剩余距离/松手速度挂钩，
+    参与计算的速度封顶 1400pt/s，clamp [350, 1100]ms（2026-08-31 定案档）。 */
+function prepareFlyOut(
+  e: {
+    translationX: number;
+    translationY: number;
+    velocityX: number;
+    velocityY: number;
+  },
+  fromX: number,
+  fromY: number,
+): { toX: number; toY: number; exitDuration: number } {
+  'worklet';
+  let dx = e.translationX;
+  let dy = e.translationY;
+  if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+    dx = e.velocityX * 0.05;
+    dy = e.velocityY * 0.05;
+  }
+  const len = Math.hypot(dx, dy);
+  if (len < 1) {
+    dx = 0;
+    dy = 1;
+  } else {
+    dx /= len;
+    dy /= len;
+  }
+  // 优雅退出（2026-08-31 用户："太慢，要优雅不要慢速"）：
+  // - 飞出目标 0.6×屏（原来 1.0：尾部屏外空飞是"慢"的主因——配合
+  //   watchdog 出屏判定，视觉更快完全出屏）；
+  // - 低速兜底下限 180→400（慢拖不再被 clamp 到 950ms+）；
+  // - 时长上限 1100/950→600ms，下限 300ms——全程 ~450-600ms 的利落节奏。
+  const toX = dx * SCREEN_WIDTH * 0.6;
+  const toY = dy * SCREEN_HEIGHT * 0.6;
+  const travel = Math.hypot(toX - fromX, toY - fromY);
+  const speed = Math.min(Math.max(Math.hypot(e.velocityX, e.velocityY), 400) * 0.5, 900);
+  const exitDuration = Math.min(600, Math.max(300, (travel / speed) * 1000));
+  return { toX, toY, exitDuration };
+}
 /** 相册转场统一时长：进入展开/飞回缩略图/飞出/顶栏关闭全部 300ms
     （iOS Photos：进入/退出同为轻快 0.3s，图片全程清晰无透明度变化） */
 const VIEWER_TRANSITION_MS = 300;
@@ -90,7 +141,10 @@ const VIEWER_TRANSITION_MS = 300;
     无抛物线；松手后沿当前方向直线运动。2026-08-30 用户观察定案） */
 // 关闭后延迟拆除的宽限期：给 PagerView 内部减速/手势收尾的时间，避免
 // SwiftUI TabView 在动画途中被整树卸载（真机闪退），随后再真正卸载 Modal。
-const TEARDOWN_GRACE_MS = 400;
+// 2026-08-31：400→100ms——两条关闭路径（飞回/淡出动画完成回调）触发
+// onClose 时 PagerView 均已静止，宽限只需覆盖 React 重新渲染与布局收尾；
+// 400ms 会让动画结束后"定住一下"且屏幕不可触摸（用户实测反馈）。
+const TEARDOWN_GRACE_MS = 100;
 
 // 抛错值 → 可读文本统一走 utils/errorMessage.readableError（thermo Z7-A）
 
@@ -126,8 +180,9 @@ export default function ImageViewer({
   visible,
   onClose,
   forumName,
-  // 简化后不再使用（进入/飞回动画已删）；调用点仍传，暂保留收参避免连锁改动
-  sourceFrame: _sourceFrame,
+  // 飞回原位目标（2026-08-31 v1 重新启用）：点击缩略图的屏幕矩形；
+  // 缺省（头像/楼中楼引用等 3 参调用点）时退化为缩略条格/飞出。
+  sourceFrame,
   imageOrigins,
   imagePreviews,
   contextTitle,
@@ -154,6 +209,27 @@ export default function ImageViewer({
   // 一致 + imageWarm 免过渡，换图像素级无感（不再有裸换树闪白）。
   const [staticMode, setStaticMode] = useState(false);
   const insets = useSafeAreaInsets();
+  // Worklet 可读镜像（退出手势 onEnd 在 UI 线程，不能读 React state/insets）：
+  // 飞回目标判定用——底部缩略条几何、打开时的源矩形与初始页下标
+  const bottomInsetRef = useRef(0);
+  bottomInsetRef.current = insets.bottom;
+  // 退场判定共享值镜像（2026-08-31）：⚠️ 手势 worklet 读 JS ref
+  // （sourceFrameRef / openInitialIndexRef 等）拿到的是 useMemo 创建时的
+  // 冻结快照——日志实证 open 页=1 时 onEnd 读到 openIdx=0 → 点开第 2 张图
+  // /翻页永远走条格档（用户复现"多图只有第一张能成功"）。判定数据在
+  // 打开/reveal/滚动时同步进共享值，worklet 直读实时值。
+  const srcFrameSV = useSharedValue<ImageSourceFrame | null>(null);
+  const openIdxSV = useSharedValue(initialIndex);
+  const thumbXSV = useSharedValue(0);
+  const bottomInsetSV = useSharedValue(16);
+  /** 横滑带整组帧镜像（打开时初始化 + reveal 修正后更新）：翻页退出按
+      currentIdx 取对应帧，飞回横滑带里原图位置（2026-08-31 用户要求） */
+  const flybackFramesSV = useSharedValue<ImageSourceFrame[] | null>(null);
+  useEffect(() => {
+    bottomInsetSV.value = insets.bottom; // Worklet 镜像（手势用）
+  }, [insets.bottom, bottomInsetSV]);
+  const sourceFrameRef = useRef<ImageSourceFrame | null>(null);
+  const openInitialIndexRef = useRef(initialIndex);
   const pagerRef = useRef<PagerView>(null);
   // 照片级图库滑动适配器（react-native-zoom-reanimated parentScrollRef）：
   // 库 overflow 溢出时按 offset 换算目标页，驱动原生 PagerView 切页。
@@ -201,6 +277,9 @@ export default function ImageViewer({
     },
   });
   const thumbnailRef = useRef<ScrollView>(null);
+  // 缩略条横向滚动偏移（onScroll 记录；档2 飞回目标需按当前可见位置换算——
+  // 条会滚动到当前格居中，固定几何在 9 图时会把目标算到屏外）
+  const thumbnailScrollXRef = useRef(0);
 
   // ── 转场卡死取证（2026-08-30 临时埋点，验完即删）──
   // 复现后 Metro 日志看 [viewer-dbg] 序列：
@@ -272,6 +351,9 @@ export default function ImageViewer({
   // Drag-to-dismiss translation（Twitter 式 2D 跟手：Y 为主退出轴，X 同步跟手）
   const dragTranslateX = useSharedValue(0);
   const dragTranslateY = useSharedValue(0);
+  // 跟手原始累计（不随限位钳制）：驱动背景揭示/缩小阈值与退出判定——
+  // 图片拖到限位"钉住"后，progress 仍随手指继续（Twitter 行为）
+  const dragRawY = useSharedValue(0);
   // Entrance animation for the image (scale 0.95→1, opacity 0→1)
   const enterOpacity = useSharedValue(1);
   // 进入展开起点（Photos 同款：有源矩形时从缩略图位置/尺寸放大到全屏；
@@ -288,9 +370,6 @@ export default function ImageViewer({
   const exitToX = useSharedValue(0);
   const exitToY = useSharedValue(0);
   const exitToScale = useSharedValue(1);
-  // 退场期圆角冻结值（拖拽结束时的圆角；退场期间不再逐帧改 borderRadius——
-  // 大图切圆角每帧重栅格化是退场卡顿源之一）
-  const exitRadius = useSharedValue(0);
   // 手势仲裁：起始点 + 上一帧位移（onTouchesMove 手动激活判定 + 增量跟手）
   const touchStartX = useSharedValue(0);
   const touchStartY = useSharedValue(0);
@@ -402,11 +481,24 @@ export default function ImageViewer({
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset viewer state when the modal opens.
       setCurrentIndex(initialIndex);
       setViewingIndex(initialIndex);
+      sourceFrameRef.current = sourceFrame ?? null;
+      srcFrameSV.value = sourceFrame ?? null;
+      flybackFramesSV.value = getArmedFramesSnapshot();
+      if (__DEV__) {
+        console.warn('[hshift] snapshot', {
+          n: flybackFramesSV.value?.length ?? 0,
+          f0x: flybackFramesSV.value ? Math.round(flybackFramesSV.value[0].x) : -1,
+          srcX: sourceFrame ? Math.round(sourceFrame.x) : -1,
+        });
+      }
+      openInitialIndexRef.current = initialIndex;
+      openIdxSV.value = initialIndex;
       setShowUI(true);
       setIsZoomed(false);
       overlayOpacity.value = 1;
       dragTranslateX.value = 0;
       dragTranslateY.value = 0;
+      dragRawY.value = 0;
       touchStartX.value = 0;
       touchStartY.value = 0;
       prevTransX.value = 0;
@@ -419,7 +511,6 @@ export default function ImageViewer({
       exitToX.value = 0;
       exitToY.value = 0;
       exitToScale.value = 1;
-      exitRadius.value = 0;
       isDismissing.value = false;
       // 简化方案（2026-08-30 用户决定）：移除进入展开/飞回动画——PagerView
       // 直显，不再有 overlay 进入动画（多轮实证 Reanimated withTiming 在
@@ -440,8 +531,29 @@ export default function ImageViewer({
         isLong: isLongImageOf(initialIndex),
         reduceMotion,
       });
+      // 打开时自动揭示被遮挡的源图（2026-08-31）：等淡入完成、PagerView 稳定
+      // 后触发列表平滑滚动——用户拖动退出时背景已就位（此前在 teardown 后
+      // 瞬间滚动，观感生硬）。返回值 = 移位后的可见源矩形，覆盖飞回预算
+      // frame，保证拖动退出飞回的目标与滚动后的卡片位置一致。
+      const revealTimer = setTimeout(() => {
+        // 进入动画（350ms 淡入）已完成、背景被 Modal 完全遮住后才做后台
+        // 移位——用户："大图模式下图片显示到位了才移动，如果还在加载动画
+        // 瞬时移动，动画会极度错乱"。横滑带此时瞬间移正（后台不可见），
+        // 用户拖动退出时已就位。
+        flushHShiftOnOpen();
+        const revealed = revealOnOpen();
+        if (revealed) {
+          sourceFrameRef.current = revealed.frame;
+          srcFrameSV.value = revealed.frame;
+          flybackFramesSV.value = revealed.frames;
+        }
+      }, 400);
+      return () => clearTimeout(revealTimer);
     }
-  }, [visible, initialIndex, overlayOpacity, dragTranslateX, dragTranslateY, touchStartX, touchStartY, prevTransX, prevTransY, exitProgress, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, enterOpacity, reduceMotion, isDismissing, setStaticMode, isLongImageOf, dbg]);
+    // visible=false：无需清理（revealTimer 已被上面 return 的 cleanup 处理；
+    // 若在 400ms 内关闭，cleanup 会在依赖变化时清掉 timer）
+    return undefined;
+  }, [visible, initialIndex, overlayOpacity, dragTranslateX, dragTranslateY, touchStartX, touchStartY, prevTransX, prevTransY, exitProgress, exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, enterOpacity, reduceMotion, isDismissing, setStaticMode, isLongImageOf, dbg]);
 
 
   // 手势 worklet 镜像：当前页/总页数/长图态（随渲染刷新，手势 useMemo 不重建
@@ -459,10 +571,12 @@ export default function ImageViewer({
   // Scroll thumbnail strip to current item（跟手：用视觉页 viewingIndex）
   useEffect(() => {
     const thumbWidth = 56 + 6;
-    thumbnailRef.current?.scrollTo({
-      x: Math.max(0, viewingIndex * thumbWidth - SCREEN_WIDTH / 2 + thumbWidth / 2),
-      animated: true,
-    });
+    const targetX = Math.max(0, viewingIndex * thumbWidth - SCREEN_WIDTH / 2 + thumbWidth / 2);
+    // 预填滚动目标偏移（2026-08-31）：scrollTo(animated) 期间 onScroll 未到
+    // 达时，退出手势按最新目标近似——防档2 条格几何用陈旧偏移算出屏外
+    thumbnailScrollXRef.current = targetX;
+    thumbXSV.value = targetX;
+    thumbnailRef.current?.scrollTo({ x: targetX, animated: true });
   }, [viewingIndex]);
 
   // ── 相邻页大图预取（2026-08-31 连续滑动黑屏根治 v2）──
@@ -624,26 +738,25 @@ export default function ImageViewer({
           { translateY: dragTranslateY.value },
           { scale: 1 - dragProgress * DRAG_SHRINK_FACTOR },
         ],
-        // 圆角/边框曲线只在变化帧下发（退场开始一次），动画期不动 borderRadius
-        // ——大图切圆角每帧重栅格化是退场卡顿源之一。
-        borderRadius: 0,
-        borderCurve: 'continuous',
       };
     }
-    // ── 退场态：单 progress 同曲线插值 → 直线轨迹（起点=手势当前位置）──
-    const e = Easing.out(Easing.cubic)(p);
-    const x = exitFromX.value + (exitToX.value - exitFromX.value) * e;
-    const y = exitFromY.value + (exitToY.value - exitFromY.value) * e;
-    const s = exitFromScale.value + (exitToScale.value - exitFromScale.value) * e;
+    // ── 退场态：直线轨迹（起点=手势当前位置）──
+    // 2026-08-31 修双重缓动：progress 已由 withTiming 以 quad-out 驱动，
+    // 这里再做 cubic 第二重插值会让起步瞬间速度 ≈ 6×平均（"怪异冲出去"）。
+    // 位移与缩放共用同一 progress（quad-out）线性插值——同步到位：
+    // 图片平滑放大/缩小，到目标位置时恰好达到目标大小（用户要求：
+    // "刚好运行到原来位置的时候刚好达到初始大小"，缩放不单独走曲线）。
+    // 圆角：不在此驱动（Fabric 动态 borderRadius 不可靠）——由 React state
+    // 静态样式供给（在图片上，见渲染处 exitRadiusStyle）。
+    const x = exitFromX.value + (exitToX.value - exitFromX.value) * p;
+    const y = exitFromY.value + (exitToY.value - exitFromY.value) * p;
+    const s = exitFromScale.value + (exitToScale.value - exitFromScale.value) * p;
     return {
       transform: [
         { translateX: x },
         { translateY: y },
         { scale: s },
       ],
-      // 退场期圆角冻结在拖拽结束值（逐帧改 borderRadius 会重栅格化大图）
-      borderRadius: exitRadius.value,
-      borderCurve: 'continuous',
     };
   });
 
@@ -659,27 +772,19 @@ export default function ImageViewer({
   //   定时器逐帧写 exitProgress（quad-out 近似），保证退出动画必定完成、
   //   界面必定关闭——从机制上杜绝「退出卡死」。
   const startExitAnimation = useCallback(
-    (opts: {
-      fromX: number;
-      fromY: number;
-      fromScale: number;
-      toX: number;
-      toY: number;
-      toScale: number;
-      radius: number;
-      /** 退场时长（默认 300ms）；手势退场按剩余距离/松手速度动态传入 */
-      duration?: number;
-      tag: string;
-    }) => {
-      const { fromX, fromY, fromScale, toX, toY, toScale, radius, duration = VIEWER_TRANSITION_MS, tag } = opts;
-      exitFromX.value = fromX;
-      exitFromY.value = fromY;
-      exitFromScale.value = fromScale;
-      exitToX.value = toX;
-      exitToY.value = toY;
-      exitToScale.value = toScale;
-      exitRadius.value = radius;
-      const easing = Easing.out(Easing.quad);
+    (opts: { duration?: number; tag: string }) => {
+      const { duration = VIEWER_TRANSITION_MS, tag } = opts;
+      // staticMode（PagerView 隐藏、overlay 承担画面）与退出动画同任务切换
+      setStaticMode(true);
+      // 优雅曲线（2026-08-31 用户："要优雅不要慢速"）：out(quad) 起步
+      // 2× 平均速（冲出感/生硬）——inOut(cubic) 慢起慢收、头尾速度 0；
+      // 配合 600ms 上限时长：柔和起止 + 利落节奏
+      const easing = Easing.inOut(Easing.cubic);
+      // 横滑带兜底：400ms revealTimer 前退出（<400ms）时横滑带尚未移正——
+      // 此刻补一次瞬间滚动（后台被 staticMode overlay 盖住，不可见），
+      // 保证横滑带停在移位后位置（2026-08-31 用户复现"飞回的不是位移后
+      // 的位置"——flush 未触发，横滑带根本没移）
+      flushHShiftOnOpen();
       // 主路径：JS 线程启动 withTiming
       exitProgress.value = withTiming(
         1,
@@ -688,24 +793,89 @@ export default function ImageViewer({
           if (finished) runOnJS(onClose)();
         },
       );
-      // 看门狗：120ms 内 UI 动画未推进 → JS 逐帧驱动兜底
+      // 看门狗 v2（2026-08-31）：停滞检测而非一次性检查——历史 reanimated
+      // 坑是动画"推进一段后停住"（progress 停在 0.05~0.9 任意处），旧版
+      // 120ms 后见 progress>0.05 即放手，停在中途会永久卡住（用户实测
+      // "松手后图片卡住无法回去"）。现在：60ms 周期采样，progress 连续
+      // 3 次（~180ms）未前进且未完成 → JS 定时器逐帧驱动到 1 并 onClose。
       const t0 = Date.now();
-      const watchdog = setTimeout(() => {
-        if (exitProgress.value > 0.05) return; // 动画在推进，正常
-        dbg('exit-watchdog-fallback', { tag });
+      let lastP = exitProgress.value;
+      let stallCount = 0;
+      // 视觉出屏提前关闭（2026-08-31 用户："图片已完全退出屏幕，界面仍一秒
+      // 不可点"）：飞出目标=屏外 1.0×屏——图片完全越出屏幕后动画仍在屏外
+      // 空飞（最长 1100ms 的尾部），期间 Modal 一直挡触摸。
+      // 解析几何求「图片**完全**出屏」的进度阈值 outT（中心线直线路径 +
+      // 等比缩放）：图最内缘越过屏幕边 → |c(t)| − half·s(t) ≥ half。
+      // ⚠️ 符号务必为「减」：|c|+half·s ≥ half 是"贴边"（轻拖时起点即满足
+      // → outT=0 → 动画第一拍被截断，列表闪现——用户实测"飞出过程闪几下"）。
+      // 二分求解；四方向取最后越出的边（max）。outT>0 才启用。
+      const outT = (() => {
+        const fx = exitFromX.value;
+        const fy = exitFromY.value;
+        const tx = exitToX.value;
+        const ty = exitToY.value;
+        const fs = exitFromScale.value;
+        const ts = exitToScale.value;
+        const hw = SCREEN_WIDTH / 2;
+        const hh = SCREEN_HEIGHT / 2;
+        const solve = (c0: number, c1: number, half: number): number | null => {
+          const f = (t: number) => {
+            const c = c0 + (c1 - c0) * t;
+            const s = fs + (ts - fs) * t;
+            return Math.abs(c) - half * s - half; // 图完全出屏的判据
+          };
+          if (f(1) <= 0) return null; // 终点仍未完全出屏
+          if (f(0) >= 0) return 0; // 起点已完全出屏（不会发生）
+          let lo = 0;
+          let hi = 1;
+          for (let i = 0; i < 16; i++) {
+            const mid = (lo + hi) / 2;
+            if (f(mid) >= 0) hi = mid;
+            else lo = mid;
+          }
+          return hi;
+        };
+        const tsOut = [solve(fx, tx, hw), solve(fy, ty, hh), solve(-fx, -tx, hw), solve(-fy, -ty, hh)];
+        const valid = tsOut.filter((v): v is number => v !== null && v > 0);
+        return valid.length === 0 ? null : Math.max(...valid);
+      })();
+      const watchdog = setInterval(() => {
+        const p = exitProgress.value;
+        const elapsed = (Date.now() - t0) / duration;
+        // 图片完全越出屏幕 → 立即关闭（尾部屏外空飞不再阻塞触摸）
+        if (outT !== null && p >= outT) {
+          clearInterval(watchdog);
+          onClose();
+          return;
+        }
+        if (p >= 0.99 || elapsed > 1.15) {
+          clearInterval(watchdog);
+          if (p < 0.99) onClose(); // 超时但未完成：强制关闭
+          return;
+        }
+        if (elapsed < 0.06) return; // 起步期不判
+        if (p > lastP + 0.01) {
+          lastP = p;
+          stallCount = 0;
+          return;
+        }
+        stallCount += 1;
+        if (stallCount < 3) return;
+        dbg('exit-watchdog-stall', { p, tag });
+        clearInterval(watchdog);
         const drive = setInterval(() => {
-          const t = Math.min(1, (Date.now() - t0 + 120) / duration);
+          const t = Math.min(1, (Date.now() - t0) / duration);
           const e = 1 - Math.pow(1 - t, 2); // quad-out 近似
-          exitProgress.value = e;
+          exitProgress.value = Math.max(exitProgress.value, e);
           if (t >= 1) {
             clearInterval(drive);
             onClose();
           }
         }, 16);
-      }, 120);
-      return watchdog;
+      }, 60);
+      return () => clearInterval(watchdog);
     },
-    [exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, exitProgress, onClose, dbg],
+    [exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitProgress, onClose, dbg],
   );
 
   // X 关闭（简化 2026-08-30）：不做飞回动画——容器 350ms 渐淡出后关闭，
@@ -717,6 +887,9 @@ export default function ImageViewer({
       dragY: dragTranslateY.value,
     });
     isDismissing.value = true;
+    // X 关闭也补横滑带移位（后台不可见，瞬间移动）：与 startExitAnimation
+    // 同一语义（revealTimer 400ms 前关闭时横滑带尚未移正）
+    flushHShiftOnOpen();
     if (reduceMotion) {
       onClose();
       return;
@@ -814,7 +987,11 @@ const dismissGesture = useMemo(
             diag ||
             (dX > 0 && currentIdxSV.value <= 0) ||
             (dX < 0 && currentIdxSV.value >= pageCountSV.value - 1);
-          dragTranslateX.value = xGo ? dragTranslateX.value + dX : 0;
+          // Twitter 式跟手限位：显示位移钳制在附近范围（X ±80pt，
+          // Y ±38% 屏高）——超过后图片"钉住"，raw 继续累计驱动 progress
+          dragTranslateX.value = xGo
+            ? Math.max(-MAX_DRAG_X, Math.min(MAX_DRAG_X, dragTranslateX.value + dX))
+            : 0;
           let followY = true;
           if (isLongPageSV.value) {
             const st = scrollStatesRef.current[currentIdxSV.value];
@@ -827,17 +1004,23 @@ const dismissGesture = useMemo(
               (e.translationY < -2 && atBottom) ||
               (atTop && atBottom);
           }
-          dragTranslateY.value = followY ? dragTranslateY.value + dY : 0;
+          if (followY) {
+            dragRawY.value += dY;
+            const maxY = SCREEN_HEIGHT * MAX_DRAG_Y_FACTOR;
+            dragTranslateY.value = Math.max(-maxY, Math.min(maxY, dragRawY.value));
+          }
         })
         .onEnd((e) => {
           if (isDismissing.value || zoomedSV.value) return;
-          const dragLen = Math.hypot(dragTranslateX.value, dragTranslateY.value);
+          // 阈值判定用 raw 累计（图片钉在限位后 raw 仍增长，拉过限位照常触发）
+          const dragLen = Math.hypot(dragTranslateX.value, dragRawY.value);
           const beyondThreshold = dragLen > 140 || Math.abs(e.velocityY) > 900;
           if (!beyondThreshold) {
-            // 未过阈值 → 弹簧回弹（X/Y 一起回）；拖拽期间切的静态大图换回
+            // 未过阈值 → 弹簧回弹（X/Y/raw 一起回）；拖拽期间切的静态大图换回
             // PagerView（恢复翻页/缩放，长图页本就没切）
             runOnJS(dbg)('drag-end-spring', { len: dragLen, vy: e.velocityY });
             runOnJS(setStaticMode)(false);
+            dragRawY.value = withSpring(0, MOMENTUM);
             dragTranslateX.value = withSpring(0, MOMENTUM);
             dragTranslateY.value = withSpring(0, MOMENTUM);
             return;
@@ -853,60 +1036,47 @@ const dismissGesture = useMemo(
             return;
           }
           const dragProgress = Math.min(dragLen / SHRINK_DISTANCE, 1);
-          // 退场起点=当前跟手位置；scale 按拖拽距离缩小系数（跟手态即时生效）
+          // 退场起点=当前跟手位置（clamp 后的显示值）；scale 按拖拽距离缩小
           const fromX = dragTranslateX.value;
           const fromY = dragTranslateY.value;
           const fromScale = 1 - dragProgress * DRAG_SHRINK_FACTOR;
-          const radius = 24 * dragProgress;
           // 切除 PagerView（SwiftUI TabView）→ 静态大图：同 URI + imageWarm 免
-          // 过渡，换图像素级无感；退场 transform 落在轻量 Image 上，120fps 平滑
-          runOnJS(setStaticMode)(true);
-          // 简化退出（2026-08-30 用户决定）：不做飞回目标——沿松手方向
-          // 直线飞出屏幕边缘（方向=位移，位移过小则取抛速方向）
-          let dx = e.translationX;
-          let dy = e.translationY;
-          if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
-            dx = e.velocityX * 0.05;
-            dy = e.velocityY * 0.05;
-          }
-          const len = Math.hypot(dx, dy);
-          if (len < 1) {
-            dx = 0;
-            dy = 1;
-          } else {
-            dx /= len;
-            dy /= len;
-          }
-          const toX = dx * SCREEN_WIDTH * 1.0;
-          const toY = dy * SCREEN_HEIGHT * 1.0;
-          // 退场时长与剩余距离/松手速度挂钩（iOS Photos：快松快飞、慢松延长）。
-          // 三处修正（2026-08-31 二轮，用户实测仍"极快"）：
-          // - 飞出目标从 1.2 屏缩到 1.0 屏（"完全出屏"即可，travel 缩短 ~15%）；
-          // - 松手速度打 0.7 折：动画速度延续手指速度，不再"固定时间飞远路"；
-          // - clamp 上限 420→750ms（旧值下 travel/speed 恒压上限=每秒 3 屏）。
-          const travel = Math.hypot(toX - fromX, toY - fromY);
-          // 退出动画时长（三轮调慢后的手感档，2026-08-31 定案）：
-          // - 参与计算的松手速度封顶 1400pt/s（飞速甩动也按此算）：快速/飞速
-          //   场景时长均匀 ~1.1s，不再随手指速度无限缩短；
-          // - clamp [350, 1100]ms；缓动 quad-out（起步瞬时速度 = 2×平均，
-          //   cubic 是 3×——"嗖地冲出去"主要来自 cubic 起步冲刺）。
-          // - 曾试 2200ms（四轮"再降两倍"），用户实测过慢已回退到本档。
-          const speed = Math.min(Math.max(Math.hypot(e.velocityX, e.velocityY), 180) * 0.5, 700);
-          const exitDuration = Math.min(1100, Math.max(350, (travel / speed) * 1000));
+          // 过渡，换图像素级无感；退场 transform 落在轻量 Image 上，120fps 平滑。
+          // staticMode 与圆角在 startExitAnimation（JS 同任务）里一并切换——若
+          // 在此 runOnJS 单独切，overlay 先以无圆角姿态显示一帧（用户实测）。
+          // ── 退场目标（2026-08-31 v2：横滑带帧优先）──
+          // ── 退场目标（2026-08-31 用户拍板：回归初始"滑出屏幕"）──
+          // 删除飞回原位/条格/横滑带帧全部档位：手势退出 = 沿松手方向
+          // 飞出屏幕（fallback0，动态时长），长图/普通图一视同仁。
+          const fallback0 = prepareFlyOut(e, fromX, fromY);
+          const toX = fallback0.toX;
+          const toY = fallback0.toY;
+          const toScale = 0.35;
+          const exitDuration = fallback0.exitDuration;
+          const tag = 'exit-drag';
+          // 退场目标取证（2026-08-31 临时）：复现"滑出屏幕"问题看 exit-target 行
+          runOnJS(dbg)('exit-target', {
+            flyback: tag,
+            idx: currentIdxSV.value,
+            openIdx: openIdxSV.value,
+            toX: Math.round(toX),
+            toY: Math.round(toY),
+            toScale,
+            tag,
+          });
           // 动画统一由 JS 线程启动（startExitAnimation 内部带看门狗兜底——
           // 日志实证 worklet 里直接 withTiming 会偶发不推进，JS 启动是
-          // 与进入动画相同的成功路径）
-          runOnJS(startExitAnimation)({
-            fromX,
-            fromY,
-            fromScale,
-            toX,
-            toY,
-            toScale: 0.35, // 缩小终点加大：飞出过程缩小可见（旧 0.5 被位移主导）
-            radius,
-            duration: exitDuration,
-            tag: 'exit-drag',
-          });
+          // 与进入动画相同的成功路径）。
+          // toScale 不做钳制（2026-08-31 用户要求）：松手后图片平滑放大到
+          // 初始大小（撤销跟手缩小），恰好到位时恰好恢复——目标由各档
+          // 几何给出（源矩形宽比/条格/0.35），宽高比由 scale 自然适配。
+          exitFromX.value = fromX;
+          exitFromY.value = fromY;
+          exitFromScale.value = fromScale;
+          exitToX.value = toX;
+          exitToY.value = toY;
+          exitToScale.value = toScale;
+          runOnJS(startExitAnimation)({ duration: exitDuration, tag });
         }),
     [
       onClose,
@@ -915,7 +1085,7 @@ const dismissGesture = useMemo(
       longReadPan,
       isLongPageSV,
       currentIdxSV,
-      pageCountSV,
+      openIdxSV,
       initialIdxSV,
       touchStartX,
       touchStartY,
@@ -931,7 +1101,6 @@ const dismissGesture = useMemo(
       exitToY,
       exitToScale,
       exitProgress,
-      exitRadius,
       setStaticMode,
       dbg,
       startExitAnimation,
@@ -1294,6 +1463,10 @@ const dismissGesture = useMemo(
               styles.pager,
               styles.pagerOverlay,
               staticMode ? styles.pagerOverlayActive : null,
+              // 圆角**不能**放在本容器：图片 contentFit=contain 居中，图片
+              // 四角根本不接触容器边缘，容器圆角对图片无效（2026-08-31 用户
+              // 实测"动画过程方角、末尾才圆角"=teardown 后真卡片圆角）。
+              // 圆角直接给 overlay 内两个 Image（见下），scale 动画时等比跟随。
               contentStyle,
             ]}
           >
@@ -1302,6 +1475,11 @@ const dismissGesture = useMemo(
             {(() => {
               const overlayMain = displayUriOf(viewingIndex, images[viewingIndex]);
               const overlayPreview = imagePreviews?.[viewingIndex];
+              // 注意：退出（飞出）动画的 Image **不带 borderRadius**——iOS 上
+              // cornerRadius+mask 的视图在 transform 动画中逐帧重栅格化，
+              // 全屏大图 scale 轨迹卡顿闪烁（2026-08-31 用户实测"飞出过程
+              // 卡顿明显闪几下"）。纯飞出场景无圆角需求（此前圆角诉求属于
+              // 已删除的飞回原位档）。
               return overlayPreview && overlayPreview !== overlayMain ? (
                 <Image
                   source={{ uri: overlayPreview }}
@@ -1411,6 +1589,11 @@ const dismissGesture = useMemo(
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.thumbnailStrip}
+              scrollEventThrottle={32}
+              onScroll={(e) => {
+                thumbnailScrollXRef.current = e.nativeEvent.contentOffset.x;
+                thumbXSV.value = e.nativeEvent.contentOffset.x;
+              }}
             >
               {images.map((uri, index) => (
                 <ThumbnailCell

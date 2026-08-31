@@ -19,6 +19,7 @@ import { hapticForScene } from '@/theme/hapticsMap';
 import {RadiusStyle} from '@/theme';
 import { formatCount } from '@/utils';
 import { useTimeLabel } from '@/hooks/useTimeLabel';
+import { suppressNavDoubleTap } from '@/hooks/useNavDoubleTapToTop';
 import { useAppPreference } from '@/hooks/useAppPreference';
 import type { SemanticColors } from '@/theme/colors';
 import type { PostInfo, ThreadInfo } from '@/types';
@@ -39,6 +40,9 @@ function ForumAvatarWithHdr({
 }) {
   const handlePress = () => {
     hapticForScene('press');
+    // 先抑制导航栏双击回顶（原生栏手势覆盖 headerRight）：快速二连击
+    // 会被识别成"双击回顶"，旧页 push 动画中回顶照播 → 观感"先回顶再进吧"
+    suppressNavDoubleTap();
     router.push({
       pathname: '/forum/[name]',
       params: { name: forumName || '' },

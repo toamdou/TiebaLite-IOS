@@ -28,6 +28,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useBlockFilter } from '@/hooks/useBlockFilter';
 import { useAppPreference } from '@/hooks/useAppPreference';
 import { useImageViewer } from '@/hooks/useImageViewer';
+import { useSourceRevealConsumer } from '@/hooks/useViewerSourceReveal';
 import { BlockManager } from '@/utils/BlockManager';
 import { LoadType } from '@/types';
 import type { FeedItem, ThreadInfo } from '@/types';
@@ -337,6 +338,12 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
   }, [load]);
 
   const listRef = useRef<LegendListRef | null>(null);
+  // 被遮挡源图揭示（2026-08-31）：查看器关闭后滚动列表使点击时半遮的
+  // 卡片对齐屏缘（顶栏下/屏底）
+  useSourceRevealConsumer(listRef, decoratedItems, (it: unknown) => {
+    const f = it as FeedItem;
+    return f.threadInfo?.id ?? f.topicInfo?.topicId ?? f.forumInfo?.forumId;
+  });
 
   // 下拉刷新：走 refresh 模式（refreshing 置 true，spinner 有状态可依）
   const handleRefresh = useCallback(async () => {

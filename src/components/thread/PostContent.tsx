@@ -57,6 +57,8 @@ interface PostContentProps {
   /** 大图查看器顶栏标题：帖子图片=帖子标题；回复图片=回复内容前 30 字 */
   contextTitle?: string | null;
   onImagePress?: ImagePressHandler;
+  /** 揭示移位的行 key（PostCard 传 post.id；图片块与横滑带移位共用） */
+  revealKey?: string | number;
   onLinkPress?: (url: string) => void;
   onUserPress?: (uid: string) => void;
   onTopicPress?: (topicId: string, topicName: string) => void;
@@ -73,6 +75,7 @@ function PostContent({
   content,
   forumName,
   contextTitle,
+  revealKey,
   onImagePress,
   onLinkPress,
   onUserPress,
@@ -289,6 +292,7 @@ function PostContent({
                 watermarkText={watermarkText}
                 forumName={forumName}
                 contextTitle={contextTitle}
+                revealKey={revealKey}
                 onPress={onImagePress}
                 dimmed={dimImages}
                 style={hasPrecedingContent ? styles.imageBlockSpaced : undefined}

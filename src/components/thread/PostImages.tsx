@@ -57,6 +57,8 @@ interface ImageSegmentProps {
   watermarkText?: string;
   forumName?: string;
   contextTitle?: string | null;
+  /** 揭示移位的行 key（PostCard 传 post.id；透传给 MediaPager 横滑带） */
+  revealKey?: string | number;
   onPress?: ImagePressHandler;
   /** 夜间「图片压暗」（isDark && imageDarkenWhenNight），单图与多图带一致 */
   dimmed?: boolean;
@@ -70,6 +72,7 @@ export function ImageSegment({
   watermarkText,
   forumName,
   contextTitle,
+  revealKey,
   onPress,
   dimmed = false,
   style,
@@ -181,6 +184,7 @@ export function ImageSegment({
           viewportWidth={viewportWidth}
           leadInset={leadInset}
           recycleKey={images[0]?.src || ''}
+          revealKey={revealKey}
           contextMenu
           forumName={forumName}
           onImagePress={(index, frame) => {

@@ -9,7 +9,7 @@
  * - Action bar: 分享 | 评论 … 点赞, separated from content by a hairline border
  */
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,8 @@ import { levelBadgeColor } from '@/constants/rank';
 import { Avatar } from '@/components/ui/Avatar';
 import PostContent from './PostContent';
 import { RichTextRunsText } from './RichTextRunsText';
+import { armSourceReveal, armSourceRevealRow } from '@/hooks/useViewerSourceReveal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineClampPreview } from '@/components/ui/LineClampPreview';
 import type { SemanticColors } from '@/theme/colors';
 import type { ImagePressHandler } from './PostImages';
@@ -197,11 +199,33 @@ const PostCard = React.memo(function PostCard({
   onImagePress,
 }: PostCardProps) {
   const { colors } = useThemeColors();
+  const insets = useSafeAreaInsets();
   const showBothUsername = useAppPreference('showBothUsername', false);
   // 时间格式 / IP 属地 / 等级徽标（设置→使用习惯→贴子）
   const timeLabel = useTimeLabel();
   const showIpLocation = useAppPreference('showIpLocation', true);
   const showLevelBadge = useAppPreference('showLevelBadge', true);
+  // 卡片行测量（揭示移位用）：二段 measureInWindow 行几何 → armSourceRevealRow
+  const cardRootRef = useRef<View>(null);
+  // 被遮挡源图揭示（2026-08-31）：主楼/楼内正文图与引用条统一出口——
+  // 点击时若该图被顶栏/屏缘遮挡，记录行 key（post.id），查看器打开后
+  // 列表自动滚动使其完整可见；二段测量卡片行几何：移位精确到行内偏移。
+  // bottomCovered = 帖内底部浮动条（54）+ 其下安全区——图片被底栏盖住
+  // 也算遮挡，移位让图底对齐底栏上缘（用户：帖子文字多、图片在下被挡
+  // 时不会自动移位）
+  const handleViewerImagePress = useCallback(
+    (...args: Parameters<NonNullable<typeof onImagePress>>) => {
+      const frame = args[2];
+      armSourceReveal(post.id, frame, insets, { bottomCovered: 54 });
+      if (frame && cardRootRef.current) {
+        cardRootRef.current.measureInWindow((_x, y, _w, h) => {
+          armSourceRevealRow(post.id, y, h);
+        });
+      }
+      onImagePress?.(...args);
+    },
+    [onImagePress, post.id, insets],
+  );
 
   // 复制内容：直接写入剪贴板（原 /copy 自由复制页已删除；
   // 长按正文只走系统原生文本选择，此处为 ⋮ 菜单入口）
@@ -276,7 +300,11 @@ const PostCard = React.memo(function PostCard({
   // Lv1-3 青/4-9 蓝/10-15 橙/16-18 深橙/19+ 灰；等级色字 + 25% 透明底）
   const levelColor = levelBadgeColor(post.authorLevelId);
   return (
-    <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.borderCard }]}>
+    <View
+      style={[s.card, { backgroundColor: colors.card, borderColor: colors.borderCard }]}
+      ref={cardRootRef}
+      collapsable={false}
+    >
       {/* 长按已交还系统原生文本选择（自定义 /copy 弹层已删除），
           卡壳不再拦截手势，仅作布局容器 */}
       <View>
@@ -347,7 +375,8 @@ const PostCard = React.memo(function PostCard({
           content={post.content}
           forumName={forumName}
           contextTitle={contextTitle ?? floorSummary}
-          onImagePress={onImagePress}
+          revealKey={post.id}
+          onImagePress={handleViewerImagePress}
         />
 
         {/* ── Sub-Post Quote Section (楼中楼) ──
@@ -370,7 +399,7 @@ const PostCard = React.memo(function PostCard({
                       <Text style={[s.subPostName, { color: colors.textSecondary }]} numberOfLines={1}>
                         {sp.authorNameShow || sp.authorName}：
                       </Text>
-                      <SubQuoteItem sp={sp} colors={colors} onImagePress={onImagePress} />
+                      <SubQuoteItem sp={sp} colors={colors} onImagePress={handleViewerImagePress} />
                     </View>
                   </React.Fragment>
                 ))}
