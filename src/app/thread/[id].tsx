@@ -48,6 +48,8 @@ import { useAppPreference } from '@/hooks/useAppPreference';
 import { useNavDoubleTapToTop } from '@/hooks/useNavDoubleTapToTop';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useImageViewer } from '@/hooks/useImageViewer';
+import { useSourceRevealConsumer, armSourceReveal, armSourceRevealRow, type RevealTarget } from '@/hooks/useViewerSourceReveal';
+import { NAV_BAR_H } from '@/constants/layout';
 import { usePagedList } from '@/hooks/usePagedList';
 import { useThreadPageActions, type ConfirmRequest, type ThreadExtra } from '@/hooks/useThreadPageActions';
 import { recordThreadVisit } from '@/services/storage/visitHistory';
@@ -57,6 +59,7 @@ import type { PostInfo, ThreadInfo } from '@/types';
 
 /** Hard cap for retained posts in a thread to bound long-thread memory. */
 const MAX_POSTS = 400;
+const SCREEN_H = Dimensions.get('window').height;
 
 /**
  * 首屏入场级联窗口：入场总时长 = enter + stagger × (窗口-1)。若直接按 posts.length
@@ -245,6 +248,53 @@ export default function ThreadPage() {
 
   const imageViewer = useImageViewer();
 
+  // ── 主楼遮挡揭示（2026-08-31）：主楼渲染在 ListHeaderComponent（不在
+  // LegendList data 内），通用消费者找不到行 → 专属处理：
+  // ① 点击主楼图时 arm（post.id + 行几何=ThreadHeader 根，measure 行高）；
+  // ② onMiss 时 scrollToOffset 推算滚动量（见 handleHeaderRevealMiss）。
+  const threadHeaderRef = useRef<View>(null);
+  const handleHeaderImagePress = useCallback(
+    (...args: Parameters<typeof imageViewer.handleImagePress>) => {
+      const frame = args[2];
+      if (frame && mainPost) {
+        armSourceReveal(mainPost.id, frame, insets, { bottomCovered: 54 });
+        if (threadHeaderRef.current) {
+          threadHeaderRef.current.measureInWindow((_x, y, _w, h) => {
+            armSourceRevealRow(mainPost.id, y, h);
+          });
+        }
+      }
+      imageViewer.handleImagePress(...args);
+    },
+    [imageViewer, mainPost, insets],
+  );
+  const handleHeaderRevealMiss = useCallback(
+    (target: RevealTarget) => {
+      if (!target.rawFrame || !postListRef.current?.scrollToOffset) return;
+      const rf = target.rawFrame;
+      // 目标线：底部遮挡 → 图底对齐"屏底 − 安全区 − 浮动条(54)"；
+      // 顶部遮挡 → 图顶对齐"顶栏下缘"。滚动量 = 帧窗口坐标直接推算
+      //（offset 相对列表顶；帧 y 是窗口坐标，含 header 当前位置）。
+      const guardTop = insets.top + NAV_BAR_H;
+      const guardBottom = SCREEN_H - Math.max(insets.bottom, 16) - 54;
+      const targetOffset = target.clipTop
+        ? rf.y - guardTop
+        : rf.y + rf.height - guardBottom;
+      if (targetOffset <= 0) return; // 已可见/无法上滚
+      postListRef.current.scrollToOffset({ offset: targetOffset, animated: true });
+    },
+    [insets],
+  );
+
+  // 被遮挡源图揭示（2026-08-31）：帖子正文图/引用图半遮时，打开查看器后
+  // 自动滚动楼层列表使该楼层对齐屏缘（主楼走 onMiss → handleHeaderRevealMiss）
+  useSourceRevealConsumer(
+    postListRef,
+    replyPosts,
+    (p: unknown) => (p as PostInfo).id,
+    handleHeaderRevealMiss,
+  );
+
   // ── 页面动作（useThreadPageActions）：requireLogin + in-flight 守卫 + patchPost/setExtra 注入 ──
   const patchPost = useCallback(
     (postId: string, patch: (post: PostInfo) => Partial<PostInfo>) =>
@@ -359,20 +409,22 @@ export default function ThreadPage() {
 
     return (
       <StaggerItem index={0} entrance={entranceProgress} entryTotal={entryTotalSV}>
-        <ThreadHeader
-          thread={thread}
-          mainPost={mainPost}
-          seeLz={seeLz}
-          reverse={reverse}
-          colors={colors}
-          pageLabel={totalPages > 0 ? `${threadPageCurrent}/${totalPages}页` : undefined}
-          onToggleSeeLz={handleToggleSeeLz}
-          onToggleSort={handleToggleSort}
-          onImagePress={imageViewer.handleImagePress}
-        />
+        <View ref={threadHeaderRef} collapsable={false}>
+          <ThreadHeader
+            thread={thread}
+            mainPost={mainPost}
+            seeLz={seeLz}
+            reverse={reverse}
+            colors={colors}
+            pageLabel={totalPages > 0 ? `${threadPageCurrent}/${totalPages}页` : undefined}
+            onToggleSeeLz={handleToggleSeeLz}
+            onToggleSort={handleToggleSort}
+            onImagePress={handleHeaderImagePress}
+          />
+        </View>
       </StaggerItem>
     );
-  }, [thread, mainPost, seeLz, reverse, colors, totalPages, threadPageCurrent, handleToggleSeeLz, handleToggleSort, imageViewer.handleImagePress, entranceProgress, entryTotalSV]);
+  }, [thread, mainPost, seeLz, reverse, colors, totalPages, threadPageCurrent, handleToggleSeeLz, handleToggleSort, handleHeaderImagePress, entranceProgress, entryTotalSV]);
 
   // Render individual post / reply（动作在 more.tsx formSheet 发起，经
   // thread-more-action 回本页执行）

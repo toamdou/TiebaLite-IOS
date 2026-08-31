@@ -41,6 +41,8 @@ import { SymbolView } from '@/components/ui/SymbolView';
 import { setThreadSnapshot } from '@/utils/threadSnapshot';
 import { HdrPressable } from '@/components/ui/HdrPressable';
 import { hapticForScene } from '@/theme/hapticsMap';
+import { armSourceReveal, armSourceRevealRow } from '@/hooks/useViewerSourceReveal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { rtBeginLikeCharge, rtEndLikeCharge } from '@/theme/hapticsRealtime';
 import { useThemeColors } from '@/theme/ThemeContext';
 import { MOMENTUM } from '@/theme/springs';
@@ -143,6 +145,7 @@ const TweetCard = React.memo(function TweetCard({
 }: TweetCardProps) {
   const { colors } = useThemeColors();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const hideMedia = useAppPreference('hideMedia');
   // useAppPreference 的 defaultValue 已兜底（store 缺省时返回默认值），
@@ -177,6 +180,8 @@ const TweetCard = React.memo(function TweetCard({
   // 按下瞬间记录时间戳，整卡 onPress 在窗口内直接短路，确保点吧名只进吧
   //（2026-08-27 真机复现"点吧名进帖子"）。
   const chipPressBlockUntilRef = useRef(0);
+  // 卡片行测量（揭示移位用）：二段 measureInWindow 行几何 → armSourceRevealRow
+  const cardRootRef = useRef<View>(null);
   const handleCardPress = useCallback(() => {
     if (Date.now() < chipPressBlockUntilRef.current) return;
     if (__DEV__) console.warn(`[card] card-press id=${thread.id}`);
@@ -230,6 +235,15 @@ const TweetCard = React.memo(function TweetCard({
       }
       if (__DEV__) console.warn(`[card] img-press id=${thread.id} idx=${index} n=${images.length}`);
       hapticForScene('press');
+      // 被遮挡源图揭示（2026-08-31）：点击时若该图被顶栏/屏缘遮挡，
+      // 记录行 key——查看器打开后列表自动滚动使其完整可见；
+      // 二段测量卡片行几何：reveal 移位精确到"行内偏移"
+      armSourceReveal(thread.id, sourceFrame, insets);
+      if (sourceFrame && cardRootRef.current) {
+        cardRootRef.current.measureInWindow((_x, y, _w, h) => {
+          armSourceRevealRow(thread.id, y, h);
+        });
+      }
       // origins = 每张图的原图 URL（大图查看器「保存原图」）；contextTitle = 帖子标题
       // meta = 逐图长图/查看原图标记 + 真实宽高：查看器据此对长图默认显示原图档
       // （isLongPic/高度判据）、决定是否出现「查看原图」菜单项——与帖内 ImageSegment
@@ -322,7 +336,7 @@ const TweetCard = React.memo(function TweetCard({
   }
 
   return (
-    <View style={styles.cardWrap}>
+    <View style={styles.cardWrap} ref={cardRootRef} collapsable={false}>
       <HdrPressable
         onPress={handleCardPress}
         style={[styles.card, { backgroundColor: colors.card, borderColor: cardBorderColor }]}
@@ -429,6 +443,7 @@ const TweetCard = React.memo(function TweetCard({
               viewportWidth={stripViewportWidth}
               leadInset={stripLeadInset}
               recycleKey={thread.id}
+              revealKey={thread.id}
               contextMenu={imageContextMenu}
               forumName={thread.forumName}
               onImagePress={handleImagePress}

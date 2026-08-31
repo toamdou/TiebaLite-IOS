@@ -7,7 +7,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl } from 'react-native';
-import { LegendList } from '@legendapp/list/react-native';
+import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
+import { useSourceRevealConsumer } from '@/hooks/useViewerSourceReveal';
 
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadMoreFooter } from '@/components/ui/LoadMoreFooter';
@@ -81,6 +82,9 @@ export const ForumTabList = React.memo(function ForumTabList({
   // tab 0 的数据由页面级初始加载负责（loaded 翻转前已发起），不重复请求
   const attemptedRef = useRef(tab === 0);
   const [tabLoading, setTabLoading] = useState(false);
+  // 被遮挡源图揭示（2026-08-31）：本 tab 列表实例自持 ref 供消费者，
+  // 同时继续桥接父级 setListRef（页面原有契约不变）
+  const internalListRef = useRef<LegendListRef | null>(null);
   useEffect(() => {
     if (attemptedRef.current || !loaded) return;
     attemptedRef.current = true;
@@ -106,6 +110,9 @@ export const ForumTabList = React.memo(function ForumTabList({
       : threads.filter((t) => !filterAdThreads || !isAdThreadInfo(t));
     return filtered.filter((t) => !t.isTop);
   }, [threads, blockedWords, blockedUsers, filterAdThreads]);
+
+  // 被遮挡源图揭示（2026-08-31）：查看器关闭后滚动本 tab 列表使半遮卡片对齐屏缘
+  useSourceRevealConsumer(internalListRef, listThreads, (t: unknown) => (t as ThreadInfo).id);
 
   // 视口尾预取（同 explore）：滚动时对尾后 6 条缩略图 prefetch
   const listThreadsRef = useRef(listThreads);
@@ -159,7 +166,10 @@ export const ForumTabList = React.memo(function ForumTabList({
   return (
     <LegendList
       recycleItems
-      ref={setListRef}
+      ref={(ref) => {
+        internalListRef.current = ref as LegendListRef | null;
+        setListRef(ref);
+      }}
       data={listThreads}
       keyExtractor={threadKeyExtractor}
       getItemType={threadItemType}

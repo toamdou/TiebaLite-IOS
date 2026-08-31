@@ -15,8 +15,9 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { LegendList } from '@legendapp/list/react-native';
+import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
 import { SymbolView } from '@/components/ui/SymbolView';
+import { useSourceRevealConsumer } from '@/hooks/useViewerSourceReveal';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import TweetCard, { type TweetCardProps } from '@/components/feed/TweetCard';
 import { EntranceRow } from '@/components/feed/EntranceRow';
@@ -179,6 +180,9 @@ export function SearchThreadList({
   //（搜索行 UISearchBar）始终挂在同一棵组件树上，提交搜索/切 tab 不再
   // 卸载重建（2026-08-27 真机：两套树切换让搜索栏重挂，出现结果/切板块
   // 时从右往左跳动两下）。
+  // 被遮挡源图揭示（2026-08-31）：搜索结果列表自持 ref 供查看器关闭后滚动
+  const searchListRef = useRef<LegendListRef | null>(null);
+  useSourceRevealConsumer(searchListRef, items, (it: unknown) => (it as SearchThreadResult).id);
   const listEmpty = useCallback(() => {
     if (loading && items.length === 0) {
       return <SkeletonList variant="row" itemHeight={104} count={6} />;
@@ -218,6 +222,7 @@ export function SearchThreadList({
   return (
     <LegendList
       recycleItems
+      ref={searchListRef}
       data={items}
       keyExtractor={threadKeyExtractor}
       contentContainerStyle={styles.listContent}

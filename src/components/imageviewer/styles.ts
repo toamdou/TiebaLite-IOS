@@ -33,8 +33,10 @@ export const viewerStyles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  /* overlay 动画层：绝对铺满 pagerWrap，常态 opacity 0（PagerView 交互），
-     staticMode 期间 pagerOverlayActive 置 1 承担全部 transform */
+/* overlay 动画层：绝对铺满 pagerWrap，常态 opacity 0（PagerView 交互），
+   staticMode 期间 pagerOverlayActive 置 1 承担全部 transform。
+   overflow hidden：退场飞回时 contentStyle 下发 borderRadius（源矩形圆角），
+   须裁剪子图片才可见圆角（2026-08-31 用户实测"动画中无圆角"）*/
   pagerOverlay: {
     position: 'absolute',
     top: 0,
@@ -42,6 +44,7 @@ export const viewerStyles = StyleSheet.create({
     right: 0,
     bottom: 0,
     opacity: 0,
+    overflow: 'hidden',
   },
   pagerOverlayActive: {
     opacity: 1,

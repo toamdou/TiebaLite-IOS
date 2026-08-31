@@ -31,7 +31,7 @@ import { useTimeLabel } from '@/hooks/useTimeLabel';
 import { levelBadgeColor } from '@/constants/rank';
 import { useAppPreference } from '@/hooks/useAppPreference';
 import { openLink } from '@/utils/linkOpener';
-import type { ImageSourceFrame } from '@/hooks/useImageViewer';
+import { frameFromPressEvent, type ImageSourceFrame } from '@/hooks/useImageViewer';
 import { LineClampPreview } from '@/components/ui/LineClampPreview';
 import { TiebaRichText } from '../../../../modules/tieba-native/src/TiebaRichText';
 import { contentToRichTextRuns } from '@/utils/richTextRuns';
@@ -329,7 +329,16 @@ export const ReplyItem = React.memo(function ReplyItem({
               {images.slice(0, 3).map((uri, i) => (
                 <PostImageContextMenu key={i} full={uri}>
                   <Pressable
-                    onPress={() => onImagePress(images, i, undefined, undefined, replySummary)}
+                    onPress={(e) =>
+                      onImagePress(
+                        images,
+                        i,
+                        // 飞回原位源矩形（2026-08-31）：80pt 缩略图
+                        frameFromPressEvent(e, { width: 80, height: 80 }),
+                        undefined,
+                        replySummary,
+                      )
+                    }
                     style={({ pressed }) => [
                       s.thumbImage,
                       { opacity: pressed ? 0.75 : 1 },
@@ -467,7 +476,16 @@ export function ParentReplyCard({
           {images.map((uri, i) => (
             <Pressable
               key={i}
-              onPress={() => onImagePress(images, i, undefined, undefined, parentSummary)}
+              onPress={(e) =>
+                      onImagePress(
+                        images,
+                        i,
+                        // 飞回原位源矩形（2026-08-31）：80pt 缩略图
+                        frameFromPressEvent(e, { width: 80, height: 80 }),
+                        undefined,
+                        parentSummary,
+                      )
+                    }
               style={({ pressed }) => [s.thumbImage, { opacity: pressed ? 0.75 : 1 }]}
               accessibilityRole="button"
               accessibilityLabel={`查看第${i + 1}张图片`}

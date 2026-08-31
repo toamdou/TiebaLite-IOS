@@ -16,6 +16,7 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
+  type GestureResponderEvent,
 } from 'react-native';
 import { clamp } from 'react-native-reanimated';
 import { Image } from 'expo-image';
@@ -24,6 +25,7 @@ import {Radius} from '@/theme/spacing';
 import { thumbnailUrl, THUMB_POST } from '@/utils/thumbnail';
 import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
 import { frameFromPressEvent, type ImageSourceFrame } from '@/hooks/useImageViewer';
+import { armSourceRevealFrames, applyHShiftX, armHShiftOnOpen } from '@/hooks/useViewerSourceReveal';
 import { stopPropagation } from '@/utils/gesture';
 import PostImageContextMenu from '@/components/feed/PostImageContextMenu';
 import { SymbolView } from '@/components/ui/SymbolView';
@@ -60,6 +62,9 @@ export const MediaPager = React.memo(function MediaPager({
   viewportWidth,
   leadInset,
   recycleKey,
+  /** 揭示移位的行 key（与 armSourceReveal 的 key 一致；缺省用 recycleKey）：
+      TweetCard 传入 thread.id；PostImages 由 PostCard/PostContent 链传 post.id */
+  revealKey,
   contextMenu = false,
   light = false,
   forumName,
@@ -84,6 +89,8 @@ export const MediaPager = React.memo(function MediaPager({
   onImagePress: (index: number, sourceFrame?: ImageSourceFrame | null) => void;
   /** 视频 poster 点击兜底（无此回调时点击无操作；PostImages 场景不传） */
   onFallbackPress?: () => void;
+  /** 揭示移位的行 key（MediaPager 主体透传给 MultiImageStrip；缺省 recycleKey） */
+  revealKey?: string | number;
 }) {
   const { isDark } = useThemeColors();
 
@@ -177,6 +184,7 @@ export const MediaPager = React.memo(function MediaPager({
       viewportWidth={viewportWidth}
       leadInset={leadInset}
       recycleKey={recycleKey}
+      revealKey={revealKey}
       contextMenu={contextMenu}
       light={light}
       forumName={forumName}
@@ -199,6 +207,7 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
   viewportWidth,
   leadInset,
   recycleKey,
+  revealKey,
   contextMenu,
   light = false,
   forumName,
@@ -209,6 +218,8 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
   viewportWidth: number;
   leadInset: number;
   recycleKey: string;
+  revealKey?: string | number;
+  /** 图片长按菜单（透传，X 同款） */
   contextMenu?: boolean;
   /** 自适应渲染 light 模式：跳过原生右键菜单包装层 */
   light?: boolean;
@@ -240,14 +251,66 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
       return center;
     });
   }, [itemWidths, leadInset]);
+  // 当前横向滚动偏移（onScroll 记录；横滑遮蔽判定 + 移位目标推算用）
+  const offsetXRef = useRef(0);
   const handleStripScroll = useCallback(
     (e: { nativeEvent: { contentOffset: { x: number } } }) => {
+      offsetXRef.current = e.nativeEvent.contentOffset.x;
       const center = e.nativeEvent.contentOffset.x + viewportWidth / 2;
       let idx = 0;
       while (idx + 1 < itemCenters.length && itemCenters[idx + 1] <= center) idx++;
       setActiveIndex((prev) => (prev === idx ? prev : idx));
     },
     [itemCenters, viewportWidth],
+  );
+
+  // 按压图片：iframe 精确帧交给上层（onImagePress 已算）；同时
+  // ① 几何推算整组横滑带帧（翻页退出时飞回对应序号的原图位置）；
+  // ② 若该图被卡片边缘裁切（部分露出视口外）→ 立即平滑滚动横滑带让图
+  //    完整可见（打开查看器前后台移位；用户拖动退出时已就位），坐标修正
+  //    走 pending 通道（applyHShiftX，与 arm 顺序无关）。
+  // 几何：带内左缘 L_i，当前偏移 O；目标偏移 oTarget ∈ [R_i−V, L_i]（完整
+  // 可见域，取距当前最近）；移位后图左缘窗口 = 按压帧 x + O − oTarget
+  //（按压帧 x = pageX − locationX，图左缘窗口坐标，精确）。
+  const handleStripPress = useCallback(
+    (i: number, e: GestureResponderEvent) => {
+      const frame = frameFromPressEvent(e, { width: itemWidths[i], height: stripHeight });
+      const key = revealKey ?? recycleKey;
+      if (frame) {
+        const L0 = itemCenters[i] - itemWidths[i] / 2;
+        // 整组横滑带帧：同 y 同高，x = 点击帧.x + (L_j − L_i)（带内偏移差，
+        // 与横滑带滚动偏移无关）
+        armSourceRevealFrames(
+          key,
+          itemCenters.map((c, j) => ({
+            x: frame.x + (c - itemWidths[j] / 2 - L0),
+            y: frame.y,
+            width: itemWidths[j],
+            height: stripHeight,
+          })),
+          i,
+        );
+        const L = L0;
+        const R = L + itemWidths[i];
+        const O = offsetXRef.current;
+        if (L < O - 0.5 || R > O + viewportWidth + 0.5) {
+          const oMin = R - viewportWidth;
+          const oMax = L;
+          const oTarget =
+            oMin > oMax ? Math.round((oMin + oMax) / 2) : clamp(O, oMin, oMax);
+          const targetX = Math.round(oTarget);
+          // 坐标修正立即并入帧组（dx 语义，拖动退出时的飞回目标=移位后位置）；
+          // 滚动本体等查看器进入动画完成（flushHShiftOnOpen，入 revealTimer
+          // 400ms）再执行——后台被 Modal 完全遮住，瞬间移动不可见
+          applyHShiftX(key, O - targetX);
+          armHShiftOnOpen(key, () => {
+            scrollRef.current?.scrollTo?.({ x: targetX, animated: false });
+          });
+        }
+      }
+      onImagePress(i, frame);
+    },
+    [itemCenters, itemWidths, stripHeight, revealKey, recycleKey, viewportWidth, onImagePress],
   );
 
   // 视口横跨整卡宽（负 margin 抵消 contentCol 缩进），左缘贴卡片边框起点：
@@ -281,7 +344,7 @@ const MultiImageStrip = React.memo(function MultiImageStrip({
           const isLong = img.height > 0 && img.width > 0 && img.height / img.width > LONG_IMAGE_RATIO;
           const thumbEl = (
             <Pressable
-              onPress={(e) => onImagePress(i, frameFromPressEvent(e, { width: w, height: stripHeight }))}
+              onPress={(e) => handleStripPress(i, e)}
               onPressIn={stopPropagation}
               onPressOut={stopPropagation}
               accessibilityRole="imagebutton"

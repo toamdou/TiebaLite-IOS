@@ -15,6 +15,18 @@ import { useIsFocused } from 'expo-router';
 import { addNavDoubleTapListener } from '../../modules/tieba-native/src/TiebaNative';
 import { hapticForScene } from '@/theme/hapticsMap';
 
+/**
+ * 导航离开抑制（2026-08-31 用户："点右上角吧头像会先回顶再进入吧"）：
+ * 原生栏双击手势覆盖整条导航栏（含 headerRight）——点击吧头像后 400ms 内
+ * 的第二次点击会被识别为"双击回顶"，此时旧页 push 动画未结束（仍可见），
+ * 回顶动画照播 → 观感"先回顶再进吧"。导航离开动作前调用 suppress：
+ * 窗口期内忽略所有双击回顶事件。
+ */
+let suppressUntil = 0;
+export function suppressNavDoubleTap(ms = 600): void {
+  suppressUntil = Date.now() + ms;
+}
+
 export function useNavDoubleTapToTop(scrollToTop: () => void, enabled = true) {
   const isFocused = useIsFocused();
   // 回调与焦点走 ref：聚焦/失焦不重订阅原生事件；enabled 翻转才重挂
@@ -27,6 +39,7 @@ export function useNavDoubleTapToTop(scrollToTop: () => void, enabled = true) {
     if (!enabled) return;
     return addNavDoubleTapListener(() => {
       if (!focusedRef.current) return;
+      if (Date.now() < suppressUntil) return; // 导航离开窗口期内忽略
       hapticForScene('press');
       scrollToTopRef.current();
     });
