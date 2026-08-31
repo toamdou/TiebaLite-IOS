@@ -46,9 +46,15 @@ enum TiebaSigner {
     return md5Hex(raw + secret).lowercased()
   }
 
+  /// 参数签名：与前台 src/services/api/sign.ts 的 signParams 逐字节一致——
+/// **无分隔符**拼接（key1=value1key2=value2…）。2026-08-27 JS 侧已修
+/// （join('&') 与服务端不符恒错，登录 110001 根因；Python 参考实现对照
+/// 验证）；原生此函数当时漏修，导致后台 BGTask（c/s/msg 通知轮询、
+/// c/c/forum/msign 自动签到）全部带错签名：服务端 HTTP 200 + error_code
+/// 静默拒绝、无日志（2026-08-31 核实修复）。
   static func signParams(_ params: [String: String], secret: String = secret) -> String {
     let sorted = params.sorted { $0.key < $1.key }
-    let raw = sorted.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
+    let raw = sorted.map { "\($0.key)=\($0.value)" }.joined()
     return md5Hex(raw + secret).lowercased()
   }
 

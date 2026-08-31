@@ -12,12 +12,11 @@
  *
  * 媒体支持（可选）：传入 images 时在摘要与 meta 之间渲染一行小缩略图
  * （80pt 方形、Radius.image 圆角，expo-image cover 裁切，最多 4 张）。
- * 缩略图点击经 onImagePress(images, index) 回调交给调用方打开大图查看器；
- * 不传 images 时不渲染任何媒体区（浏览历史保持纯文字）。
+ * 纯展示不可点（2026-08-31：onImagePress 死分支已删——全仓无调用点）。
  */
 
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Text } from '../ui/CompatText';
 import { Image } from 'expo-image';
 import { Avatar } from '@/components/ui/Avatar';
@@ -27,8 +26,6 @@ import {RadiusStyle, Radius} from '@/theme/spacing';
 import { typographyStyles } from '@/theme/typography';
 import { thumbnailUrl, THUMB_POST } from '@/utils/thumbnail';
 import { isImageWarm, markImageWarm } from '@/utils/imageWarm';
-import { frameFromPressEvent, type ImageSourceFrame } from '@/hooks/useImageViewer';
-import { stopPropagation } from '@/utils/gesture';
 import { hapticForScene } from '@/theme/hapticsMap';
 
 // ── 设计常量（与 TweetCard 头部/缩进保持一致） ──
@@ -56,12 +53,6 @@ export interface CompactFeedRowProps {
   abstract?: string;
   /** 可选缩略图 URL 列表（如收藏贴配图）；缺省不渲染媒体区 */
   images?: string[];
-  /** 点击缩略图回调（供调用方打开大图查看器）；不传则缩略图不可点 */
-  onImagePress?: (
-    images: string[],
-    index: number,
-    sourceFrame?: ImageSourceFrame | null,
-  ) => void;
   /** 底部 meta 行内容（吧名入口 / 楼层 / 回复数等，由调用方组装） */
   meta?: React.ReactNode;
   /** 头部名字行内、用户名右侧的挂件（吧名药丸等小标签） */
@@ -79,7 +70,6 @@ export function CompactFeedRow({
   title,
   abstract,
   images,
-  onImagePress,
   meta,
   headerPill,
   headerAccessory,
@@ -144,44 +134,24 @@ export function CompactFeedRow({
                   {abstract}
                 </Text>
               ) : null}
-              {/* ── 缩略图带（可选）：摘要与 meta 之间一行小图 ── */}
+              {/* ── 缩略图带（可选）：摘要与 meta 之间一行小图（纯展示，不可点——
+              2026-08-31 删 onImagePress 死分支：全仓无调用点喂它） ── */}
               {mediaList.length > 0 ? (
                 <View style={styles.mediaStrip}>
                   {mediaList.slice(0, MEDIA_THUMB_MAX).map((uri, i) => {
                     const thumb = thumbnailUrl(uri, THUMB_POST);
-                    const img = (
-                      <Image
-                        source={{ uri: thumb }}
-                        style={[styles.mediaThumb, { backgroundColor: placeholderBg }]}
-                        contentFit="cover"
-                        cachePolicy="memory-disk"
-                        transition={isImageWarm(thumb) ? 0 : 200}
-                        onLoad={() => markImageWarm(thumb)}
-                        recyclingKey={thumb}
-                      />
-                    );
-                    // 未提供 onImagePress 时缩略图不可点（纯展示）
-                    if (!onImagePress) {
-                      return <View key={`${thumb}-${i}`} style={styles.mediaThumbWrap}>{img}</View>;
-                    }
                     return (
-                      <Pressable
-                        key={`${thumb}-${i}`}
-                        onPress={(e) =>
-                        onImagePress(
-                          mediaList,
-                          i,
-                          frameFromPressEvent(e, { width: MEDIA_THUMB_SIZE, height: MEDIA_THUMB_SIZE }),
-                        )
-                      }
-                        onPressIn={stopPropagation}
-                        onPressOut={stopPropagation}
-                        accessibilityRole="imagebutton"
-                        accessibilityLabel={`查看第${i + 1}张图片`}
-                        style={styles.mediaThumbWrap}
-                      >
-                        {img}
-                      </Pressable>
+                      <View key={`${thumb}-${i}`} style={styles.mediaThumbWrap}>
+                        <Image
+                          source={{ uri: thumb }}
+                          style={[styles.mediaThumb, { backgroundColor: placeholderBg }]}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                          transition={isImageWarm(thumb) ? 0 : 200}
+                          onLoad={() => markImageWarm(thumb)}
+                          recyclingKey={thumb}
+                        />
+                      </View>
                     );
                   })}
                 </View>

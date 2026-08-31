@@ -508,13 +508,19 @@ export default function HistoryPage() {
           }
         />
       )}
-      {/* 大图查看器（帖卡媒体点击；图片长按菜单由 TweetCard 内 MediaPager 承担） */}
+      {/* 大图查看器（帖卡媒体点击；图片长按菜单由 TweetCard 内 MediaPager 承担）
+          2026-08-31 补全参：此前只传 5 项，缺 origins/contextTitle/meta/previews
+          ——历史页进查看器「保存原图」退化、长图判定退化（审查 P1） */}
       <ImageViewer
         images={imageViewer.imageViewerImages}
         initialIndex={imageViewer.imageViewerIndex}
         visible={imageViewer.imageViewerVisible}
         onClose={imageViewer.closeImageViewer}
         sourceFrame={imageViewer.imageViewerSourceFrame}
+        imageOrigins={imageViewer.imageViewerOrigins}
+        contextTitle={imageViewer.imageViewerContextTitle}
+        imageMeta={imageViewer.imageViewerMeta}
+        imagePreviews={imageViewer.imageViewerPreviews}
       />
           </View>
         </RNHostView>

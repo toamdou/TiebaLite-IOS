@@ -22,7 +22,7 @@
  * 组件内（header 保持置顶展示）。
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import {
   StyleSheet,
   ScrollView,
   Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { hapticForScene } from '@/theme/hapticsMap';
@@ -79,6 +80,11 @@ export default function SearchPage() {
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  // 排序菜单锚点（点击瞬间 measureInWindow 实测触发钮位置，页面级浮层
+  // 按此定位——菜单在列表头内会随滚+被卡片盖住，浮层提级到页根）
+  const [sortMenuAnchor, setSortMenuAnchor] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const sortTriggerRef = useRef<View>(null);
+  const { width: winW, height: winH } = useWindowDimensions();
 
   const {
     activeTab,
@@ -207,6 +213,30 @@ export default function SearchPage() {
     setHistoryExpanded((v) => !v);
   }, []);
 
+  // 打开排序菜单：实测触发钮窗口坐标（列表头内可滚动，必须按点击瞬间
+  // 的实际位置锚定），菜单渲染在页面级浮层（不被结果卡片遮挡）。
+  const openSortMenu = useCallback(() => {
+    hapticForScene('press');
+    sortTriggerRef.current?.measureInWindow((x, y, w, h) => {
+      setSortMenuAnchor({ x, y, w, h });
+      setSortMenuOpen(true);
+    });
+  }, []);
+
+  /** 排序菜单浮层水平/垂直位置（溢出翻转向上展开） */
+  const sortMenuPos = useMemo(() => {
+    if (!sortMenuAnchor) return undefined;
+    const MENU_W = 148;
+    const MENU_H = 96;
+    const x = Math.min(sortMenuAnchor.x, winW - MENU_W - 8);
+    const below = sortMenuAnchor.y + sortMenuAnchor.h + 4 + MENU_H;
+    let top = sortMenuAnchor.y + sortMenuAnchor.h + 4;
+    if (below > winH - 8 && sortMenuAnchor.y - MENU_H - 4 >= insets.top + NAV_BAR_H) {
+      top = sortMenuAnchor.y - MENU_H - 4; // 下方放不下 → 向上展开
+    }
+    return { x, top };
+  }, [sortMenuAnchor, winW, winH, insets.top]);
+
   // ══ 搜索行（系统原生 UISearchBar：放大镜/取消钮/键盘全部由系统承担）══
   const searchRow = (
     <View style={styles.searchRow}>
@@ -238,50 +268,20 @@ export default function SearchPage() {
       </View>
       {tab === 'thread' && (
         <View style={[styles.sortRow, { zIndex: 10 }]}>
-          <HdrPressable
-            onPress={() => {
-              hapticForScene('press');
-              setSortMenuOpen((v) => !v);
-            }}
-            hitSlop={8}
-            flashRadius={8}
-            effect="subtle"
-            style={styles.sortTrigger}
-          >
-            <Text style={[styles.sortText, { color: colors.textSecondary }]}>
-              {SORT_OPTIONS.find((o) => String(o.value) === sortOrder)?.label ?? '按时间'}
-            </Text>
-            <SymbolView name="chevron.down" size={12} tintColor={colors.textTertiary} />
-          </HdrPressable>
-          {sortMenuOpen && (
-            <Pressable style={styles.sortOverlay} onPress={() => setSortMenuOpen(false)}>
-              <View
-                style={[
-                  styles.sortMenu,
-                  { backgroundColor: colors.card, borderColor: colors.borderCard },
-                ]}
-              >
-                {SORT_OPTIONS.map((o) => (
-                  <HdrPressable
-                    key={o.value}
-                    onPress={() => handleSortChange(o.value)}
-                    style={styles.sortOption}
-                    flashRadius={8}
-                    effect="subtle"
-                  >
-                    <Text
-                      style={[
-                        styles.sortOptionText,
-                        { color: String(o.value) === sortOrder ? colors.primary : colors.text },
-                      ]}
-                    >
-                      {o.label}
-                    </Text>
-                  </HdrPressable>
-                ))}
-              </View>
-            </Pressable>
-          )}
+          <View ref={sortTriggerRef} collapsable={false}>
+            <HdrPressable
+              onPress={openSortMenu}
+              hitSlop={8}
+              flashRadius={8}
+              effect="subtle"
+              style={styles.sortTrigger}
+            >
+              <Text style={[styles.sortText, { color: colors.textSecondary }]}>
+                {SORT_OPTIONS.find((o) => String(o.value) === sortOrder)?.label ?? '按时间'}
+              </Text>
+              <SymbolView name="chevron.down" size={12} tintColor={colors.textTertiary} />
+            </HdrPressable>
+          </View>
         </View>
       )}
     </View>
@@ -355,6 +355,8 @@ export default function SearchPage() {
                       onEndReached={loadMoreThreads}
                       hasMore={threadHasMore}
                       loadingMore={loadingMore}
+                      refreshing={loading}
+                      onRefresh={() => doSearch(searchedKeyword, 'thread')}
                       onLike={feedActions.like}
                       onShare={feedActions.share}
                       onImagePress={imageViewer.handleImagePress}
@@ -373,6 +375,8 @@ export default function SearchPage() {
                       loading={loading}
                       error={error}
                       onRetry={() => doSearch(searchedKeyword, 'forum')}
+                      refreshing={loading}
+                      onRefresh={() => doSearch(searchedKeyword, 'forum')}
                     />
                   </View>
                 );
@@ -387,12 +391,47 @@ export default function SearchPage() {
                     loading={loading}
                     error={error}
                     onRetry={() => doSearch(searchedKeyword, 'user')}
+                    refreshing={loading}
+                    onRefresh={() => doSearch(searchedKeyword, 'user')}
                   />
                 </View>
               );
             })}
           </SegmentPager>
         </View>
+      )}
+
+      {/* 排序菜单页面级浮层（2026-08-31 提层：此前渲染在列表头内，随列表
+          滚动且被结果卡片遮挡）。全屏背板捕获点击关闭；菜单按 measureInWindow
+          锚定在触发钮下方，空间不足自动向上展开。 */}
+      {sortMenuOpen && sortMenuAnchor && sortMenuPos && (
+        <Pressable style={styles.sortBackdrop} onPress={() => setSortMenuOpen(false)}>
+          <View
+            style={[
+              styles.sortMenuFloat,
+              { left: sortMenuPos.x, top: sortMenuPos.top, backgroundColor: colors.card, borderColor: colors.borderCard },
+            ]}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <HdrPressable
+                key={o.value}
+                onPress={() => handleSortChange(o.value)}
+                style={styles.sortOption}
+                flashRadius={8}
+                effect="subtle"
+              >
+                <Text
+                  style={[
+                    styles.sortOptionText,
+                    { color: String(o.value) === sortOrder ? colors.primary : colors.text },
+                  ]}
+                >
+                  {o.label}
+                </Text>
+              </HdrPressable>
+            ))}
+          </View>
+        </Pressable>
       )}
 
       {/* 大图查看器（搜索卡图片点击；长按菜单由卡片内原生 ContextMenu 承担） */}
@@ -455,6 +494,23 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 4,
     minWidth: 140,
+  },
+  // 页面级浮层（2026-08-31）：全屏背板 + 锚定菜单，zIndex 高于结果列表
+  sortBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 80,
+  },
+  sortMenuFloat: {
+    position: 'absolute',
+    zIndex: 81,
+    ...RadiusStyle.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 4,
+    minWidth: 148,
   },
   sortOption: {
     paddingHorizontal: Spacing.md,

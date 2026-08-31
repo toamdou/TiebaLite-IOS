@@ -22,7 +22,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   useAnimatedReaction,
-  useFrameCallback,
   withSpring,
   withTiming,
   withDecay,
@@ -30,9 +29,14 @@ import Animated, {
   cancelAnimation,
   runOnJS,
   Easing,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager-view';
+import PagerView, {
+  type PageScrollStateChangedNativeEvent,
+  type PagerViewOnPageScrollEvent,
+  type PagerViewOnPageSelectedEvent,
+} from 'react-native-pager-view';
 import { Image } from 'expo-image';
 
 import { SymbolView } from '@/components/ui/SymbolView';
@@ -44,13 +48,13 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { useAppPreference } from '@/hooks/useAppPreference';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { ImageSourceFrame, ViewerImageMeta } from '@/hooks/useImageViewer';
-import { buildPageWindow, LongImageView, ZoomableImage, ThumbnailCell } from '@/components/imageviewer/parts';
+import { LongImageView, ZoomableImage, ThumbnailCell } from '@/components/imageviewer/parts';
+import { viewerStyles as styles } from '@/components/imageviewer/styles';
 import { useAuthStore } from '@/stores/authStore';
 import { Toast, type ToastRef } from '@/components/ui/Toast';
 import { TiebaPhotoContextMenu } from '../../modules/tieba-native/src/TiebaPhotoContextMenu';
 import { TiebaNative } from '../../modules/tieba-native/src/TiebaNative';
 import type { ScrollableRef } from 'react-native-zoom-reanimated';
-import { useLowPowerMode } from '../../modules/tieba-system/src';
 import { readableError } from '@/utils/errorMessage';
 import { resolveWatermarkText } from '@/utils/watermark';
 import { Spacing } from '@/theme';
@@ -73,10 +77,12 @@ const VIEWER_IMAGE_ACTIONS = [
 
 /** 拖拽揭示背景：200pt 内黑色遮罩完全渐隐、模糊背景完全显现 */
 const BG_REVEAL_DISTANCE = 200;
-/** 拖拽缩小全程：280pt 时图片缩至约 0.75（跟手缩小，松手后经退场动画归位） */
-const SHRINK_DISTANCE = 280;
-/** 拖拽缩小系数（280pt 时 1 → 0.75） */
-const DRAG_SHRINK_FACTOR = 0.25;
+/** 拖拽缩小全程：180pt 时图片缩至约 0.7（跟手缩小，松手后经退场动画归位）。
+    2026-08-31：280→180 / 系数 0.25→0.3——旧值太钝，普通拖动（50-150pt）
+    缩小几乎无感（用户反馈"跟手没有缩小过程"）。 */
+const SHRINK_DISTANCE = 180;
+/** 拖拽缩小系数（180pt 时 1 → 0.7） */
+const DRAG_SHRINK_FACTOR = 0.3;
 /** 相册转场统一时长：进入展开/飞回缩略图/飞出/顶栏关闭全部 300ms
     （iOS Photos：进入/退出同为轻快 0.3s，图片全程清晰无透明度变化） */
 const VIEWER_TRANSITION_MS = 300;
@@ -101,8 +107,9 @@ export interface ImageViewerProps {
   /** 并行原图数组（长按「保存原图」用；缺省该项退化为保存当前图） */
   imageOrigins?: (string | undefined)[];
   /** 逐图预览档 URL（列表刚显示的小档；与 images 下标一一对应，可缺省）。
-      2026-08-30 起不再被 overlay 消费（overlay 单图=当前显示档，内存缓存
-      命中即出图）；保留接口避免调用点连锁改动。 */
+      PagerView 普通图页（ZoomableImage）与 overlay 动画层都用它垫底秒显：
+      大图档（bigPic/原图）首次进查看器缓存 miss，小档（srcPic）在列表
+      展示时已入缓存，翻页/拖拽全程有图。 */
   imagePreviews?: (string | undefined)[];
   /** 顶栏标题：帖子图片=帖子标题；回复/楼中楼图片=回复文字前 30 字 */
   contextTitle?: string | null;
@@ -122,6 +129,7 @@ export default function ImageViewer({
   // 简化后不再使用（进入/飞回动画已删）；调用点仍传，暂保留收参避免连锁改动
   sourceFrame: _sourceFrame,
   imageOrigins,
+  imagePreviews,
   contextTitle,
   imageMeta,
 }: ImageViewerProps) {
@@ -163,11 +171,11 @@ export default function ImageViewer({
   liveWRef.current = liveWindowWidth;
   const currentIdxRef = useRef(currentIndex);
   currentIdxRef.current = currentIndex;
-  // 窗口起始/大小镜像（adapter 是 useRef 一次性实例，scrollToOffset 调用
-  // 时才读这里的最新窗口值；初始 {0,0}，pages memo 之后每渲染更新一次）
-  const pageWindowRef = useRef({ start: 0, count: 0 });
   const imagesRef = useRef(images);
   imagesRef.current = images;
+  // 全量挂载（2026-08-31 起无窗口化）：adapter 直接按绝对下标切页，
+  // 不再有窗内局部索引/窗外重建的分支——窗口重建与原生滚动竞争导致的
+  // offset 错位（「高速滑动黑屏 + 只能往回滑」）从机制上消失。
   const galleryScrollRef = useRef<ScrollableRef>({
     scrollToOffset: ({ offset, animated }) => {
       const pager = pagerRef.current;
@@ -188,23 +196,11 @@ export default function ImageViewer({
       }
       if (nearest === cur) return;
       if (nearest < 0 || nearest >= imagesRef.current.length) return;
-      // 窗口化 PagerView：setPage 吃子列表局部 tag（绝对下标在窗口起始 >0
-      // 时越界 → SwiftUI TabView 静默忽略、页不切，但库的 snap 决策仍会
-      // reset 缩放 →「滑到边缘页没动、放大被复位」）。窗内用局部索引直切；
-      // 窗外重建窗口，由齐窗 effect（setPageWithoutAnimation(anchor)）对齐。
-      const { start, count } = pageWindowRef.current;
-      if (nearest >= start && nearest < start + count) {
-        if (animated === false) pager.setPageWithoutAnimation(nearest - start);
-        else pager.setPage(nearest - start);
-      } else {
-        setCurrentIndex(nearest);
-      }
+      if (animated === false) pager.setPageWithoutAnimation(nearest);
+      else pager.setPage(nearest);
     },
   });
   const thumbnailRef = useRef<ScrollView>(null);
-  // 首次挂载时 initialPage prop 已定位到窗口 anchor，无需再同步；
-  // 之后的 window 重建（currentIndex 变化）才需要 setPageWithoutAnimation 对齐。
-  const pagerInitializedRef = useRef(false);
 
   // ── 转场卡死取证（2026-08-30 临时埋点，验完即删）──
   // 复现后 Metro 日志看 [viewer-dbg] 序列：
@@ -224,7 +220,6 @@ export default function ImageViewer({
   const imageWatermark = useAppPreference('imageWatermark', 'none');
   const account = useAuthStore((s) => s.account);
   const { reduceMotion } = useReducedMotion();
-  const lowPowerMode = useLowPowerMode();
 
   // 长图判据：纯几何——fit-width 显示高度明显超过屏高才进阅读模式。服务端
   // isLongPic 标记对"稍高于屏"的图会过宽路由成阅读模式（顶部顶状态栏、
@@ -254,23 +249,16 @@ export default function ImageViewer({
     [originMode, isLongImageOf, imageOrigins],
   );
 
-  const pageWindow = useMemo(
-    // 低功耗只降到 2：windowSize=1 时 PagerView 只有当前页、无法左右滑动翻图。
-    () => {
-      const win = buildPageWindow(images, currentIndex, lowPowerMode ? 2 : 3);
-      return {
-        ...win,
-        pages: win.pages.map((p) => ({
-          ...p,
-          uri: displayUriOf(p.index, p.uri),
-        })),
-      };
-    },
-    [images, currentIndex, lowPowerMode, displayUriOf],
-  );
-  const { pages, start: pageWindowStart, anchor: pageWindowAnchor } = pageWindow;
-  pageWindowRef.current = { start: pageWindowStart, count: pages.length };
-  // 缩略条展示全部图片（仅大图 PagerView 走窗口化），实现长图集可直接跳到远端图。
+  // ── 全量挂载（2026-08-31 去窗口化）──
+  // 窗口化（±1 页 + 窗口重建）在高速滑动时与原生滚动竞争：reload +
+  // setPageWithoutAnimation 打断减速 → contentOffset 错位（视觉黑屏 +
+  // 往前滑越界回弹只能往回）——真机复现根因。改为 PagerView 挂全部
+  // images（cell 为空 View 零成本，图片仍按 active 单页解码，内存策略
+  // 不变），滑动全程无重建、无对齐调用。
+  // viewingIndex = 滑动途中视觉当前页（onPageScroll 实时翻转 → 新页
+  // 立即 active 出图，不再等 settle 结束才亮）；currentIndex 仍由
+  // settle 门控在减速结束后应用（页码/预取/触感对齐）。
+  const [viewingIndex, setViewingIndex] = useState(initialIndex);
 
   // 水印文案解析已收敛到 utils/watermark（thermo Z2-C）
   const getWatermarkText = useCallback(
@@ -285,12 +273,11 @@ export default function ImageViewer({
   const dragTranslateX = useSharedValue(0);
   const dragTranslateY = useSharedValue(0);
   // Entrance animation for the image (scale 0.95→1, opacity 0→1)
-  const enterScale = useSharedValue(1);
   const enterOpacity = useSharedValue(1);
   // 进入展开起点（Photos 同款：有源矩形时从缩略图位置/尺寸放大到全屏；
   // 无源矩形退化为 0.95 居中淡入）。contentStyle 与 dragTranslate 相加。
-  const enterTransX = useSharedValue(0);
-  const enterTransY = useSharedValue(0);
+  // 2026-08-31：进入展开动画已删（简化方案），enterTrans*/enterScale 恒
+  // 0/1 无写入点，contentStyle 因子已移除——此注释块仅保留历史说明。
   // 退场统一动画（唯一驱动）：exitProgress 0→1，x/y/scale/圆角/透明度全部由
   // 同一个 progress 插值（双轴缓动不同 → 抛物线轨迹），杜绝多 timing 竞态顿挫。
   // 目标参数在手势 onEnd / closeViewer 时写入，动画期间不再读取手势位移。
@@ -309,11 +296,8 @@ export default function ImageViewer({
   const touchStartY = useSharedValue(0);
   const prevTransX = useSharedValue(0);
   const prevTransY = useSharedValue(0);
-  // 长图页滚动状态（longReadPan 写入）：偏移/最大可滚量。
-  // 最大可滚量由 LongImageView 按内容高+顶部安全区写入；退出手势据此仲裁
-  // "滚动 vs 退出"（顶下拉/底上拉）。
-  const longScrollY = useSharedValue(0);
-  const longScrollMax = useSharedValue(0);
+  // 手势脉冲（页面级 zoomGestureLastTime 变化时 +1，UI 线程）：驱动顶栏
+  // 自动收起——手势结束后 2.6s 渐隐（iOS Photos 行为），再手势重新计时。
   // 手势 worklet 只读镜像（手势 useMemo 不随渲染重建，直接读共享值拿新状态）
   const currentIdxSV = useSharedValue(initialIndex);
   const pageCountSV = useSharedValue(images.length);
@@ -347,10 +331,21 @@ export default function ImageViewer({
   // 防抖：退场动画进行中忽略新触摸，避免二次拖拽劫持动画。
   const isDismissing = useSharedValue(false);
 
-  // 长图阅读滚动 pan：与退出手势 RNGH-RNGH 同流（不再套原生 ScrollView——
-  // UIKit 滚动抢先吃触摸、边界仲裁失效是真机"大图退不出"的实证根因）。
-  // offset 由本手势直接写入 longScrollY（UI 线程），退出手势读到的边界状态
-  // 帧帧新鲜；缩放时由 zoomedSV 门控不激活（交给各页内缩放 pan）。
+  // 长图页滚动状态查表（2026-08-31 P0 修复）：每张长图页各自持有 y/max，
+  // 挂载时注册进本表；readPan/退出手势按当前页（currentIdxSV）读对应组。
+  // 旧实现所有长图页写同一对共享值——全量挂载后多长图页必互踩（边界判定
+  // 错乱：上下滑误触发退出/滚不到底）。
+  const scrollStatesRef = useRef<Record<number, { y: SharedValue<number>; max: SharedValue<number> }>>({});
+  const attachScrollState = useCallback(
+    (i: number, y: SharedValue<number>, max: SharedValue<number>) => {
+      scrollStatesRef.current[i] = { y, max };
+    },
+    [],
+  );
+  const detachScrollState = useCallback((i: number) => {
+    delete scrollStatesRef.current[i];
+  }, []);
+  // 阅读滚动基线（手势激活期间单值安全：同一时刻只有一个长图页的手势活跃）
   const readBase = useSharedValue(0);
   const longReadPan = useMemo(
     () =>
@@ -358,28 +353,29 @@ export default function ImageViewer({
         .minDistance(4000)
         .maxPointers(1)
         .onTouchesDown(() => {
-          readBase.value = longScrollY.value;
+          const st = scrollStatesRef.current[currentIdxSV.value];
+          if (st) readBase.value = st.y.value;
         })
         .onTouchesMove((_e, mgr) => {
           if (!zoomedSV.value) mgr.activate();
         })
         .onUpdate((e) => {
+          const st = scrollStatesRef.current[currentIdxSV.value];
+          if (!st) return;
           const target = readBase.value + e.translationY;
-          longScrollY.value = Math.min(0, Math.max(-longScrollMax.value, target));
+          st.y.value = Math.min(0, Math.max(-st.max.value, target));
         })
         .onEnd((e) => {
           if (isDismissing.value) return;
+          const st = scrollStatesRef.current[currentIdxSV.value];
+          if (!st) return;
           // 钉在边界（顶/底；含无可滚余量）不衰减——由退出手势接棒
-          if (
-            longScrollY.value <= -longScrollMax.value + 0.5 ||
-            longScrollY.value >= -0.5 ||
-            longScrollMax.value <= 0.5
-          ) {
+          if (st.y.value <= -st.max.value + 0.5 || st.y.value >= -0.5 || st.max.value <= 0.5) {
             return;
           }
-          longScrollY.value = withDecay({ velocity: e.velocityY, clamp: [-longScrollMax.value, 0] });
+          st.y.value = withDecay({ velocity: e.velocityY, clamp: [-st.max.value, 0] });
         }),
-    [zoomedSV, longScrollY, longScrollMax, readBase, isDismissing],
+    [zoomedSV, readBase, isDismissing],
   );
   // 减少动态：把 reduceMotion 镜像到 UI 线程（手势 onEnd 里判断）
   const reduceMotionSV = useSharedValue(reduceMotion);
@@ -387,75 +383,6 @@ export default function ImageViewer({
   useEffect(() => {
     reduceMotionSV.value = reduceMotion;
   }, [reduceMotion, reduceMotionSV]);
-
-  // ── 双通道动画探针（取证临时）──
-  // UI 线程通道：useFrameCallback 每帧回调，累计帧间隔（timeSincePreviousFrame），
-  // 每 8 帧 runOnJS 打一次 avgMs——满帧 ~16.7ms；avgMs 暴涨/断流即掉帧/卡死。
-  // 常闭（active=false），probeAnimation / 拖拽起止开关。
-  const frameProbeActive = useSharedValue(false);
-  const frameProbeTag = useSharedValue('');
-  const frameProbeAcc = useSharedValue(0);
-  const frameProbeCount = useSharedValue(0);
-  // UI 线程心跳：frameProbe 每帧写入最近帧回调时间戳；JS probe 由此计算
-  // uiAge（距上次 UI 帧回调的毫秒数）——uiAge 持续增大 = UI 线程卡死/动画
-  // 驱动停，是「整个应用卡死」的直接证据（2026-08-30：第二次拖拽后 frame
-  // 日志断流 13 秒，JS probe 仍活着）。
-  const frameProbeStamp = useSharedValue(0);
-  const frameProbe = useFrameCallback((info) => {
-    if (!frameProbeActive.value) return;
-    frameProbeStamp.value = info.timestamp;
-    frameProbeAcc.value += info.timeSincePreviousFrame ?? 16.7;
-    frameProbeCount.value += 1;
-    if (frameProbeCount.value >= 8) {
-      const avg = frameProbeAcc.value / frameProbeCount.value;
-      frameProbeAcc.value = 0;
-      frameProbeCount.value = 0;
-      runOnJS(dbg)('frame', { tag: frameProbeTag.value, avgMs: avg });
-    }
-  }, false);
-
-  const frameProbeStart = useCallback(
-    (tag: string) => {
-      frameProbeTag.value = tag;
-      frameProbeAcc.value = 0;
-      frameProbeCount.value = 0;
-      frameProbeActive.value = true;
-      frameProbe.setActive(true);
-    },
-    [frameProbe, frameProbeActive, frameProbeTag, frameProbeAcc, frameProbeCount],
-  );
-  const frameProbeStop = useCallback(() => {
-    frameProbeActive.value = false;
-    frameProbe.setActive(false);
-  }, [frameProbe, frameProbeActive]);
-
-  // 动画进程采样（取证）：动画启动处调用，双通道并行——
-  // UI 线程帧率（上方 frameProbe）+ JS 线程每 100ms 打各动画共享值。
-  // 卡死时：probe 持续但数值不动 → 动画驱动/UI 线程卡；probe 中断 → JS 卡。
-  const probeAnimation = useCallback(
-    (tag: string) => {
-      frameProbeStart(tag);
-      let n = 0;
-      const iv = setInterval(() => {
-        n += 1;
-        const stamp = frameProbeStamp.value;
-        dbg('probe', tag, {
-          n,
-          exit: exitProgress.value,
-          ex: enterTransX.value,
-          ey: enterTransY.value,
-          es: enterScale.value,
-          eo: enterOpacity.value,
-          uiAge: stamp > 0 ? Math.round(Date.now() - stamp / 1000) : -1,
-        });
-        if (n >= 8) {
-          clearInterval(iv);
-          frameProbeStop();
-        }
-      }, 100);
-    },
-    [dbg, frameProbeStart, frameProbeStop, frameProbeStamp, exitProgress, enterTransX, enterTransY, enterScale, enterOpacity],
-  );
 
   useEffect(() => {
     cancelAnimation(overlayOpacity);
@@ -474,6 +401,7 @@ export default function ImageViewer({
     if (visible) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset viewer state when the modal opens.
       setCurrentIndex(initialIndex);
+      setViewingIndex(initialIndex);
       setShowUI(true);
       setIsZoomed(false);
       overlayOpacity.value = 1;
@@ -528,27 +456,98 @@ export default function ImageViewer({
     initialIdxSV.value = initialIndex;
   }, [initialIndex, initialIdxSV]);
 
-  // Scroll thumbnail strip to current item
+  // Scroll thumbnail strip to current item（跟手：用视觉页 viewingIndex）
   useEffect(() => {
     const thumbWidth = 56 + 6;
     thumbnailRef.current?.scrollTo({
-      x: Math.max(0, currentIndex * thumbWidth - SCREEN_WIDTH / 2 + thumbWidth / 2),
+      x: Math.max(0, viewingIndex * thumbWidth - SCREEN_WIDTH / 2 + thumbWidth / 2),
       animated: true,
     });
-  }, [currentIndex]);
+  }, [viewingIndex]);
 
-  // Keep the windowed PagerView centered on the current page so only the
-  // current ±1 pages stay mounted.
+  // ── 相邻页大图预取（2026-08-31 连续滑动黑屏根治 v2）──
+  // 快速滑动时 PagerView（UICollectionView paging）会直接跳过中间页，且
+  // 视图层发起的下载随页卸载被取消——滑多了就整页停在黑屏（无请求、无
+  // 报错）。预取走 expo-image 的 SDWebImagePrefetcher 独立通道，不随视图
+  // 生命周期取消；预取落盘后页面激活即命中缓存秒显。
+  // v2 三条通道：
+  // 1. 打开即全量补漏预取（未预取过的页排队下载，SDWebImagePrefetcher
+  //    自带缓存跳过/去重）——保证任何速度滑动到任何页都有缓存；
+  // 2. onPageScroll 方向感知预取（滑动途中 position+offset 实时上报，
+  //    100ms 节流）——跳过中间页时途经页也被预取；
+  // 3. settled 后（currentIndex 变化）±3 窗口补漏（防抖 150ms 合并连滑）。
+  const prefetchedRef = useRef<Set<string>>(new Set());
+  const prefetchUris = useCallback(
+    (uris: string[]) => {
+      const fresh = uris.filter((u) => u && !prefetchedRef.current.has(u));
+      if (fresh.length === 0) return;
+      fresh.forEach((u) => prefetchedRef.current.add(u));
+      dbg('prefetch', { n: fresh.length, first: fresh[0]?.slice(-24) });
+      void Image.prefetch(fresh).then((ok) => {
+        if (!ok) dbg('prefetch-incomplete');
+      });
+    },
+    [dbg],
+  );
+  const prefetchWindow = useCallback(
+    (center: number) => {
+      const targets: string[] = [];
+      for (const i of [center - 3, center - 2, center - 1, center + 1, center + 2, center + 3]) {
+        if (i < 0 || i >= images.length) continue;
+        const u = displayUriOf(i, images[i]);
+        if (u) targets.push(u);
+      }
+      prefetchUris(targets);
+    },
+    [images, displayUriOf, prefetchUris],
+  );
+
+  // 通道 1：打开即全量补漏（低优先级队列顺次下载，不阻塞 UI）
   useEffect(() => {
-    if (!visible || !pagerRef.current) return;
-    if (!pagerInitializedRef.current) {
-      // 首次挂载：initialPage 已定位 anchor，重复 setPage 可能在挂载期
-      // 触发 SwiftUI TabView 同步竞态（真机偶发打开即崩），跳过。
-      pagerInitializedRef.current = true;
-      return;
-    }
-    pagerRef.current.setPageWithoutAnimation(pageWindowAnchor);
-  }, [currentIndex, visible, pageWindowAnchor]);
+    if (!visible) return;
+    prefetchUris(images.map((_, i) => displayUriOf(i, images[i])));
+  }, [visible, images, displayUriOf, prefetchUris]);
+
+  // 通道 2：滑动途中方向感知预取 + 实时翻转 viewingIndex（100ms 节流；
+  // event 每帧触发）。viewingIndex 让视觉新页立即 active 出图（缓存秒显），
+  // 不再等 settle 结束才亮（旧窗口化版本滑动途中停留页=非 active 空页=黑屏）。
+  // 防渲染风暴：passing 未变（同页回弹/微漂）不 setState——滑动中只在
+  // 真正换页时触发一次重渲染（2026-08-31 审查 P2）。
+  const lastPageScrollRef = useRef(0);
+  const prevViewingRef = useRef(-1);
+  const handlePageScroll = useCallback(
+    (e: PagerViewOnPageScrollEvent) => {
+      const { position, offset } = e.nativeEvent;
+      const now = Date.now();
+      if (now - lastPageScrollRef.current < 100) return;
+      lastPageScrollRef.current = now;
+      const passing = position + (offset >= 0.5 ? 1 : 0);
+      dbg('page-scroll', { position, offset: Math.round(offset * 100) / 100 });
+      if (passing !== prevViewingRef.current) {
+        prevViewingRef.current = passing;
+        setViewingIndex(passing);
+      }
+      prefetchWindow(passing);
+    },
+    [prefetchWindow, dbg],
+  );
+
+  // 通道 3：settled 后 ±3 补漏
+  const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefetchAdjacent = useCallback(() => {
+    prefetchWindow(currentIndex);
+  }, [currentIndex, prefetchWindow]);
+
+  useEffect(() => {
+    if (!visible) return;
+    if (prefetchTimerRef.current) clearTimeout(prefetchTimerRef.current);
+    prefetchTimerRef.current = setTimeout(prefetchAdjacent, 150);
+    return () => {
+      if (prefetchTimerRef.current) clearTimeout(prefetchTimerRef.current);
+    };
+  }, [visible, currentIndex, prefetchAdjacent]);
+
+  // 全量挂载后无需窗口对齐（initialPage 已定位，滑动纯原生无重建）。
 
   // 关闭延迟拆除：visible=false 后保留 Modal 挂载 TEARDOWN_GRACE_MS，
   // 让 PagerView 内部 scroll view 的减速/手势彻底结束后再整树卸载
@@ -621,9 +620,9 @@ export default function ImageViewer({
       const dragProgress = Math.min(dragLen / SHRINK_DISTANCE, 1);
       return {
         transform: [
-          { translateX: enterTransX.value + dragTranslateX.value },
-          { translateY: enterTransY.value + dragTranslateY.value },
-          { scale: enterScale.value * (1 - dragProgress * DRAG_SHRINK_FACTOR) },
+          { translateX: dragTranslateX.value },
+          { translateY: dragTranslateY.value },
+          { scale: 1 - dragProgress * DRAG_SHRINK_FACTOR },
         ],
         // 圆角/边框曲线只在变化帧下发（退场开始一次），动画期不动 borderRadius
         // ——大图切圆角每帧重栅格化是退场卡顿源之一。
@@ -640,7 +639,7 @@ export default function ImageViewer({
       transform: [
         { translateX: x },
         { translateY: y },
-        { scale: s * enterScale.value },
+        { scale: s },
       ],
       // 退场期圆角冻结在拖拽结束值（逐帧改 borderRadius 会重栅格化大图）
       borderRadius: exitRadius.value,
@@ -653,8 +652,11 @@ export default function ImageViewer({
   //   路径。日志实证（2026-08-30）：在手势 worklet（onEnd）里直接启动的
   //   withTiming 会偶发完全不推进（exit 恒 0 + UI 帧回调断流），而 JS 线程
   //   启动的进入动画每次都正常。
+  // - 缓动 quad-out（2026-08-31 三轮调慢）：cubic-out 起步瞬时速度为平均
+  //   3 倍、"嗖地冲出去"是用户"飞出太快"观感的主因；quad-out 起步 2 倍，
+  //   配合 onEnd 的 1.1s 均匀时长，冲刺感大减。
   // - 看门狗兜底：120ms 后 progress 仍未推进（UI 动画驱动异常）→ 改由 JS
-  //   定时器逐帧写 exitProgress（EASE_OUT 近似），保证退出动画必定完成、
+  //   定时器逐帧写 exitProgress（quad-out 近似），保证退出动画必定完成、
   //   界面必定关闭——从机制上杜绝「退出卡死」。
   const startExitAnimation = useCallback(
     (opts: {
@@ -665,9 +667,11 @@ export default function ImageViewer({
       toY: number;
       toScale: number;
       radius: number;
+      /** 退场时长（默认 300ms）；手势退场按剩余距离/松手速度动态传入 */
+      duration?: number;
       tag: string;
     }) => {
-      const { fromX, fromY, fromScale, toX, toY, toScale, radius, tag } = opts;
+      const { fromX, fromY, fromScale, toX, toY, toScale, radius, duration = VIEWER_TRANSITION_MS, tag } = opts;
       exitFromX.value = fromX;
       exitFromY.value = fromY;
       exitFromScale.value = fromScale;
@@ -675,10 +679,11 @@ export default function ImageViewer({
       exitToY.value = toY;
       exitToScale.value = toScale;
       exitRadius.value = radius;
+      const easing = Easing.out(Easing.quad);
       // 主路径：JS 线程启动 withTiming
       exitProgress.value = withTiming(
         1,
-        { duration: VIEWER_TRANSITION_MS, easing: EASE_OUT },
+        { duration, easing },
         (finished) => {
           if (finished) runOnJS(onClose)();
         },
@@ -688,10 +693,9 @@ export default function ImageViewer({
       const watchdog = setTimeout(() => {
         if (exitProgress.value > 0.05) return; // 动画在推进，正常
         dbg('exit-watchdog-fallback', { tag });
-        const dur = VIEWER_TRANSITION_MS;
         const drive = setInterval(() => {
-          const t = Math.min(1, (Date.now() - t0 + 120) / dur);
-          const e = 1 - Math.pow(1 - t, 3); // EASE_OUT 近似
+          const t = Math.min(1, (Date.now() - t0 + 120) / duration);
+          const e = 1 - Math.pow(1 - t, 2); // quad-out 近似
           exitProgress.value = e;
           if (t >= 1) {
             clearInterval(drive);
@@ -699,10 +703,9 @@ export default function ImageViewer({
           }
         }, 16);
       }, 120);
-      probeAnimation(tag);
       return watchdog;
     },
-    [exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, exitProgress, onClose, dbg, probeAnimation],
+    [exitFromX, exitFromY, exitFromScale, exitToX, exitToY, exitToScale, exitRadius, exitProgress, onClose, dbg],
   );
 
   // X 关闭（简化 2026-08-30）：不做飞回动画——容器 350ms 渐淡出后关闭，
@@ -765,8 +768,6 @@ const dismissGesture = useMemo(
           prevTransX.value = e.translationX;
           prevTransY.value = e.translationY;
           runOnJS(dbg)('drag-start', { isLong: isLongPageSV.value, zoomed: zoomedSV.value });
-          // 拖拽跟手期帧率采样（同探针通道；onEnd 关闭）
-          runOnJS(frameProbeStart)('drag');
           // 拖拽即切静态大图（仅非长图页）：PagerView（SwiftUI TabView）宿主
           // transform 是 120fps 卡顿源，拖拽跟手全程落在轻量 Image 上；
           // 长图页保持阅读形态，退场时才切（onEnd 里）。回弹时切回 PagerView。
@@ -780,8 +781,11 @@ const dismissGesture = useMemo(
           const dy = e.changedTouches[0].y - touchStartY.value;
           let yGo = false;
           if (isLongPageSV.value) {
-            const atTop = longScrollY.value <= 0.5;
-            const atBottom = longScrollY.value >= -longScrollMax.value + 0.5;
+            const st = scrollStatesRef.current[currentIdxSV.value];
+            const sy = st?.y.value ?? 0;
+            const smax = st?.max.value ?? 0;
+            const atTop = sy <= 0.5;
+            const atBottom = sy >= -smax + 0.5;
             yGo = Math.abs(dy) >= 10 && ((dy > 0 && atTop) || (dy < 0 && atBottom));
           } else {
             yGo = Math.abs(dy) >= 10;
@@ -813,8 +817,11 @@ const dismissGesture = useMemo(
           dragTranslateX.value = xGo ? dragTranslateX.value + dX : 0;
           let followY = true;
           if (isLongPageSV.value) {
-            const atTop = longScrollY.value <= 0.5;
-            const atBottom = longScrollY.value >= -longScrollMax.value + 0.5;
+            const st = scrollStatesRef.current[currentIdxSV.value];
+            const sy = st?.y.value ?? 0;
+            const smax = st?.max.value ?? 0;
+            const atTop = sy <= 0.5;
+            const atBottom = sy >= -smax + 0.5;
             followY =
               (e.translationY > 2 && atTop) ||
               (e.translationY < -2 && atBottom) ||
@@ -830,14 +837,12 @@ const dismissGesture = useMemo(
             // 未过阈值 → 弹簧回弹（X/Y 一起回）；拖拽期间切的静态大图换回
             // PagerView（恢复翻页/缩放，长图页本就没切）
             runOnJS(dbg)('drag-end-spring', { len: dragLen, vy: e.velocityY });
-            runOnJS(frameProbeStop)();
             runOnJS(setStaticMode)(false);
             dragTranslateX.value = withSpring(0, MOMENTUM);
             dragTranslateY.value = withSpring(0, MOMENTUM);
             return;
           }
           isDismissing.value = true;
-          runOnJS(frameProbeStop)();
           runOnJS(dbg)('drag-end-exit', {
             len: dragLen,
             vy: e.velocityY,
@@ -872,8 +877,22 @@ const dismissGesture = useMemo(
             dx /= len;
             dy /= len;
           }
-          const toX = dx * SCREEN_WIDTH * 1.2;
-          const toY = dy * SCREEN_HEIGHT * 1.2;
+          const toX = dx * SCREEN_WIDTH * 1.0;
+          const toY = dy * SCREEN_HEIGHT * 1.0;
+          // 退场时长与剩余距离/松手速度挂钩（iOS Photos：快松快飞、慢松延长）。
+          // 三处修正（2026-08-31 二轮，用户实测仍"极快"）：
+          // - 飞出目标从 1.2 屏缩到 1.0 屏（"完全出屏"即可，travel 缩短 ~15%）；
+          // - 松手速度打 0.7 折：动画速度延续手指速度，不再"固定时间飞远路"；
+          // - clamp 上限 420→750ms（旧值下 travel/speed 恒压上限=每秒 3 屏）。
+          const travel = Math.hypot(toX - fromX, toY - fromY);
+          // 退出动画时长（三轮调慢后的手感档，2026-08-31 定案）：
+          // - 参与计算的松手速度封顶 1400pt/s（飞速甩动也按此算）：快速/飞速
+          //   场景时长均匀 ~1.1s，不再随手指速度无限缩短；
+          // - clamp [350, 1100]ms；缓动 quad-out（起步瞬时速度 = 2×平均，
+          //   cubic 是 3×——"嗖地冲出去"主要来自 cubic 起步冲刺）。
+          // - 曾试 2200ms（四轮"再降两倍"），用户实测过慢已回退到本档。
+          const speed = Math.min(Math.max(Math.hypot(e.velocityX, e.velocityY), 180) * 0.5, 700);
+          const exitDuration = Math.min(1100, Math.max(350, (travel / speed) * 1000));
           // 动画统一由 JS 线程启动（startExitAnimation 内部带看门狗兜底——
           // 日志实证 worklet 里直接 withTiming 会偶发不推进，JS 启动是
           // 与进入动画相同的成功路径）
@@ -883,8 +902,9 @@ const dismissGesture = useMemo(
             fromScale,
             toX,
             toY,
-            toScale: 0.5,
+            toScale: 0.35, // 缩小终点加大：飞出过程缩小可见（旧 0.5 被位移主导）
             radius,
+            duration: exitDuration,
             tag: 'exit-drag',
           });
         }),
@@ -893,8 +913,6 @@ const dismissGesture = useMemo(
       reduceMotionSV,
       zoomedSV,
       longReadPan,
-      longScrollY,
-      longScrollMax,
       isLongPageSV,
       currentIdxSV,
       pageCountSV,
@@ -905,8 +923,6 @@ const dismissGesture = useMemo(
       prevTransY,
       dragTranslateX,
       dragTranslateY,
-      enterTransX,
-      enterTransY,
       isDismissing,
       exitFromX,
       exitFromY,
@@ -918,9 +934,6 @@ const dismissGesture = useMemo(
       exitRadius,
       setStaticMode,
       dbg,
-      probeAnimation,
-      frameProbeStart,
-      frameProbeStop,
       startExitAnimation,
     ],
   );
@@ -934,28 +947,66 @@ const dismissGesture = useMemo(
     closeViewer();
   }, [closeViewer]);
 
+  // ══ 翻页 settle 门控（2026-08-31 快滑卡死根治）══
+  // 快速滑动时 onPageSelected 每停一页都触发 setCurrentIndex → 窗口重建
+  //（PagerView reload 子视图 + setPageWithoutAnimation），在 UICollectionView
+  // 自身减速动画中反复打断 → 卡在半页（半页之间无内容 = 黑屏）+ 分页系统
+  // 拉回 = 翻不动（真机复现「黑屏时无法滑到下一张」）。
+  // 门控：dragging/settling 期间只记录目标页（pending），等减速真正结束
+  //（pageScrollState=idle）再一次性应用最终页（窗口重建+预取+触感）。
+  // 兜底：settling 超过 600ms 未 idle（减速异常）强制应用，防永久卡死。
+  const pendingIdxRef = useRef(-1);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const applyPendingPage = useCallback(() => {
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
+    if (pendingIdxRef.current < 0) return;
+    const idx = pendingIdxRef.current;
+    pendingIdxRef.current = -1;
+    dbg('apply-page', { idx });
+    hapticForScene('toggle');
+    setCurrentIndex(idx);
+    setViewingIndex(idx);
+  }, [dbg]);
+  // 卸载/关闭时清理兜底定时器
+  useEffect(() => () => {
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+  }, []);
+
   const handlePageSelected = useCallback(
     (e: PagerViewOnPageSelectedEvent) => {
-      dbg('page-sel', { pos: e.nativeEvent.position, start: pageWindowStart });
-      hapticForScene('toggle');
-      setCurrentIndex(e.nativeEvent.position + pageWindowStart);
+      // 全量挂载：position 即绝对下标
+      const pos = e.nativeEvent.position;
+      pendingIdxRef.current = pos;
+      dbg('page-sel', { pos, pending: true });
+      // 应用交给 onPageScrollStateChanged 的 idle（慢滑/快滑统一走 settle 结束）
     },
-    [pageWindowStart, dbg],
+    [dbg],
+  );
+
+  const handlePageScrollStateChanged = useCallback(
+    (e: PageScrollStateChangedNativeEvent) => {
+      const st = e.nativeEvent.pageScrollState;
+      dbg('page-state', { st });
+      if (st === 'idle') {
+        applyPendingPage();
+      } else if (st === 'settling') {
+        // 兜底：减速异常（settling 一直不结束）600ms 后强制应用
+        if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+        settleTimerRef.current = setTimeout(applyPendingPage, 600);
+      }
+    },
+    [applyPendingPage, dbg],
   );
 
   const handleThumbnailPress = useCallback(
     (idx: number) => {
-      const localIndex = idx - pageWindowStart;
-      if (localIndex >= 0 && localIndex < pages.length) {
-        // 目标页在当前窗口内：直接翻页（窗口随滑动重建）
-        pagerRef.current?.setPage(localIndex);
-      } else {
-        // 目标页在当前窗口外（缩略条可跳远图）：直接更新 currentIndex，
-        // 窗口围绕新页重建，再交给 setPageWithoutAnimation 对齐到新 anchor。
-        setCurrentIndex(idx);
-      }
+      // 全量挂载：绝对下标直接切页（onPageSelected → settle 门控应用）
+      pagerRef.current?.setPage(idx);
     },
-    [pageWindowStart, pages.length],
+    [],
   );
 
   // iOS 27：RN 的 <StatusBar hidden /> 是 no-op，状态栏隐藏走原生 VC 级。
@@ -1066,6 +1117,8 @@ const dismissGesture = useMemo(
 
   // 渲染风暴取证（节流 250ms）：JS 线程卡死前的最后阶段往往伴随高频重渲染，
   // 此日志高频出现即渲染风暴实锤（临时埋点，验完即删）。
+  // ⚠️ 不在 render 里读共享值（isDismissing.value 曾在此打点——Reanimated 4
+  // 渲染期读 .value 会警告且值可能过期，已移除）。
   if (__DEV__) {
     const now = Date.now();
     if (now - lastRenderLogRef.current > 250) {
@@ -1075,8 +1128,8 @@ const dismissGesture = useMemo(
         mounted,
         staticMode,
         currentIndex,
+        viewingIndex,
         isZoomed,
-        exiting: isDismissing.value,
       });
     }
   }
@@ -1105,12 +1158,16 @@ const dismissGesture = useMemo(
           {/* 状态栏隐藏/恢复走原生（TiebaNative.setModalStatusBarHidden）：iOS 27
               RN StatusBar 是 no-op 且 setStyle 会红屏；这里不放 StatusBar */}
 
-          {/* 背景层 1：实时毛玻璃（恒显；明暗渐变由黑 scrim 承担，见
-              bgScrimStyle 注释——blur opacity 逐帧动画=每帧重采样，掉帧源） */}
+          {/* 背景层 1：毛玻璃（恒显；明暗渐变由黑 scrim 承担，见
+              bgScrimStyle 注释——blur opacity 逐帧动画=每帧重采样，掉帧源）。
+              realTime={false}：背后信息流在查看器打开期间是静止的，实时
+              模糊的输出与静态模拟观感等价，省掉全屏每帧高斯重采样
+              （顶/底栏同款静态模拟；拖拽揭示时显示为暗色半透明+高光渐变）。 */}
           <View style={styles.bgLayer} pointerEvents="none">
             <GlassView
               theme="dark"
               glassEffectStyle="regular"
+              realTime={false}
               style={StyleSheet.absoluteFill}
             />
           </View>
@@ -1127,22 +1184,27 @@ const dismissGesture = useMemo(
             <PagerView
               ref={pagerRef}
               style={[styles.pager, staticMode && styles.pagerWhileStatic]}
-              initialPage={pageWindowAnchor}
+              initialPage={initialIndex}
               scrollEnabled={!isZoomed}
+              onPageScroll={handlePageScroll}
               onPageSelected={handlePageSelected}
-              overdrag
+              onPageScrollStateChanged={handlePageScrollStateChanged}
             >
-            {pages.map((page) => {
-              const longPage = isLongImageOf(page.index);
-              const pageMeta = imageMeta?.[page.index];
+            {/* 全量挂载（2026-08-31）：cell 为空 View 零成本，图片按 active
+                单页解码；active 跟随 viewingIndex——滑动途中视觉新页立即
+                出图（缓存秒显），不再等 settle 结束才亮。 */}
+            {images.map((uri, index) => {
+              const longPage = isLongImageOf(index);
+              const pageMeta = imageMeta?.[index];
+              const pageIsActive = index === viewingIndex;
               return (
-              <View key={String(page.index)} collapsable={false} style={styles.imagePage}>
+              <View key={String(index)} collapsable={false} style={styles.imagePage}>
                 {/* 大图长按：在长按位置弹出选项框（无放大预览，页面本身已是大图） */}
                 <TiebaPhotoContextMenu
-                  fullUrl={imageOrigins?.[page.index] ?? page.uri}
+                  fullUrl={imageOrigins?.[index] ?? displayUriOf(index, uri)}
                   previewEnabled={false}
-                  actions={buildPageActions(page.index)}
-                  onAction={(actionId) => handlePageMenuAction(page.index, actionId)}
+                  actions={buildPageActions(index)}
+                  onAction={(actionId) => handlePageMenuAction(index, actionId)}
                   style={StyleSheet.absoluteFill}
                 >
                   {longPage ? (
@@ -1150,56 +1212,59 @@ const dismissGesture = useMemo(
                        fit-width + 单指下滑读完；捏合/双击缩放。修复长图默认直接
                        解码 originSrc 巨图导致的整机冻结。 */
                     <LongImageView
-                      baseUri={images[page.index]}
-                      originUri={imageOrigins?.[page.index]}
+                      baseUri={uri}
+                      originUri={imageOrigins?.[index]}
                       imageWidth={pageMeta?.width}
                       imageHeight={pageMeta?.height}
                       onSingleTap={toggleUI}
                       onZoomChange={setIsZoomed}
+                      active={pageIsActive}
                       readPan={longReadPan}
-                      scrollY={longScrollY}
-                      scrollMax={longScrollMax}
+                      scrollIndex={index}
+                      onScrollAttach={attachScrollState}
+                      onScrollDetach={detachScrollState}
                       gallerySwipe
                       galleryScrollRef={galleryScrollRef}
-                      galleryIndex={currentIndex}
+                      galleryIndex={viewingIndex}
                       galleryItemWidth={SCREEN_WIDTH}
                       zoomMirror={zoomedSV}
                       gesturePulse={gesturePulse}
                       onLoadStart={() => {
-                        if (page.uri !== images[page.index]) {
-                          setOriginLoading((prev) => ({ ...prev, [page.index]: true }));
+                        if (displayUriOf(index, uri) !== uri) {
+                          setOriginLoading((prev) => ({ ...prev, [index]: true }));
                         }
                       }}
                       onLoadEnd={() => {
-                        setOriginLoading((prev) => ({ ...prev, [page.index]: false }));
+                        setOriginLoading((prev) => ({ ...prev, [index]: false }));
                       }}
                     />
                   ) : (
                     <ZoomableImage
-                      uri={page.uri}
+                      uri={displayUriOf(index, uri)}
+                      previewUri={imagePreviews?.[index]}
                       onSingleTap={toggleUI}
                       onZoomChange={setIsZoomed}
-                      active={page.active}
+                      active={pageIsActive}
                       gallerySwipe
                       galleryScrollRef={galleryScrollRef}
-                      galleryIndex={currentIndex}
+                      galleryIndex={viewingIndex}
                       galleryItemWidth={SCREEN_WIDTH}
                       zoomMirror={zoomedSV}
                       gesturePulse={gesturePulse}
                       onLoadStart={() => {
                         // 仅当该页显示的是原图（长图默认/手动切换）时转圈：
                         // 普通档位图沿用原有直出行为，不闪加载动画
-                        if (page.uri !== images[page.index]) {
-                          setOriginLoading((prev) => ({ ...prev, [page.index]: true }));
+                        if (displayUriOf(index, uri) !== uri) {
+                          setOriginLoading((prev) => ({ ...prev, [index]: true }));
                         }
                       }}
                       onLoadEnd={() => {
-                        setOriginLoading((prev) => ({ ...prev, [page.index]: false }));
+                        setOriginLoading((prev) => ({ ...prev, [index]: false }));
                       }}
                     />
                   )}
                 </TiebaPhotoContextMenu>
-                {originLoading[page.index] ? (
+                {originLoading[index] ? (
                   <View pointerEvents="none" style={styles.originLoadingOverlay}>
                     <ActivityIndicator size="large" color="#FFFFFF" />
                   </View>
@@ -1232,13 +1297,29 @@ const dismissGesture = useMemo(
               contentStyle,
             ]}
           >
+            {/* 垫底小档（当页预览 URI）：staticMode 承担拖拽/退场画面时，若大图
+                尚未加载（快速翻页后立即拖动），预览先出图避免退场黑屏。 */}
+            {(() => {
+              const overlayMain = displayUriOf(viewingIndex, images[viewingIndex]);
+              const overlayPreview = imagePreviews?.[viewingIndex];
+              return overlayPreview && overlayPreview !== overlayMain ? (
+                <Image
+                  source={{ uri: overlayPreview }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="contain"
+                  transition={0}
+                  cachePolicy="memory-disk"
+                  recyclingKey={`viewer-static-preview-${overlayPreview}`}
+                />
+              ) : null;
+            })()}
             <Image
-              source={{ uri: displayUriOf(currentIndex, images[currentIndex]) }}
+              source={{ uri: displayUriOf(viewingIndex, images[viewingIndex]) }}
               style={StyleSheet.absoluteFill}
               contentFit="contain"
               transition={0}
               cachePolicy="memory-disk"
-              recyclingKey={`viewer-static-${currentIndex}`}
+              recyclingKey={`viewer-static-${viewingIndex}`}
             />
           </Animated.View>
         </View>
@@ -1276,7 +1357,7 @@ const dismissGesture = useMemo(
             pointerEvents="none"
           >
             <Text style={styles.counterText} accessibilityLiveRegion="polite">
-              {currentIndex + 1}/{images.length}
+              {viewingIndex + 1}/{images.length}
             </Text>
             {contextTitle ? (
               <Text style={styles.contextTitleText} numberOfLines={1} ellipsizeMode="tail">
@@ -1336,8 +1417,7 @@ const dismissGesture = useMemo(
                   key={index}
                   uri={uri}
                   index={index}
-                  currentIndex={currentIndex}
-                  active={Math.abs(index - currentIndex) <= 1}
+                  currentIndex={viewingIndex}
                   onPress={handleThumbnailPress}
                 />
               ))}
@@ -1353,143 +1433,3 @@ const dismissGesture = useMemo(
     </Modal>
   );
 }
-
-// ---------- Styles ----------
-
-const styles = StyleSheet.create({
-  viewerRoot: {
-    flex: 1,
-  },
-  modalContainer: {
-    flex: 1,
-  },
-  // 背景层：透明 Modal 下承载 模糊/遮罩（先于内容渲染，位于底层）
-  bgLayer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  bgScrim: {
-    backgroundColor: '#000000',
-  },
-  pager: {
-    flex: 1,
-  },
-  pagerWrap: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  /* overlay 动画层：绝对铺满 pagerWrap，常态 opacity 0（PagerView 交互），
-     staticMode 期间 pagerOverlayActive 置 1 承担全部 transform */
-  pagerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    opacity: 0,
-  },
-  pagerOverlayActive: {
-    opacity: 1,
-  },
-  /* staticMode 期间 PagerView 仅隐藏（保持挂载/解码），不让它参与动画 */
-  pagerWhileStatic: {
-    opacity: 0,
-  },
-  imagePage: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  watermarkOverlay: {
-    position: 'absolute',
-    right: 20,
-    bottom: 24,
-    maxWidth: '70%',
-    color: 'rgba(255,255,255,0.72)',
-    fontSize: 12,
-    fontWeight: '500',
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  topBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.sm,
-    backgroundColor: 'transparent',
-    zIndex: 10,
-  },
-  topBarButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderCurve: 'continuous',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  topBarButtonPressed: {
-    // 顶栏按钮无高光效果（2026-08-28 用户要求）；仅按压微降不透明度
-    opacity: 0.55,
-  },
-  topBarActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  counterText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  topBarCenter: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    // 使用与 topBar 相同的上下 padding 把内容垂直对齐到按钮行
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.sm,
-  },
-  originLoadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  contextTitleText: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 13,
-    fontWeight: '500',
-    // 左右各留出按钮区（左 1 右 2 × 40pt + 间距），超长自动省略号截断
-    maxWidth: SCREEN_WIDTH - 180,
-  },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingTop: Spacing.sm,
-    backgroundColor: 'transparent',
-    zIndex: 10,
-  },
-  thumbnailStrip: {
-    paddingHorizontal: Spacing.md,
-    gap: 6,
-  },
-});
