@@ -53,7 +53,7 @@
 - ✅ 广告 / 直播内容过滤
 - ❓ 屏蔽：屏蔽词 / 屏蔽用户 / 屏蔽吧
 - ✅ 阅读字号、省流量模式、图片加载质量三档
--❓  App scheme 深链
+- ❓  App scheme 深链
 
 ### ❌ 未实现
 
@@ -111,10 +111,6 @@ npm start                # 纯 JS 改动的热更新模式（配合已装好的 
 1. **手动构建**：仓库页 → **Actions** → **Build iOS Unsigned IPA** → **Run workflow**（可选 Release / Debug）→ 结束后在本次运行页面的 Artifacts 下载 `TiebaLite-unsigned-*.ipa`；
 2. **打 Tag 自动发 Release**：
 
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
 ## 📱 通过 SideStore / AltStore 安装
 
 CI 产出的是**未签名 IPA**，不能直接安装，需要 SideStore / AltStore 用你自己的 Apple ID 重签后侧载：
@@ -125,8 +121,8 @@ CI 产出的是**未签名 IPA**，不能直接安装，需要 SideStore / AltSt
 
 本项目站在这些项目的肩膀上：
 
-- [HuanCheng65/TiebaLite](https://github.com/HuanCheng65/TiebaLite) — Kotlin 原版（真正原创），API 协议与交互设计的主要参照
-- [zzc10086/TiebaLite](https://github.com/zzc10086/TiebaLite) — Kotlin 版 fork，接口实现的直接对照来源
+- [HuanCheng65/TiebaLite](https://github.com/HuanCheng65/TiebaLite) — Kotlin 原版
+- [zzc10086/TiebaLite](https://github.com/zzc10086/TiebaLite) — Kotlin 版 fork
 - [Starry-OvO/aiotieba](https://github.com/Starry-OvO/aiotieba) — 贴吧协议字段参考
 - [n0099/tbclient.protobuf](https://github.com/n0099/tbclient.protobuf) — 百度贴吧客户端 protobuf 定义合集
 
