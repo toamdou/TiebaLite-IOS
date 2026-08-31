@@ -25,6 +25,8 @@ import Animated, {
   withSpring,
   withTiming,
   withDecay,
+  FadeIn,
+  FadeOut,
   withDelay,
   cancelAnimation,
   runOnJS,
@@ -52,7 +54,6 @@ import { LongImageView, ZoomableImage, ThumbnailCell } from '@/components/imagev
 import { viewerStyles as styles } from '@/components/imageviewer/styles';
 import { revealOnOpen, getArmedFramesSnapshot, flushHShiftOnOpen } from '@/hooks/useViewerSourceReveal';
 import { useAuthStore } from '@/stores/authStore';
-import { Toast, type ToastRef } from '@/components/ui/Toast';
 import { TiebaPhotoContextMenu } from '../../modules/tieba-native/src/TiebaPhotoContextMenu';
 import { TiebaNative } from '../../modules/tieba-native/src/TiebaNative';
 import type { ScrollableRef } from 'react-native-zoom-reanimated';
@@ -191,9 +192,16 @@ export default function ImageViewer({
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [showUI, setShowUI] = useState(true);
   const [downloadProgress, setDownloadProgress] = useState(false);
-  // 大图内部 toast：提示渲染在 Modal 内（外层页面 toast 会被 Modal 盖住，
-  // 用户实测「保存成功要退出大图才看得到」）
-  const saveToastRef = useRef<ToastRef>(null);
+  // 保存成功提示（2026-08-31 用户："保存 toast 显示在左上角，应和点赞成功
+  // 一样在屏幕底部、简洁地显示保存成功"）：底部深色药丸（同 ToastHost 的
+  // 药丸样式）——大图 Modal 内自渲染（外层 ToastHost 被 Modal 盖住）
+  const [savePill, setSavePill] = useState<string | null>(null);
+  const savePillTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showSavePill = useCallback((msg: string) => {
+    setSavePill(msg);
+    if (savePillTimerRef.current) clearTimeout(savePillTimerRef.current);
+    savePillTimerRef.current = setTimeout(() => setSavePill(null), 2200);
+  }, []);
   const [isZoomed, setIsZoomed] = useState(false);
   // 手动「查看原图」的页（下标 → 显示原图）；互斥于长图默认原图（后者不进此表）
   const [originMode, setOriginMode] = useState<Record<number, boolean>>({});
@@ -1212,7 +1220,7 @@ const dismissGesture = useMemo(
       const wm = getWatermarkText(forumName);
       await saveImageToGallery(uri, imageWatermarkEnabled ? wm : '');
       hapticForScene('action-success');
-      saveToastRef.current?.show({ title: '保存成功', type: 'success' });
+      showSavePill('保存成功');
     } catch (e: unknown) {
       const message = readableError(e);
       if (message === 'PERMISSION_DENIED') {
@@ -1610,8 +1618,17 @@ const dismissGesture = useMemo(
       </Animated.View>
       </GestureDetector>
         </SafeAreaProvider>
-          {/* 大图内部 toast（Modal 内最高层；外层 toast 被 Modal 遮挡） */}
-          <Toast ref={saveToastRef} />
+          // 底部保存成功药丸（2026-08-31 用户要求：与点赞成功一致、底部、简洁）
+  {savePill ? (
+    <Animated.View
+      entering={FadeIn.duration(180)}
+      exiting={FadeOut.duration(180)}
+      pointerEvents="none"
+      style={[styles.savePill, { bottom: Math.max(insets.bottom, 16) + 96 }]}
+    >
+      <Text style={styles.savePillText}>{savePill}</Text>
+    </Animated.View>
+  ) : null}
 
     </Modal>
   );
