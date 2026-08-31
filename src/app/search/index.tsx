@@ -252,13 +252,11 @@ export default function SearchPage() {
     </View>
   );
 
-  // ══ 共享列表头（搜索行 + 分段 + 排序；随列表滚动退出） ══
+  // ══ 共享列表头（分段 + 排序；随列表滚动退出。搜索行不再在此——固定
+  // 在页面根，见根 return：两树切换（搜索前/后）时搜索行保持同一实例
+  // 同一位置，不再"搜索过程下移、结果后回原位"（2026-08-31 用户）） ══
   const listHeader = (tab: SearchTab) => (
-    // headerTransparent 原生顶栏（透明玻璃）悬浮于内容之上：列表头起点
-    // 必须让出顶栏高度（insets.top + NAV_BAR_H），否则搜索行被返回钮压住
-    //（2026-08-27 真机：顶栏只剩返回钮、与搜索栏重叠）。
-    <View style={[styles.headerBlock, { paddingTop: insets.top + NAV_BAR_H }]}>
-      {searchRow}
+    <View style={styles.headerBlock}>
       <View style={styles.segmentRow}>
         <TiebaSegmentedControl
           segments={TABS.map((t) => ({ label: t.label, value: t.key }))}
@@ -302,10 +300,15 @@ export default function SearchPage() {
         }}
       />
 
+      {/* 搜索行固定在页面根（搜索前/后同一实例、同一位置——切换零跳动；
+          原各树内渲染会导致"搜索过程搜索栏下移、结果显示后回原位"） */}
+      <View style={[styles.searchBarFixed, { paddingTop: insets.top + NAV_BAR_H }]}>
+        {searchRow}
+      </View>
+
       {!hasSearched ? (
-        /* ── 搜索前：搜索行（固定）+ 历史/建议 ── */
+        /* ── 搜索前：历史/建议（滚动区在固定搜索行下方） ── */
         <View style={styles.flex}>
-          <View style={{ paddingTop: insets.top + NAV_BAR_H }}>{searchRow}</View>
           <ScrollView
             style={styles.flex}
             contentContainerStyle={{
@@ -458,6 +461,11 @@ const styles = StyleSheet.create({
   searchRow: {
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.xs,
+  },
+  // 固定搜索行容器（页面根）：搜索前/后同一实例——顶栏让位走 paddingTop
+  //（headerTransparent 原生顶栏悬浮），下方内容（历史/分页列表）在其下
+  searchBarFixed: {
+    zIndex: 20,
   },
   // ── 分段 ──
   segmentRow: {

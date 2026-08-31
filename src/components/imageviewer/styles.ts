@@ -49,6 +49,28 @@ export const viewerStyles = StyleSheet.create({
   pagerOverlayActive: {
     opacity: 1,
   },
+  /* 保存成功底部药丸（同 ToastHost 药丸：固定深色、纯文字、简洁——
+     2026-08-31 用户："保存 toast 应和点赞成功一样在底部，别花里胡哨"） */
+  savePill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    maxWidth: '82%',
+    backgroundColor: 'rgba(28, 28, 30, 0.88)',
+    borderRadius: 18,
+    borderCurve: 'continuous',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  savePillText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   /* staticMode 期间 PagerView 仅隐藏（保持挂载/解码），不让它参与动画 */
   pagerWhileStatic: {
     opacity: 0,
