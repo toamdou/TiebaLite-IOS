@@ -7,7 +7,6 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -21,6 +20,7 @@ import { SymbolView } from '@/components/ui/SymbolView';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import TweetCard, { type TweetCardProps } from '@/components/feed/TweetCard';
 import { EntranceRow } from '@/components/feed/EntranceRow';
+import LoadMoreFooter from '@/components/ui/LoadMoreFooter';
 import { htmlToText } from '@/utils/htmlSummary';
 import {
   SearchForumCard,
@@ -106,6 +106,8 @@ export function SearchThreadList({
   loading,
   error,
   onRetry,
+  refreshing,
+  onRefresh,
 }: {
   items: SearchThreadResult[];
   colors: SemanticColors;
@@ -125,6 +127,9 @@ export function SearchThreadList({
   /** 失败态（无数据时）：header + 重试按钮 */
   error?: string;
   onRetry?: () => void;
+  /** 原生下拉刷新（iOS 系统 UIRefreshControl） */
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }) {
   // 吧头像走全站统一缓存：搜索帖服务端 forum_info 时有时无，缺的按吧名
   // 键（forumId 恒空）补齐；服务端有值不覆盖。
@@ -159,18 +164,15 @@ export function SearchThreadList({
     [colors, onPressItem, onLike, onShare, onImagePress, avatarMap],
   );
   const listFooter = useCallback(
-    () =>
-      loadingMore ? (
-        <View style={styles.footerLoader}>
-          <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={[styles.footerText, { color: colors.textTertiary }]}>加载更多...</Text>
-        </View>
-      ) : !hasMore && items.length > 0 ? (
-        <View style={styles.footerLoader}>
-          <Text style={[styles.footerText, { color: colors.textTertiary }]}>没有更多了</Text>
-        </View>
-      ) : null,
-    [loadingMore, hasMore, items.length, colors.primary, colors.textTertiary],
+    () => (
+      <LoadMoreFooter
+        hasMore={hasMore ?? false}
+        loading={loadingMore ?? false}
+        colors={{ primary: colors.primary, textTertiary: colors.textTertiary }}
+        onLoadMore={onEndReached ?? (() => {})}
+      />
+    ),
+    [hasMore, loadingMore, colors.primary, colors.textTertiary, onEndReached],
   );
 
   // 首屏骨架 / 失败 / 空态一律走 LegendList + ListEmptyComponent：header
@@ -228,6 +230,15 @@ export function SearchThreadList({
       ListEmptyComponent={listEmpty}
       ListFooterComponent={listFooter}
       renderItem={renderItem}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing ?? false}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        ) : undefined
+      }
     />
   );
 }
@@ -240,6 +251,8 @@ export function SearchForumList({
   loading,
   error,
   onRetry,
+  refreshing,
+  onRefresh,
 }: {
   items: SearchForumResult[];
   colors: SemanticColors;
@@ -249,6 +262,9 @@ export function SearchForumList({
   loading?: boolean;
   error?: string;
   onRetry?: () => void;
+  /** 原生下拉刷新（iOS 系统 UIRefreshControl） */
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }) {
   const entranceDoneRef = useRef(false);
   useEffect(() => {
@@ -316,6 +332,15 @@ export function SearchForumList({
       ListHeaderComponent={header as React.ReactElement | null}
       ListEmptyComponent={listEmpty}
       renderItem={renderItem}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing ?? false}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        ) : undefined
+      }
     />
   );
 }
@@ -328,6 +353,8 @@ export function SearchUserList({
   loading,
   error,
   onRetry,
+  refreshing,
+  onRefresh,
 }: {
   items: SearchUserResult[];
   colors: SemanticColors;
@@ -337,6 +364,9 @@ export function SearchUserList({
   loading?: boolean;
   error?: string;
   onRetry?: () => void;
+  /** 原生下拉刷新（iOS 系统 UIRefreshControl） */
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }) {
   const entranceDoneRef = useRef(false);
   useEffect(() => {
@@ -404,6 +434,15 @@ export function SearchUserList({
       ListHeaderComponent={header as React.ReactElement | null}
       ListEmptyComponent={listEmpty}
       renderItem={renderItem}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing ?? false}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        ) : undefined
+      }
     />
   );
 }
@@ -440,15 +479,15 @@ export function SearchPostList({
     [colors, onPressItem],
   );
   const listFooter = useCallback(
-    () =>
-      loadingMore ? (
-        <View style={styles.postFooter}>
-          <ActivityIndicator size="small" color={colors.primary} />
-        </View>
-      ) : !hasMore && items.length > 0 ? (
-        <Text style={[styles.noMore, { color: colors.textDisabled }]}>没有更多了</Text>
-      ) : null,
-    [loadingMore, hasMore, items.length, colors.primary, colors.textDisabled],
+    () => (
+      <LoadMoreFooter
+        hasMore={hasMore}
+        loading={loadingMore}
+        colors={{ primary: colors.primary, textTertiary: colors.textTertiary }}
+        onLoadMore={onEndReached}
+      />
+    ),
+    [hasMore, loadingMore, colors.primary, colors.textTertiary, onEndReached],
   );
 
   return (
@@ -513,25 +552,6 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 15,
-  },
-  footerLoader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
-  },
-  footerText: {
-    fontSize: 13,
-  },
-  postFooter: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  noMore: {
-    textAlign: 'center',
-    paddingVertical: 16,
-    fontSize: 13,
   },
   postSeparator: {
     height: 8,

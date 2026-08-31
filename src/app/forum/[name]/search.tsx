@@ -6,22 +6,16 @@
  * search history, and paginated results.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
   Alert,
   Text,
 } from 'react-native';
-import { VStack, RNHostView } from '@expo/ui/swift-ui';
-import {
-  frame,
-} from '@expo/ui/swift-ui/modifiers';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import type { SearchBarCommands } from 'react-native-screens';
 import { hapticForScene } from '@/theme/hapticsMap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemedHost } from '@/components/ui/ThemedHost';
 import { SearchHistorySection } from '@/components/search/SearchHistorySection';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -36,6 +30,8 @@ import type { SearchPostResult } from '@/types';
 import { SymbolView } from '@/components/ui/SymbolView';
 import { HdrPressable } from '@/components/ui/HdrPressable';
 import { GlassView } from '@/components/ui/GlassView';
+import { TiebaSearchBar } from '@/components/ui/TiebaSearchBar';
+import { NAV_BAR_H } from '@/constants/layout';
 
 // ---------- Constants ----------
 // 取值对齐 Kotlin ForumSearchPostSortType / ForumSearchPostFilterType
@@ -51,9 +47,6 @@ const FILTER_OPTIONS = [
   { label: '仅主题贴', value: '1' },
 ];
 const MAX_HISTORY_ITEMS = 10;
-
-/** 原生搜索栏高度（bar 实测 402×108，与主搜索页同值）；控件行从 bar 底开始让位 */
-const SEARCH_BAR_HEIGHT = 108;
 
 // ---------- Main Page ----------
 export default function ForumSearchPage() {
@@ -72,14 +65,10 @@ export default function ForumSearchPage() {
   const [searched, setSearched] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(true);
 
-  // 原生 header 搜索栏（UISearchController）引用与当前文字镜像。
-  // iOS 不支持 autoFocus / onClose 事件，改用命令式 focus() 实现自动聚焦；
-  // 切换 tab 返回时重新聚焦，方便连续搜索。
-  const searchBarRef = useRef<SearchBarCommands | null>(null);
-  const searchQueryRef = useRef('');
-  useEffect(() => {
-    searchQueryRef.current = searchQuery;
-  }, [searchQuery]);
+  // ── 原生 header 搜索栏（UISearchController）引用与当前文字镜像。
+  // 2026-08-31 移除：headerSearchBarOptions 点搜索会顶掉导航栏标题（用户
+  // 否决），改用页内 RN 托管 UISearchBar（TiebaSearchBar，主搜索页同款），
+  // 顶栏常显、标题显示搜索关键词。
   const paged = usePagedList<SearchPostResult, { kw: string }>({
     fetcher: async (p, params, signal) => {
       const data = await searchPost(
@@ -208,109 +197,106 @@ export default function ForumSearchPage() {
 // 否则进页即闪骨架屏且永不消失——8-25 真机「一直闪骨架屏」根因）。
   const showLoading = loading && results.length === 0 && searched;
 
-  const searchBarOptions = useMemo(
-    () => ({
-      ref: searchBarRef,
-      placeholder: '搜索吧内帖子...',
-      hideWhenScrolling: false,
-      placement: 'stacked' as const,
-      autoCapitalize: 'none' as const,
-      text: searchQuery,
-      onChangeText: (e: { nativeEvent: { text: string } }) => setSearchQuery(e.nativeEvent.text),
-      onSearchButtonPress: (e: { nativeEvent: { text: string } }) => handleSubmitSearch(e.nativeEvent.text),
-      onCancelButtonPress: () => setSearchQuery(''),
-    }),
-    [searchQuery, handleSubmitSearch],
-  );
+  /** iOS 取消语义：有文字清空（保留结果），无文字返回吧页 */
+  const handleCancel = useCallback(() => {
+    if (searchQuery.length > 0) {
+      setSearchQuery('');
+      return;
+    }
+    router.back();
+  }, [searchQuery, router]);
 
   return (
-    // 页面级 ThemedHost（ignoreSafeArea 让 VStack 从 y=0 起）：RN 内容经
-    // RNHostView 从顶部延伸；排序/筛选自绘行在 RN 层内（面板 zIndex 60
-    // 高于结果列表，SwiftUI Menu 嵌 RN 树被盖的旧问题不再有）
-    <ThemedHost style={{ flex: 1 }} ignoreSafeArea="container">
-      <VStack spacing={0} modifiers={[frame({ maxWidth: 10000, maxHeight: 10000 })]}>
-        {/* RN 内容（工具行/历史/骨架/错误/空态/结果列表） */}
-        <RNHostView>
-          <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <Stack.Screen options={{ headerSearchBarOptions: searchBarOptions }} />
-            {/* 排序/筛选自绘行：从搜索栏底让位（insets.top + 108） */}
-            <SortFilterBar
-              sortType={sortType}
-              filterType={filterType}
-              menuOpen={menuOpen}
-              onToggle={(kind) => {
-                hapticForScene('press');
-                setMenuOpen((prev) => (prev === kind ? null : kind));
-              }}
-              onSelect={(kind, value) => {
-                hapticForScene('toggle');
-                setMenuOpen(null);
-                if (kind === 'sort') setSortType(value);
-                else setFilterType(value);
-              }}
-              top={insets.top + SEARCH_BAR_HEIGHT}
-              colors={colors}
-            />
-            {/* Search History (only before first search)；复用全站搜索页同款区块 */}
-            {!searched && (
-              <View style={styles.historyWrap}>
-              <SearchHistorySection
-                suggestions={[]}
-                history={history}
-                historyExpanded={historyExpanded}
-                onToggleExpand={() => setHistoryExpanded((v) => !v)}
-                onClearHistory={handleClearHistory}
-                onPressKeyword={handleHistoryTap}
-                onLongPressKeyword={handleHistoryLongPress}
-                colors={colors}
-              />
-              </View>
-            )}
-            {/* Loading */}
-            {showLoading && (
-              <SkeletonList count={6} variant="thread" />
-            )}
-            {/* Error */}
-            {error && results.length === 0 && !showLoading && (
-              <ErrorState message={error} onRetry={() => doSearch(searchQuery)} />
-            )}
-            {/* Empty */}
-            {!showLoading && !error && searched && results.length === 0 && (
-              <EmptyState
-                title="未找到相关内容"
-                description="换个关键词试试吧"
-                icon={'doc.text.magnifyingglass' as any}
-              />
-            )}
-            {/* Results */}
-            {!showLoading && results.length > 0 && (
-              <SearchPostList
-                items={results}
-                colors={colors}
-                onPressItem={handleOpenPost}
-                onEndReached={handleLoadMore}
-                hasMore={hasMore}
-                loadingMore={loadingMore}
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
-              />
-            )}
-          </View>
-        </RNHostView>
-      </VStack>
-    </ThemedHost>
+    // 顶栏常显 + 标题显示搜索关键词（2026-08-31 用户拍板：不再用导航栏内嵌
+    // UISearchController 顶掉标题——点搜索只聚焦搜索框，顶栏不动）
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{ title: searchedKeyword || '吧内搜索' }} />
+      {/* 原生搜索栏（RN 托管 UISearchBar）：从顶栏下方让位 */}
+      <View style={[styles.searchRow, { paddingTop: insets.top + NAV_BAR_H }]}>
+        <TiebaSearchBar
+          placeholder="搜索吧内帖子..."
+          text={searchQuery}
+          showCancel={searchQuery.length > 0}
+          autoFocus={!searched}
+          onTextChange={setSearchQuery}
+          onSubmit={handleSubmitSearch}
+          onCancel={handleCancel}
+        />
+      </View>
+      {/* 排序/筛选自绘行（页面级 zIndex 高于结果列表，弹层不被卡片盖） */}
+      <SortFilterBar
+        sortType={sortType}
+        filterType={filterType}
+        menuOpen={menuOpen}
+        onToggle={(kind) => {
+          hapticForScene('press');
+          setMenuOpen((prev) => (prev === kind ? null : kind));
+        }}
+        onSelect={(kind, value) => {
+          hapticForScene('toggle');
+          setMenuOpen(null);
+          if (kind === 'sort') setSortType(value);
+          else setFilterType(value);
+        }}
+        colors={colors}
+      />
+      {/* Search History (only before first search)；复用全站搜索页同款区块 */}
+      {!searched && (
+        <View style={styles.historyWrap}>
+          <SearchHistorySection
+            suggestions={[]}
+            history={history}
+            historyExpanded={historyExpanded}
+            onToggleExpand={() => setHistoryExpanded((v) => !v)}
+            onClearHistory={handleClearHistory}
+            onPressKeyword={handleHistoryTap}
+            onLongPressKeyword={handleHistoryLongPress}
+            colors={colors}
+          />
+        </View>
+      )}
+      {/* Loading */}
+      {showLoading && (
+        <SkeletonList count={6} variant="thread" />
+      )}
+      {/* Error */}
+      {error && results.length === 0 && !showLoading && (
+        <ErrorState message={error} onRetry={() => doSearch(searchQuery)} />
+      )}
+      {/* Empty */}
+      {!showLoading && !error && searched && results.length === 0 && (
+        <EmptyState
+          title="未找到相关内容"
+          description="换个关键词试试吧"
+          icon={'doc.text.magnifyingglass' as any}
+        />
+      )}
+      {/* Results */}
+      {!showLoading && results.length > 0 && (
+        <SearchPostList
+          items={results}
+          colors={colors}
+          onPressItem={handleOpenPost}
+          onEndReached={handleLoadMore}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
+        />
+      )}
+    </View>
   );
 }
 
-// ---------- 排序/筛选自绘下拉（RN 层 zIndex 高于结果列表；吧页 ForumSortBar 同款） ----------
+// ---------- 排序/筛选自绘下拉（2026-08-31：菜单锚在按钮下方 40pt 的 inner
+// 容器内，不再被外层 paddingTop 顶跑；整行 zIndex 提升，弹层盖在结果卡片上） ----------
 function SortFilterBar({
   sortType,
   filterType,
   menuOpen,
   onToggle,
   onSelect,
-  top,
   colors,
 }: {
   sortType: string;
@@ -318,34 +304,34 @@ function SortFilterBar({
   menuOpen: 'sort' | 'filter' | null;
   onToggle: (kind: 'sort' | 'filter') => void;
   onSelect: (kind: 'sort' | 'filter', value: string) => void;
-  top: number;
   colors: any;
 }) {
   const kind = menuOpen;
   const options = kind === 'sort' ? SORT_OPTIONS : FILTER_OPTIONS;
   const selectedValue = kind === 'sort' ? sortType : filterType;
   return (
-    <View style={[styles.toolRow, { paddingTop: top }]}>
-      <HdrPressable
-        effect="subtle"
-        style={({ pressed }) => [styles.toolBtn, { opacity: pressed ? 0.7 : 1 }]}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="帖子排序"
-        onPress={() => onToggle('sort')}
-      >
-        <SymbolView name="arrow.up.arrow.down" size={14} weight="semibold" tintColor={colors.primary} />
-        <Text style={[styles.toolBtnText, { color: colors.primary }]}>
-          {SORT_OPTIONS.find((o) => o.value === sortType)?.label ?? '排序'}
-        </Text>
-        <SymbolView
-          name={menuOpen === 'sort' ? 'chevron.up' : 'chevron.down'}
-          size={12}
-          weight="semibold"
-          tintColor={colors.primary}
-        />
-      </HdrPressable>
-      <HdrPressable
+    <View style={styles.toolRow}>
+      <View style={styles.toolInner}>
+        <HdrPressable
+          effect="subtle"
+          style={({ pressed }) => [styles.toolBtn, { opacity: pressed ? 0.7 : 1 }]}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="帖子排序"
+          onPress={() => onToggle('sort')}
+        >
+          <SymbolView name="arrow.up.arrow.down" size={14} weight="semibold" tintColor={colors.primary} />
+          <Text style={[styles.toolBtnText, { color: colors.primary }]}>
+            {SORT_OPTIONS.find((o) => o.value === sortType)?.label ?? '排序'}
+          </Text>
+          <SymbolView
+            name={menuOpen === 'sort' ? 'chevron.up' : 'chevron.down'}
+            size={12}
+            weight="semibold"
+            tintColor={colors.primary}
+          />
+        </HdrPressable>
+        <HdrPressable
         effect="subtle"
         style={({ pressed }) => [styles.toolBtn, { opacity: pressed ? 0.7 : 1 }]}
         hitSlop={8}
@@ -368,7 +354,6 @@ function SortFilterBar({
         <View
           style={[
             styles.toolMenuWrap,
-            { top: 44 },
             kind === 'filter' ? styles.toolMenuWrapRight : null,
           ]}
         >
@@ -404,6 +389,7 @@ function SortFilterBar({
           </GlassView>
         </View>
       ) : null}
+      </View>
     </View>
   );
 }
@@ -413,8 +399,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  // 排序/筛选工具行与下拉面板（zIndex 高于结果列表，选项框不被卡片盖）
+  // 原生搜索栏行（顶栏下方让位）
+  searchRow: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.xs,
+  },
+  // 排序/筛选工具行：zIndex 高于结果列表（弹层不被卡片盖）
   toolRow: {
+    zIndex: 60,
+  },
+  toolInner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -430,10 +424,14 @@ const styles = StyleSheet.create({
     ...RadiusStyle.chip,
   },
   toolBtnText: { fontWeight: '500', fontSize: 13 },
+  // 菜单锚在 toolInner 内（按钮下方 40pt）；absolute 相对 inner 边框盒，
+  // 不受外层 padding 影响——旧版 top:44 相对 toolRow 边框盒被 paddingTop
+  // 顶到导航栏区域，弹出被搜索栏遮挡、方向反了（2026-08-31 修复）
   toolMenuWrap: {
     position: 'absolute',
+    top: 40,
     left: Spacing.lg,
-    zIndex: 60,
+    zIndex: 61,
   },
   // 筛选钮位置更靠右：面板右对齐到筛选钮附近
   toolMenuWrapRight: {

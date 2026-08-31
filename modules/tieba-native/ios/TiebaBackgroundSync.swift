@@ -420,8 +420,10 @@ final class TiebaBackgroundSync: @unchecked Sendable {
         "tbs": snapshot.tbs,
         "authsid": "null",
         "stoken": snapshot.stoken,
-        // TODO(原生批次对齐): user_id: '' 待原生批次对齐 AccountUtil.getUid()（后台快照已有 uid 可用）
-        "user_id": ""
+        // Kotlin 对照（2026-08-31）：OfficialTiebaApi.mSignFlow 传真实
+        // AccountUtil.getUid()——旧版 user_id 恒空串（原 TODO 亦明言待对齐），
+        // 与 Kotlin 不一致，服务端对空 uid 的 msign 可能静默拒绝。
+        "user_id": snapshot.uid
       ],
       includeCommon: true,
       includeSign: true,
