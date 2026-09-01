@@ -561,13 +561,12 @@ public final class TiebaNativeModule: Module {
   // 不改名则存量旧参数 mask 会经 timer/KVO 路径永久存活。
   private static let gradientMaskName = "tiebaNavGlassGradient.v16"
 
-  // 液态玻璃开关（2026-09-01 实验，用户要求再试）：UIGlassEffect 为 iOS 26+
-  // 公开类，与 UIBlurEffect 同走 effect 赋值通道，KVO/swizzle/timer 重挂体系
-  // 零改动；仅材质常量、判类（动态 type(of:) 自动适配）、mask 挂载三处联动。
-  // v8（08-26）曾弃用它：①自绘内缩圆角→全宽 bar 四角露无材质空白区；
-  // ②基底偏白、透明度只能靠 mask 硬压；③自带边框亮线即"底部明显边界"。
-  // 若真机复现任一硬伤 → useLiquidGlass 改 false 一行切回 systemMaterial。
-  private static let useLiquidGlass = true
+  // 液态玻璃开关（实验结论 2026-09-01）：UIGlassEffect 赋给 _UIBarBackground
+  // 的 UIVisualEffectView.effect 在 iOS 27β 上不渲染（诊断实锤：assigned 成功
+  // 但整条 bar 无玻璃，仅系统按钮自带玻璃）→ 维持 false。systemMaterial+α0.25
+  // 为当前拍板观感；官方玻璃姿势（iOS26 UIView.effect 给 _UIBarBackground）
+  // 需私有视图适配+重挂体系改造，暂不折腾。
+  private static let useLiquidGlass = false
 
   // 共享材质常量：滚动 swizzle / KVO / timer 热路径只做比较与复用，不再分配
   // （此前每次比较或重挂都新建一个 UIBlurEffect，飞速滑动时每帧多次堆分配）。
