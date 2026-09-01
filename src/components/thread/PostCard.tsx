@@ -292,7 +292,6 @@ const PostCard = React.memo(function PostCard({
     [
       timeLabel(post.createTime),
       post.floor > 0 ? `${post.floor}楼` : null,
-      showIpLocation && post.ipLocation ? `IP属地:${post.ipLocation}` : null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -324,6 +323,11 @@ const PostCard = React.memo(function PostCard({
                         ? `${post.authorNameShow} @${post.authorName}`
                         : (post.authorNameShow || post.authorName)}
                     </Text>
+                    {showIpLocation && post.ipLocation ? (
+                      <Text style={[s.ipText, { color: colors.textTertiary }]} numberOfLines={1}>
+                        来自{post.ipLocation}
+                      </Text>
+                    ) : null}
                     {showLevelBadge && levelColor && (
                       <View style={[s.levelBadge, { backgroundColor: levelColor.bg }]}>
                         <Text style={[s.levelBadgeText, { color: levelColor.color }]}>Lv.{post.authorLevelId}</Text>
@@ -397,7 +401,8 @@ const PostCard = React.memo(function PostCard({
                     )}
                     <View style={s.subPostRow}>
                       <Text style={[s.subPostName, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {sp.authorNameShow || sp.authorName}：
+                        {sp.authorNameShow || sp.authorName}
+                        {showIpLocation && sp.ipLocation ? ` 来自${sp.ipLocation}` : ''}：
                       </Text>
                       <SubQuoteItem sp={sp} colors={colors} onImagePress={handleViewerImagePress} />
                     </View>
@@ -487,6 +492,10 @@ const s = StyleSheet.create({
   },
   authorMeta: {
     ...typographyStyles.caption1,
+  },
+  ipText: {
+    fontSize: 12,
+    fontWeight: '400',
   },
 
   // Sub-post section (楼中楼) — 无卡片，hairline 横线分隔，文字严格限高

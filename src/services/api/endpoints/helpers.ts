@@ -381,8 +381,9 @@ export function mapProtoPosts(rawPosts: any[], threadId: string, userList: any[]
       isAgree: (p.agree?.hasAgree ?? 0) === 1,
       // 踩状态从 proto 映射（proto 无 has_disagree 字段时保持 false，服务端下发则取真实值）
       isDisagree: (p.agree?.hasDisagree ?? p.agree?.has_disagree ?? p.isDisagree ?? p.is_disagree ?? 0) === 1,
-      // 主楼/楼层 IP 属地：Post 无 ip 字段，属地挂在 author(User.ip) 上
-      ipLocation: p.author?.ip ?? p.ipAddress ?? p.ip ?? '',
+      // 主楼/楼层 IP 属地：Post 无 ip 字段，属地挂在 author 上（User.ip_address=127，
+      // SwiftProtobuf ToJsonName→ipAddress）；JSON 兜底 location.addr（楼中楼同款）。
+      ipLocation: p.location?.addr ?? p.ipAddress ?? author.ipAddress ?? p.author?.ip ?? p.ip ?? '',
     };
   });
 }

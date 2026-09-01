@@ -936,6 +936,10 @@ export default function ImageViewer({
 //   缩略条格（翻页后当前页）→ 沿手势方向缩小淡出（单图无缩略条）；
 //   未过阈值 → 弹簧回弹。缩放态（zoomedSV）下禁用，交给页内缩放 pan。
 const dismissGesture = usePanGesture({
+    // 长图页完全禁用退出手势（2026-09-01 修复多图横滑）：enabled=false 后
+    // RNGH 不参与该页触摸，PagerView 原生翻页无竞争、横向可正常切换；
+    // 长图阅读滚动走 readPan，关闭走 X（手势滑出本就禁用）。
+    enabled: !isLongImageOf(currentIndex),
     // 死区 10→5（2026-09-01）：10pt 内画面完全不动是「不跟手」主感来源；
     // 5pt 是翻页手势轻微纵向抖动的容差下限，再小会误抢横向翻页。
     minDistance: 5,

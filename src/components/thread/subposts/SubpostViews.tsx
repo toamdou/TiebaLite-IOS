@@ -242,6 +242,11 @@ export const ReplyItem = React.memo(function ReplyItem({
                 <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>
                   {item.authorNameShow || item.authorName}
                 </Text>
+                {showIpLocation && item.ipLocation ? (
+                  <Text style={[s.ipText, { color: colors.textTertiary }]} numberOfLines={1}>
+                    来自{item.ipLocation}
+                  </Text>
+                ) : null}
               </Pressable>
             </Link>
 
@@ -261,7 +266,6 @@ export const ReplyItem = React.memo(function ReplyItem({
             <View style={s.headerRight}>
               <Text style={[s.meta, { color: colors.textTertiary }]} numberOfLines={1}>
                 {timeLabel(item.createTime)}
-                {showIpLocation && item.ipLocation ? ` · ${item.ipLocation}` : ''}
               </Text>
               {/* ⋮ 更多操作：点赞左侧（复制内容/查看用户/举报/删除，与旧长按一致） */}
               <HdrPressable
@@ -697,6 +701,10 @@ const s = StyleSheet.create({
   meta: {
     ...typographyStyles.caption1,
     flexShrink: 0,
+  },
+  ipText: {
+    fontSize: 12,
+    fontWeight: '400',
   },
 
 // Reply-to chip
