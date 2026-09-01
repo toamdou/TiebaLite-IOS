@@ -552,22 +552,26 @@ public final class TiebaNativeModule: Module {
   // 渐变 mask 的名字标记：同一视图重复挂载时直接更新 frame，不重复创建。
   // 参数升级时同步升版本号——复用分支只校验名字与 colors 非空、不比较数值，
   // 不改名则存量旧参数 mask 会经 timer/KVO 路径永久存活。
-  private static let gradientMaskName = "tiebaNavGlassGradient.v15"
+  private static let gradientMaskName = "tiebaNavGlassGradient.v16"
+
+  // 液态玻璃开关（2026-09-01 实验，用户要求再试）：UIGlassEffect 为 iOS 26+
+  // 公开类，与 UIBlurEffect 同走 effect 赋值通道，KVO/swizzle/timer 重挂体系
+  // 零改动；仅材质常量、判类（动态 type(of:) 自动适配）、mask 挂载三处联动。
+  // v8（08-26）曾弃用它：①自绘内缩圆角→全宽 bar 四角露无材质空白区；
+  // ②基底偏白、透明度只能靠 mask 硬压；③自带边框亮线即"底部明显边界"。
+  // 若真机复现任一硬伤 → useLiquidGlass 改 false 一行切回 systemMaterial。
+  private static let useLiquidGlass = true
 
   // 共享材质常量：滚动 swizzle / KVO / timer 热路径只做比较与复用，不再分配
   // （此前每次比较或重挂都新建一个 UIBlurEffect，飞速滑动时每帧多次堆分配）。
-  // v8（2026-08-26）：弃用 UIGlassEffect。真机三轮实测其在本 β 上：①自绘
-  // 内缩圆角形状，全宽 bar 四角（尤下部两角）露出无材质空白区；②材质基底
-  // 偏白，透明度只能靠 mask 硬压；③自带边框亮线即"底部明显边界"。三者均
-  // 为材质自身渲染行为，mask/数值无法根治。换 systemUltraThinMaterial：
-  // 全幅均匀超轻磨砂、自动深浅色、无角部缺口无边框线。
-  // v15（2026-09-01 用户拍板）：观感"不好看"根源=ultraThin 模糊太弱、
-  // α 压低后内容几乎是直接透出（透明水渍感）。换 .systemMaterial 常规磨砂
-  // （模糊层次明显、文字底下干净），mask 同步降到 α0.38 满足"更透"诉求：
-  // 透看得见内容、又有成型的磨砂层次。—— 模糊强弱只能换 style（UIBlurEffect
-  // 无半径旋钮），这是 iOS 27 上唯一"液态玻璃/高斯模糊"的现实替代（UIGlassEffect
-  // 官方类三无解已封档、手工 CIGaussianBlur 逐帧成本否决）。
-  fileprivate static let barGlassEffect: UIVisualEffect = UIBlurEffect(style: .systemMaterial)
+  // v15（2026-09-01）：ultraThin 模糊太弱像水渍 → .systemMaterial 常规磨砂，
+  // mask α0.38；v16 用户再降 → α0.25（液态玻璃分支不挂 mask，无 α 旋钮）。
+  fileprivate static let barGlassEffect: UIVisualEffect = {
+    if #available(iOS 26, *) {
+      if useLiquidGlass { return UIGlassEffect() }
+    }
+    return UIBlurEffect(style: .systemMaterial)
+  }()
 
   // 导航栏弱引用缓存：滚动恢复路径（每帧）不做全树扫描，只遍历该缓存；
   // forceNavBarLiquidGlass（timer/KVO 路径）负责填充与刷新。
@@ -671,19 +675,24 @@ public final class TiebaNativeModule: Module {
         // 顶栏（"第一次打开吧页顶栏透明"根因之一）——bounds 非零才挂，
         // layoutSubviews hook 会在布局完成后异步补挂（≤1 帧 + force 兜底）。
         if bg.layer.bounds.width > 0 && bg.layer.bounds.height > 0 {
-        if let existing = bg.layer.mask as? CAGradientLayer,
+          if TiebaNativeModule.useLiquidGlass {
+            // 液态玻璃自带形状/透明度/高光描边，不挂 mask；切换时清残留旧 mask
+            if bg.layer.mask != nil {
+              bg.layer.mask = nil
+              applied = true
+            }
+        } else if let existing = bg.layer.mask as? CAGradientLayer,
            existing.name == gradientMaskName,
            let colors = existing.colors as? [CGColor], !colors.isEmpty {
           existing.frame = bg.layer.bounds
         } else {
-          // v15（2026-09-01 拍板）：配 .systemMaterial 常规磨砂，均一 α0.38（比
-          // v14 更透），仅底部 ~7pt 极短衰减到 0——消掉"内容在 bar 下沿突然
-          // 变实"的硬边窗口感；衰减区极短，不构成 v11 那类可视分段。
+          // v16（2026-09-01）：systemMaterial 分支均一 α0.25（用户再透一档），
+          // 底部 ~7pt 极短衰减到 0 消硬边；衰减区极短不构成 v11 类分段观感。
           let mask = CAGradientLayer()
           mask.name = gradientMaskName
           mask.colors = [
-            UIColor(white: 1, alpha: 0.38).cgColor,  // loc 0.000 主体均一
-            UIColor(white: 1, alpha: 0.38).cgColor,  // loc 0.930
+            UIColor(white: 1, alpha: 0.25).cgColor,  // loc 0.000 主体均一
+            UIColor(white: 1, alpha: 0.25).cgColor,  // loc 0.930
             UIColor(white: 1, alpha: 0).cgColor,     // loc 1.000 底部贴沿归零
           ]
           mask.locations = [0, 0.93, 1]
