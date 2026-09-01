@@ -242,11 +242,6 @@ export const ReplyItem = React.memo(function ReplyItem({
                 <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>
                   {item.authorNameShow || item.authorName}
                 </Text>
-                {showIpLocation && item.ipLocation ? (
-                  <Text style={[s.ipText, { color: colors.textTertiary }]} numberOfLines={1}>
-                    来自{item.ipLocation}
-                  </Text>
-                ) : null}
               </Pressable>
             </Link>
 
@@ -262,6 +257,11 @@ export const ReplyItem = React.memo(function ReplyItem({
                 <Text style={[s.lzChipText, { color: colors.primary }]}>楼主</Text>
               </View>
             )}
+            {showIpLocation && item.ipLocation ? (
+              <Text style={[s.ipText, { color: colors.textTertiary }]} numberOfLines={1}>
+                IP属地：{item.ipLocation}
+              </Text>
+            ) : null}
 
             <View style={s.headerRight}>
               <Text style={[s.meta, { color: colors.textTertiary }]} numberOfLines={1}>
@@ -703,8 +703,9 @@ const s = StyleSheet.create({
     flexShrink: 0,
   },
   ipText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '400',
+    marginLeft: 4,
   },
 
 // Reply-to chip

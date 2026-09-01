@@ -552,7 +552,7 @@ public final class TiebaNativeModule: Module {
   // 渐变 mask 的名字标记：同一视图重复挂载时直接更新 frame，不重复创建。
   // 参数升级时同步升版本号——复用分支只校验名字与 colors 非空、不比较数值，
   // 不改名则存量旧参数 mask 会经 timer/KVO 路径永久存活。
-  private static let gradientMaskName = "tiebaNavGlassGradient.v12"
+  private static let gradientMaskName = "tiebaNavGlassGradient.v13"
 
   // 共享材质常量：滚动 swizzle / KVO / timer 热路径只做比较与复用，不再分配
   // （此前每次比较或重挂都新建一个 UIBlurEffect，飞速滑动时每帧多次堆分配）。
@@ -670,14 +670,14 @@ public final class TiebaNativeModule: Module {
            let colors = existing.colors as? [CGColor], !colors.isEmpty {
           existing.frame = bg.layer.bounds
         } else {
-          // v12（2026-09-01 用户拍板）：去掉底部梯度段，全 bar 均一 α0.82——
-          // v11 平台段 α1.0 太实（顶栏像纯色板），v10 α0.50 又太透（返回键/
-          // 右侧按钮"掉出顶栏"）；均一中档既整体抬高透明度又保住控件可读性。
+          // v13（2026-09-01 二轮）：在 v12 α0.82 基础再透一档到 α0.70——
+          // 用户实测 0.82 仍偏实；0.70 保留均一无梯度。0.50（v10）已被否
+          //（返回键/药丸"掉出顶栏"），0.70 是安全下限的余量。
           let mask = CAGradientLayer()
           mask.name = gradientMaskName
           mask.colors = [
-            UIColor(white: 1, alpha: 0.82).cgColor,
-            UIColor(white: 1, alpha: 0.82).cgColor,
+            UIColor(white: 1, alpha: 0.70).cgColor,
+            UIColor(white: 1, alpha: 0.70).cgColor,
           ]
           mask.locations = [0, 1]
           mask.startPoint = CGPoint(x: 0.5, y: 0)
@@ -780,8 +780,11 @@ public final class TiebaNativeModule: Module {
   nonisolated(unsafe) private static var navDoubleTapGateKey: UInt8 = 0
 
   /// 安装幂等：force 由 timer/KVO 反复跑，按手势类型判重。
-  /// 双击识别不拦单击按钮动作——UIControl 在第一击 touch-up 即派发，
-  /// 识别器只在第二击开始后才可能成功（误触返回键最坏=一次返回+空回顶）。
+  /// iOS 27β 上 UITapGestureRecognizer(numberOfTapsRequired:2) 在导航栏上
+  /// 偶发"单击即触发"（真机 2026-09-01 实证：点一次就回顶）——双击判定改放
+  /// JS 侧（useNavDoubleTapToTop 400ms 窗口），原生只上报 bar 标题/空白区的
+  /// 单击（onNavDoubleTap 事件语义=bar 单击，JS 负责两次判定与抑制）。
+  /// 门卫保留：左右边缘区与栏内 UIControl 不识别——事件仅在标题/空白区发出。
   private static func installNavDoubleTapToTop(on bar: UINavigationBar) {
     let installed = bar.gestureRecognizers?.contains { $0 is NavDoubleTapGesture } ?? false
     guard !installed else { return }
@@ -789,7 +792,7 @@ public final class TiebaNativeModule: Module {
       target: TiebaNativeModule.self,
       action: #selector(navDoubleTapped(_:))
     )
-    tap.numberOfTapsRequired = 2
+    tap.numberOfTapsRequired = 1
     // 必须关闭 touches 延迟（默认 true）！否则栏内所有 UIControl（返回钮/
     // 搜索钮/药丸）的 touch-up 要等双击判定窗口结束才派发——返回按钮点击
     // 后延迟 ~0.3s 才响应、振动落在返回之后（真机实测 2026-08-26）。

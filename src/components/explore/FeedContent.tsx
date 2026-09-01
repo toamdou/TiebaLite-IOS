@@ -322,13 +322,22 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
     },
   });
 
-  // 折叠完成后移除目标行（引用相等，与失败回滚无关）
+  // 折叠完成后移除目标行。⚠️ 不能用引用相等：菜单路径（TweetCard
+  // 右上角 × → handleTweetMenuAction）会新建 FeedItem 包装对象，与列表内
+  // 的 item 不是同一引用，filter(i => i !== target) 恒删不掉 —— 折叠动画
+  // 结束后行恢复完整（collapsingId 复位 → CollapseRow 同步回弹），观感
+  // 就是"卡片不会消失"（2026-09-01 真机实证）。改按线程 id 移除。
   const handleCollapseEnd = useCallback(() => {
     const target = opacityTargetRef.current;
     opacityTargetRef.current = null;
     setCollapsingId(null);
     if (!target) return;
-    setItems((prev) => prev.filter((i) => i !== target));
+    const targetId = target.threadInfo?.id;
+    setItems((prev) =>
+      targetId
+        ? prev.filter((i) => i.threadInfo?.id !== targetId)
+        : prev.filter((i) => i !== target),
+    );
   }, [setItems]);
 
   const handleSubmitDislike = useCallback(() => {
