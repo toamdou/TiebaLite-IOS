@@ -71,7 +71,10 @@ export const viewerStyles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
-  /* staticMode 期间 PagerView 仅隐藏（保持挂载/解码），不让它参与动画 */
+  /* staticMode 期间 PagerView 仅隐藏（保持挂载/解码），不让它参与动画。
+     opacity 0 后 CA 合成已跳过该子树。**不要加 display:none**：真机 A/B
+     （2026-09-01）实证 display 切换会把 PagerView 从布局树移除，拖拽回弹
+     恢复后原生 UIScrollView 不重新布局 → 整页黑屏（翻页才恢复）。 */
   pagerWhileStatic: {
     opacity: 0,
   },

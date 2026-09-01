@@ -14,7 +14,11 @@ if (__DEV__) {
     const head = String(args[0] ?? '');
     if (
       head.includes('Error reading persisted server registration info') ||
-      head.includes('ERR_NOTIFICATIONS_KEYCHAIN_ACCESS')
+      head.includes('ERR_NOTIFICATIONS_KEYCHAIN_ACCESS') ||
+      // RN 0.86 Modal（New Architecture）挂载 children 时自抛的固有噪音：
+      // 组件栈只有 View + AppContainer（RN 内部），业务组件零参与
+      // （2026-09-01 真机复现取证），仅 console.error 不影响功能——静默。
+      head.includes('Text strings must be rendered within a <Text> component')
     ) {
       return;
     }

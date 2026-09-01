@@ -2943,7 +2943,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - RNGestureHandler (2.32.0):
+  - RNGestureHandler (3.2.1):
     - boost
     - DoubleConversion
     - fast_float
@@ -2970,6 +2970,7 @@ PODS:
     - ReactCodegen
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
+    - RNWorklets (>= 0.8.0)
     - SocketRocket
     - Yoga
   - RNPlainText (0.8.0):
@@ -3841,7 +3842,7 @@ SPEC CHECKSUMS:
   ReactCodegen: c5a56ce0e7d6b0ece2130ad68b87ca647f092a05
   ReactCommon: 322cf4b51be09a3cbf5ae891c8dd9f52091c4011
   RNCMaskedView: d707a83784c67099b54b37d056ababb2767ce15e
-  RNGestureHandler: 89c0c079dc88636fed9580bb581bd7df69ef33d0
+  RNGestureHandler: 8f92f7836ebbc8e372c2374b8d3043dd058451cf
   RNPlainText: d58368595fc2ce89ea74f5b0b09a49eb35b726bd
   RNReanimated: 56b12744833e5d677b5a2b7fe191913d09618058
   RNScreens: cd316d11b2eadd658804e5d956194d4588d05e2b

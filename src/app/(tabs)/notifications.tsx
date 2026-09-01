@@ -12,21 +12,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   VStack, Button, Text, Label,
-  Picker, ProgressView, ContentUnavailableView, Spacer,
+  ProgressView, ContentUnavailableView, Spacer,
 } from '@expo/ui/swift-ui';
 import {
-  pickerStyle, tag, foregroundStyle, padding,
+  foregroundStyle,
   buttonStyle, buttonBorderShape,
 } from '@expo/ui/swift-ui/modifiers';
 import {
   View, DeviceEventEmitter,
 } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { hapticForScene } from '@/theme/hapticsMap';
 import { useThemeColors } from '@/theme/ThemeContext';
 import { ThemedHost } from '@/components/ui/ThemedHost';
 import { SegmentPager } from '@/components/ui/SegmentPager';
+import { TiebaSegmentedControl } from '@/components/ui/TiebaSegmentedControl';
 import { BottomFade } from '@/components/feed/BottomFade';
 import { MessageTabList } from '@/components/notifications/MessageTabList';
 import { useAuthStore } from '@/stores/authStore';
@@ -160,40 +162,47 @@ export default function NotificationsScreen() {
   }
 
   // ── 已登录 ──
+  // 2026-08-31 重构：分段器/分页整体纯 RN 化——原 SwiftUI Picker + VStack
+  // 嵌套下，内层 RN 的 SegmentPager 拿不到高度（用户实测消息页整块空白，
+  // 连调试条都不可见）；TiebaSegmentedControl 与吧页同款原生分段。
+  // paddingBottom 与未登录分支对齐（insets.bottom + 80 = 底栏高度+安全区）：
+  // 此前缺失时 pager 区域直通屏底、区域中心偏下 40~60pt（2026-09-01 用户
+  // "空态没居中"的几何根因之一；另一根因见 MessageTabList 空态容器注释）。
   return (
-    <View style={{ flex: 1, paddingTop: insets.top }}>
-      <ThemedHost style={{ flex: 1 }} ignoreSafeArea="container">
-        <VStack spacing={0}>
-          {/* 分段选择器：selection 是 string 标签，onSelectionChange 用正式签名 */}
-          <Picker<string>
-            selection={activeTab}
-            onSelectionChange={handleTabChange}
-            modifiers={[pickerStyle('segmented'), padding({ horizontal: 16, top: 8, bottom: 4 })]}
-          >
-            {SEGMENTS.map((s) => (
-              <Text key={s.value} modifiers={[tag(s.value)]}>{s.label}</Text>
-            ))}
-          </Picker>
+    <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom + 80 }}>
+      <View style={styles.segRow}>
+        <TiebaSegmentedControl
+          segments={SEGMENTS.map((s) => ({ label: s.label, value: s.value }))}
+          selectedIndex={TAB_INDEX[activeTab]}
+          onSelect={handleTabChange}
+        />
+      </View>
 
-          {/* 三页横滑（回复/提到/赞），每 tab 独立列表与滚动位置 */}
-          <SegmentPager pageIndex={TAB_INDEX[activeTab]} onPageIndexChange={handlePagerChange} canExit={false}>
-            {SEGMENTS.map((s) => (
-              <View key={s.value} style={{ flex: 1 }}>
-                <MessageTabList
-                  tab={s.value}
-                  isLoggedIn={isLoggedIn}
-                  colors={colors}
-                  active={s.value === activeTab}
-                  refreshSignal={refreshSignal}
-                />
-              </View>
-            ))}
-          </SegmentPager>
-        </VStack>
-      </ThemedHost>
+      {/* 三页横滑（回复/提到/赞），每 tab 独立列表与滚动位置 */}
+      <SegmentPager pageIndex={TAB_INDEX[activeTab]} onPageIndexChange={handlePagerChange} canExit={false}>
+        {SEGMENTS.map((s) => (
+          <View key={s.value} style={{ flex: 1 }}>
+            <MessageTabList
+              tab={s.value}
+              isLoggedIn={isLoggedIn}
+              colors={colors}
+              active={s.value === activeTab}
+              refreshSignal={refreshSignal}
+            />
+          </View>
+        ))}
+      </SegmentPager>
 
       {/* 底部渐罩：叠在列表之上、贴容器底 80pt；glass 底栏背后不再是纯平实色 */}
       <BottomFade />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  segRow: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+});

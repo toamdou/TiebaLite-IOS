@@ -49,6 +49,8 @@ export interface ImageSegmentImage {
   originSrc?: string;
   isLongPic?: boolean;
   showOriginalBtn?: boolean;
+  /** 动图（GIF）：mapProtoContent 按 PbContent.dynamic/URL 后缀判定装配 */
+  isGif?: boolean;
 }
 
 interface ImageSegmentProps {
@@ -173,6 +175,7 @@ export function ImageSegment({
       originSrc: img.originSrc || img.src,
       width: img.width,
       height: img.height,
+      isGif: img.isGif,
     }));
     return (
       // dimmed 与单图分支一致（夜间压暗整条图片带）。压暗放在本层外层 View：
@@ -236,7 +239,12 @@ export function ImageSegment({
         onLoad={() => markImageWarm(singleUri)}
         recyclingKey={singleUri}
       />
-      {singleIsLong ? (
+      {/* 右下角徽标：GIF（动图）优先，其次长图（2026-09-01 帖内 GIF 标识） */}
+      {single.isGif ? (
+        <View style={styles.longBadge} pointerEvents="none">
+          <Text style={styles.longBadgeText}>GIF</Text>
+        </View>
+      ) : singleIsLong ? (
         <View style={styles.longBadge} pointerEvents="none">
           <SymbolView name="arrow.down" size={10} tintColor="#FFFFFF" />
           <Text style={styles.longBadgeText}>长图</Text>

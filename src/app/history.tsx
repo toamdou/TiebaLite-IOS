@@ -319,8 +319,10 @@ export default function HistoryPage() {
       }
 
       // 帖记录：与 explore/搜索同款 TweetCard（X 式卡片：作者行 + 多图横带 +
-      // 吧名药丸 + 操作栏 + 图片长按菜单 + ImageViewer 大图）。历史跨吧，
+      // 吧名药丸 + 图片长按菜单 + ImageViewer 大图）。历史跨吧，
       // showForumPill 开启；timeType="create" 以访问时间充当相对时间展示。
+      // 2026-09-01 用户要求：hideActions 隐藏评论/分享/点赞操作栏
+      //（历史不存计数，那一栏是死数据）。
       if (isThread) {
         const avatarKey = forumAvatarKey(item);
         const storeAvatar = avatarKey ? avatarMap[avatarKey]?.avatar ?? '' : '';
@@ -339,8 +341,8 @@ export default function HistoryPage() {
               timeType="create"
               showForumPill
               imageContextMenu
+              hideActions
               onImagePress={imageViewer.handleImagePress}
-              onShare={feedActions.share}
             />
           </SwipeToDeleteRow>
         );

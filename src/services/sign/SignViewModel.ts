@@ -15,7 +15,6 @@ import { syncBackgroundSnapshot } from '@/services/nativeBackground';
 import { showToast } from '@/components/ui/Toast';
 import {
   finishSignLiveActivity,
-  isLiveActivityAvailable,
   startSignLiveActivity,
   updateSignLiveActivity,
 } from '@/services/liveActivity';
@@ -200,15 +199,6 @@ export function createSignViewModel(): UseBoundStore<StoreApi<SignState>> {
           const useBanner = prefs.signDisplayMode === 'notification';
           const silent = prefs.signSilent ?? false;
 
-          // 2026-08-27 诊断：用户一键签到只出"实时活动"横幅、无灵动岛。
-          // 日志区分 JS 分支没进 island（useIsland=false）还是原生 start
-          // 失败（available=false 或 start 返回 null）。
-          if (__DEV__) {
-            console.warn(
-              `[sign] island useIsland:${useIsland} mode:${prefs.signDisplayMode} enabled:${prefs.liveActivitySignEnabled} available:${isLiveActivityAvailable()}`,
-            );
-          }
-
           const { runSignBatch } = lazyRunSignBatch();
           const result = await runSignBatch({
             tbs,
@@ -280,13 +270,6 @@ export function createSignViewModel(): UseBoundStore<StoreApi<SignState>> {
                       fail: 0,
                       exp: 0,
                     });
-                    // 2026-08-27 诊断：available:true 但用户看不到灵动岛——
-                    // 记录原生 start 是否真的返回了 activity id（null = 原生
-                    // 创建失败；有 id 而不可见 = 系统行为：自家 app 在前台时
-                    // 灵动岛不展示自己的 Live Activity，切后台才出现）。
-                    if (__DEV__) {
-                      console.warn(`[sign] island start id=${id ? 'YES' : 'NULL'}`);
-                    }
                     set({ _liveActivityId: id });
                     return id;
                   },

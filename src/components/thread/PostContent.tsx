@@ -116,6 +116,7 @@ function PostContent({
       originSrc?: string;
       isLongPic?: boolean;
       showOriginalBtn?: boolean;
+      isGif?: boolean;
     }[] = [];
     let blockedKey = 0;
 
@@ -162,6 +163,7 @@ function PostContent({
             // smallSrc 已删：mapProtoContent 从不产出（见第二轮扫描）。
             isLongPic: (segment as { isLongPic?: boolean }).isLongPic,
             showOriginalBtn: (segment as { showOriginalBtn?: boolean }).showOriginalBtn,
+            isGif: (segment as { isGif?: boolean }).isGif,
           });
           break;
 

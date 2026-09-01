@@ -16,7 +16,6 @@ import { Avatar } from '@/components/ui/Avatar';
 import { SymbolView } from '@/components/ui/SymbolView';
 import { LoadMoreFooter } from '@/components/ui/LoadMoreFooter';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { PressScale } from '@/components/ui/PressScale';
 import { usePagedList } from '@/hooks/usePagedList';
@@ -42,6 +41,36 @@ const MESSAGE_EMPTY_STATE: Record<MessageTab, { title: string; description: stri
   at: { title: '暂无@提到我', description: '暂时没有 @你 的内容' },
   agree: { title: '暂无收到的赞', description: '你收到的赞会显示在这里' },
 };
+
+
+/**
+ * 消息空态（2026-08-31 纯 RN 自绘）：SwiftUI ContentUnavailableView 经
+ * ThemedHost(matchContents) 在 SegmentPager 嵌套页里测量塌缩为 0（外层
+ * flex/minHeight 均无效，用户实测看不到文字）——RN 文本无宿主测量问题。
+ */
+function MsgEmptyState({
+  icon,
+  title,
+  description,
+  colors,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+  colors: SemanticColors;
+}) {
+  return (
+    <View style={styles.msgEmptyInner}>
+      <SymbolView name={icon} size={34} tintColor={colors.textTertiary} />
+      <RNText style={[styles.msgEmptyTitle, { color: colors.text }]}>{title}</RNText>
+      {description ? (
+        <RNText style={[styles.msgEmptyDesc, { color: colors.textSecondary }]}>
+          {description}
+        </RNText>
+      ) : null}
+    </View>
+  );
+}
 
 interface MessageTabListProps {
   tab: MessageTab;
@@ -239,10 +268,11 @@ export function MessageTabList({
         // 未登录：显式说明（此前未登录时 loading 恒 true、骨架屏永转，
         // "加载失败还是没消息"无从判断——2026-08-29 用户反馈）
         <View style={[styles.messageEmptyWrap, { minHeight: 320 }]}>
-          <EmptyState
+          <MsgEmptyState
+            icon="person.crop.circle.badge.questionmark"
             title="未登录"
             description="登录后查看回复、@提到我 与收到的赞"
-            icon="person.crop.circle.badge.questionmark"
+            colors={colors}
           />
         </View>
       ) : msgLoading && messages.length === 0 ? (
@@ -256,15 +286,16 @@ export function MessageTabList({
           retryLabel="重试"
         />
       ) : visibleMessages.length === 0 ? (
-        // 空态包 ThemedHost（EmptyState 内置）+ 保底高度：裸 ContentUnavailableView
-        // 在 SegmentPager 内高度塌缩成一片空白（2026-08-27 真机"消息界面全空白、
-        // 无提示"根因）；与个人主页空态 minHeight 隔离同款修复。
-        // 分 tab 专属文案（2026-08-29 用户反馈：空态要能区分"没消息"）。
+        // 空态：**纯 RN 自绘**（2026-08-31）——SwiftUI ContentUnavailableView
+        // 经 ThemedHost(matchContents) 在 SegmentPager 嵌套页里测量塌缩为 0，
+        // 外层 flex 修复无效（用户实测"看不到无消息文字"）；RN 文本无宿主
+        // 测量问题，任何容器都稳定可见。分 tab 专属文案。
         <View style={[styles.messageEmptyWrap, { minHeight: 320 }]}>
-          <EmptyState
+          <MsgEmptyState
+            icon="bell"
             title={MESSAGE_EMPTY_STATE[tab].title}
             description={MESSAGE_EMPTY_STATE[tab].description}
-            icon="bell"
+            colors={colors}
           />
         </View>
       ) : (
@@ -294,10 +325,34 @@ export function MessageTabList({
 const styles = StyleSheet.create({
   // 骨架屏容器
   messageSkeleton: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: 24 },
-  // 空态容器：居中 + 保底高度（见空态注释）
+  // 空态容器：in-flow flex:1 占满剩余高度并居中（2026-09-01 终局）。
+  // 此前 absolute 铺满依赖"包含块高度"——v8 iOS 页包装对 RN 子视图零
+  // AutoLayout 约束，若 Fabric 挂载未按页高应用则 flex 链塌缩，absolute
+  // 回落 minHeight 320 + top 锚定、文字悬在页面上部（用户实测"偏上"）。
+  // in-flow 与 LegendList 走完全相同的高度渠道：列表显示正常则空态必然
+  // 同高同基准（absolute 在链断时可正常而列表异常——恰反）。
+  // minHeight 320 仅兜底极端塌缩，行为不劣于原方案。
   messageEmptyWrap: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 320,
     paddingTop: Spacing.lg,
+  },
+  // 纯 RN 空态内容（SwiftUI 宿主塌缩的替代，见 MsgEmptyState）
+  msgEmptyInner: {
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: Spacing.lg,
+  },
+  msgEmptyTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  msgEmptyDesc: {
+    fontSize: 13,
+    textAlign: 'center',
   },
   messageListContent: {
     paddingHorizontal: Spacing.lg,
