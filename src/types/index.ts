@@ -601,6 +601,8 @@ export interface AppPreferences {
   clipboardLinkDetection: boolean;
   /** 双击顶栏（标题/空白区）回顶：搜索/吧页/帖内/楼中楼四页生效 */
   navBarDoubleTapToTop: boolean;
+  /** 顶栏透明度（0-1，均一 mask alpha；设置-浏览 Slider 无级调节即时生效） */
+  navBarGlassAlpha: number;
   hapticFeedback: boolean;
   /**
    * 每场景震动风格覆盖（JSON 字符串，形如 {"like":"medium","toggle":"off"}）。

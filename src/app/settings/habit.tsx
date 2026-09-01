@@ -1,10 +1,11 @@
-import { useCallback } from 'react';
-import { Form, Section, Toggle, Picker, Text } from '@expo/ui/swift-ui';
+import { useCallback, useRef, useState } from 'react';
+import { Form, Section, Toggle, Picker, Text, Slider, LabeledContent, HStack } from '@expo/ui/swift-ui';
 import { pickerStyle, tag } from '@expo/ui/swift-ui/modifiers';
 import { ThemedHost } from '@/components/ui/ThemedHost';
 import { hapticForScene } from '@/theme/hapticsMap';
 import { usePreferencesStore } from '@/stores/preferencesStore';
 import { useFormTint } from '@/hooks/useFormTint';
+import { TiebaNative } from '../../../modules/tieba-native/src/TiebaNative';
 import {
   DEFAULT_SORT_OPTIONS,
   FORUM_FAB_OPTIONS,
@@ -41,6 +42,25 @@ export default function HabitSettingsPage() {
   const handleFabChange = useCallback((v: string) => {
     hapticForScene('toggle');
     setPreference('forumFabFunction', v);
+  }, [setPreference]);
+
+  // ── 顶栏透明度（无级调节，即时生效）──
+  // SwiftUI Slider 拖动由系统接管（非受控）：拖动中只把值推给原生 setter
+  // 实时预览（不写 store，避免每帧重渲染驱动控件抖动），松手才持久化；
+  // 百分比文本用本地 state 跟进显示。
+  const glassAlphaRef = useRef(preferences.navBarGlassAlpha);
+  const [glassAlphaLabel, setGlassAlphaLabel] = useState(() =>
+    Math.round(preferences.navBarGlassAlpha * 100),
+  );
+  const handleGlassAlphaChange = useCallback((v: number) => {
+    const clamped = Math.min(Math.max(v, 0), 1);
+    glassAlphaRef.current = clamped;
+    setGlassAlphaLabel(Math.round(clamped * 100));
+    TiebaNative.setNavBarGlassAlpha(clamped);
+  }, []);
+  const handleGlassAlphaEditEnd = useCallback(() => {
+    setPreference('navBarGlassAlpha', glassAlphaRef.current);
+    TiebaNative.setNavBarGlassAlpha(glassAlphaRef.current);
   }, [setPreference]);
 
   const handleStartTabChange = useCallback((v: string) => {
@@ -126,6 +146,21 @@ export default function HabitSettingsPage() {
             isOn={preferences.navBarDoubleTapToTop}
             onIsOnChange={(v) => handlePrefChange('navBarDoubleTapToTop', v)}
           />
+          <LabeledContent label="顶栏透明度">
+            <HStack spacing={8}>
+              <Slider
+                min={0}
+                max={1}
+                step={0.01}
+                value={preferences.navBarGlassAlpha}
+                onValueChange={handleGlassAlphaChange}
+                onEditingChanged={(editing) => {
+                  if (!editing) handleGlassAlphaEditEnd();
+                }}
+              />
+              <Text>{glassAlphaLabel}%</Text>
+            </HStack>
+          </LabeledContent>
           <Toggle
             label="底栏滚动收纳"
             systemImage="menubar.rectangle"

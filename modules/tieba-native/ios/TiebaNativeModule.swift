@@ -132,6 +132,16 @@ public final class TiebaNativeModule: Module {
       }
     }
 
+    // 顶栏透明度无级调节（设置-浏览「顶栏透明度」Slider，2026-09-01）：
+    // 拖动即时生效——更新共享 alpha 并刷新已挂 mask 的 colors（未挂 bar
+    // 由 force 的 v17 均一 mask 创建路径读取）。
+    Function("setNavBarGlassAlpha") { (alpha: Double) in
+      TiebaNativeModule.navBarGlassAlpha = CGFloat(min(max(alpha, 0), 1))
+      DispatchQueue.main.async {
+        TiebaNativeModule.refreshNavBarGlassMaskAlpha()
+      }
+    }
+
     Function("isLiveActivitySupported") {
       supportsLiveActivities
     }
@@ -559,7 +569,30 @@ public final class TiebaNativeModule: Module {
   // 渐变 mask 的名字标记：同一视图重复挂载时直接更新 frame，不重复创建。
   // 参数升级时同步升版本号——复用分支只校验名字与 colors 非空、不比较数值，
   // 不改名则存量旧参数 mask 会经 timer/KVO 路径永久存活。
-  private static let gradientMaskName = "tiebaNavGlassGradient.v16"
+  private static let gradientMaskName = "tiebaNavGlassGradient.v17"
+
+  // 顶栏透明度（mask 均一 alpha，0-1）：默认 0.25（用户拍板 v16 观感）；
+  // 设置-浏览 Slider 无级调节，setNavBarGlassAlpha 即时刷新已挂 mask。
+  nonisolated(unsafe) fileprivate static var navBarGlassAlpha: CGFloat = 0.25
+
+  /// 无级调节即时生效：把当前所有已挂导航栏的 mask colors 刷成均一 alpha。
+  /// 只改 colors 不动 name/结构（幂等路径不冲突）；无 mask 的 bar 交给
+  /// force 的创建路径（读取 navBarGlassAlpha）。
+  private static func refreshNavBarGlassMaskAlpha() {
+    guard Thread.isMainThread else {
+      DispatchQueue.main.async { refreshNavBarGlassMaskAlpha() }
+      return
+    }
+    for navBar in cachedNavBars.allObjects {
+      guard let bg = findBarBackgroundView(in: navBar),
+            let mask = bg.layer.mask as? CAGradientLayer,
+            mask.name == gradientMaskName else { continue }
+      mask.colors = [
+        UIColor(white: 1, alpha: navBarGlassAlpha).cgColor,
+        UIColor(white: 1, alpha: navBarGlassAlpha).cgColor,
+      ]
+    }
+  }
 
   // 液态玻璃开关（实验结论 2026-09-01）：UIGlassEffect 赋给 _UIBarBackground
   // 的 UIVisualEffectView.effect 在 iOS 27β 上不渲染（诊断实锤：assigned 成功
@@ -713,16 +746,16 @@ public final class TiebaNativeModule: Module {
            let colors = existing.colors as? [CGColor], !colors.isEmpty {
           existing.frame = bg.layer.bounds
         } else {
-          // v16（2026-09-01）：systemMaterial 分支均一 α0.25（用户再透一档），
-          // 底部 ~7pt 极短衰减到 0 消硬边；衰减区极短不构成 v11 类分段观感。
+          // v17（2026-09-01 拍板）：去掉底部 7pt 衰减——整条 bar 相同透明度。
+          // 均一 alpha 由 navBarGlassAlpha 提供（默认 0.25，设置-浏览 Slider
+          // 无级调节即时生效）。
           let mask = CAGradientLayer()
           mask.name = gradientMaskName
           mask.colors = [
-            UIColor(white: 1, alpha: 0.25).cgColor,  // loc 0.000 主体均一
-            UIColor(white: 1, alpha: 0.25).cgColor,  // loc 0.930
-            UIColor(white: 1, alpha: 0).cgColor,     // loc 1.000 底部贴沿归零
+            UIColor(white: 1, alpha: navBarGlassAlpha).cgColor,
+            UIColor(white: 1, alpha: navBarGlassAlpha).cgColor,
           ]
-          mask.locations = [0, 0.93, 1]
+          mask.locations = [0, 1]
           mask.startPoint = CGPoint(x: 0.5, y: 0)
           mask.endPoint = CGPoint(x: 0.5, y: 1)
           mask.frame = bg.layer.bounds
