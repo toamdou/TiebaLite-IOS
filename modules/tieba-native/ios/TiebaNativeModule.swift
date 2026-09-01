@@ -456,6 +456,13 @@ public final class TiebaNativeModule: Module {
   }()
 
   nonisolated(unsafe) private static var navGlassScrollSwizzled = false
+  /// 液态玻璃一次性诊断标志（devicectl --console 取证，2026-09-01 纯色排查）
+  nonisolated(unsafe) private static var glassDiagLogged = false
+  // 滚动 setContentOffset swizzle 的节流时间戳：KVO 已即时覆盖 effect 重置，
+  // swizzle 只作 ≤1 帧窗口的粗粒度兜底——限频后滚动热路径每帧只付一次时间戳
+  // 比较，不再每帧做 findBarBackgroundView 子树扫描/偶发 setEffect 布局
+  // （真机"拖动有阻尼感、列表跟不上手指"的嫌疑之一，2026-09-01）。
+  nonisolated(unsafe) private static var lastNavGlassReapply = TimeInterval(0)
   private static let navGlassScrollDump: Void = {
     guard !navGlassScrollSwizzled else { return }
     navGlassScrollSwizzled = true
@@ -507,7 +514,11 @@ public final class TiebaNativeModule: Module {
     let block: @convention(block) (AnyObject, CGPoint, Bool) -> Void = { scrollView, offset, animated in
       originalFn(scrollView, selector, offset, animated)
       if abs(offset.y) > 1 {
-        TiebaNativeModule.reapplyNavBarGlassOnScroll()
+        let now = ProcessInfo.processInfo.systemUptime
+        if now - TiebaNativeModule.lastNavGlassReapply > 0.012 {
+          TiebaNativeModule.lastNavGlassReapply = now
+          TiebaNativeModule.reapplyNavBarGlassOnScroll()
+        }
       }
     }
     method_setImplementation(method, imp_implementationWithBlock(block))
@@ -525,9 +536,14 @@ public final class TiebaNativeModule: Module {
     CATransaction.setDisableActions(true)
     for navBar in cachedNavBars.allObjects {
       if let bg = findBarBackgroundView(in: navBar), !isGlassApplied(bg.effect) {
-        // 与 force 同款两段式重挂（置空→赋值），见上注释
-        bg.effect = UIVisualEffect()
-        bg.effect = barGlassEffect
+        // 与 force 同款重挂：Liquid Glass 不可两段式（置空会触发 UIKit 对
+        // 同一视图重复赋玻璃的渲染失效，expo#43732）——玻璃分支单独直赋
+        if TiebaNativeModule.useLiquidGlass {
+          bg.effect = TiebaNativeModule.barGlassEffect
+        } else {
+          bg.effect = UIVisualEffect()
+          bg.effect = TiebaNativeModule.barGlassEffect
+        }
         touched = true
       }
     }
@@ -543,16 +559,25 @@ public final class TiebaNativeModule: Module {
   // 渐变 mask 的名字标记：同一视图重复挂载时直接更新 frame，不重复创建。
   // 参数升级时同步升版本号——复用分支只校验名字与 colors 非空、不比较数值，
   // 不改名则存量旧参数 mask 会经 timer/KVO 路径永久存活。
-  private static let gradientMaskName = "tiebaNavGlassGradient.v11"
+  private static let gradientMaskName = "tiebaNavGlassGradient.v16"
+
+  // 液态玻璃开关（实验结论 2026-09-01）：UIGlassEffect 赋给 _UIBarBackground
+  // 的 UIVisualEffectView.effect 在 iOS 27β 上不渲染（诊断实锤：assigned 成功
+  // 但整条 bar 无玻璃，仅系统按钮自带玻璃）→ 维持 false。systemMaterial+α0.25
+  // 为当前拍板观感；官方玻璃姿势（iOS26 UIView.effect 给 _UIBarBackground）
+  // 需私有视图适配+重挂体系改造，暂不折腾。
+  private static let useLiquidGlass = false
 
   // 共享材质常量：滚动 swizzle / KVO / timer 热路径只做比较与复用，不再分配
   // （此前每次比较或重挂都新建一个 UIBlurEffect，飞速滑动时每帧多次堆分配）。
-  // v8（2026-08-26）：弃用 UIGlassEffect。真机三轮实测其在本 β 上：①自绘
-  // 内缩圆角形状，全宽 bar 四角（尤下部两角）露出无材质空白区；②材质基底
-  // 偏白，透明度只能靠 mask 硬压；③自带边框亮线即"底部明显边界"。三者均
-  // 为材质自身渲染行为，mask/数值无法根治。换 systemUltraThinMaterial：
-  // 全幅均匀超轻磨砂、自动深浅色、无角部缺口无边框线。
-  fileprivate static let barGlassEffect: UIVisualEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+  // v15（2026-09-01）：ultraThin 模糊太弱像水渍 → .systemMaterial 常规磨砂，
+  // mask α0.38；v16 用户再降 → α0.25（液态玻璃分支不挂 mask，无 α 旋钮）。
+  fileprivate static let barGlassEffect: UIVisualEffect = {
+    if #available(iOS 26, *) {
+      if useLiquidGlass { return UIGlassEffect() }
+    }
+    return UIBlurEffect(style: .systemMaterial)
+  }()
 
   // 导航栏弱引用缓存：滚动恢复路径（每帧）不做全树扫描，只遍历该缓存；
   // forceNavBarLiquidGlass（timer/KVO 路径）负责填充与刷新。
@@ -585,6 +610,13 @@ public final class TiebaNativeModule: Module {
   // 常量的同类（含子类）即视为已是玻璃；系统复位态（nil / 其他类）不命中。
   fileprivate static func isGlassApplied(_ effect: UIVisualEffect?) -> Bool {
     guard let effect = effect else { return false }
+    if TiebaNativeModule.useLiquidGlass {
+      // iOS 26+ Liquid Glass：getter 常返回内部包装/副本（8-26 实证 isEqual
+      // 语义不成立），isKindOf 也可能落空 → 判类永远"未挂"→ force/KVO/timer
+      // 无限重赋 → 玻璃反复重建渲染失效（expo#43732）→ 整条 bar 纯色
+      //（2026-09-01 真机"顶栏是纯色的"根因）。改按类名含 Glass 宽容判定。
+      return String(describing: type(of: effect)).contains("Glass")
+    }
     return effect.isKind(of: type(of: barGlassEffect))
   }
 
@@ -636,19 +668,32 @@ public final class TiebaNativeModule: Module {
       // （用户实测"底部有一条很明显边界"，2026-08-26）。幂等：已隐藏即跳过。
       hideBarHairlines(in: navBar)
       if let bg = findBarBackgroundView(in: navBar) {
-        // 渲染层材质：幂等（isGlassApplied 类判同，见该函数注释）。重赋前先
-        // 置空再挂：UIKit 对同一视图重复赋 Liquid Glass 有渲染失效问题（expo#43732）。
+        // 渲染层材质：幂等（isGlassApplied 判定，见该函数注释）。Liquid Glass
+        // 分支不可两段式（置空会触发 UIKit 对同一视图重复赋玻璃的渲染失效，
+        // expo#43732 → 整条 bar 纯色，2026-09-01 实证）；blur 分支保留置空→赋值。
         if !isGlassApplied(bg.effect) {
-          bg.effect = UIVisualEffect()
-          bg.effect = barGlassEffect
+          if TiebaNativeModule.useLiquidGlass {
+            bg.effect = TiebaNativeModule.barGlassEffect
+          } else {
+            bg.effect = UIVisualEffect()
+            bg.effect = TiebaNativeModule.barGlassEffect
+          }
           applied = true
+          // 一次性诊断（devicectl --console 可捕获）：材质类名 + 赋值后
+          // getter 读回的类名——判定判类匹配与否（2026-09-01 纯色排查）
+          if TiebaNativeModule.useLiquidGlass, TiebaNativeModule.glassDiagLogged == false {
+            TiebaNativeModule.glassDiagLogged = true
+            debugPrint(
+              "[tieba-glass] assigned=\(String(describing: type(of: TiebaNativeModule.barGlassEffect))) " +
+                "readback=\(String(describing: type(of: bg.effect))) view=\(type(of: bg))"
+            )
+          }
         }
         // 滚动中被系统重置时即时恢复（KVO 兜底 1.5s timer 的扫描间隙）。
         observeGlassEffect(on: bg)
-        // 渐变分段遮罩（v11，2026-08-29）：v10 平台段 α 0.50、底部 5% 渐隐，
-        // 真机反馈整条 bar 半透（返回键/右侧按钮行"掉出顶栏"、最下端透明）。
-        // v11 平台段整体 α 1.0（状态区到 0.96 全实——返回键/药丸全部覆盖），
-        // 仅最后 ~4% 快速归零（终端 α0，保留内容平滑透入、无硬底边横线）。
+        // 分段遮罩演进（2026-08-29 → 09-01）：v10 平台段 α 0.50 太透、v11
+        // α 1.0 太实且底部 4% 渐隐呈梯度带 → v12 去梯度均一 α0.82，
+        // 整体透明度抬高一档且无分段感（用户 2026-09-01 拍板，见下创建处）。
         // 幂等复用：同名 mask 且 colors 未被清空时只同步 frame。UIKit 在
         // 页面切换/布局重建 _UIBarBackground 时可能保留旧 mask 但清空其
         // colors（实测楼中楼页 mask 存在但 colors 空、渐变丢失）——只有
@@ -657,22 +702,27 @@ public final class TiebaNativeModule: Module {
         // 顶栏（"第一次打开吧页顶栏透明"根因之一）——bounds 非零才挂，
         // layoutSubviews hook 会在布局完成后异步补挂（≤1 帧 + force 兜底）。
         if bg.layer.bounds.width > 0 && bg.layer.bounds.height > 0 {
-        if let existing = bg.layer.mask as? CAGradientLayer,
+          if TiebaNativeModule.useLiquidGlass {
+            // 液态玻璃自带形状/透明度/高光描边，不挂 mask；切换时清残留旧 mask
+            if bg.layer.mask != nil {
+              bg.layer.mask = nil
+              applied = true
+            }
+        } else if let existing = bg.layer.mask as? CAGradientLayer,
            existing.name == gradientMaskName,
            let colors = existing.colors as? [CGColor], !colors.isEmpty {
           existing.frame = bg.layer.bounds
         } else {
+          // v16（2026-09-01）：systemMaterial 分支均一 α0.25（用户再透一档），
+          // 底部 ~7pt 极短衰减到 0 消硬边；衰减区极短不构成 v11 类分段观感。
           let mask = CAGradientLayer()
           mask.name = gradientMaskName
           mask.colors = [
-            UIColor(white: 1, alpha: 1.0).cgColor,  // loc 0.000 顶端全实
-            UIColor(white: 1, alpha: 1.0).cgColor,  // loc 0.050 状态区/灵动岛
-            UIColor(white: 1, alpha: 1.0).cgColor,  // loc 0.960 平台（返回键/右侧药丸全实）
-            UIColor(white: 1, alpha: 0.65).cgColor,  // loc 0.980 快速衰减
-            UIColor(white: 1, alpha: 0.20).cgColor,  // loc 0.992
-            UIColor(white: 1, alpha: 0).cgColor,     // loc 1.000 精确归零
+            UIColor(white: 1, alpha: 0.25).cgColor,  // loc 0.000 主体均一
+            UIColor(white: 1, alpha: 0.25).cgColor,  // loc 0.930
+            UIColor(white: 1, alpha: 0).cgColor,     // loc 1.000 底部贴沿归零
           ]
-          mask.locations = [0, 0.05, 0.96, 0.98, 0.992, 1]
+          mask.locations = [0, 0.93, 1]
           mask.startPoint = CGPoint(x: 0.5, y: 0)
           mask.endPoint = CGPoint(x: 0.5, y: 1)
           mask.frame = bg.layer.bounds
@@ -773,8 +823,11 @@ public final class TiebaNativeModule: Module {
   nonisolated(unsafe) private static var navDoubleTapGateKey: UInt8 = 0
 
   /// 安装幂等：force 由 timer/KVO 反复跑，按手势类型判重。
-  /// 双击识别不拦单击按钮动作——UIControl 在第一击 touch-up 即派发，
-  /// 识别器只在第二击开始后才可能成功（误触返回键最坏=一次返回+空回顶）。
+  /// iOS 27β 上 UITapGestureRecognizer(numberOfTapsRequired:2) 在导航栏上
+  /// 偶发"单击即触发"（真机 2026-09-01 实证：点一次就回顶）——双击判定改放
+  /// JS 侧（useNavDoubleTapToTop 400ms 窗口），原生只上报 bar 标题/空白区的
+  /// 单击（onNavDoubleTap 事件语义=bar 单击，JS 负责两次判定与抑制）。
+  /// 门卫保留：左右边缘区与栏内 UIControl 不识别——事件仅在标题/空白区发出。
   private static func installNavDoubleTapToTop(on bar: UINavigationBar) {
     let installed = bar.gestureRecognizers?.contains { $0 is NavDoubleTapGesture } ?? false
     guard !installed else { return }
@@ -782,7 +835,7 @@ public final class TiebaNativeModule: Module {
       target: TiebaNativeModule.self,
       action: #selector(navDoubleTapped(_:))
     )
-    tap.numberOfTapsRequired = 2
+    tap.numberOfTapsRequired = 1
     // 必须关闭 touches 延迟（默认 true）！否则栏内所有 UIControl（返回钮/
     // 搜索钮/药丸）的 touch-up 要等双击判定窗口结束才派发——返回按钮点击
     // 后延迟 ~0.3s 才响应、振动落在返回之后（真机实测 2026-08-26）。

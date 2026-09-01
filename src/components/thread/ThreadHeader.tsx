@@ -138,10 +138,14 @@ const ThreadHeader = memo(function ThreadHeader({
                 <View style={[styles.lzBadge, { backgroundColor: colors.primary + '18' }]}>
                   <Text style={[styles.lzBadgeText, { color: colors.primary }]}>楼主</Text>
                 </View>
+                {showIpLocation && mainPost?.ipLocation ? (
+                  <Text style={[styles.authorIpText, { color: colors.textTertiary }]} numberOfLines={1}>
+                    IP属地：{mainPost.ipLocation}
+                  </Text>
+                ) : null}
               </View>
               <Text style={[styles.authorMeta, { color: colors.textTertiary }]}>
                 {timeLabel(thread.createTime)}
-                {showIpLocation && mainPost?.ipLocation ? ` · IP属地:${mainPost.ipLocation}` : ''}
               </Text>
             </View>
           </Pressable>
@@ -251,6 +255,7 @@ const styles = StyleSheet.create({
   },
   lzBadgeText: { fontSize: 11, fontWeight: '700', lineHeight: 15 },
   authorMeta: { fontSize: 13, fontWeight: '400' },
+  authorIpText: { fontSize: 11, fontWeight: '400', marginLeft: 4 },
 
   // ── Reply toolbar ──
   replyToolbar: {

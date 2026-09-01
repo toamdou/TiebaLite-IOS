@@ -39,7 +39,7 @@ import Animated, {
 
 import { useLocalSearchParams, Stack, Link, useRouter, useIsFocused } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Text as SWText, Menu, ConfirmationDialog, Button as SWButton } from '@expo/ui/swift-ui';
+import { Menu, Button as SWButton } from '@expo/ui/swift-ui';
 import { labelStyle, buttonStyle, frame, contentShape, shapes } from '@expo/ui/swift-ui/modifiers';
 import { SegmentPager } from '@/components/ui/SegmentPager';
 import { TiebaSegmentedControl } from '@/components/ui/TiebaSegmentedControl';
@@ -156,7 +156,6 @@ export default function ForumPage() {
   const { height: screenH } = useWindowDimensions();
   const fabTop = screenH - insets.bottom - Spacing.md - 52;
   const [showClassifyPicker, setShowClassifyPicker] = useState(false);
-  const [unfollowConfirmVisible, setUnfollowConfirmVisible] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const sortMenuOpenAtRef = useRef(0);
 
@@ -428,16 +427,6 @@ export default function ForumPage() {
     Alert.alert('已复制', '吧链接已复制到剪贴板');
   }, [name]);
 
-  const handleUnfollowConfirm = useCallback(async () => {
-    if (!currentForum) return;
-    hapticForScene('favorite');
-    try {
-      await unfollowForum(currentForum.forumId, name);
-    } catch (e: any) {
-      Alert.alert('取消失败', e?.message || '网络错误，请稍后重试');
-    }
-  }, [currentForum, name, unfollowForum]);
-
   const headerRight = useMemo(() => function HeaderRight() {
     return (
       <View style={styles.headerButtons}>
@@ -460,7 +449,7 @@ export default function ForumPage() {
             <SWButton label="分享" systemImage="square.and.arrow.up" onPress={handleShareForum} />
             <SWButton label="复制链接" systemImage="link" onPress={handleCopyForumLink} />
             {isLoggedIn && currentForum?.isLike && (
-              <SWButton label="取消关注" systemImage="person.badge.minus" role="destructive" onPress={() => setUnfollowConfirmVisible(true)} />
+              <SWButton label="取消关注" systemImage="person.badge.minus" role="destructive" onPress={handleToggleFollow} />
             )}
           </Menu>
         </ThemedHost>
@@ -567,7 +556,6 @@ export default function ForumPage() {
 
   const handleForumMenuAction = useCallback((action: string, item: ThreadInfo) => {
     if (action === 'block') void feedActions.blockAuthor(item);
-    else if (action === 'report') void feedActions.report(item);
   }, [feedActions]);
 
   // ── Follow button label ──
@@ -862,22 +850,6 @@ export default function ForumPage() {
           setGoodClassifyId={setGoodClassifyId}
           colors={colors}
         />
-
-        {/* ── Unfollow ConfirmationDialog ── */}
-        <ThemedHost matchContents style={{ position: 'absolute', width: 0, height: 0 }}>
-          <ConfirmationDialog
-            title="取消关注"
-            isPresented={unfollowConfirmVisible}
-            onIsPresentedChange={setUnfollowConfirmVisible}
-            titleVisibility="visible"
-          >
-            <ConfirmationDialog.Actions>
-              <SWButton label="确定" role="destructive" onPress={() => { handleUnfollowConfirm(); setUnfollowConfirmVisible(false); }} />
-              <SWButton label="取消" role="cancel" />
-            </ConfirmationDialog.Actions>
-            <ConfirmationDialog.Message><SWText>{`确定要取消关注${name}吧吗？`}</SWText></ConfirmationDialog.Message>
-          </ConfirmationDialog>
-        </ThemedHost>
     </View>
   );
 }

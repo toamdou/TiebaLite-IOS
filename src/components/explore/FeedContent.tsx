@@ -7,22 +7,25 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Pressable, StyleSheet, Text as RNText,
+  View, StyleSheet, Text as RNText,
   DeviceEventEmitter, RefreshControl,
 } from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import {
-  VStack, HStack, Button, Text, Label,
+  VStack, Button, Label,
   ContentUnavailableView, Spacer,
   RNHostView, BottomSheet, Group,
 } from '@expo/ui/swift-ui';
 import {
-  font, padding, buttonStyle, buttonBorderShape,
+  buttonStyle, buttonBorderShape, padding,
   presentationDetents, presentationDragIndicator,
 } from '@expo/ui/swift-ui/modifiers';
 import { hapticForScene } from '@/theme/hapticsMap';
+import { HdrPressable } from '@/components/ui/HdrPressable';
+import { SymbolView } from '@/components/ui/SymbolView';
+import { showToast } from '@/components/ui/Toast';
 import { useThemeColors } from '@/theme/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
 import { useBlockFilter } from '@/hooks/useBlockFilter';
@@ -81,7 +84,7 @@ const FOCUS_REFRESH_STALE_MS = 5 * 60 * 1000;
 
 // 信息流帖卡「×」菜单项：模块级常量 —— 若在 renderItem 内联数组字面量，
 // 每帧新建引用会击穿 TweetCard 的 React.memo，点赞/加载更多时整屏重渲。
-const TWEET_MENU_OPTIONS: TweetCardMenuAction[] = ['dislike', 'block', 'report', 'copy-title'];
+const TWEET_MENU_OPTIONS: TweetCardMenuAction[] = ['dislike', 'block', 'copy-title'];
 
 // ── 信息流单行：FeedRow（memo 化，collapsing 只影响命中行自身） ──
 // 抽出后 renderItem 不再因 collapsingId 翻转而重渲所有 cell——不感兴趣
@@ -267,6 +270,10 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
   // 不感兴趣折叠：动画期间数据保持在位，完成后再移除
   const [collapsingId, setCollapsingId] = useState<string | null>(null);
   const opacityTargetRef = useRef<FeedItem | null>(null);
+  // 折叠动画兜底定时器：CollapseRow 的 withTiming 完成回调在本仓曾实证
+  // 偶发不触发（reanimated 三坑：回调被覆盖/不推进），不能赌动画回调——
+  // 动画窗口结束后由 JS 定时器强制移除（2026-09-01 二轮根治）
+  const collapseFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 双击重选刷新：回顶动画后延迟触发 pull-refresh（spinner 可见性），
   // 卸载/失效时跳过；动画期间源（scrollToOffset）与刷新互不阻塞。
@@ -276,6 +283,7 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (collapseFallbackTimerRef.current) clearTimeout(collapseFallbackTimerRef.current);
     };
   }, []);
 
@@ -295,30 +303,60 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
     mutationFn: submitDislike,
     onSuccess: () => {
       hapticForScene('action-success');
+      showToast('已减少此类内容推荐');
       // 折叠动画在位播放：卡片先压扁收起，动画完成（handleCollapseEnd）
       // 才真正从列表移除 —— 列表逻辑不提前动数据，LegendList 布局稳定
-      if (dislikeTarget) {
-        opacityTargetRef.current = dislikeTarget;
-        const id = dislikeTarget.threadInfo?.id || '';
-        setCollapsingId(id ? `${dislikeTarget.type}-${id}` : null);
+      const target = dislikeTarget;
+      setDislikeTarget(null);
+      setSelectedReasons([]);
+      if (!target) return;
+      const targetId = target.threadInfo?.id || '';
+      if (!targetId) {
+        // 无可用行 key：折叠动画无从触发，引用移除兜底（2026-09-01）
+        setItems((prev) => prev.filter((i) => i !== target));
+        return;
       }
-      setDislikeTarget(null);
-      setSelectedReasons([]);
+      opacityTargetRef.current = target;
+      setCollapsingId(`${target.type}-${targetId}`);
+      // 兜底（二轮）：不管 CollapseRow 动画回调是否触发，360ms（动画
+      // 280ms 之后）强制按 id 移除并复位折叠态 —— 用户实证"有 toast 但
+      // 卡片永不消失"两次，根因在动画完成回调链，不赌它
+      if (collapseFallbackTimerRef.current) clearTimeout(collapseFallbackTimerRef.current);
+      collapseFallbackTimerRef.current = setTimeout(() => {
+        collapseFallbackTimerRef.current = null;
+        setItems((prev) => prev.filter((i) => i.threadInfo?.id !== targetId));
+        setCollapsingId(null);
+        if (opacityTargetRef.current === target) opacityTargetRef.current = null;
+      }, 360);
     },
-    onError: () => {
+    onError: (error) => {
       hapticForScene('action-fail');
-      setDislikeTarget(null);
-      setSelectedReasons([]);
+      // 失败保持面板打开（可重试/取消），绝不静默关闭 —— 2026-09-01
+      // 用户反馈"提交后不知道成没成功"，此前 onError 无声关面板
+      showToast(error instanceof Error ? error.message : '提交失败，请稍后重试');
     },
   });
 
-  // 折叠完成后移除目标行（引用相等，与失败回滚无关）
+  // 折叠完成后移除目标行。⚠️ 不能用引用相等：菜单路径（TweetCard
+  // 右上角 × → handleTweetMenuAction）会新建 FeedItem 包装对象，与列表内
+  // 的 item 不是同一引用，filter(i => i !== target) 恒删不掉 —— 折叠动画
+  // 结束后行恢复完整（collapsingId 复位 → CollapseRow 同步回弹），观感
+  // 就是"卡片不会消失"（2026-09-01 真机实证）。改按线程 id 移除。
   const handleCollapseEnd = useCallback(() => {
+    if (collapseFallbackTimerRef.current) {
+      clearTimeout(collapseFallbackTimerRef.current);
+      collapseFallbackTimerRef.current = null;
+    }
     const target = opacityTargetRef.current;
     opacityTargetRef.current = null;
     setCollapsingId(null);
     if (!target) return;
-    setItems((prev) => prev.filter((i) => i !== target));
+    const targetId = target.threadInfo?.id;
+    setItems((prev) =>
+      targetId
+        ? prev.filter((i) => i.threadInfo?.id !== targetId)
+        : prev.filter((i) => i !== target),
+    );
   }, [setItems]);
 
   const handleSubmitDislike = useCallback(() => {
@@ -330,6 +368,13 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
       clickTime: Date.now(),
     });
   }, [dislikeTarget, selectedReasons, dislikeMutation]);
+
+  // 面板「取消」：显式关闭（面板外点按/下滑关闭走 onIsPresentedChange）
+  const handleCloseDislike = useCallback(() => {
+    hapticForScene('press');
+    setDislikeTarget(null);
+    setSelectedReasons([]);
+  }, []);
 
   const startLoad = useCallback((p = 1) => {
     pageTagRef.current = '';
@@ -427,9 +472,6 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
       }
       case 'block':
         void feedActions.blockAuthor(thread);
-        break;
-      case 'report':
-        void feedActions.report(thread);
         break;
       case 'copy-title':
         feedActions.copyTitle(thread);
@@ -591,7 +633,9 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
         </View>
       </RNHostView>
 
-      {/* 不感兴趣原因面板 */}
+      {/* 不感兴趣原因面板（2026-09-01 重布局：定高 detent 贴内容消除空白；
+          提交/取消用 RN 触控（HdrPressable），与 ForumChip 同规避 SwiftUI
+          Button 事件偶发不触发；选中态勾选 + 禁用态 + 成功/失败 toast） */}
       <BottomSheet
         isPresented={dislikeTarget !== null}
         onIsPresentedChange={(presented) => {
@@ -601,45 +645,66 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
           }
         }}
       >
-        <Group modifiers={[presentationDetents(['medium']), presentationDragIndicator('visible')]}>
-          <VStack alignment="leading" spacing={16} modifiers={[padding({ horizontal: 20, top: 12, bottom: 24 })]}>
-            <Text modifiers={[font({ textStyle: 'headline' })]}>不感兴趣</Text>
-            <RNHostView matchContents>
+        <Group modifiers={[presentationDetents([{ height: 372 }]), presentationDragIndicator('visible')]}>
+          <RNHostView matchContents>
+            <View style={styles.dislikePanel}>
+              <RNText style={[styles.dislikeTitle, { color: colors.text }]}>不感兴趣</RNText>
+              <RNText style={[styles.dislikeSubtitle, { color: colors.textTertiary }]}>
+                我们会减少这类内容的推荐
+              </RNText>
               <View style={styles.dislikeChips}>
                 {DEFAULT_DISLIKE_REASONS.map((reason) => {
                   const selected = selectedReasons.includes(reason.dislikeId);
                   return (
-                    <Pressable
+                    <HdrPressable
                       key={reason.dislikeId}
                       onPress={() => toggleReason(reason.dislikeId)}
-                      style={({ pressed }) => [
+                      flashRadius={20}
+                      effect="subtle"
+                      style={[
                         styles.dislikeChip,
-                        {
-                          backgroundColor: selected ? colors.primary : colors.surfaceSecondary,
-                          borderColor: selected ? colors.primary : 'transparent',
-                          opacity: pressed ? 0.8 : 1,
-                          transform: [{ scale: pressed ? 0.95 : 1 }],
-                        },
+                        selected
+                          ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                          : { backgroundColor: colors.surfaceSecondary, borderColor: 'transparent' },
                       ]}
+                      accessibilityRole="button"
+                      accessibilityState={selected ? { selected: true } : {}}
+                      accessibilityLabel={reason.dislikeReason}
                     >
-                      <RNText style={[styles.dislikeChipText, { color: selected ? colors.textOnPrimary : colors.textSecondary }]}>
+                      {selected ? (
+                        <SymbolView name="checkmark" size={12} weight="bold" tintColor={colors.textOnPrimary} />
+                      ) : null}
+                      <RNText
+                        style={[
+                          styles.dislikeChipText,
+                          { color: selected ? colors.textOnPrimary : colors.textSecondary },
+                        ]}
+                      >
                         {reason.dislikeReason}
                       </RNText>
-                    </Pressable>
+                    </HdrPressable>
                   );
                 })}
               </View>
-            </RNHostView>
-            <HStack spacing={12}>
-              <Spacer />
-              <Button
+              <HdrPressable
+                disabled={selectedReasons.length === 0}
                 onPress={handleSubmitDislike}
-                modifiers={[buttonStyle('borderedProminent'), buttonBorderShape('capsule')]}
+                flashRadius={24}
+                style={[
+                  styles.dislikeSubmit,
+                  { backgroundColor: colors.primary, opacity: selectedReasons.length === 0 ? 0.45 : 1 },
+                ]}
+                accessibilityRole="button"
+                accessibilityState={selectedReasons.length === 0 ? { disabled: true } : {}}
               >
-                <Label title="提交" systemImage="hand.thumbsdown.fill" />
-              </Button>
-            </HStack>
-          </VStack>
+                <SymbolView name="hand.thumbsdown.fill" size={15} tintColor={colors.textOnPrimary} />
+                <RNText style={[styles.dislikeSubmitText, { color: colors.textOnPrimary }]}>提交</RNText>
+              </HdrPressable>
+              <HdrPressable onPress={handleCloseDislike} effect="subtle" style={styles.dislikeCancel} hitSlop={8}>
+                <RNText style={[styles.dislikeCancelText, { color: colors.textSecondary }]}>取消</RNText>
+              </HdrPressable>
+            </View>
+          </RNHostView>
         </Group>
       </BottomSheet>
     </VStack>
@@ -649,11 +714,42 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
 const styles = StyleSheet.create({
   // 容器契约与列表一致：卡片贴边 10pt、列表 paddingVertical 8（2026-08-29 错位修复）
   feedSkeleton: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 24 },
-  // 不感兴趣原因 chips
-  dislikeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingVertical: 4 },
+  // 不感兴趣原因面板（2026-09-01 重布局：紧凑贴内容、双列格栅胶囊、
+  // 全宽提交 + 居中取消）
+  dislikePanel: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 24 },
+  dislikeTitle: { fontSize: 18, fontWeight: '700', letterSpacing: 0 },
+  dislikeSubtitle: { fontSize: 13, marginTop: 4 },
+  dislikeChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 18,
+  },
   dislikeChip: {
-    paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20,
+    flexGrow: 1,
+    flexBasis: '45%',
+    minHeight: 40,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderCurve: 'continuous',
     borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   dislikeChipText: { fontSize: 14, fontWeight: '600', letterSpacing: 0 },
+  dislikeSubmit: {
+    marginTop: 22,
+    height: 46,
+    borderRadius: 23,
+    borderCurve: 'continuous',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  dislikeSubmitText: { fontSize: 16, fontWeight: '700' },
+  dislikeCancel: { marginTop: 8, height: 40, alignItems: 'center', justifyContent: 'center' },
+  dislikeCancelText: { fontSize: 15, fontWeight: '500' },
 });
