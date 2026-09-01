@@ -29,7 +29,10 @@ export async function submitDislike(params: {
 }
 
 export async function checkReportPost(postId: string): Promise<string> {
-  return extractData(await apiPost<any>('/c/f/ueg/checkjubao', { category: '1', pid: postId })).data?.report_url ?? '';
+  const body = extractData(await apiPost<any>('/c/f/ueg/checkjubao', { category: '1', pid: postId }));
+  // Kotlin CheckReportBean.data.url；旧实现误读 data.report_url 恒空
+  // → 所有内容一律"不支持在线举报"（2026-09-01 对照 Kotlin 实证修复）
+  return body?.data?.url ?? body?.data?.report_url ?? '';
 }
 
 // Kotlin AppHybridTiebaApi topicDetail: GET /mo/q/newtopic/topicDetail
