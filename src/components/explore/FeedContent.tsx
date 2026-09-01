@@ -270,6 +270,10 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
   // 不感兴趣折叠：动画期间数据保持在位，完成后再移除
   const [collapsingId, setCollapsingId] = useState<string | null>(null);
   const opacityTargetRef = useRef<FeedItem | null>(null);
+  // 折叠动画兜底定时器：CollapseRow 的 withTiming 完成回调在本仓曾实证
+  // 偶发不触发（reanimated 三坑：回调被覆盖/不推进），不能赌动画回调——
+  // 动画窗口结束后由 JS 定时器强制移除（2026-09-01 二轮根治）
+  const collapseFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 双击重选刷新：回顶动画后延迟触发 pull-refresh（spinner 可见性），
   // 卸载/失效时跳过；动画期间源（scrollToOffset）与刷新互不阻塞。
@@ -279,6 +283,7 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (collapseFallbackTimerRef.current) clearTimeout(collapseFallbackTimerRef.current);
     };
   }, []);
 
@@ -301,18 +306,28 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
       showToast('已减少此类内容推荐');
       // 折叠动画在位播放：卡片先压扁收起，动画完成（handleCollapseEnd）
       // 才真正从列表移除 —— 列表逻辑不提前动数据，LegendList 布局稳定
-      if (dislikeTarget) {
-        opacityTargetRef.current = dislikeTarget;
-        const id = dislikeTarget.threadInfo?.id || '';
-        if (id) {
-          setCollapsingId(`${dislikeTarget.type}-${id}`);
-        } else {
-          // 无可用行 key 时折叠动画无从触发，直接移除兜底（2026-09-01）
-          setItems((prev) => prev.filter((i) => i !== dislikeTarget));
-        }
-      }
+      const target = dislikeTarget;
       setDislikeTarget(null);
       setSelectedReasons([]);
+      if (!target) return;
+      const targetId = target.threadInfo?.id || '';
+      if (!targetId) {
+        // 无可用行 key：折叠动画无从触发，引用移除兜底（2026-09-01）
+        setItems((prev) => prev.filter((i) => i !== target));
+        return;
+      }
+      opacityTargetRef.current = target;
+      setCollapsingId(`${target.type}-${targetId}`);
+      // 兜底（二轮）：不管 CollapseRow 动画回调是否触发，360ms（动画
+      // 280ms 之后）强制按 id 移除并复位折叠态 —— 用户实证"有 toast 但
+      // 卡片永不消失"两次，根因在动画完成回调链，不赌它
+      if (collapseFallbackTimerRef.current) clearTimeout(collapseFallbackTimerRef.current);
+      collapseFallbackTimerRef.current = setTimeout(() => {
+        collapseFallbackTimerRef.current = null;
+        setItems((prev) => prev.filter((i) => i.threadInfo?.id !== targetId));
+        setCollapsingId(null);
+        if (opacityTargetRef.current === target) opacityTargetRef.current = null;
+      }, 360);
     },
     onError: (error) => {
       hapticForScene('action-fail');
@@ -328,6 +343,10 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
   // 结束后行恢复完整（collapsingId 复位 → CollapseRow 同步回弹），观感
   // 就是"卡片不会消失"（2026-09-01 真机实证）。改按线程 id 移除。
   const handleCollapseEnd = useCallback(() => {
+    if (collapseFallbackTimerRef.current) {
+      clearTimeout(collapseFallbackTimerRef.current);
+      collapseFallbackTimerRef.current = null;
+    }
     const target = opacityTargetRef.current;
     opacityTargetRef.current = null;
     setCollapsingId(null);
