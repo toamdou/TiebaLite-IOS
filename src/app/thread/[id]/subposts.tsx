@@ -23,6 +23,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useThemeColors } from '@/theme/ThemeContext';
 import { hapticForScene } from '@/theme/hapticsMap';
+import { showToast } from '@/components/ui/Toast';
 import { useAuthStore } from '@/stores/authStore';
 import { useMediaBus } from '@/stores/mediaBusStore';
 import { mediaKeysOf } from '@/utils/feedMedia';
@@ -151,6 +152,8 @@ export default function SubPostsPage() {
       );
       try {
         await agree(threadId, item.id, nextAgree ? 1 : 0, 2);
+        // 成功 toast（2026-09-01：楼中楼点赞此前无任何成功反馈）
+        showToast(nextAgree ? '点赞成功' : '已取消点赞');
       } catch {
         // 失败回滚（先校验：当前态必须仍等于本次乐观写入的态，
         // 期间被刷新/其他路径改写过的行不在此列，直接跳过）

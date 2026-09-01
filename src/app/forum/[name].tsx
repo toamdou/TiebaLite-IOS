@@ -673,6 +673,40 @@ export default function ForumPage() {
     [currentTab, forumSortType, sortMenuOpen, colors, goodClassify.length, selectedClassifyLabel, handleSortChange],
   );
 
+  // segment 槽位单独 memo：切 tab 时只有这里（以及分类/排序行）需要重建，
+  // tabHeader（吧卡片+置顶）与列表头外壳的 memo 引用保持稳定——此前
+  // topBlock 直接依赖 currentTab，切 tab 整个列表头重建、三列表 header
+  // 引用全变，LegendList 连带重挂头（2026-09-01 卡顿根因一）。
+  //
+  // 2026-09-01 玻璃根因（深度调查定案）：UIKit 玻璃 chrome 必须在 alpha=1、
+  // 在屏、已布局、有真实背板内容状态下物化；离屏/未布局时首挂一次即永久
+  // 扁平（UIVisualEffectView 文档规则，legend-list#482 / liquid-glass#27 同证）。
+  // 本页 segment 在 PagerView 的 SwiftUI TabView 页面 + LegendList 虚拟化容器
+  // （POSITION_OUT_OF_VIEW=-1e7 停放）内，首挂落进无效状态 → 永久无玻璃。
+  // 修法=布局完成（在屏有效）后重挂一次强制重新物化；segRemount 状态加进
+  // deps 使 topBlock 引用更新、三列表 header 拿到新元素触发重挂。
+  const [segRemount, setSegRemount] = useState(0);
+  const segRemountDoneRef = useRef(false);
+  const handleSegSlotLayout = useCallback(() => {
+    if (segRemountDoneRef.current) return;
+    segRemountDoneRef.current = true;
+    requestAnimationFrame(() => setSegRemount((k) => k + 1));
+  }, []);
+
+  const segmentSlot = useMemo(
+    () => (
+      <View style={styles.segmentSlot} onLayout={handleSegSlotLayout}>
+        <TiebaSegmentedControl
+          key={`seg-${segRemount}`}
+          segments={TAB_SEGMENTS}
+          selectedIndex={currentTab}
+          onSelect={handleSegmentChange}
+        />
+      </View>
+    ),
+    [currentTab, handleSegmentChange, handleSegSlotLayout, segRemount],
+  );
+
   // 顶部板块（吧卡片 + 置顶 + segment + 排序/分类）：作为列表头元素传给
   // 三个 tab 的 LegendList（随列表原生滚动、完全跟手、滑到顶自然退出）。
   // segment 用原生 TiebaSegmentedControl（UIKit UISegmentedControl）：
@@ -689,18 +723,12 @@ export default function ForumPage() {
             移入列表头自身后任何渲染路径都从顶栏下沿开始，滚动跟手滑出不变。 */}
         <View style={{ paddingTop: insets.top + NAV_BAR_H }}>
           {tabHeader}
-          <View style={styles.segmentSlot}>
-            <TiebaSegmentedControl
-              segments={TAB_SEGMENTS}
-              selectedIndex={currentTab}
-              onSelect={handleSegmentChange}
-            />
-          </View>
+          {segmentSlot}
           {fixedBar}
         </View>
       </>
     ),
-    [insets.top, tabHeader, fixedBar, currentTab, handleSegmentChange],
+    [insets.top, tabHeader, segmentSlot, fixedBar],
   );
 
   // ── Loading state ──

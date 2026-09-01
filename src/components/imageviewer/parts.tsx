@@ -9,7 +9,7 @@
  * 视觉外页零解码（active 门控），不再有窗口重建与原生滑动的竞争。
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { View, Pressable, StyleSheet, Dimensions, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -17,9 +17,9 @@ import Animated, {
   useAnimatedReaction,
   runOnJS,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector, type GestureType } from 'react-native-gesture-handler';
+import { GestureDetector, useExclusiveGestures, usePanGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import type { SharedValue } from 'react-native-reanimated';
-import { useZoomGesture, type ScrollableRef } from 'react-native-zoom-reanimated';
+import { useZoomGesture, TAP_MAX_DELTA, type ScrollableRef } from '@/components/imageviewer/zoomGesture';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 
@@ -45,6 +45,7 @@ export const ZoomableImage = memo(function ZoomableImage({
   galleryScrollRef,
   galleryIndex,
   galleryItemWidth,
+  pageCount,
   zoomMirror,
   gesturePulse,
 }: {
@@ -63,12 +64,14 @@ export const ZoomableImage = memo(function ZoomableImage({
   galleryScrollRef: React.RefObject<ScrollableRef>;
   galleryIndex: number;
   galleryItemWidth: number;
+  /** 总页数（边界页溢出判定：首/末页不翻页也不复位缩放） */
+  pageCount: number;
   /** 缩放态镜像（父级持值，UI 线程直读）：本页 active 时把 isZoomedIn 写入 */
   zoomMirror: SharedValue<boolean>;
   /** 手势脉冲（父级持值）：本页 active 时 gesture 触发 +1 → 父级排 UI 自动收起 */
   gesturePulse: SharedValue<number>;
 }) {
-  // ── 缩放核心 = react-native-zoom-reanimated（2026-08-30 替换手写实现）──
+  // ── 缩放核心 = 本地 zoomGesture（v3 hooks，2026-08-30 起替代 zoom-reanimated）──
   // focal 捏合（rubber band + 动态焦点）、双击缩放、pan（带边界回弹/动量）、
   // 放大态边缘滑图（enableGallerySwipe：放大后左右滑动不恢复缩放直接切图，
   // 用户指定保留）全部由库内部维护。我们保留：
@@ -93,6 +96,7 @@ export const ZoomableImage = memo(function ZoomableImage({
     parentScrollRef: galleryScrollRef,
     currentIndex: galleryIndex,
     itemWidth: galleryItemWidth,
+    pageCount,
     doubleTapConfig: { defaultScale: 3, minZoomScale: 1, maxZoomScale: 5 },
   });
 
@@ -182,29 +186,25 @@ export const ZoomableImage = memo(function ZoomableImage({
   // 单击 chrome 开关 + 双击触感：与库双击（负责缩放）并存。noop 双击只
   // 参与 Exclusive 协调（保证双击时单击不误触）并在成功时补触感——
   // 库的双击不带动效触感，这里补回旧实现的手感。
-  const tapCombo = useMemo(
-    () =>
-      Gesture.Exclusive(
-        Gesture.Tap()
-          .numberOfTaps(2)
-          .onEnd((_e, success) => {
-            'worklet';
-            if (success) runOnJS(hapticForScene)('toggle');
-          }),
-        Gesture.Tap()
-          .numberOfTaps(1)
-          .onEnd((_e, success) => {
-            'worklet';
-            if (success) runOnJS(onSingleTap)();
-          }),
-      ),
-    [onSingleTap],
-  );
+  const doubleTapGesture = useTapGesture({
+    numberOfTaps: 2,
+    maxDeltaX: TAP_MAX_DELTA,
+    maxDeltaY: TAP_MAX_DELTA,
+    onDeactivate: (e) => {
+      'worklet';
+      if (!e.canceled) runOnJS(hapticForScene)('toggle');
+    },
+  });
+  const singleTapGesture = useTapGesture({
+    numberOfTaps: 1,
+    onDeactivate: (e) => {
+      'worklet';
+      if (!e.canceled) runOnJS(onSingleTap)();
+    },
+  });
+  const tapCombo = useExclusiveGestures(doubleTapGesture, singleTapGesture);
 
-  const composedGesture = useMemo(
-    () => Gesture.Simultaneous(zoomGesture, tapCombo),
-    [zoomGesture, tapCombo],
-  );
+  const composedGesture = useSimultaneousGestures(zoomGesture, tapCombo);
 
   // 内存策略（2026-08-30 改真·按需）：仅当前页（active）解码图片。贴吧
   // CDN 尺寸注入已停用（thumbnailUrl 只做 ATS 协议升级），旧「非激活页放
@@ -326,6 +326,7 @@ export const LongImageView = memo(function LongImageView({
   galleryScrollRef,
   galleryIndex,
   galleryItemWidth,
+  pageCount,
   zoomMirror,
   gesturePulse,
 }: {
@@ -341,7 +342,7 @@ export const LongImageView = memo(function LongImageView({
   onLoadStart?: () => void;
   onLoadEnd?: () => void;
   /** 阅读滚动 pan（父级创建：与退出手势同流，未缩放时驱动长图上下阅读） */
-  readPan: GestureType;
+  readPan: ReturnType<typeof usePanGesture>;
   /** 页下标：滚动状态按页注册到父级查表（全量挂载后多长图页不能共享单对
       SharedValue——2026-08-31 审查发现的 P0：旧实现所有长图页写同一
       scrollMax，边界判定互踩） */
@@ -357,6 +358,8 @@ export const LongImageView = memo(function LongImageView({
   galleryScrollRef: React.RefObject<ScrollableRef>;
   galleryIndex: number;
   galleryItemWidth: number;
+  /** 总页数（边界页溢出判定：首/末页不翻页也不复位缩放） */
+  pageCount: number;
   /** 缩放态镜像 / 手势脉冲（同 ZoomableImage 契约） */
   zoomMirror: SharedValue<boolean>;
   gesturePulse: SharedValue<number>;
@@ -366,7 +369,7 @@ export const LongImageView = memo(function LongImageView({
     imageWidth && imageWidth > 0 && imageHeight && imageHeight > 0
       ? Math.round((PART_SCREEN_WIDTH * imageHeight) / imageWidth)
       : PART_SCREEN_HEIGHT;
-  // ── 缩放核心 = react-native-zoom-reanimated（与 ZoomableImage 同一套）──
+  // ── 缩放核心 = 本地 zoomGesture（与 ZoomableImage 同一套）──
   // 长图场景：未放大时库 pan 判 fail → 阅读由父级 readPan 驱动（本组件
   // 不参与）；放大后库 pan 按"内容高 × scale − 屏高"自动边界（含回弹/
   // 动量），既有长图阅读/退出手势契约不变。
@@ -386,6 +389,7 @@ export const LongImageView = memo(function LongImageView({
     parentScrollRef: galleryScrollRef,
     currentIndex: galleryIndex,
     itemWidth: galleryItemWidth,
+    pageCount,
     doubleTapConfig: { defaultScale: 3, minZoomScale: 1, maxZoomScale: 5 },
   });
   // 镜像（长图页无 active 概念：未触达的页不会产生手势，常开即可）：
@@ -451,29 +455,25 @@ export const LongImageView = memo(function LongImageView({
   );
 
   // 单击 chrome 开关 + 双击触感（同 ZoomableImage；库双击负责缩放）
-  const tapCombo = useMemo(
-    () =>
-      Gesture.Exclusive(
-        Gesture.Tap()
-          .numberOfTaps(2)
-          .onEnd((_e, success) => {
-            'worklet';
-            if (success) runOnJS(hapticForScene)('toggle');
-          }),
-        Gesture.Tap()
-          .numberOfTaps(1)
-          .onEnd((_e, success) => {
-            'worklet';
-            if (success) runOnJS(onSingleTap)();
-          }),
-      ),
-    [onSingleTap],
-  );
+  const doubleTapGesture = useTapGesture({
+    numberOfTaps: 2,
+    maxDeltaX: TAP_MAX_DELTA,
+    maxDeltaY: TAP_MAX_DELTA,
+    onDeactivate: (e) => {
+      'worklet';
+      if (!e.canceled) runOnJS(hapticForScene)('toggle');
+    },
+  });
+  const singleTapGesture = useTapGesture({
+    numberOfTaps: 1,
+    onDeactivate: (e) => {
+      'worklet';
+      if (!e.canceled) runOnJS(onSingleTap)();
+    },
+  });
+  const tapCombo = useExclusiveGestures(doubleTapGesture, singleTapGesture);
 
-  const composedGesture = useMemo(
-    () => Gesture.Simultaneous(zoomGesture, tapCombo),
-    [zoomGesture, tapCombo],
-  );
+  const composedGesture = useSimultaneousGestures(zoomGesture, tapCombo);
 
   const insets = useSafeAreaInsets();
 

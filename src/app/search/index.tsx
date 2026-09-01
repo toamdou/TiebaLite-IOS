@@ -23,6 +23,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactElement } from 'react';
 import {
   View,
   Text,
@@ -255,34 +256,62 @@ export default function SearchPage() {
   // ══ 共享列表头（分段 + 排序；随列表滚动退出。搜索行不再在此——固定
   // 在页面根，见根 return：两树切换（搜索前/后）时搜索行保持同一实例
   // 同一位置，不再"搜索过程下移、结果后回原位"（2026-08-31 用户）） ══
-  const listHeader = (tab: SearchTab) => (
-    <View style={styles.headerBlock}>
-      <View style={styles.segmentRow}>
-        <TiebaSegmentedControl
-          segments={TABS.map((t) => ({ label: t.label, value: t.key }))}
-          selectedIndex={TAB_INDEX[activeTab]}
-          onSelect={handleSegmentSelect}
-        />
-      </View>
-      {tab === 'thread' && (
-        <View style={[styles.sortRow, { zIndex: 10 }]}>
-          <View ref={sortTriggerRef} collapsable={false}>
-            <HdrPressable
-              onPress={openSortMenu}
-              hitSlop={8}
-              flashRadius={8}
-              effect="subtle"
-              style={styles.sortTrigger}
-            >
-              <Text style={[styles.sortText, { color: colors.textSecondary }]}>
-                {SORT_OPTIONS.find((o) => String(o.value) === sortOrder)?.label ?? '按时间'}
-              </Text>
-              <SymbolView name="chevron.down" size={12} tintColor={colors.textTertiary} />
-            </HdrPressable>
+  // 按 tab 缓存元素：此前每次渲染现场新建，任何状态变化（输入、加载、
+  // 菜单开合…）都令三列表 header 引用全变、LegendList 连带重挂头
+  // （2026-09-01 卡顿根因二）。deps 只留真正影响 header 内容的项。
+  //
+  // 2026-09-01 玻璃根因（与吧页同款，见 forum/[name] 注释）：UIKit 玻璃
+  // chrome 离屏/未布局时首挂即永久扁平。本页 segment 同处 PagerView 页面
+  // + LegendList 列表头内，首挂落进无效状态；布局完成后重挂一次强制重新
+  // 物化（segRemount 进 deps，三 header 拿到新 key 触发重建）。
+  const [segRemount, setSegRemount] = useState(0);
+  const segRemountDoneRef = useRef(false);
+  const handleSegRowLayout = useCallback(() => {
+    if (segRemountDoneRef.current) return;
+    segRemountDoneRef.current = true;
+    requestAnimationFrame(() => setSegRemount((k) => k + 1));
+  }, []);
+
+  const listHeaders = useMemo(
+    () => {
+      const mkHeader = (tab: SearchTab) => (
+        <View style={styles.headerBlock}>
+          <View style={styles.segmentRow} onLayout={handleSegRowLayout}>
+            <TiebaSegmentedControl
+              key={`seg-${segRemount}`}
+              segments={TABS.map((t) => ({ label: t.label, value: t.key }))}
+              selectedIndex={TAB_INDEX[activeTab]}
+              onSelect={handleSegmentSelect}
+            />
           </View>
+          {tab === 'thread' && (
+            <View style={[styles.sortRow, { zIndex: 10 }]}>
+              <View ref={sortTriggerRef} collapsable={false}>
+                <HdrPressable
+                  onPress={openSortMenu}
+                  hitSlop={8}
+                  flashRadius={8}
+                  effect="subtle"
+                  style={styles.sortTrigger}
+                >
+                  <Text style={[styles.sortText, { color: colors.textSecondary }]}>
+                    {SORT_OPTIONS.find((o) => String(o.value) === sortOrder)?.label ?? '按时间'}
+                  </Text>
+                  <SymbolView name="chevron.down" size={12} tintColor={colors.textTertiary} />
+                </HdrPressable>
+              </View>
+            </View>
+          )}
         </View>
-      )}
-    </View>
+      );
+      return {
+        thread: mkHeader('thread'),
+        forum: mkHeader('forum'),
+        user: mkHeader('user'),
+      } as Record<SearchTab, ReactElement>;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sortOrder/colors 已含，回调均 useCallback 稳定
+    [activeTab, sortOrder, colors, handleSegmentSelect, openSortMenu, segRemount, handleSegRowLayout],
   );
 
   return (
@@ -343,7 +372,7 @@ export default function SearchPage() {
             onPageIndexChange={handlePagerChange}
           >
             {TABS.map((t) => {
-              const header = listHeader(t.key);
+              const header = listHeaders[t.key];
               if (t.key === 'thread') {
                 return (
                   <View key={t.key} style={styles.page}>

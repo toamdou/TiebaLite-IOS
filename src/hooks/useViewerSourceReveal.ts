@@ -74,25 +74,7 @@ const listeners = new Set<(target: RevealTarget) => void>();
 
 /** 横滑带移位的滚动量（负=左移）：只动 x，几何与滚动偏移差（O−targetX） */
 export function applyHShiftX(key: string | number, dx: number): void {
-  if (!armedFrames || armedFramesKey !== key) {
-    if (__DEV__) {
-      console.warn('[hshift] dx skipped', {
-        key,
-        dx: Math.round(dx),
-        hasFrames: !!armedFrames,
-        framesKey: armedFramesKey,
-      });
-    }
-    return;
-  }
-  if (__DEV__) {
-    console.warn('[hshift] dx applied', {
-      key,
-      dx: Math.round(dx),
-      n: armedFrames.length,
-      f0x: Math.round(armedFrames[0].x),
-    });
-  }
+  if (!armedFrames || armedFramesKey !== key) return;
   armedFrames = armedFrames.map((f) => ({ ...f, x: f.x + dx }));
 }
 

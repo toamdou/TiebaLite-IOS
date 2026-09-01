@@ -153,6 +153,8 @@ export function useThreadPageActions({
           agreeNum: Math.max(0, p.agreeNum + (opType === 1 ? 1 : -1)),
         }));
         hapticForScene('like');
+        // 成功 toast（2026-09-01：与信息流卡片同款底部药丸，此前只失败有）
+        showToast(opType === 1 ? '点赞成功' : '已取消点赞');
       } catch (e) {
         if (__DEV__) console.warn('[thread] agree ERR postId=', postId, e);
         hapticForScene('action-fail');
@@ -184,6 +186,8 @@ export function useThreadPageActions({
               : current,
           };
         });
+        // 成功 toast（2026-09-01：帖底栏点赞此前无任何成功反馈）
+        showToast(opType === 1 ? '点赞成功' : '已取消点赞');
       } catch (e) {
         // 2026-08-28：帖内点赞「没反应」已由 thread 同步修复（setExtra 不再被
         // repin 门控吞）；此处保留 code+body 取证，服务端状态类错误继续幂等处理
