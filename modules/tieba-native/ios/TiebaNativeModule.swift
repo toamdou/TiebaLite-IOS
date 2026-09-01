@@ -534,9 +534,14 @@ public final class TiebaNativeModule: Module {
     CATransaction.setDisableActions(true)
     for navBar in cachedNavBars.allObjects {
       if let bg = findBarBackgroundView(in: navBar), !isGlassApplied(bg.effect) {
-        // 与 force 同款两段式重挂（置空→赋值），见上注释
-        bg.effect = UIVisualEffect()
-        bg.effect = barGlassEffect
+        // 与 force 同款重挂：Liquid Glass 不可两段式（置空会触发 UIKit 对
+        // 同一视图重复赋玻璃的渲染失效，expo#43732）——玻璃分支单独直赋
+        if TiebaNativeModule.useLiquidGlass {
+          bg.effect = TiebaNativeModule.barGlassEffect
+        } else {
+          bg.effect = UIVisualEffect()
+          bg.effect = TiebaNativeModule.barGlassEffect
+        }
         touched = true
       }
     }
@@ -604,6 +609,13 @@ public final class TiebaNativeModule: Module {
   // 常量的同类（含子类）即视为已是玻璃；系统复位态（nil / 其他类）不命中。
   fileprivate static func isGlassApplied(_ effect: UIVisualEffect?) -> Bool {
     guard let effect = effect else { return false }
+    if TiebaNativeModule.useLiquidGlass {
+      // iOS 26+ Liquid Glass：getter 常返回内部包装/副本（8-26 实证 isEqual
+      // 语义不成立），isKindOf 也可能落空 → 判类永远"未挂"→ force/KVO/timer
+      // 无限重赋 → 玻璃反复重建渲染失效（expo#43732）→ 整条 bar 纯色
+      //（2026-09-01 真机"顶栏是纯色的"根因）。改按类名含 Glass 宽容判定。
+      return String(describing: type(of: effect)).contains("Glass")
+    }
     return effect.isKind(of: type(of: barGlassEffect))
   }
 
@@ -655,12 +667,26 @@ public final class TiebaNativeModule: Module {
       // （用户实测"底部有一条很明显边界"，2026-08-26）。幂等：已隐藏即跳过。
       hideBarHairlines(in: navBar)
       if let bg = findBarBackgroundView(in: navBar) {
-        // 渲染层材质：幂等（isGlassApplied 类判同，见该函数注释）。重赋前先
-        // 置空再挂：UIKit 对同一视图重复赋 Liquid Glass 有渲染失效问题（expo#43732）。
+        // 渲染层材质：幂等（isGlassApplied 判定，见该函数注释）。Liquid Glass
+        // 分支不可两段式（置空会触发 UIKit 对同一视图重复赋玻璃的渲染失效，
+        // expo#43732 → 整条 bar 纯色，2026-09-01 实证）；blur 分支保留置空→赋值。
         if !isGlassApplied(bg.effect) {
-          bg.effect = UIVisualEffect()
-          bg.effect = barGlassEffect
+          if TiebaNativeModule.useLiquidGlass {
+            bg.effect = TiebaNativeModule.barGlassEffect
+          } else {
+            bg.effect = UIVisualEffect()
+            bg.effect = TiebaNativeModule.barGlassEffect
+          }
           applied = true
+          // 一次性诊断（devicectl --console 可捕获）：材质类名 + 赋值后
+          // getter 读回的类名——判定判类匹配与否（2026-09-01 纯色排查）
+          if TiebaNativeModule.useLiquidGlass, TiebaNativeModule.glassDiagLogged == false {
+            TiebaNativeModule.glassDiagLogged = true
+            debugPrint(
+              "[tieba-glass] assigned=\(String(describing: type(of: TiebaNativeModule.barGlassEffect))) " +
+                "readback=\(String(describing: type(of: bg.effect))) view=\(type(of: bg))"
+            )
+          }
         }
         // 滚动中被系统重置时即时恢复（KVO 兜底 1.5s timer 的扫描间隙）。
         observeGlassEffect(on: bg)

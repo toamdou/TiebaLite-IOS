@@ -113,7 +113,6 @@ export const ReplyItem = React.memo(function ReplyItem({
   onAgree,
   animateIn,
   isOwn,
-  onReport,
   onDelete,
   onImagePress,
 }: {
@@ -124,7 +123,6 @@ export const ReplyItem = React.memo(function ReplyItem({
   onAgree: (item: SubPostInfo) => void;
   animateIn: boolean;
   isOwn: boolean;
-  onReport: (item: SubPostInfo) => void;
   onDelete: (item: SubPostInfo) => void;
   onImagePress: (images: string[], index: number, sourceFrame?: ImageSourceFrame | null, origins?: (string | undefined)[], contextTitle?: string | null) => void;
 }) {
@@ -169,32 +167,30 @@ export const ReplyItem = React.memo(function ReplyItem({
   // 旧长按一致，不再钳制布局）；正文长按则完全交还系统原生文本选择。
   const handleMorePress = useCallback(() => {
     hapticForScene('press');
-    const options = ['复制内容', '查看用户', '举报'];
+    const options = ['复制内容', '查看用户'];
     if (isOwn) {
       options.push('删除');
     }
     const cancelIndex = options.length;
-    // ActionSheetIOS 只有一个 destructive 位：本人可见「删除」时以删除为
-    // destructive，否则举报为 destructive。
+    // ActionSheetIOS 只有一个 destructive 位：仅本人可见「删除」时以删除为
+    // destructive，否则不以任何项为 destructive。
     ActionSheetIOS.showActionSheetWithOptions(
       {
         options: [...options, '取消'],
         cancelButtonIndex: cancelIndex,
-        destructiveButtonIndex: isOwn ? 3 : 2,
+        destructiveButtonIndex: isOwn ? 2 : undefined,
       },
       (buttonIndex) => {
         if (buttonIndex === 0) {
           Clipboard.setStringAsync(contentToText(item.content) || '[内容已删除]');
         } else if (buttonIndex === 1) {
           router.push({ pathname: '/user/[uid]', params: { uid: item.authorId } });
-        } else if (buttonIndex === 2) {
-          onReport(item);
-        } else if (buttonIndex === 3 && isOwn) {
+        } else if (buttonIndex === 2 && isOwn) {
           onDelete(item);
         }
       },
     );
-  }, [item, isOwn, onReport, onDelete, router]);
+  }, [item, isOwn, onDelete, router]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: fade.value,

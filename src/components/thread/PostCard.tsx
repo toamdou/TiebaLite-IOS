@@ -54,7 +54,6 @@ interface PostCardProps {
   subPosts?: SubPostInfo[];
   onAgree?: (postId: string, opType: number) => void;
   onDelete?: (postId: string) => void;
-  onReport?: (postId: string) => void;
   onSubPostsPress?: (post: PostInfo) => void;
   /** 大图查看器顶栏标题覆盖（主楼传帖子标题；缺省用楼层内容摘要） */
   contextTitle?: string | null;
@@ -193,7 +192,6 @@ const PostCard = React.memo(function PostCard({
   subPosts,
   onAgree,
   onDelete,
-  onReport,
   onSubPostsPress,
   contextTitle,
   onImagePress,
@@ -267,7 +265,7 @@ const PostCard = React.memo(function PostCard({
   // 零常驻视图，点击时才拉起系统面板。
   const handleMorePress = useCallback(() => {
     hapticForScene('press');
-    const options = ['复制内容', '分享', '复制链接', '举报', ...(onDelete ? ['删除'] : []), '取消'];
+    const options = ['复制内容', '分享', '复制链接', ...(onDelete ? ['删除'] : []), '取消'];
     const cancelButtonIndex = options.length - 1;
     const destructiveButtonIndex = onDelete ? options.length - 2 : undefined;
     ActionSheetIOS.showActionSheetWithOptions(
@@ -281,12 +279,11 @@ const PostCard = React.memo(function PostCard({
           case 0: void handleCopyPress(); break;
           case 1: void handleShare(); break;
           case 2: void handleCopyLink(); break;
-          case 3: onReport?.(post.id); break;
-          case 4: onDelete?.(post.id); break;
+          case 3: onDelete?.(post.id); break;
         }
       },
     );
-  }, [handleCopyPress, handleShare, handleCopyLink, onReport, onDelete, post.id]);
+  }, [handleCopyPress, handleShare, handleCopyLink, onDelete, post.id]);
 
   const authorMeta =
     [

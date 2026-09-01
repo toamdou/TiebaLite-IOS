@@ -84,7 +84,7 @@ const FOCUS_REFRESH_STALE_MS = 5 * 60 * 1000;
 
 // 信息流帖卡「×」菜单项：模块级常量 —— 若在 renderItem 内联数组字面量，
 // 每帧新建引用会击穿 TweetCard 的 React.memo，点赞/加载更多时整屏重渲。
-const TWEET_MENU_OPTIONS: TweetCardMenuAction[] = ['dislike', 'block', 'report', 'copy-title'];
+const TWEET_MENU_OPTIONS: TweetCardMenuAction[] = ['dislike', 'block', 'copy-title'];
 
 // ── 信息流单行：FeedRow（memo 化，collapsing 只影响命中行自身） ──
 // 抽出后 renderItem 不再因 collapsingId 翻转而重渲所有 cell——不感兴趣
@@ -472,9 +472,6 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
       }
       case 'block':
         void feedActions.blockAuthor(thread);
-        break;
-      case 'report':
-        void feedActions.report(thread);
         break;
       case 'copy-title':
         feedActions.copyTitle(thread);

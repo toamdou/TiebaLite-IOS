@@ -1,8 +1,7 @@
-import { apiGetWeb, apiPost } from '../client';
+import { apiGetWeb } from '../client';
 import { TiebaApiError } from '../interceptors';
 import {
   extractData,
-  getStoken,
   postFormAction,
 } from './helpers';
 export async function submitDislike(params: {
@@ -27,19 +26,6 @@ export async function submitDislike(params: {
     // 携带即被判 NOT_LOGIN，2026-08-27 Metro 实证）
   });
   return { success: true };
-}
-
-export async function checkReportPost(postId: string): Promise<string> {
-  const body = extractData(await apiPost<any>('/c/f/ueg/checkjubao', {
-    category: '1',
-    pid: postId,
-    // 对齐 Kotlin checkReport：@Field("stoken")=登录 sToken（缺省服务端当
-    // 未登录，data.url 回空 →"不支持在线举报"假象；2026-09-01 二轮补）
-    stoken: getStoken(),
-  }));
-  // Kotlin CheckReportBean.data.url；旧实现误读 data.report_url 恒空
-  // → 所有内容一律"不支持在线举报"（2026-09-01 对照 Kotlin 实证修复）
-  return body?.data?.url ?? body?.data?.report_url ?? '';
 }
 
 // Kotlin AppHybridTiebaApi topicDetail: GET /mo/q/newtopic/topicDetail

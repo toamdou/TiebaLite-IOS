@@ -73,7 +73,7 @@ export function useThreadPageActions({
     forumName: thread?.forumName,
     title: thread?.title,
   });
-  const { share: shareAction, report: reportAction, remove: removeAction, copy: copyAction } = threadActions;
+  const { share: shareAction, remove: removeAction, copy: copyAction } = threadActions;
 
   // ── 登录守卫：未登录弹提示，返回 false 表示拦截（调用方直接 return）──
   const requireLogin = useCallback((): boolean => {
@@ -216,17 +216,6 @@ export function useThreadPageActions({
     });
   }, [requireLogin, runOnce, id, thread, firstPostId, setExtra, isAlreadyInTargetState]);
 
-  /** 举报：文案区分回复/主贴 */
-  const handleReport = useCallback((postId?: string) => {
-    const targetPostId = postId || id;
-    const isReply = !!postId && postId !== id;
-    showConfirm({
-      title: isReply ? '举报回复' : '举报',
-      message: isReply ? '确定要举报这条回复吗？' : '确定要举报这条帖子吗？',
-      onConfirm: () => reportAction(targetPostId),
-    });
-  }, [id, reportAction, showConfirm]);
-
   /** 删除（主贴→返回上一页；回复→就地移除） */
   const handleDelete = useCallback((postId?: string) => {
     const targetPostId = postId || id;
@@ -260,7 +249,6 @@ export function useThreadPageActions({
     handleToggleCollect,
     handleAgree,
     handleThreadAgree,
-    handleReport,
     handleDelete,
     handleCopyLink,
     shareAction,
