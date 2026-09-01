@@ -237,6 +237,13 @@ export default function ForumSearchPage() {
           setMenuOpen(null);
           if (kind === 'sort') setSortType(value);
           else setFilterType(value);
+          // 排序/筛选变化后重新搜索：usePagedList 的 params 不含
+          // sortType/filterType，不主动重拉页面结果不变
+          //（2026-09-01 用户实测「点了没反应」）。setState 后下一帧
+          // 触发，fetcher 读最新闭包值。
+          if (searchedKeyword.trim()) {
+            setImmediate(() => refresh());
+          }
         }}
         colors={colors}
       />

@@ -5,7 +5,7 @@
  * Each page uses ScrollView for pinch-to-zoom.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
   View,
@@ -33,7 +33,7 @@ import Animated, {
   Easing,
   type SharedValue,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector, GestureStateManager, usePanGesture } from 'react-native-gesture-handler';
 import PagerView, {
   type PageScrollStateChangedNativeEvent,
   type PagerViewOnPageScrollEvent,
@@ -56,7 +56,7 @@ import { revealOnOpen, getArmedFramesSnapshot, flushHShiftOnOpen } from '@/hooks
 import { useAuthStore } from '@/stores/authStore';
 import { TiebaPhotoContextMenu } from '../../modules/tieba-native/src/TiebaPhotoContextMenu';
 import { TiebaNative } from '../../modules/tieba-native/src/TiebaNative';
-import type { ScrollableRef } from 'react-native-zoom-reanimated';
+import type { ScrollableRef } from '@/components/imageviewer/zoomGesture';
 import { readableError } from '@/utils/errorMessage';
 import { resolveWatermarkText } from '@/utils/watermark';
 import { Spacing } from '@/theme';
@@ -239,7 +239,7 @@ export default function ImageViewer({
   const sourceFrameRef = useRef<ImageSourceFrame | null>(null);
   const openInitialIndexRef = useRef(initialIndex);
   const pagerRef = useRef<PagerView>(null);
-  // 照片级图库滑动适配器（react-native-zoom-reanimated parentScrollRef）：
+  // 照片级图库滑动适配器（zoomGesture gallerySwipe 的 parentScrollRef）：
   // 库 overflow 溢出时按 offset 换算目标页，驱动原生 PagerView 切页。
   // staticMode/未挂载时 pagerRef.current 为空 → 库侧守卫自然忽略。
   // **不要用模块级 SCREEN_WIDTH 换算页**（2026-08-30 日志实证：Dim 常量
@@ -422,48 +422,57 @@ export default function ImageViewer({
   // 挂载时注册进本表；readPan/退出手势按当前页（currentIdxSV）读对应组。
   // 旧实现所有长图页写同一对共享值——全量挂载后多长图页必互踩（边界判定
   // 错乱：上下滑误触发退出/滚不到底）。
-  const scrollStatesRef = useRef<Record<number, { y: SharedValue<number>; max: SharedValue<number> }>>({});
+  // 2026-09-01 三版教训：普通 ref 对象 / Map / SharedValue 内对象突变——
+  // Reanimated 会把被 worklet 使用过的共享对象深冻结，JS 侧任何「添加新键」
+  // 都抛 cannot add a new property。终局=**不可变整体替换**：每次 attach/
+  // detach 生成新对象整体赋给 .value（替换引用不受冻结限制），worklet 读
+  // .value[i] 时拿到最新引用。
+  const scrollStatesRef = useSharedValue<Record<number, { y: SharedValue<number>; max: SharedValue<number> }>>({});
   const attachScrollState = useCallback(
     (i: number, y: SharedValue<number>, max: SharedValue<number>) => {
-      scrollStatesRef.current[i] = { y, max };
+      scrollStatesRef.value = { ...scrollStatesRef.value, [i]: { y, max } };
     },
-    [],
+    [scrollStatesRef],
   );
   const detachScrollState = useCallback((i: number) => {
-    delete scrollStatesRef.current[i];
-  }, []);
+    if (!(i in scrollStatesRef.value)) return;
+    const next = { ...scrollStatesRef.value };
+    delete next[i];
+    scrollStatesRef.value = next;
+  }, [scrollStatesRef]);
   // 阅读滚动基线（手势激活期间单值安全：同一时刻只有一个长图页的手势活跃）
   const readBase = useSharedValue(0);
-  const longReadPan = useMemo(
-    () =>
-      Gesture.Pan()
-        .minDistance(4000)
-        .maxPointers(1)
-        .onTouchesDown(() => {
-          const st = scrollStatesRef.current[currentIdxSV.value];
-          if (st) readBase.value = st.y.value;
-        })
-        .onTouchesMove((_e, mgr) => {
-          if (!zoomedSV.value) mgr.activate();
-        })
-        .onUpdate((e) => {
-          const st = scrollStatesRef.current[currentIdxSV.value];
-          if (!st) return;
-          const target = readBase.value + e.translationY;
-          st.y.value = Math.min(0, Math.max(-st.max.value, target));
-        })
-        .onEnd((e) => {
-          if (isDismissing.value) return;
-          const st = scrollStatesRef.current[currentIdxSV.value];
-          if (!st) return;
-          // 钉在边界（顶/底；含无可滚余量）不衰减——由退出手势接棒
-          if (st.y.value <= -st.max.value + 0.5 || st.y.value >= -0.5 || st.max.value <= 0.5) {
-            return;
-          }
-          st.y.value = withDecay({ velocity: e.velocityY, clamp: [-st.max.value, 0] });
-        }),
-    [zoomedSV, readBase, isDismissing],
-  );
+  const longReadPan = usePanGesture({
+    minDistance: 4000,
+    maxPointers: 1,
+    onTouchesDown: (_e) => {
+      'worklet';
+      const st = scrollStatesRef.value[currentIdxSV.value];
+      if (st) readBase.value = st.y.value;
+    },
+    onTouchesMove: (e) => {
+      'worklet';
+      if (!zoomedSV.value) GestureStateManager.activate(e.handlerTag);
+    },
+    onUpdate: (e) => {
+      'worklet';
+      const st = scrollStatesRef.value[currentIdxSV.value];
+      if (!st) return;
+      const target = readBase.value + e.translationY;
+      st.y.value = Math.min(0, Math.max(-st.max.value, target));
+    },
+    onDeactivate: (e) => {
+      'worklet';
+      if (isDismissing.value) return;
+      const st = scrollStatesRef.value[currentIdxSV.value];
+      if (!st) return;
+      // 钉在边界（顶/底；含无可滚余量）不衰减——由退出手势接棒
+      if (st.y.value <= -st.max.value + 0.5 || st.y.value >= -0.5 || st.max.value <= 0.5) {
+        return;
+      }
+      st.y.value = withDecay({ velocity: e.velocityY, clamp: [-st.max.value, 0] });
+    },
+  });
   // 减少动态：把 reduceMotion 镜像到 UI 线程（手势 onEnd 里判断）
   const reduceMotionSV = useSharedValue(reduceMotion);
 
@@ -916,7 +925,7 @@ export default function ImageViewer({
 
 // 交互式拖拽关闭（iOS Photos 风格，2026-08-29 重构 v2 / 08-30 增补）：
 // - 手势本体稳定（门控全走共享值，不随 isZoomed 重建——快速捏合不被掐断）；
-// - minDistance=10 自动激活兜底（不再依赖纯手动 activate：嵌套 PagerView
+// - minDistance=5 自动激活兜底（不再依赖纯手动 activate：嵌套 PagerView
 //   环境下手动模式会偶发收不到 touchesMove，普通图纵滑退不出——用户实测）；
 //   激活后 onUpdate 里仲裁：长图页滚动区内纵向不跟手（滚动归阅读 pan，
 //   贴顶下拉/贴底上拉才接管退出）；横向仅 PagerView 翻不了的方向（首页右
@@ -926,194 +935,183 @@ export default function ImageViewer({
 // - 放开时距离或速度过阈值 → 三档退场目标：源缩略图矩形（点击页）→ 底栏
 //   缩略条格（翻页后当前页）→ 沿手势方向缩小淡出（单图无缩略条）；
 //   未过阈值 → 弹簧回弹。缩放态（zoomedSV）下禁用，交给页内缩放 pan。
-const dismissGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .minDistance(10)
-        .maxPointers(1)
-        .simultaneousWithExternalGesture(longReadPan)
-        .onTouchesDown((e) => {
-          if (zoomedSV.value) return;
-          const t = e.changedTouches[0];
-          touchStartX.value = t.x;
-          touchStartY.value = t.y;
-          prevTransX.value = 0;
-          prevTransY.value = 0;
-        })
-        .onStart((e) => {
-          // 退场动画进行中忽略新拖拽（2026-08-30：第二次拖拽在 isDismissing
-          // 期再次 onStart 会叠加 setStaticMode/探针，状态错乱）
-          if (isDismissing.value) return;
-          // 自动激活（minDistance 10）时 translation 已累计了按下到激活点的
-          // 位移：以激活点为增量基线，onUpdate 从 0 起跟手（无首帧跳变）。
-          prevTransX.value = e.translationX;
-          prevTransY.value = e.translationY;
-          runOnJS(dbg)('drag-start', { isLong: isLongPageSV.value, zoomed: zoomedSV.value });
-          // 拖拽即切静态大图（仅非长图页）：PagerView（SwiftUI TabView）宿主
-          // transform 是 120fps 卡顿源，拖拽跟手全程落在轻量 Image 上；
-          // 长图页保持阅读形态，退场时才切（onEnd 里）。回弹时切回 PagerView。
-          if (!isLongPageSV.value) runOnJS(setStaticMode)(true);
-        })
-        .onTouchesMove((e, mgr) => {
-          if (isDismissing.value || zoomedSV.value) return;
-          // 兜底手动激活：minDistance=10 已能自动激活，这里只做激活前仲裁
-          //（长图页非边界纵向、翻页横向不抢）
-          const dx = e.changedTouches[0].x - touchStartX.value;
-          const dy = e.changedTouches[0].y - touchStartY.value;
-          let yGo = false;
-          if (isLongPageSV.value) {
-            const st = scrollStatesRef.current[currentIdxSV.value];
-            const sy = st?.y.value ?? 0;
-            const smax = st?.max.value ?? 0;
-            const atTop = sy <= 0.5;
-            const atBottom = sy >= -smax + 0.5;
-            yGo = Math.abs(dy) >= 10 && ((dy > 0 && atTop) || (dy < 0 && atBottom));
-          } else {
-            yGo = Math.abs(dy) >= 10;
-          }
-          const xGo =
-            Math.abs(dx) >= 10 &&
-            ((dx > 0 && currentIdxSV.value <= 0) ||
-              (dx < 0 && currentIdxSV.value >= pageCountSV.value - 1));
-          if (yGo || xGo) mgr.activate();
-        })
-        .onUpdate((e) => {
-          if (isDismissing.value || zoomedSV.value) return;
-          // 增量跟手：滚动区内的位移不累计（容器归 0、内容正常滚动），
-          // 滚动到边界后继续拉时从 0 起跟——跨区全程无跳变。
-          const dX = e.translationX - prevTransX.value;
-          const dY = e.translationY - prevTransY.value;
-          prevTransX.value = e.translationX;
-          prevTransY.value = e.translationY;
-          // 横向跟手：斜向拖动（X 分量 ≲ Y 分量）→ X 自由跟随（用户实测
-          // 「不能随手势自由拖动」= 非边缘页横动被归 0）；纯横向（X 主导）
-          // → 仍只跟边缘页（其余交 PagerView 翻页，不污染退场位移）。
-          const diag =
-            Math.abs(dX) <= Math.abs(dY) * 1.5 ||
-            Math.abs(dX) <= Math.abs(dY);
-          const xGo =
-            diag ||
-            (dX > 0 && currentIdxSV.value <= 0) ||
-            (dX < 0 && currentIdxSV.value >= pageCountSV.value - 1);
-          // Twitter 式跟手限位：显示位移钳制在附近范围（X ±80pt，
-          // Y ±38% 屏高）——超过后图片"钉住"，raw 继续累计驱动 progress
-          dragTranslateX.value = xGo
-            ? Math.max(-MAX_DRAG_X, Math.min(MAX_DRAG_X, dragTranslateX.value + dX))
-            : 0;
-          let followY = true;
-          if (isLongPageSV.value) {
-            const st = scrollStatesRef.current[currentIdxSV.value];
-            const sy = st?.y.value ?? 0;
-            const smax = st?.max.value ?? 0;
-            const atTop = sy <= 0.5;
-            const atBottom = sy >= -smax + 0.5;
-            followY =
-              (e.translationY > 2 && atTop) ||
-              (e.translationY < -2 && atBottom) ||
-              (atTop && atBottom);
-          }
-          if (followY) {
-            dragRawY.value += dY;
-            const maxY = SCREEN_HEIGHT * MAX_DRAG_Y_FACTOR;
-            dragTranslateY.value = Math.max(-maxY, Math.min(maxY, dragRawY.value));
-          }
-        })
-        .onEnd((e) => {
-          if (isDismissing.value || zoomedSV.value) return;
-          // 阈值判定用 raw 累计（图片钉在限位后 raw 仍增长，拉过限位照常触发）
-          const dragLen = Math.hypot(dragTranslateX.value, dragRawY.value);
-          const beyondThreshold = dragLen > 140 || Math.abs(e.velocityY) > 900;
-          if (!beyondThreshold) {
-            // 未过阈值 → 弹簧回弹（X/Y/raw 一起回）；拖拽期间切的静态大图换回
-            // PagerView（恢复翻页/缩放，长图页本就没切）
-            runOnJS(dbg)('drag-end-spring', { len: dragLen, vy: e.velocityY });
-            runOnJS(setStaticMode)(false);
-            dragRawY.value = withSpring(0, MOMENTUM);
-            dragTranslateX.value = withSpring(0, MOMENTUM);
-            dragTranslateY.value = withSpring(0, MOMENTUM);
-            return;
-          }
-          isDismissing.value = true;
-          runOnJS(dbg)('drag-end-exit', {
-            len: dragLen,
-            vy: e.velocityY,
-            isLong: isLongPageSV.value,
-          });
-          if (reduceMotionSV.value) {
-            runOnJS(onClose)();
-            return;
-          }
-          const dragProgress = Math.min(dragLen / SHRINK_DISTANCE, 1);
-          // 退场起点=当前跟手位置（clamp 后的显示值）；scale 按拖拽距离缩小
-          const fromX = dragTranslateX.value;
-          const fromY = dragTranslateY.value;
-          const fromScale = 1 - dragProgress * DRAG_SHRINK_FACTOR;
-          // 切除 PagerView（SwiftUI TabView）→ 静态大图：同 URI + imageWarm 免
-          // 过渡，换图像素级无感；退场 transform 落在轻量 Image 上，120fps 平滑。
-          // staticMode 与圆角在 startExitAnimation（JS 同任务）里一并切换——若
-          // 在此 runOnJS 单独切，overlay 先以无圆角姿态显示一帧（用户实测）。
-          // ── 退场目标（2026-08-31 v2：横滑带帧优先）──
-          // ── 退场目标（2026-08-31 用户拍板：回归初始"滑出屏幕"）──
-          // 删除飞回原位/条格/横滑带帧全部档位：手势退出 = 沿松手方向
-          // 飞出屏幕（fallback0，动态时长），长图/普通图一视同仁。
-          const fallback0 = prepareFlyOut(e, fromX, fromY);
-          const toX = fallback0.toX;
-          const toY = fallback0.toY;
-          const toScale = 0.35;
-          const exitDuration = fallback0.exitDuration;
-          const tag = 'exit-drag';
-          // 退场目标取证（2026-08-31 临时）：复现"滑出屏幕"问题看 exit-target 行
-          runOnJS(dbg)('exit-target', {
-            flyback: tag,
-            idx: currentIdxSV.value,
-            openIdx: openIdxSV.value,
-            toX: Math.round(toX),
-            toY: Math.round(toY),
-            toScale,
-            tag,
-          });
-          // 动画统一由 JS 线程启动（startExitAnimation 内部带看门狗兜底——
-          // 日志实证 worklet 里直接 withTiming 会偶发不推进，JS 启动是
-          // 与进入动画相同的成功路径）。
-          // toScale 不做钳制（2026-08-31 用户要求）：松手后图片平滑放大到
-          // 初始大小（撤销跟手缩小），恰好到位时恰好恢复——目标由各档
-          // 几何给出（源矩形宽比/条格/0.35），宽高比由 scale 自然适配。
-          exitFromX.value = fromX;
-          exitFromY.value = fromY;
-          exitFromScale.value = fromScale;
-          exitToX.value = toX;
-          exitToY.value = toY;
-          exitToScale.value = toScale;
-          runOnJS(startExitAnimation)({ duration: exitDuration, tag });
-        }),
-    [
-      onClose,
-      reduceMotionSV,
-      zoomedSV,
-      longReadPan,
-      isLongPageSV,
-      currentIdxSV,
-      openIdxSV,
-      initialIdxSV,
-      touchStartX,
-      touchStartY,
-      prevTransX,
-      prevTransY,
-      dragTranslateX,
-      dragTranslateY,
-      isDismissing,
-      exitFromX,
-      exitFromY,
-      exitFromScale,
-      exitToX,
-      exitToY,
-      exitToScale,
-      exitProgress,
-      setStaticMode,
-      dbg,
-      startExitAnimation,
-    ],
-  );
+const dismissGesture = usePanGesture({
+    // 死区 10→5（2026-09-01）：10pt 内画面完全不动是「不跟手」主感来源；
+    // 5pt 是翻页手势轻微纵向抖动的容差下限，再小会误抢横向翻页。
+    minDistance: 5,
+    maxPointers: 1,
+    simultaneousWith: longReadPan,
+    onTouchesDown: (e) => {
+      'worklet';
+      if (zoomedSV.value) return;
+      const t = e.changedTouches[0];
+      touchStartX.value = t.x;
+      touchStartY.value = t.y;
+      prevTransX.value = 0;
+      prevTransY.value = 0;
+    },
+    onActivate: (e) => {
+      'worklet';
+      // 退场动画进行中忽略新拖拽（2026-08-30：第二次拖拽在 isDismissing
+      // 期再次 onStart 会叠加 setStaticMode/探针，状态错乱）
+      if (isDismissing.value) return;
+      // 自动激活（minDistance 5）时 translation 已累计了按下到激活点的
+      // 位移：以激活点为增量基线，onUpdate 从 0 起跟手（无首帧跳变）。
+      prevTransX.value = e.translationX;
+      prevTransY.value = e.translationY;
+      runOnJS(dbg)('drag-start', { isLong: isLongPageSV.value, zoomed: zoomedSV.value });
+      // 拖拽即切静态大图（仅非长图页）：PagerView 宿主 transform 是 120fps
+      // 卡顿源，拖拽跟手全程落在轻量 Image 上；长图页保持阅读形态，退场时
+      // 才切（onDeactivate 里）。回弹时切回 PagerView。
+      if (!isLongPageSV.value) runOnJS(setStaticMode)(true);
+    },
+    onTouchesMove: (e) => {
+      'worklet';
+      if (isDismissing.value || zoomedSV.value) return;
+      // 长图模式禁止手势滑出（2026-09-01 用户要求）：阅读滚动与退出
+      // 手势冲突（向上滑到边界被判为退出）。长图页一律 fail——触摸交还
+      // readPan（阅读滚动）与 PagerView（翻页），关闭走 X/系统返回。
+      if (isLongPageSV.value) {
+        GestureStateManager.fail(e.handlerTag);
+        return;
+      }
+      // 兜底手动激活：minDistance=5 已能自动激活，这里做激活前仲裁
+      //（翻页横向不抢）。
+      // 2026-09-01 修复「斜向/横向滑动直接退出」：yGo 必须垂直主导
+      // （|dy| > |dx|，纯"上下滑动"才退出），且不满足 yGo/xGo 时**显式
+      // fail** 把触摸交还 PagerView 翻页——否则 minDistance 自动激活会在
+      // 仲裁前接管横滑（多图中间页左右滑退出）。
+      const dx = e.changedTouches[0].x - touchStartX.value;
+      const dy = e.changedTouches[0].y - touchStartY.value;
+      const yGo = Math.abs(dy) >= 5 && Math.abs(dy) > Math.abs(dx);
+      const xGo =
+        Math.abs(dx) >= 5 &&
+        ((dx > 0 && currentIdxSV.value <= 0) ||
+          (dx < 0 && currentIdxSV.value >= pageCountSV.value - 1));
+      if (yGo || xGo) GestureStateManager.activate(e.handlerTag);
+      else GestureStateManager.fail(e.handlerTag);
+    },
+    onUpdate: (e) => {
+      'worklet';
+      if (isDismissing.value || zoomedSV.value) return;
+      // 增量跟手：滚动区内的位移不累计（容器归 0、内容正常滚动），
+      // 滚动到边界后继续拉时从 0 起跟——跨区全程无跳变。
+      const dX = e.translationX - prevTransX.value;
+      const dY = e.translationY - prevTransY.value;
+      prevTransX.value = e.translationX;
+      prevTransY.value = e.translationY;
+      // 横向跟手：斜向拖动（X 分量 ≲ Y 分量）→ X 自由跟随（用户实测
+      // 「不能随手势自由拖动」= 非边缘页横动被归 0）；纯横向（X 主导）
+      // → 仍只跟边缘页（其余交 PagerView 翻页，不污染退场位移）。
+      const diag =
+        Math.abs(dX) <= Math.abs(dY) * 1.5 ||
+        Math.abs(dX) <= Math.abs(dY);
+      const xGo =
+        diag ||
+        (dX > 0 && currentIdxSV.value <= 0) ||
+        (dX < 0 && currentIdxSV.value >= pageCountSV.value - 1);
+      // Twitter 式跟手限位：显示位移钳制在附近范围（X ±80pt，
+      // Y ±38% 屏高）——超过后图片"钉住"，raw 继续累计驱动 progress
+      dragTranslateX.value = xGo
+        ? Math.max(-MAX_DRAG_X, Math.min(MAX_DRAG_X, dragTranslateX.value + dX))
+        : 0;
+      let followY = true;
+      if (isLongPageSV.value) {
+        const st = scrollStatesRef.value[currentIdxSV.value];
+        const sy = st?.y.value ?? 0;
+        const smax = st?.max.value ?? 0;
+        const atTop = sy <= 0.5;
+        const atBottom = sy >= -smax + 0.5;
+        followY =
+          (e.translationY > 2 && atTop) ||
+          (e.translationY < -2 && atBottom) ||
+          (atTop && atBottom);
+      }
+      if (followY) {
+        dragRawY.value += dY;
+        const maxY = SCREEN_HEIGHT * MAX_DRAG_Y_FACTOR;
+        dragTranslateY.value = Math.max(-maxY, Math.min(maxY, dragRawY.value));
+      }
+    },
+    onDeactivate: (e) => {
+      'worklet';
+      if (isDismissing.value || zoomedSV.value) return;
+      // 阈值判定用 raw 累计（图片钉在限位后 raw 仍增长，拉过限位照常触发）
+      // 阈值判定：距离/纵向速度之外，**顶到横向限位（±MAX_DRAG_X）即视为
+      // 过阈值**——此前纯横向跟手最多 80pt（<140pt 阈值），拉到边界松手
+      // 永远回弹退不出（2026-09-01 用户实测「左边缘右滑淡出到边界停住」）；
+      // 横向甩速同样触发（边缘页横甩 = 退出意图，非翻页）。
+      const dragLen = Math.hypot(dragTranslateX.value, dragRawY.value);
+      const pinnedX = Math.abs(dragTranslateX.value) >= MAX_DRAG_X - 0.5;
+      const beyondThreshold =
+        dragLen > 140 ||
+        Math.abs(e.velocityY) > 900 ||
+        Math.abs(e.velocityX) > 900 ||
+        pinnedX;
+      if (!beyondThreshold) {
+        // 未过阈值 → 弹簧回弹（X/Y/raw 一起回）；拖拽期间切的静态大图换回
+        // PagerView（恢复翻页/缩放，长图页本就没切）
+        runOnJS(dbg)('drag-end-spring', { len: dragLen, vy: e.velocityY });
+        runOnJS(setStaticMode)(false);
+        dragRawY.value = withSpring(0, MOMENTUM);
+        dragTranslateX.value = withSpring(0, MOMENTUM);
+        dragTranslateY.value = withSpring(0, MOMENTUM);
+        return;
+      }
+      isDismissing.value = true;
+      runOnJS(dbg)('drag-end-exit', {
+        len: dragLen,
+        vy: e.velocityY,
+        isLong: isLongPageSV.value,
+      });
+      if (reduceMotionSV.value) {
+        runOnJS(onClose)();
+        return;
+      }
+      const dragProgress = Math.min(dragLen / SHRINK_DISTANCE, 1);
+      // 退场起点=当前跟手位置（clamp 后的显示值）；scale 按拖拽距离缩小
+      const fromX = dragTranslateX.value;
+      const fromY = dragTranslateY.value;
+      const fromScale = 1 - dragProgress * DRAG_SHRINK_FACTOR;
+      // 切除 PagerView → 静态大图：同 URI + imageWarm 免过渡，换图像素级
+      // 无感；退场 transform 落在轻量 Image 上，120fps 平滑。
+      // staticMode 与圆角在 startExitAnimation（JS 同任务）里一并切换——若
+      // 在此 runOnJS 单独切，overlay 先以无圆角姿态显示一帧（用户实测）。
+      // ── 退场目标（2026-08-31 v2：横滑带帧优先）──
+      // ── 退场目标（2026-08-31 用户拍板：回归初始"滑出屏幕"）──
+      // 删除飞回原位/条格/横滑带帧全部档位：手势退出 = 沿松手方向
+      // 飞出屏幕（fallback0，动态时长），长图/普通图一视同仁。
+      const fallback0 = prepareFlyOut(e, fromX, fromY);
+      const toX = fallback0.toX;
+      const toY = fallback0.toY;
+      const toScale = 0.35;
+      const exitDuration = fallback0.exitDuration;
+      const tag = 'exit-drag';
+      // 退场目标取证（2026-08-31 临时）：复现"滑出屏幕"问题看 exit-target 行
+      runOnJS(dbg)('exit-target', {
+        flyback: tag,
+        idx: currentIdxSV.value,
+        openIdx: openIdxSV.value,
+        toX: Math.round(toX),
+        toY: Math.round(toY),
+        toScale,
+        tag,
+      });
+      // 动画统一由 JS 线程启动（startExitAnimation 内部带看门狗兜底——
+      // 日志实证 worklet 里直接 withTiming 会偶发不推进，JS 启动是
+      // 与进入动画相同的成功路径）。
+      // toScale 不做钳制（2026-08-31 用户要求）：松手后图片平滑放大到
+      // 初始大小（撤销跟手缩小），恰好到位时恰好恢复——目标由各档
+      // 几何给出（源矩形宽比/条格/0.35），宽高比由 scale 自然适配。
+      exitFromX.value = fromX;
+      exitFromY.value = fromY;
+      exitFromScale.value = fromScale;
+      exitToX.value = toX;
+      exitToY.value = toY;
+      exitToScale.value = toScale;
+      runOnJS(startExitAnimation)({ duration: exitDuration, tag });
+    },
+  });
 
   const toggleUI = useCallback(() => {
     setShowUI((prev) => !prev);
@@ -1404,6 +1402,7 @@ const dismissGesture = useMemo(
                       galleryScrollRef={galleryScrollRef}
                       galleryIndex={viewingIndex}
                       galleryItemWidth={SCREEN_WIDTH}
+                      pageCount={images.length}
                       zoomMirror={zoomedSV}
                       gesturePulse={gesturePulse}
                       onLoadStart={() => {
@@ -1426,6 +1425,7 @@ const dismissGesture = useMemo(
                       galleryScrollRef={galleryScrollRef}
                       galleryIndex={viewingIndex}
                       galleryItemWidth={SCREEN_WIDTH}
+                      pageCount={images.length}
                       zoomMirror={zoomedSV}
                       gesturePulse={gesturePulse}
                       onLoadStart={() => {

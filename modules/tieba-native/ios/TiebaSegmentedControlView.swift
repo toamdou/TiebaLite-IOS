@@ -38,14 +38,47 @@ public final class TiebaSegmentedControlView: ExpoView {
 
   public required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
+    // 液态玻璃修复（2026-08-30 定案；8-31 被 7e83217 无说明回退，9-01 恢复）：
+    // UIView 默认 isOpaque == true，合成器认为本层不透明、跳过其身后内容合成，
+    // iOS 26+ 分段控件的玻璃药丸拿不到采样素材、退化为平淡纯色胶囊。
+    // 宿主与控件显式透明链（expo-ui SwiftUI 宿主同根因 expo#44739/#45365）。
+    isOpaque = false
+    backgroundColor = .clear
     addSubview(control)
     control.translatesAutoresizingMaskIntoConstraints = false
+    control.isOpaque = false
+    control.backgroundColor = .clear
     NSLayoutConstraint.activate([
       control.leadingAnchor.constraint(equalTo: leadingAnchor),
       control.trailingAnchor.constraint(equalTo: trailingAnchor),
       control.centerYAnchor.constraint(equalTo: centerYAnchor),
     ])
     control.addTarget(self, action: #selector(handleValueChanged), for: .valueChanged)
+  }
+
+  // 9-01 第二轮：真机复现「消息页（固定位置）有玻璃、吧页/搜索页（LegendList
+  // 列表头内）没有」——透明链只清自身+control 两层不够，列表头/滚动容器链上
+  // 的祖先 UIView 仍默认 isOpaque=true、挡住身后内容合成。这里在挂窗与布局时
+  // 沿 superview 链向上清整条透明链（RN 容器/ScrollView 包装层一并处理）。
+  // 只清 isOpaque 不动 backgroundColor：isOpaque=false 仅告知合成器"本层可能
+  // 透明、请继续合成身后内容"，视觉零影响；改背景色则会破坏 RN 容器样式。
+  public override func didMoveToWindow() {
+    super.didMoveToWindow()
+    guard window != nil else { return }
+    makeChainTransparent()
+  }
+
+  public override func layoutSubviews() {
+    super.layoutSubviews()
+    makeChainTransparent()
+  }
+
+  private func makeChainTransparent() {
+    var ancestor = superview
+    while let view = ancestor {
+      view.isOpaque = false
+      ancestor = view.superview
+    }
   }
 
   @objc private func handleValueChanged() {

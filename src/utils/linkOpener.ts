@@ -40,6 +40,36 @@ function tryTiebaInApp(raw: string): boolean {
 }
 
 /**
+ * 直连目标 host 校验（Mimosa：请求前校验，拒绝 localhost/环回/私有/保留）：
+ * 仅放行 https 公开域名——拒绝 localhost、IP 字面量（含私有/保留网段）。
+ */
+function isPublicHttpUrl(target: URL): boolean {
+  if (target.protocol !== 'https:') return false;
+  const h = target.hostname.toLowerCase();
+  if (h === '' || h === 'localhost' || h.endsWith('.localhost')) return false;
+  // IP 字面量一律拒绝（无法可靠区分环回/私有/保留，公开站点用域名）
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return false;
+  return true;
+}
+
+/**
+ * 百度站外链接安全确认页（/mo/q/checkurl?url=…）：该 H5 确认页在应用内
+ * SafariVC 打不开（依赖贴吧环境，2026-09-01 用户实测「打不开这个页面」）。
+ * 点击本身就是跳转意图 → 解析 url 参数、host 校验后直接打开真实目标。
+ */
+function tryCheckUrlRedirect(raw: string): string | null {
+  if (!/^https?:\/\/tieba\.baidu\.com\/mo\/q\/checkurl\?/i.test(raw)) return null;
+  const m = raw.match(/[?&]url=([^&#]+)/i);
+  if (!m) return null;
+  try {
+    const target = new URL(decodeURIComponent(m[1]));
+    return isPublicHttpUrl(target) ? target.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Open a URL based on the user's `useBuiltInBrowser` preference.
  *
  * @param url - The URL to open.
@@ -53,6 +83,17 @@ export async function openLink(
 ): Promise<void> {
   try {
     if (tryTiebaInApp(url)) return;
+
+    const directTarget = tryCheckUrlRedirect(url);
+    if (directTarget) {
+      await WebBrowser.openBrowserAsync(directTarget, {
+        dismissButtonStyle: 'done',
+        presentationStyle:
+          WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
+        enableBarCollapsing: true,
+      });
+      return;
+    }
 
     const prefs = await getPreferences();
     const useInApp = forceInApp ?? (prefs.useBuiltInBrowser ?? true);

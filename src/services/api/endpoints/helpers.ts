@@ -149,17 +149,34 @@ export function mapMediaList(raw: any): MediaInfo[] {
     ));
     if (!src) continue;
     const smallRaw = String(m.srcPic ?? m.src_pic ?? '');
-    // 动图判定：贴吧 GIF 的动图原链在 originPic（可数 MB 级 .gif），bigPic
-    // 派生可能是静态 jpg——只看 URL 后缀（服务端无 isGif 字段；showOriginalBtn
-    // 对 GIF 恒 0 反向佐证）。查看器据此对 GIF 强制原档播放动画。
+    // 动图判定：只看 URL 后缀（.gif）——**不能**把 dynamicPic「值非空」当
+    // 判定源：服务端对几乎所有图片都下发 dynamicPic（多为动图封面/静态
+    // 派生链），2026-09-01 曾实测全图 GIF 徽标 + 查看器全走静态原链。
+    // 判定 = dynamicPic / originPic / bigPic / src 任一源带 .gif 后缀。
+    const dynamicRaw = String(m.dynamicPic ?? m.dynamic_pic ?? '');
+    const originRaw = String(m.originPic ?? m.origin_pic ?? '');
+    const bigRaw = String(m.bigPic ?? m.big_pic ?? '');
+    const srcRaw = String(m.src ?? '');
     const isGif = /\.gif(?:\?|#|$)/i.test(
-      String(m.originPic ?? m.origin_pic ?? m.bigPic ?? m.big_pic ?? m.src ?? ''),
+      `${dynamicRaw} ${originRaw} ${bigRaw} ${srcRaw}`,
     );
+    // 动图链：数据里第一个带 .gif 后缀的 URL（优先级 dynamicPic >
+    // originPic > bigPic > src）。列表一直用 src(=bigPic) 能播；大图/帖内
+    // 强制原链若固定取 originPic 而服务端把 originPic 做成静态 jpg 派生、
+    // 动图链在 bigPic，就会「外面能播、大图不播」（2026-09-01 用户实测）。
+    const gifChain = isGif
+      ? [dynamicRaw, originRaw, bigRaw, srcRaw].find((u) =>
+          /\.gif(?:\?|#|$)/i.test(u),
+        ) ?? ''
+      : '';
     result.push({
       type: isVideo ? 'video' : 'image',
       src,
       originSrc:
-        toHttpsImgUrl(String(m.originPic ?? m.origin_pic ?? m.originSrc ?? m.origin_src ?? m.bigPic ?? m.big_pic ?? '')) || undefined,
+        toHttpsImgUrl(String(
+          gifChain ||
+          (m.originPic ?? m.origin_pic ?? m.originSrc ?? m.origin_src ?? m.bigPic ?? m.big_pic ?? ''),
+        )) || undefined,
       // srcPic 是比 bigPic 更小的一档（若服务端提供且与 src 不同），
       // 供「省流」档使用；与 src 相同/缺失时不重复出现。
       smallSrc:
@@ -395,10 +412,24 @@ export function mapProtoContent(rawContent: any[]): any[] {
         // URL 优先级对齐 Kotlin: cdnSrc > bigCdnSrc > src
         const imgSrc = c.cdnSrc || c.bigCdnSrc || c.cdnSrcActive || c.src || '';
         const imgOrigin = c.originSrc || c.bigSrc || c.bigCdnSrc || c.src || '';
+        // 动图判定（供帖内 GIF 徽标）：动图专用链 PbContent.dynamic（字段 16）
+        // + 各 URL 源后缀。**不换渲染链**：帖内默认静态档、点「查看原图」
+        // 用 originSrc 原档可播（2026-09-01 用户确认该机制保留）。
+        const dynamicChain = String(c.dynamic ?? '');
+        const gifChain = [
+          dynamicChain,
+          c.cdnSrc,
+          c.bigCdnSrc,
+          c.cdnSrcActive,
+          c.originSrc,
+          c.bigSrc,
+          c.src,
+        ].find((u: unknown) => typeof u === 'string' && /\.gif(?:\?|#|$)/i.test(u));
         return {
           type: 'image',
           src: imgSrc,
           originSrc: imgOrigin,
+          isGif: !!gifChain,
           width: w,
           height: h,
           // PbContent.is_long_pic(34)/show_original_btn(35)；Kotlin PicContentRender
