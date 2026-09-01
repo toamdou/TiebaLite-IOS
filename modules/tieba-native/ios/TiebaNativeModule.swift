@@ -456,6 +456,8 @@ public final class TiebaNativeModule: Module {
   }()
 
   nonisolated(unsafe) private static var navGlassScrollSwizzled = false
+  /// 液态玻璃一次性诊断标志（devicectl --console 取证，2026-09-01 纯色排查）
+  nonisolated(unsafe) private static var glassDiagLogged = false
   // 滚动 setContentOffset swizzle 的节流时间戳：KVO 已即时覆盖 effect 重置，
   // swizzle 只作 ≤1 帧窗口的粗粒度兜底——限频后滚动热路径每帧只付一次时间戳
   // 比较，不再每帧做 findBarBackgroundView 子树扫描/偶发 setEffect 布局
