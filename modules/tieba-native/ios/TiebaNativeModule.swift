@@ -569,11 +569,13 @@ public final class TiebaNativeModule: Module {
   // 渐变 mask 的名字标记：同一视图重复挂载时直接更新 frame，不重复创建。
   // 参数升级时同步升版本号——复用分支只校验名字与 colors 非空、不比较数值，
   // 不改名则存量旧参数 mask 会经 timer/KVO 路径永久存活。
-  private static let gradientMaskName = "tiebaNavGlassGradient.v17"
+  private static let gradientMaskName = "tiebaNavGlassGradient.v18"
 
-  // 顶栏透明度（mask 均一 alpha，0-1）：默认 0.25（用户拍板 v16 观感）；
-  // 设置-浏览 Slider 无级调节，setNavBarGlassAlpha 即时刷新已挂 mask。
-  nonisolated(unsafe) fileprivate static var navBarGlassAlpha: CGFloat = 0.25
+  // 顶栏透明度（mask 均一 alpha，0-1）：默认 0.15（用户拍板 2026-09-01；
+  // v17 的 0.25 基础上再透一档）。v18 升号强制存量 v17 mask 重建。
+  // setNavBarGlassAlpha/refreshNavBarGlassMaskAlpha 保留为可编程调节管线
+  //（设置-浏览 Slider 实验已撤销，无 UI 消费方）。
+  nonisolated(unsafe) fileprivate static var navBarGlassAlpha: CGFloat = 0.15
 
   /// 无级调节即时生效：把当前所有已挂导航栏的 mask colors 刷成均一 alpha。
   /// 只改 colors 不动 name/结构（幂等路径不冲突）；无 mask 的 bar 交给

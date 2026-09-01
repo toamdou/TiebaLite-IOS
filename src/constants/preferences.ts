@@ -52,8 +52,6 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   clipboardLinkDetection: true,
   /** 默认开启双击顶栏回顶（可在设置关闭） */
   navBarDoubleTapToTop: true,
-  /** 顶栏透明度默认 0.25（systemMaterial 均一 mask；设置-浏览可无级调节） */
-  navBarGlassAlpha: 0.25,
   hapticFeedback: true,
   /** 每场景震动风格覆盖：'{}' = 全部用 hapticsMap 内置规范（设置-震动设置可改） */
   hapticsSceneStyles: '{}',
