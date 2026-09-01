@@ -18,6 +18,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FieldGroup, ListItem } from '@expo/ui';
 import { ThemedHost } from '@/components/ui/ThemedHost';
 import { RowIcon } from '@/components/ui/RowIcon';
+import { useThemeColors } from '@/theme/ThemeContext';
 import { hapticForScene } from '@/theme/hapticsMap';
 
 export default function ThreadMorePage() {
@@ -29,6 +30,7 @@ export default function ThreadMorePage() {
       reverse?: string;
     }>();
   const router = useRouter();
+  const { colors } = useThemeColors();
 
   /** 动作交给 thread 页执行后返回（保持原行为：toggle 生效、JS 状态一致） */
   const emitAndBack = useCallback(
@@ -41,9 +43,14 @@ export default function ThreadMorePage() {
   );
 
   return (
-    // 2026-09-01：不再 flex:1 撑满屏幕——formSheet 高度随内容自适应，
-    // 消除「列表上方几行、下方大片纯色空白」（用户反馈）。
-    <ThemedHost style={{}} ignoreSafeArea="container">
+    // 必须 flex:1（2026-09-01 曾去掉改 style{}，内容塌缩被 sheet 纯色背景
+    // 盖住——「列表没有完全显示」。高度由 formSheet detents 决定（见
+    // _layout.tsx 的 0.3/0.55/0.9），这里撑满 sheet 视口保证完整可滚。
+    // ignoreSafeArea="all" + 宿主背景色：页面与底部区域都铺满页面背景
+    //（否则 detent 下端透明露底，2026-09-01 用户实测）。
+    // 注意：不能给 FieldGroup 外包 RN View——SwiftUI Form 必须是 Host
+    // 直接后代（8-25 实证二级 hosting 空白）。
+    <ThemedHost style={{ flex: 1, backgroundColor: colors.background }} ignoreSafeArea="all">
       {/* FieldGroup（SwiftUI Form）必须是页面级 Host 直接后代：可点、可渲染 */}
       <FieldGroup>
         <FieldGroup.Section title="浏览">
