@@ -552,7 +552,7 @@ public final class TiebaNativeModule: Module {
   // 渐变 mask 的名字标记：同一视图重复挂载时直接更新 frame，不重复创建。
   // 参数升级时同步升版本号——复用分支只校验名字与 colors 非空、不比较数值，
   // 不改名则存量旧参数 mask 会经 timer/KVO 路径永久存活。
-  private static let gradientMaskName = "tiebaNavGlassGradient.v14"
+  private static let gradientMaskName = "tiebaNavGlassGradient.v15"
 
   // 共享材质常量：滚动 swizzle / KVO / timer 热路径只做比较与复用，不再分配
   // （此前每次比较或重挂都新建一个 UIBlurEffect，飞速滑动时每帧多次堆分配）。
@@ -561,7 +561,13 @@ public final class TiebaNativeModule: Module {
   // 偏白，透明度只能靠 mask 硬压；③自带边框亮线即"底部明显边界"。三者均
   // 为材质自身渲染行为，mask/数值无法根治。换 systemUltraThinMaterial：
   // 全幅均匀超轻磨砂、自动深浅色、无角部缺口无边框线。
-  fileprivate static let barGlassEffect: UIVisualEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+  // v15（2026-09-01 用户拍板）：观感"不好看"根源=ultraThin 模糊太弱、
+  // α 压低后内容几乎是直接透出（透明水渍感）。换 .systemMaterial 常规磨砂
+  // （模糊层次明显、文字底下干净），mask 同步降到 α0.38 满足"更透"诉求：
+  // 透看得见内容、又有成型的磨砂层次。—— 模糊强弱只能换 style（UIBlurEffect
+  // 无半径旋钮），这是 iOS 27 上唯一"液态玻璃/高斯模糊"的现实替代（UIGlassEffect
+  // 官方类三无解已封档、手工 CIGaussianBlur 逐帧成本否决）。
+  fileprivate static let barGlassEffect: UIVisualEffect = UIBlurEffect(style: .systemMaterial)
 
   // 导航栏弱引用缓存：滚动恢复路径（每帧）不做全树扫描，只遍历该缓存；
   // forceNavBarLiquidGlass（timer/KVO 路径）负责填充与刷新。
@@ -670,16 +676,17 @@ public final class TiebaNativeModule: Module {
            let colors = existing.colors as? [CGColor], !colors.isEmpty {
           existing.frame = bg.layer.bounds
         } else {
-          // v14（2026-09-01 三轮）：α0.70 仍被用户判"不够透"→ 大幅降至 α0.45。
-          // ultraThin 材质本就极轻，mask α0.45 下返回键/标题等原生控件自身
-          // 不透明渲染，仍可读——若仍觉不透可继续下调（单点常量）。
+          // v15（2026-09-01 拍板）：配 .systemMaterial 常规磨砂，均一 α0.38（比
+          // v14 更透），仅底部 ~7pt 极短衰减到 0——消掉"内容在 bar 下沿突然
+          // 变实"的硬边窗口感；衰减区极短，不构成 v11 那类可视分段。
           let mask = CAGradientLayer()
           mask.name = gradientMaskName
           mask.colors = [
-            UIColor(white: 1, alpha: 0.45).cgColor,
-            UIColor(white: 1, alpha: 0.45).cgColor,
+            UIColor(white: 1, alpha: 0.38).cgColor,  // loc 0.000 主体均一
+            UIColor(white: 1, alpha: 0.38).cgColor,  // loc 0.930
+            UIColor(white: 1, alpha: 0).cgColor,     // loc 1.000 底部贴沿归零
           ]
-          mask.locations = [0, 1]
+          mask.locations = [0, 0.93, 1]
           mask.startPoint = CGPoint(x: 0.5, y: 0)
           mask.endPoint = CGPoint(x: 0.5, y: 1)
           mask.frame = bg.layer.bounds
