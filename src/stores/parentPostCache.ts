@@ -18,7 +18,6 @@ export interface ParentPostSummary {
   authorIsLz?: boolean;
   content: PostInfo['content'];
   createTime: number;
-  ipLocation?: string;
 }
 
 /** 快照时效：超过该时长视为 miss（长时间挂机后回跳楼中楼，不应展示过期的上一级回复） */
@@ -35,7 +34,7 @@ const CACHE_MAX_ENTRIES = 50;
 
 export function cacheParentPost(
   post: Pick<PostInfo, 'id' | 'authorId' | 'authorName' | 'authorNameShow' | 'authorPortrait' | 'content' | 'createTime'> &
-    Partial<Pick<PostInfo, 'authorLevelId' | 'authorIsLz' | 'ipLocation'>>,
+    Partial<Pick<PostInfo, 'authorLevelId' | 'authorIsLz'>>,
 ) {
   if (!post?.id) return;
   if (cache.size >= CACHE_MAX_ENTRIES) {
@@ -54,7 +53,6 @@ export function cacheParentPost(
       authorIsLz: post.authorIsLz,
       content: post.content,
       createTime: post.createTime,
-      ipLocation: post.ipLocation,
     },
   });
 }
