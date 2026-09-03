@@ -88,6 +88,8 @@ const TAB_SEGMENTS = [
  * 防止刷新流程被卡死。
  */
 const SCROLL_TO_TOP_FALLBACK_MS = 600;
+/** FAB 回顶刷新 spinner 最小展示时长（ms）：防数据秒回时动画不可见 */
+const MIN_FAB_REFRESH_SPINNER_MS = 400;
 
 /** 悬浮按钮随滚动下滑出屏幕的距离（pt）；贴底 FAB 高度 52 + 底部留白 */
 const FAB_HIDE_OFFSET = 120;
@@ -317,7 +319,13 @@ export default function ForumPage() {
         });
       }
       setRefreshing(true);
-      await doLoadForTabRef.current(currentTab, 1);
+      // 最小 spinner 时长（2026-09-03）：吧页 store 数据就绪时 load 秒回，
+      // refreshing 周期 <100ms → 用户看不到刷新动画（实测"回顶自动刷新
+      // 不显示刷新动画"）。与加载并行等 400ms，保证动画可感知。
+      await Promise.all([
+        doLoadForTabRef.current(currentTab, 1),
+        new Promise<void>((r) => setTimeout(r, MIN_FAB_REFRESH_SPINNER_MS)),
+      ]);
     } finally {
       refreshingRef.current = false;
       setRefreshing(false);

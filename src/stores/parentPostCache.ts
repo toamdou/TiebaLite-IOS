@@ -33,7 +33,10 @@ const cache = new Map<string, ParentCacheEntry>();
 /** 有界缓存上限：满时驱逐最旧一条（Map 迭代序 = 插入序），避免会话内无限累积富文本 */
 const CACHE_MAX_ENTRIES = 50;
 
-export function cacheParentPost(post: PostInfo) {
+export function cacheParentPost(
+  post: Pick<PostInfo, 'id' | 'authorId' | 'authorName' | 'authorNameShow' | 'authorPortrait' | 'content' | 'createTime'> &
+    Partial<Pick<PostInfo, 'authorLevelId' | 'authorIsLz' | 'ipLocation'>>,
+) {
   if (!post?.id) return;
   if (cache.size >= CACHE_MAX_ENTRIES) {
     const oldest = cache.keys().next().value;
