@@ -444,9 +444,18 @@ export function ParentReplyCard({
         <View style={s.spacer} />
         <Text style={[s.meta, { color: colors.textTertiary }]} numberOfLines={1}>
           {timeLabel(parent.createTime)}
-          {showIpLocation && parent.ipLocation ? ` · ${parent.ipLocation}` : ''}
         </Text>
       </View>
+
+      {/* IP 属地独立一栏（2026-09-03：与 ReplyItem 对齐，用户名下单独一行。
+          此前夹在时间栏同行，用户实测"显示更多"界面用户名下无属地） */}
+      {showIpLocation && parent.ipLocation ? (
+        <View style={s.ipRow}>
+          <Text style={[s.ipText, { color: colors.textTertiary }]} numberOfLines={1}>
+            IP属地：{parent.ipLocation}
+          </Text>
+        </View>
+      ) : null}
 
       {/* 正文：折叠预览收敛到共享 LineClampPreview（thermo Z4-E，含 2000 字
           测量降本）；展开后回到完整原生富文本 */}

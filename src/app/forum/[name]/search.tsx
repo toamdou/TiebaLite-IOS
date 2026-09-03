@@ -24,6 +24,7 @@ import { useThemeColors } from '@/theme/ThemeContext';
 import { Spacing, RadiusStyle, Radius } from '@/theme';
 import { SkeletonList } from '../../../components/ui/Skeleton';
 import { searchPost } from '@/services/api/endpoints/search';
+import { cacheParentPost } from '@/stores/parentPostCache';
 import { usePagedList } from '@/hooks/usePagedList';
 import { useSearchHistory } from '@/hooks/useSearchHistory';
 import type { SearchPostResult } from '@/types';
@@ -178,6 +179,20 @@ export default function ForumSearchPage() {
       // 用户实测"点回复跳主帖找不到回复"）。floor 缺省时详情页标题兜底
       // 显示「第?楼回复」，不影响定位。
       if (item.postId) {
+        // 2026-09-03：补快照——subposts 页的"上一级回复"卡只认
+        // cacheParentPost 缓存（帖子页跳转才写入）；搜索跳转缺快照时
+        // 回退成"主楼标题卡"，楼层正文/原帖链接全无（用户实测"一片空白，
+        // 只显示 原贴 第x楼回复"）。用搜索摘要构造快照：正文为纯文本，
+        // 图片无法从搜索摘要恢复（父卡至少显示作者+内容+原帖跳转）。
+        cacheParentPost({
+          id: String(item.postId),
+          authorId: item.authorId,
+          authorName: item.authorName,
+          authorNameShow: item.authorName,
+          authorPortrait: '',
+          content: item.content ? [{ type: 'text', text: item.content }] : [],
+          createTime: item.createTime,
+        });
         router.push({
           pathname: '/thread/[id]/subposts',
           params: {

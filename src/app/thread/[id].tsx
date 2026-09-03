@@ -165,7 +165,9 @@ export default function ThreadPage() {
     // 「点了没反应」根因=门控把 setExtra 的合法更新挡在门外，thread 永不
     // 同步 → 心形恒旧态 + 服务端恒回「已经点过赞了」）。
     if (needsRepinRef.current && hasPinnedOp && posts.length > 0) {
-      setPinnedMainPost(posts[0]);
+      // 楼主楼按 floor===1 匹配（倒序时服务端经 pbPage 已并入头部，此处
+      // 双保险：列表任何位置都能钉对；list 无楼主楼时退 posts[0]）。
+      setPinnedMainPost(posts.find((p) => p.floor === 1) ?? posts[0]);
     }
     needsRepinRef.current = false;
     setThread(extra?.thread ?? null);
@@ -185,18 +187,19 @@ export default function ThreadPage() {
   // 钉住引用不随 posts 翻转。
   const mainPost = useMemo(() => {
     if (!hasPinnedOp) return null;
-    if (needsRepinRef.current) return posts.length > 0 ? posts[0] : null;
+    if (needsRepinRef.current) {
+      return posts.find((p) => p.floor === 1) ?? (posts.length > 0 ? posts[0] : null);
+    }
     return pinnedMainPost;
   }, [hasPinnedOp, posts, pinnedMainPost]);
-  // 回复列表 = 剔除主贴后的数组（高1）：从【原 posts】中主贴实际位置 +1 起切再
-  // 过滤（非 filteredPosts.slice(1)：屏蔽剔除楼主后会误吞首条回复；驱逐后
-  // indexOf=-1 则不切）。
+  // 回复列表 = 剔除主贴后的数组（高1）：楼主楼可能不在 index 0（倒序/并入
+  // 首楼后仍在头部，但驱逐/异常位置时 indexOf+1 切片会错切）——恒用
+  // 引用剔除（filter），主贴卡引用不随 posts 翻转。
   const replyPosts = useMemo(() => {
     if (!hasPinnedOp || !mainPost) {
       return hideBlockedContent ? filterPosts(posts) : posts;
     }
-    const mainIndex = posts.indexOf(mainPost);
-    const remainder = mainIndex >= 0 ? posts.slice(mainIndex + 1) : posts;
+    const remainder = posts.filter((p) => p !== mainPost);
     return hideBlockedContent ? filterPosts(remainder) : remainder;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts, hasPinnedOp, mainPost, hideBlockedContent, blockedWords, blockedUsers]);

@@ -34,11 +34,21 @@ export async function pbPage(
   }, signal);
   assertProtoSuccess(decoded);
   const data = decoded.data;
-  // Kotlin PbPageRepository 兜底：首楼可能下发在 first_floor_post 而非 post_list
+  // Kotlin PbPageRepository 兜底：首楼可能下发在 first_floor_post 而非 post_list。
+  // ⚠️ 倒序（sortType=1）时服务端把楼主楼放 first_floor_post、回复放 post_list
+  // ——原先仅 postList 空时读它，导致倒序时 posts[0]=最新回复被钉成主帖卡
+  //（用户实测"回复内容跑到主帖子卡片里"）。改为恒并入并插头部（去重）：
+  // 无论楼主楼在 post_list 还是 first_floor_post，posts[0] 恒为楼主楼。
   const rawPosts = data?.postList ?? [];
-  const posts = rawPosts.length > 0
+  let posts = rawPosts.length > 0
     ? mapProtoPosts(rawPosts, threadId, data?.userList ?? [])
-    : (data?.firstFloorPost ? mapProtoPosts([data.firstFloorPost], threadId, data?.userList ?? []) : []);
+    : [];
+  const firstFloor = data?.firstFloorPost
+    ? mapProtoPosts([data.firstFloorPost], threadId, data?.userList ?? [])[0]
+    : undefined;
+  if (firstFloor && !posts.some((p) => p.id === firstFloor.id)) {
+    posts = [firstFloor, ...posts];
+  }
   // hasMore 用 currentPage < totalPage 推导，而非服务端 hasMore 字段（同
   // pbFloor）：越界 pn 时服务端返回 current 递增 + totalPage 不变，若直信
   // hasMore 会把"越界页也算还有下一页"，配合 loadMore 守卫层叠失效。
