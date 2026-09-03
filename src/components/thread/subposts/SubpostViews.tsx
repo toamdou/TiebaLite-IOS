@@ -516,7 +516,8 @@ export function ParentReplyCard({
         </ScrollView>
       )}
 
-      {/* 底部：帖子标题归属（可点 → 打开原帖；chevron 表达可跳转） */}
+      {/* 底部：帖子标题归属（可点 → 打开原帖；2026-09-03 用户要求去掉
+          chevron 箭头，标题本身即跳转入口） */}
       <View style={[s.parentFooter, { borderTopColor: colors.borderCard }]}>
         <Link href={{ pathname: '/thread/[id]', params: { id: threadId ?? '' } }} push asChild>
           <Pressable
@@ -527,7 +528,6 @@ export function ParentReplyCard({
             <Text style={[s.parentFloor, { color: colors.textLink }]} numberOfLines={2}>
               {decodedThreadTitle || decodedForumName || '原帖'} · 第{floor || '?'}楼回复
             </Text>
-            <SymbolView name="chevron.right" size={12} weight="semibold" tintColor={colors.textLink} />
           </Pressable>
         </Link>
       </View>
