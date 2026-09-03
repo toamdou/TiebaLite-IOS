@@ -286,6 +286,19 @@ export function mapProtoThread(
       author.nameShow ?? author.name_show ?? author.showNickname ?? author.show_nickname ?? author.name ?? '',
     authorPortrait: author.portrait ?? '',
     authorLevelId: Number(author.levelId ?? author.level_id ?? 0),
+    // IP 属地（2026-09-02 新增）：信息流/动态/搜索卡片用户名下独立一栏。
+    // 多源兜底与 PostInfo.mapProtoPost 同法（author.ipAddress/location.addr/
+    // 顶层 ip 键）；userMap 项同含 ip 时一并兜底。
+    authorIP:
+      raw.ipLocation ??
+      raw.ip_location ??
+      author.ipLocation ??
+      author.ip_location ??
+      author.ipAddress ??
+      author.ip_address ??
+      author.location?.addr ??
+      author.ip ??
+      '',
     replyNum: Number(raw.replyNum ?? raw.reply_num ?? 0),
     viewNum: Number(raw.viewNum ?? raw.view_num ?? 0),
     lastTime: toMillis(Number(raw.lastTimeInt ?? raw.last_time_int ?? raw.lastTime ?? raw.last_time ?? 0)),

@@ -68,6 +68,15 @@ export async function searchThread(keyword: string, page: number = 1, order: Sea
       authorName: i.user?.user_name ?? i.user?.userName ?? '',
       authorNameShow: i.user?.show_nickname ?? i.user?.showNickname ?? '',
       authorPortrait: i.user?.portrait ?? '',
+      // IP 属地（2026-09-02 新增）：搜索卡片用户名下独立一栏，多源兜底
+      authorIP:
+        i.user?.ip_location ??
+        i.user?.ipLocation ??
+        i.user?.ip_address ??
+        i.user?.ipAddress ??
+        i.user?.location?.addr ??
+        i.user?.ip ??
+        '',
       replyNum: parseInt(String(i.post_num ?? '0'), 10),
       likeNum: parseInt(String(i.like_num ?? '0'), 10),
       shareNum: parseInt(String(i.share_num ?? '0'), 10),
@@ -202,6 +211,16 @@ export async function searchPost(
     const t = Number(v ?? '');
     return Number.isFinite(t) && t > 0 ? t : 0;
   };
+  // 诊断（2026-09-02 临时，验完即删）：吧内搜索点回复跳主贴——打印原始
+  // 响应项关键键，确认 pid/floor 到底在哪个层级（顶层 vs post_info 子对象）。
+  if (__DEV__ && Array.isArray(list) && list.length > 0) {
+    const probe = list[0];
+    console.warn('[search-debug] item keys=', Object.keys(probe).slice(0, 20).join(','));
+    console.warn('[search-debug] pid=', probe.pid, 'floor=', probe.floor,
+      'post_info.pid=', probe.post_info?.pid, 'post_info.floor=', probe.post_info?.floor,
+      'postInfo.pid=', probe.postInfo?.pid,
+      'spid=', probe.spid, 'sub_post_id=', probe.sub_post_id);
+  }
   return { items: list.map((i: any) => ({
     id: String(i.tid ?? ''),
     title: i.title ?? '',
@@ -211,9 +230,22 @@ export async function searchPost(
     forumName: i.forum_name ?? i.forumInfo?.forum_name ?? '',
     createTime: parseTime(i.modified_time ?? i.time),
     replyNum: parseInt(String(i.post_num ?? '0'), 10),
-    // mo 搜索项带 pid/floor → 跳楼中楼深链（无则退化为进帖）
-    postId: i.pid != null ? String(i.pid) : undefined,
-    floor: i.floor != null ? Number(i.floor) : undefined,
+    // mo 搜索项带 pid/floor → 跳楼中楼深链（无则退化为进帖）。
+    // 2026-09-02：混合接口的楼层信息可能在 post_info 子对象（searchThread
+    // 同款结构 i.post_info.pid）而非顶层 pid——只读顶层会导致"点击回复内容
+    // 跳主帖"（用户实测）。两处兜底。
+    postId:
+      i.pid != null
+        ? String(i.pid)
+        : (i.post_info?.pid ?? i.postInfo?.pid) != null
+          ? String(i.post_info?.pid ?? i.postInfo?.pid)
+          : undefined,
+    floor:
+      i.floor != null
+        ? Number(i.floor)
+        : (i.post_info?.floor ?? i.postInfo?.floor) != null
+          ? Number(i.post_info?.floor ?? i.postInfo?.floor)
+          : undefined,
   })), hasMore: !!(d.has_more ?? (list.length >= 30)) };
 }
 

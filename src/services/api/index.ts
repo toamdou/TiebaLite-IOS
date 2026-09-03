@@ -122,7 +122,6 @@ export {
   userLikeForum,
   // Misc
   submitDislike,
-  checkReportPost,
   topicDetail,
   setUserBlack,
   cancelUserBlack,

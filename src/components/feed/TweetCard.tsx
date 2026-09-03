@@ -100,7 +100,7 @@ function truncateText(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}…`;
 }
 
-export type TweetCardMenuAction = 'dislike' | 'block' | 'copy-title' | 'report';
+export type TweetCardMenuAction = 'dislike' | 'block' | 'copy-title';
 
 export interface TweetCardProps {
   thread: ThreadInfo;
@@ -112,8 +112,8 @@ export interface TweetCardProps {
    * 吧内列表同吧冗余默认关；跨吧信息流（动态/搜索）开。
    */
   showForumPill?: boolean;
-  /** 右上角 × 的菜单项（默认 屏蔽作者/举报；动态流传扩展项保留 不感兴趣/复制标题） */
-  closeMenuOptions?: ('dislike' | 'block' | 'copy-title' | 'report')[];
+  /** 右上角 × 的菜单项（默认 屏蔽作者；动态流传扩展项保留 不感兴趣/复制标题） */
+  closeMenuOptions?: ('dislike' | 'block' | 'copy-title')[];
   /** 隐藏底部操作栏（回复/分享/点赞）——收藏列表等非社交场景（2026-08-28） */
   hideActions?: boolean;
   /** 覆盖整卡点击（默认进 /thread/id；收藏页需带 fromFavorites 参数） */
@@ -301,16 +301,15 @@ const TweetCard = React.memo(function TweetCard({
     router.push(`/thread/${thread.id}`);
   }, [router, thread.id]);
 
-  // ── 右上角小 ×：按 closeMenuOptions 组装（默认 屏蔽/举报）──
+  // ── 右上角小 ×：按 closeMenuOptions 组装（默认 屏蔽作者）──
   const handleClosePress = useCallback((e: GestureResponderEvent) => {
   void hapticForScene('press');
     e.stopPropagation?.();
     hapticForScene('press');
-    const options = closeMenuOptions ?? ['block', 'report'];
+    const options = closeMenuOptions ?? ['block'];
     const items: { title: string; action: TweetCardMenuAction }[] = [];
     if (options.includes('dislike')) items.push({ title: '不感兴趣', action: 'dislike' });
     if (options.includes('block')) items.push({ title: '屏蔽作者', action: 'block' });
-    if (options.includes('report')) items.push({ title: '举报', action: 'report' });
     if (options.includes('copy-title')) items.push({ title: '复制标题', action: 'copy-title' });
     Alert.alert(thread.title || '帖子', undefined, [
       ...items.map((it) => ({ text: it.title, onPress: () => onMenuAction?.(it.action, thread) })),
@@ -322,6 +321,8 @@ const TweetCard = React.memo(function TweetCard({
   const displayName = thread.authorNameShow || thread.authorName || '吧友';
   const rawName = thread.authorName || '';
   const showHandle = showBothUsername && !!rawName && rawName !== displayName;
+  // IP 属地（2026-09-02 新增）：信息流/动态/搜索卡片用户名下独立一栏
+  const showIp = useAppPreference('showIpLocation', true) && !!thread.authorIP;
   const timeValue = timeType === 'last' ? thread.lastTime : thread.createTime;
   // 时间随排序语义：按回复时间排序 →「回复于 xx」；按发帖时间 →「发帖于 xx」
   const timeText = timeValue
@@ -369,6 +370,13 @@ const TweetCard = React.memo(function TweetCard({
                 </Text>
               ) : null}
             </View>
+            {/* IP 属地独立一栏（2026-09-02 用户：信息流/动态/搜索卡片用户名下
+                单独一行，不挤名字行） */}
+            {showIp ? (
+              <Text style={[styles.ipLine, { color: colors.textSecondary }]} numberOfLines={1}>
+                IP属地：{thread.authorIP}
+              </Text>
+            ) : null}
           </View>
           {onMenuAction ? (
             /* 右上角小 ×（屏蔽/举报，按 closeMenuOptions 扩展） */
@@ -791,6 +799,11 @@ const styles = StyleSheet.create({
   },
   time: {
     ...typographyStyles.subhead,
+  },
+  // IP 属地独立一栏（2026-09-02）：用户名下小号灰字，不参与名字行换行
+  ipLine: {
+    fontSize: 11,
+    fontWeight: '400',
   },
 
   // ── 内容列（与名字列对齐） ──

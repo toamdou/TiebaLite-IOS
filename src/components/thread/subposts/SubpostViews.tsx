@@ -113,7 +113,6 @@ export const ReplyItem = React.memo(function ReplyItem({
   onAgree,
   animateIn,
   isOwn,
-  onReport,
   onDelete,
   onImagePress,
 }: {
@@ -124,7 +123,6 @@ export const ReplyItem = React.memo(function ReplyItem({
   onAgree: (item: SubPostInfo) => void;
   animateIn: boolean;
   isOwn: boolean;
-  onReport: (item: SubPostInfo) => void;
   onDelete: (item: SubPostInfo) => void;
   onImagePress: (images: string[], index: number, sourceFrame?: ImageSourceFrame | null, origins?: (string | undefined)[], contextTitle?: string | null) => void;
 }) {
@@ -169,32 +167,30 @@ export const ReplyItem = React.memo(function ReplyItem({
   // 旧长按一致，不再钳制布局）；正文长按则完全交还系统原生文本选择。
   const handleMorePress = useCallback(() => {
     hapticForScene('press');
-    const options = ['复制内容', '查看用户', '举报'];
+    const options = ['复制内容', '查看用户'];
     if (isOwn) {
       options.push('删除');
     }
     const cancelIndex = options.length;
-    // ActionSheetIOS 只有一个 destructive 位：本人可见「删除」时以删除为
-    // destructive，否则举报为 destructive。
+    // ActionSheetIOS 只有一个 destructive 位：仅本人可见「删除」时以删除为
+    // destructive，否则不以任何项为 destructive。
     ActionSheetIOS.showActionSheetWithOptions(
       {
         options: [...options, '取消'],
         cancelButtonIndex: cancelIndex,
-        destructiveButtonIndex: isOwn ? 3 : 2,
+        destructiveButtonIndex: isOwn ? 2 : undefined,
       },
       (buttonIndex) => {
         if (buttonIndex === 0) {
           Clipboard.setStringAsync(contentToText(item.content) || '[内容已删除]');
         } else if (buttonIndex === 1) {
           router.push({ pathname: '/user/[uid]', params: { uid: item.authorId } });
-        } else if (buttonIndex === 2) {
-          onReport(item);
-        } else if (buttonIndex === 3 && isOwn) {
+        } else if (buttonIndex === 2 && isOwn) {
           onDelete(item);
         }
       },
     );
-  }, [item, isOwn, onReport, onDelete, router]);
+  }, [item, isOwn, onDelete, router]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: fade.value,
@@ -242,11 +238,6 @@ export const ReplyItem = React.memo(function ReplyItem({
                 <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>
                   {item.authorNameShow || item.authorName}
                 </Text>
-                {showIpLocation && item.ipLocation ? (
-                  <Text style={[s.ipText, { color: colors.textTertiary }]} numberOfLines={1}>
-                    来自{item.ipLocation}
-                  </Text>
-                ) : null}
               </Pressable>
             </Link>
 
@@ -300,6 +291,16 @@ export const ReplyItem = React.memo(function ReplyItem({
               </HdrPressable>
             </View>
           </View>
+
+          {/* Row 1.5: IP 属地独立一栏（2026-09-02 用户：楼中楼详情页 IP 放
+              用户名下单独一行——此前夹在 headerRow 同行被点赞/更多按钮挤没） */}
+          {showIpLocation && item.ipLocation ? (
+            <View style={s.ipRow}>
+              <Text style={[s.ipText, { color: colors.textTertiary }]} numberOfLines={1}>
+                IP属地：{item.ipLocation}
+              </Text>
+            </View>
+          ) : null}
 
           {/* Row 2: Reply-to reference (if any) */}
           {item.replyToUserName ? (
@@ -702,8 +703,14 @@ const s = StyleSheet.create({
     ...typographyStyles.caption1,
     flexShrink: 0,
   },
+  // IP 属地独立一栏（2026-09-02）：楼中楼详情页用户名下单独一行，
+  // 不再挤进 headerRow 同行被操作钮截断
+  ipRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
   ipText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '400',
   },
 

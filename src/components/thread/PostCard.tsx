@@ -54,7 +54,6 @@ interface PostCardProps {
   subPosts?: SubPostInfo[];
   onAgree?: (postId: string, opType: number) => void;
   onDelete?: (postId: string) => void;
-  onReport?: (postId: string) => void;
   onSubPostsPress?: (post: PostInfo) => void;
   /** 大图查看器顶栏标题覆盖（主楼传帖子标题；缺省用楼层内容摘要） */
   contextTitle?: string | null;
@@ -193,7 +192,6 @@ const PostCard = React.memo(function PostCard({
   subPosts,
   onAgree,
   onDelete,
-  onReport,
   onSubPostsPress,
   contextTitle,
   onImagePress,
@@ -267,7 +265,7 @@ const PostCard = React.memo(function PostCard({
   // 零常驻视图，点击时才拉起系统面板。
   const handleMorePress = useCallback(() => {
     hapticForScene('press');
-    const options = ['复制内容', '分享', '复制链接', '举报', ...(onDelete ? ['删除'] : []), '取消'];
+    const options = ['复制内容', '分享', '复制链接', ...(onDelete ? ['删除'] : []), '取消'];
     const cancelButtonIndex = options.length - 1;
     const destructiveButtonIndex = onDelete ? options.length - 2 : undefined;
     ActionSheetIOS.showActionSheetWithOptions(
@@ -281,17 +279,18 @@ const PostCard = React.memo(function PostCard({
           case 0: void handleCopyPress(); break;
           case 1: void handleShare(); break;
           case 2: void handleCopyLink(); break;
-          case 3: onReport?.(post.id); break;
-          case 4: onDelete?.(post.id); break;
+          case 3: onDelete?.(post.id); break;
         }
       },
     );
-  }, [handleCopyPress, handleShare, handleCopyLink, onReport, onDelete, post.id]);
+  }, [handleCopyPress, handleShare, handleCopyLink, onDelete, post.id]);
 
   const authorMeta =
     [
       timeLabel(post.createTime),
       post.floor > 0 ? `${post.floor}楼` : null,
+      // IP 属地并入时间/楼层栏（2026-09-02 用户：回复卡作者名行保持干净）
+      showIpLocation && post.ipLocation ? `IP属地：${post.ipLocation}` : null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -323,11 +322,6 @@ const PostCard = React.memo(function PostCard({
                         ? `${post.authorNameShow} @${post.authorName}`
                         : (post.authorNameShow || post.authorName)}
                     </Text>
-                    {showIpLocation && post.ipLocation ? (
-                      <Text style={[s.ipText, { color: colors.textTertiary }]} numberOfLines={1}>
-                        来自{post.ipLocation}
-                      </Text>
-                    ) : null}
                     {showLevelBadge && levelColor && (
                       <View style={[s.levelBadge, { backgroundColor: levelColor.bg }]}>
                         <Text style={[s.levelBadgeText, { color: levelColor.color }]}>Lv.{post.authorLevelId}</Text>
@@ -400,9 +394,10 @@ const PostCard = React.memo(function PostCard({
                       <View style={[s.subPostDivider, { backgroundColor: colors.divider }]} />
                     )}
                     <View style={s.subPostRow}>
+                      {/* 预览三条不显示 IP 属地（2026-09-02 用户）：预览要简洁，
+                          点进楼中楼详情页（SubpostViews）才逐条显示 IP */}
                       <Text style={[s.subPostName, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {sp.authorNameShow || sp.authorName}
-                        {showIpLocation && sp.ipLocation ? ` 来自${sp.ipLocation}` : ''}：
+                        {sp.authorNameShow || sp.authorName}：
                       </Text>
                       <SubQuoteItem sp={sp} colors={colors} onImagePress={handleViewerImagePress} />
                     </View>
@@ -494,8 +489,9 @@ const s = StyleSheet.create({
     ...typographyStyles.caption1,
   },
   ipText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '400',
+    marginLeft: 4,
   },
 
   // Sub-post section (楼中楼) — 无卡片，hairline 横线分隔，文字严格限高
