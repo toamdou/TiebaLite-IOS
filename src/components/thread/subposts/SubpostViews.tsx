@@ -130,7 +130,6 @@ export const ReplyItem = React.memo(function ReplyItem({
   const { reduceMotion } = useReducedMotion();
   // 时间格式 / IP 属地 / 等级徽标（设置→使用习惯→贴子）
   const timeLabel = useTimeLabel();
-  const showIpLocation = useAppPreference('showIpLocation', true);
   const showLevelBadge = useAppPreference('showLevelBadge', true);
   // 实测量行宽：原生富文本按容器实际宽度换行，长文本不会溢出行的边界
   const [rowWidth, setRowWidth] = useState(0);
@@ -292,16 +291,6 @@ export const ReplyItem = React.memo(function ReplyItem({
             </View>
           </View>
 
-          {/* Row 1.5: IP 属地独立一栏（2026-09-02 用户：楼中楼详情页 IP 放
-              用户名下单独一行——此前夹在 headerRow 同行被点赞/更多按钮挤没） */}
-          {showIpLocation && item.ipLocation ? (
-            <View style={s.ipRow}>
-              <Text style={[s.ipText, { color: colors.textTertiary }]} numberOfLines={1}>
-                IP属地：{item.ipLocation}
-              </Text>
-            </View>
-          ) : null}
-
           {/* Row 2: Reply-to reference (if any) */}
           {item.replyToUserName ? (
             <View
@@ -411,7 +400,6 @@ export function ParentReplyCard({
 }) {
   const images = extractImages(parent.content);
   const timeLabel = useTimeLabel();
-  const showIpLocation = useAppPreference('showIpLocation', true);
   // 大图查看器顶栏标题：被引用回复文字前 30 字（超出省略；规则共用
   // summarizeText，与 thread/[id].tsx 引用图摘要一致）
   const parentSummary = useMemo(() => summarizeText(contentToText(parent.content)), [parent.content]);
@@ -446,16 +434,6 @@ export function ParentReplyCard({
           {timeLabel(parent.createTime)}
         </Text>
       </View>
-
-      {/* IP 属地独立一栏（2026-09-03：与 ReplyItem 对齐，用户名下单独一行。
-          此前夹在时间栏同行，用户实测"显示更多"界面用户名下无属地） */}
-      {showIpLocation && parent.ipLocation ? (
-        <View style={s.ipRow}>
-          <Text style={[s.ipText, { color: colors.textTertiary }]} numberOfLines={1}>
-            IP属地：{parent.ipLocation}
-          </Text>
-        </View>
-      ) : null}
 
       {/* 正文：折叠预览收敛到共享 LineClampPreview（thermo Z4-E，含 2000 字
           测量降本）；展开后回到完整原生富文本 */}

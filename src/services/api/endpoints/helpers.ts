@@ -366,7 +366,6 @@ export function mapProtoPosts(rawPosts: any[], threadId: string, userList: any[]
         // ⚠️ 仅 JSON 兜底生效：proto SubPost 无 reply_to_user_name 字段
         //（protos_src/SubPost.proto 无此字段），proto 路径恒 ''。
         replyToUserName: sp.replyToUserName ?? sp.reply_to_user_name ?? '',
-        ipLocation: sp.location?.addr ?? sp.ipAddress ?? spAuthor.ipAddress ?? '',
         agreeNum: Number(sp.agree?.agreeNum ?? sp.agreeNum ?? 0),
         isAgree: (sp.agree?.hasAgree ?? 0) === 1,
       };

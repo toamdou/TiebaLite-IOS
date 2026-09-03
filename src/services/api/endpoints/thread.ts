@@ -95,19 +95,6 @@ export async function pbFloor(
   const curPage = pg?.currentPage ?? page;
   const totPage = pg?.totalPage ?? 0;
   const computedHasMore = totPage > 0 ? curPage < totPage : (pg?.hasMore ?? 0) === 1;
-  // 诊断（2026-09-02 临时，验完即删）：楼中楼 IP 属地不显示——打印原始
-  // 楼层项的 location 与 author 结构，确认属地在 proto 解码后的实际键。
-  if (__DEV__ && rawPosts.length > 0) {
-    const probe = rawPosts[0];
-    console.warn('[pbfloor-debug] keys=', Object.keys(probe ?? {}).slice(0, 25).join(','));
-    console.warn('[pbfloor-debug] location=', JSON.stringify(probe?.location ?? null),
-      'ip=', probe?.ip, 'ipLocation=', probe?.ipLocation,
-      'author.ipAddress=', probe?.author?.ipAddress, 'author.IP=', probe?.author?.ip);
-    if (probe?.author && typeof probe.author === 'object') {
-      console.warn('[pbfloor-debug] author.keys=', Object.keys(probe.author).slice(0, 30).join(','));
-      console.warn('[pbfloor-debug] author.sample=', JSON.stringify(probe.author).slice(0, 400));
-    }
-  }
   return {
     posts: rawPosts.map((item: any) => {
       // 判空内嵌 author（proto3 空对象 {} 问题，同 mapProtoThread/mapProtoPosts）
@@ -126,18 +113,6 @@ export async function pbFloor(
         content: mapProtoContent(item.content ?? []),
         createTime: toMillis(Number(item.time ?? 0)),
         replyToUserName: item.replyToUserName ?? '',
-        // 楼中楼 IP 属地：proto 的 SubPostList.location 是 Lbs 对象
-        // （lat/lng/name/sn/distance，**无 addr 字段**——SwiftProtobuf
-        // ToJsonName 输出 location.name 属地文本）；author 内嵌 User 带
-        // ip_address=127（ToJsonName→ipAddress）。多源兜底，缺一不阻断。
-        ipLocation:
-          item.location?.name ??
-          item.location?.addr ??
-          item.ip ??
-          item.ipAddress ??
-          author.ipAddress ??
-          author.ip ??
-          '',
         agreeNum: Number(item.agreeNum ?? item.agree?.agreeNum ?? 0),
         isAgree: (item.agree?.hasAgree ?? 0) === 1,
       };

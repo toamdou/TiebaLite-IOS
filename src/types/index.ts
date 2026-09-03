@@ -207,7 +207,6 @@ export interface SubPostInfo {
   content: PostContent[];
   createTime: number;
   replyToUserName?: string;
-  ipLocation?: string;
   agreeNum?: number;
   isAgree?: boolean;
 }
