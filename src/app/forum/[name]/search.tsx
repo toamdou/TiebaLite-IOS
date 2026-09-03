@@ -173,15 +173,18 @@ export default function ForumSearchPage() {
 
   const handleOpenPost = useCallback(
     (item: SearchPostResult) => {
-      // mo 搜索结果带 pid/floor 时深链楼中楼定位到该回复，否则退化为进帖
-      if (item.postId && item.floor != null) {
+      // mo 搜索结果带 pid 即深链楼中楼定位该回复（2026-09-02：接口不下发
+      // floor，此前条件 postId && floor != null 恒 false → 总退化跳主帖，
+      // 用户实测"点回复跳主帖找不到回复"）。floor 缺省时详情页标题兜底
+      // 显示「第?楼回复」，不影响定位。
+      if (item.postId) {
         router.push({
           pathname: '/thread/[id]/subposts',
           params: {
             id: item.id,
             postId: item.postId,
             threadId: item.id,
-            floor: String(item.floor),
+            floor: item.floor != null ? String(item.floor) : '',
             forumId: forumId || '',
           },
         });

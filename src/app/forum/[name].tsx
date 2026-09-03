@@ -556,7 +556,6 @@ export default function ForumPage() {
 
   const handleForumMenuAction = useCallback((action: string, item: ThreadInfo) => {
     if (action === 'block') void feedActions.blockAuthor(item);
-    else if (action === 'report') void feedActions.report(item);
   }, [feedActions]);
 
   // ── Follow button label ──

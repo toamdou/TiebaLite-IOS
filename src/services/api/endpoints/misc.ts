@@ -1,4 +1,4 @@
-import { apiGetWeb, apiPost } from '../client';
+import { apiGetWeb } from '../client';
 import { TiebaApiError } from '../interceptors';
 import {
   extractData,
@@ -26,10 +26,6 @@ export async function submitDislike(params: {
     // 携带即被判 NOT_LOGIN，2026-08-27 Metro 实证）
   });
   return { success: true };
-}
-
-export async function checkReportPost(postId: string): Promise<string> {
-  return extractData(await apiPost<any>('/c/f/ueg/checkjubao', { category: '1', pid: postId })).data?.report_url ?? '';
 }
 
 // Kotlin AppHybridTiebaApi topicDetail: GET /mo/q/newtopic/topicDetail

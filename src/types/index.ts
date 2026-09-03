@@ -144,6 +144,8 @@ export interface ThreadInfo {
   authorNameShow: string;
   authorPortrait: string;
   authorLevelId: number;
+  /** IP 属地（2026-09-02 新增）：信息流卡片用户名下独立一栏显示 */
+  authorIP?: string;
   replyNum: number;
   viewNum: number;
   lastTime: number;

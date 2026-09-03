@@ -28,8 +28,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { useMediaBus } from '@/stores/mediaBusStore';
 import { mediaKeysOf } from '@/utils/feedMedia';
 import { flattenStyle } from '@/utils';
-import { openLink } from '@/utils/linkOpener';
-import { checkReportPost } from '@/services/api/endpoints/misc';
 import { pbFloor, agree, delPost } from '@/services/api/endpoints/thread';
 import { usePagedList } from '@/hooks/usePagedList';
 import { useImageViewer } from '@/hooks/useImageViewer';
@@ -186,22 +184,6 @@ export default function SubPostsPage() {
   const decodedForumName = safeDecode(forumName);
   const decodedThreadTitle = safeDecode(threadTitle);
 
-  const handleReport = useCallback(
-    async (item: SubPostInfo) => {
-      try {
-        const reportUrl = await checkReportPost(item.id);
-        if (reportUrl) {
-          await openLink(reportUrl);
-        } else {
-          Alert.alert('提示', '当前回复不支持在线举报');
-        }
-      } catch {
-        Alert.alert('错误', '举报失败');
-      }
-    },
-    [],
-  );
-
   const handleDelete = useCallback(
     (item: SubPostInfo) => {
       Alert.alert('删除回复', '确定要删除这条回复吗？', [
@@ -234,12 +216,11 @@ export default function SubPostsPage() {
         onAgree={handleAgree}
         animateIn={initialBatchSealed && (initialBatchIdsRef.current?.has(item.id) ?? false)}
         isOwn={!!accountUid && accountUid === item.authorId}
-        onReport={handleReport}
         onDelete={handleDelete}
         onImagePress={imageViewer.handleImagePress}
       />
     ),
-    [colors, threadAuthorId, handleAgree, accountUid, handleReport, handleDelete, imageViewer.handleImagePress, initialBatchSealed],
+    [colors, threadAuthorId, handleAgree, accountUid, handleDelete, imageViewer.handleImagePress, initialBatchSealed],
   );
 
   // 上一级回复：从模块级缓存取回被点击的那条回复（帖子页跳转前快照）。

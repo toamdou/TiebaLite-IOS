@@ -69,8 +69,12 @@ export interface TiebaNativeModule {
   /** 应用锁会话解锁态：面容验证成功后 true（遮罩解除），上锁/进后台 false */
   setPrivacyShieldUnlocked(unlocked: boolean): void;
   /** 应用实际主题（是否深色）：原生顶栏 chrome/搜索栏跟随应用而非系统
-   *  （Appearance.setColorScheme 只覆盖 RN 窗口宿主，原生栏仍随系统亮态） */
-  setChromeUserInterfaceStyle(dark: boolean): void;
+   *  （Appearance.setColorScheme 只覆盖 RN 窗口宿主，原生栏仍随系统亮态）。
+   *  null = 跟随系统（2026-09-02：自动切换模式下原生栏也不锁应用值，
+   *  override 还原 unspecified 随系统，防"系统已深色但原生栏仍浅"）。 */
+  setChromeUserInterfaceStyle(dark: boolean | null): void;
+  /** 顶栏透明度无级调节（0-1 均一 mask alpha；设置-浏览 Slider 拖动即时生效） */
+  setNavBarGlassAlpha(alpha: number): void;
   registerNotificationSync(minutes: number): void;
   cancelNotificationSync(): void;
   setNotificationCounts(

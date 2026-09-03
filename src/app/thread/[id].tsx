@@ -313,7 +313,6 @@ export default function ThreadPage() {
     handleToggleCollect,
     handleAgree,
     handleThreadAgree,
-    handleReport,
     handleDelete,
     handleCopyLink,
     shareAction,
@@ -392,7 +391,6 @@ export default function ThreadPage() {
             case 'jump': openJumpDialog(); break;
             case 'share': void shareAction(); break;
             case 'copy': void handleCopyLink(); break;
-            case 'report': handleReport(); break;
             case 'delete': handleDelete(); break;
             default: break;
           }
@@ -401,7 +399,7 @@ export default function ThreadPage() {
     );
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleToggleSeeLz, handleToggleCollect, handleToggleSort, openJumpDialog, shareAction, handleCopyLink, handleReport, handleDelete]);
+  }, [handleToggleSeeLz, handleToggleCollect, handleToggleSort, openJumpDialog, shareAction, handleCopyLink, handleDelete]);
 
   // Thread Header (ListHeaderComponent)
   const renderHeader = useMemo(() => {
@@ -447,7 +445,6 @@ export default function ThreadPage() {
         isLz={isReplyLz}
         subPosts={item.subPosts}
         onAgree={handleAgree}
-        onReport={handleReport}
         onDelete={accountUid === item.authorId ? handleDelete : undefined}
         onSubPostsPress={handleSubPostsPress}
         onImagePress={imageViewer.handleImagePress}
@@ -459,7 +456,7 @@ export default function ThreadPage() {
         {card}
       </StaggerItem>
     );
-  }, [handleAgree, handleReport, handleDelete, imageViewer.handleImagePress, handleSubPostsPress, accountUid, threadAuthorId, thread?.forumName, entranceProgress, entryTotalSV]);
+  }, [handleAgree, handleDelete, imageViewer.handleImagePress, handleSubPostsPress, accountUid, threadAuthorId, thread?.forumName, entranceProgress, entryTotalSV]);
 
   const renderFooter = useMemo(() => (
     <LoadMoreFooter
@@ -581,7 +578,7 @@ export default function ThreadPage() {
         onJump={handleJumpToPage}
       />
 
-      {/* Confirmation dialog (report / delete) */}
+      {/* Confirmation dialog (delete) */}
       <ThemedHost matchContents style={{ position: 'absolute', width: 0, height: 0 }}>
         <ConfirmationDialog
           title={confirmState.title}

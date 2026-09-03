@@ -1,7 +1,7 @@
 /**
  * useFeedCardActions — 信息流/列表卡片动作四件套的全库唯一实现
  * （thermo 2026-08-26 Z3-B/Z4-B/Z5-D：此前 explore / 吧页 / 话题页 / 搜索页
- * 各持一份 like/share/block/report 处理器，且点赞连点防竞态策略四页四种。
+ * 各持一份 like/share/block 处理器，且点赞连点防竞态策略四页四种。
  * 本 hook 以「ref 镜像优先、页面可注入更新基准」为唯一竞态策略）。
  *
  * 页面只需注入两个回调：
@@ -16,12 +16,11 @@
  */
 
 import { useCallback, useRef } from 'react';
-import { Alert, Share } from 'react-native';
+import { Share } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
 import { agree } from '@/services/api/endpoints/thread';
-import { checkReportPost } from '@/services/api/endpoints/misc';
 import { TiebaApiError } from '@/services/api/interceptors';
 import { BlockManager } from '@/utils/BlockManager';
 import { buildThreadUrl } from '@/utils';
@@ -171,24 +170,6 @@ export function useFeedCardActions(options: UseFeedCardActionsOptions) {
     [options.removeByAuthor],
   );
 
-  /** 举报：拉取服务端举报页 URL，内嵌 webview 打开（全库统一归宿） */
-  const report = useCallback(
-    async (thread: FeedCardTarget) => {
-      try {
-        const url = await checkReportPost(thread.id);
-        if (url) {
-          router.push({ pathname: '/webview', params: { url, title: '举报' } });
-        } else {
-          Alert.alert('提示', '当前帖子不支持在线举报');
-        }
-      } catch {
-        hapticForScene('action-fail');
-        Alert.alert('错误', '举报失败');
-      }
-    },
-    [router],
-  );
-
   /** 复制标题 */
   const copyTitle = useCallback((thread: FeedCardTarget) => {
     const title = thread.title ?? '';
@@ -197,5 +178,5 @@ export function useFeedCardActions(options: UseFeedCardActionsOptions) {
     }
   }, []);
 
-  return { requireLogin, like, share, blockAuthor, report, copyTitle };
+  return { requireLogin, like, share, blockAuthor, copyTitle };
 }
