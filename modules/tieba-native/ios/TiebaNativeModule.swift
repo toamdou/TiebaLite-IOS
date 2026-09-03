@@ -1047,6 +1047,16 @@ public final class TiebaNativeModule: Module {
     }
     guard isBar, let target = control,
           target.bounds.width > 0, target.bounds.height > 0 else { return }
+    // 2026-09-03：收紧为系统 chrome 按钮类——RN 0.81+ 的 Pressable 渲染为
+    // 原生 UIButton，信息流卡片（导航栈内）触摸时沿链命中 UINavigationBar
+    // 即误触发 chrome 触觉（用户实测"滑动碰到点赞按钮也振动"）。系统
+    // 返回钮/底栏项类名含 Bar/Tab + Button（_UIModernBarButton/
+    // _UIButtonBarButton/_UITabBarButton）；RN 按钮类名（RCT*）不含，排除。
+    let clsName = String(describing: type(of: target))
+    let isSystemChromeButton = clsName.localizedCaseInsensitiveContains("Button")
+      && (clsName.localizedCaseInsensitiveContains("Bar")
+        || clsName.localizedCaseInsensitiveContains("Tab"))
+    guard isSystemChromeButton else { return }
     // 双通道（UIView/UIControl）+ 快速连按去重：同一控件 800ms 内只反馈
     // 一次。返回键曾被实测「点击一次振两次」：pop 转场期间 UIKit 向原按钮
     // 重放 touchesBegan（约 150-400ms 后，250ms 去重窗之外），第二次振动

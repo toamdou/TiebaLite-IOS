@@ -319,9 +319,15 @@ export default function ForumPage() {
         });
       }
       setRefreshing(true);
-      // 最小 spinner 时长（2026-09-03）：吧页 store 数据就绪时 load 秒回，
-      // refreshing 周期 <100ms → 用户看不到刷新动画（实测"回顶自动刷新
-      // 不显示刷新动画"）。与加载并行等 400ms，保证动画可感知。
+      // 主动下偏列表到下拉位（2026-09-03 二修）：仅 setRefreshing(true) 时
+      // iOS 的 UIRefreshControl 在非用户拖拽状态不显示 spinner（上轮 400ms
+      // 时长修复后仍无动画实锤）。把列表偏移到 -60（bounce 区）让 spinner
+      // 进入可视区；结束再回 0。
+      if (list) {
+        list.scrollToOffset({ offset: -60, animated: true });
+      }
+      // 最小 spinner 时长：store 数据就绪时 load 秒回，refreshing 周期
+      // <100ms → 动画不可见。与加载并行等 400ms，保证动画可感知。
       await Promise.all([
         doLoadForTabRef.current(currentTab, 1),
         new Promise<void>((r) => setTimeout(r, MIN_FAB_REFRESH_SPINNER_MS)),
@@ -329,6 +335,7 @@ export default function ForumPage() {
     } finally {
       refreshingRef.current = false;
       setRefreshing(false);
+      tabListRefs.current[currentTab]?.scrollToOffset({ offset: 0, animated: false });
     }
     hapticForScene('toggle');
   }, [currentTab, settleScrollToTop]);

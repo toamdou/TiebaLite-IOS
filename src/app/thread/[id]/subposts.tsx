@@ -37,7 +37,7 @@ import { LoadMoreFooter } from '@/components/ui/LoadMoreFooter';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import ImageViewer from '@/components/ImageViewer';
 import { getParentPostSummary } from '@/stores/parentPostCache';
-import type { SubPostInfo } from '@/types';
+import type { PostInfo, SubPostInfo } from '@/types';
 import {
   ReplyItem,
   ParentReplyCard,
@@ -57,7 +57,7 @@ export default function SubPostsPage() {
   const { colors } = useThemeColors();
   const accountUid = useAuthStore((s) => s.account?.uid);
   const imageViewer = useImageViewer();
-  const paged = usePagedList<SubPostInfo>({
+  const paged = usePagedList<SubPostInfo, unknown, { page: { current: number; total: number; hasMore: boolean }; floorPost?: PostInfo }>({
     fetcher: async (page, _params, signal) => {
       const data = await pbFloor(threadId, postId, forumId, page, undefined, signal);
       return {
@@ -68,7 +68,9 @@ export default function SubPostsPage() {
         items: data.posts,
         hasMore: data.page.hasMore,
         nextPage: data.page.current + 1,
-        extra: data.page,
+        // floorPost = 目标楼层本体（服务端随楼中楼响应下发）："上一级回复"
+        // 卡的权威数据源，搜索/深链直达无需调用方快照（2026-09-03）。
+        extra: { page: data.page, floorPost: data.floorPost },
       };
     },
     initialPage: 1,
@@ -90,6 +92,7 @@ export default function SubPostsPage() {
     loadMore: handleLoadMore,
     load,
     setItems: setSubPosts,
+    extra,
   } = paged;
   // C5: only the first loaded batch gets the fade-in; paginated rows render opaque.
   const initialBatchIdsRef = useRef<Set<string> | null>(null);
@@ -223,9 +226,16 @@ export default function SubPostsPage() {
     [colors, threadAuthorId, handleAgree, accountUid, handleDelete, imageViewer.handleImagePress, initialBatchSealed],
   );
 
-  // 上一级回复：从模块级缓存取回被点击的那条回复（帖子页跳转前快照）。
-  // 未命中（如整包 reload 后直接深链进入）时回退展示原"主楼/帖子标题"卡。
-  const parentPost = useMemo(() => getParentPostSummary(postId), [postId]);
+  // 上一级回复：优先服务端随响应下发的楼层本体（floorPost——搜索/深链直达
+  // 也能拿到完整楼层：头像/表情/图片/IP/楼层号）；快照（帖子页跳转前写入）
+  // 仅在 floorPost 缺失时兜底（2026-09-03）。
+  const parentPost = useMemo(
+    () => extra?.floorPost ?? getParentPostSummary(postId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [extra?.floorPost, postId],
+  );
+  // 标题楼层号：路由参数（帖子页带真实楼层）→ floorPost 实际楼层 → '?'
+  const displayFloor = floor || (extra?.floorPost?.floor != null ? String(extra.floorPost.floor) : '');
 
   // 双击顶栏回顶（设置-浏览可关）
   const subPostsListRef = useRef<LegendListRef | null>(null);
@@ -243,7 +253,7 @@ export default function SubPostsPage() {
           <ParentReplyCard
             parent={parentPost}
             colors={colors}
-            floor={floor}
+            floor={displayFloor}
             decodedForumName={decodedForumName}
             decodedThreadTitle={decodedThreadTitle}
             threadId={threadId}
@@ -256,7 +266,7 @@ export default function SubPostsPage() {
           colors={colors}
           decodedForumName={decodedForumName}
           decodedThreadTitle={decodedThreadTitle}
-          floor={floor}
+          floor={displayFloor}
           threadId={threadId}
         />
       );
@@ -280,7 +290,7 @@ export default function SubPostsPage() {
   if (loading && subPosts.length === 0) {
     return (
       <View style={flattenStyle([styles.container, { backgroundColor: colors.systemGroupedBackground }])}>
-        <Stack.Screen options={{ title: `第${floor}楼回复` }} />
+        <Stack.Screen options={{ title: `第${displayFloor}楼回复` }} />
         <View style={styles.loadingSkeleton}>
           <SkeletonList count={8} variant="row" />
         </View>
@@ -290,7 +300,7 @@ export default function SubPostsPage() {
   if (error && subPosts.length === 0) {
     return (
       <View style={flattenStyle([styles.container, { backgroundColor: colors.systemGroupedBackground }])}>
-        <Stack.Screen options={{ title: `第${floor}楼回复` }} />
+        <Stack.Screen options={{ title: `第${displayFloor}楼回复` }} />
         <ErrorState message={error} onRetry={handleRefresh} />
       </View>
     );
@@ -298,7 +308,7 @@ export default function SubPostsPage() {
 
   return (
     <View style={flattenStyle([styles.container, { backgroundColor: colors.systemGroupedBackground }])}>
-      <Stack.Screen options={{ title: `第${floor || '?'}楼回复` }} />
+      <Stack.Screen options={{ title: `第${displayFloor || '?'}楼回复` }} />
       <LegendList
         recycleItems
         ref={subPostsListRef}

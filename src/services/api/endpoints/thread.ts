@@ -71,7 +71,7 @@ export async function pbPage(
 export async function pbFloor(
   threadId: string, postId: string, forumId: string, page: number = 1, subPostId?: string,
   signal?: AbortSignal,
-): Promise<{ posts: SubPostInfo[]; page: { current: number; total: number; hasMore: boolean } }> {
+): Promise<{ posts: SubPostInfo[]; page: { current: number; total: number; hasMore: boolean }; floorPost?: PostInfo }> {
   const decoded = await protoPbFloor({
     kz: threadId,
     pid: postId,
@@ -81,6 +81,14 @@ export async function pbFloor(
   }, signal);
   assertProtoSuccess(decoded);
   const data = decoded.data;
+  // 目标楼层本体（PbFloorResponseData.post = 3）：楼中楼页"上一级回复"卡的
+  // 权威数据源——服务端随响应下发楼层完整内容（含图片/表情/头像/IP）。
+  // 此前只依赖调用方预写快照（帖子页跳转才有），搜索/深链直达时无快照
+  // → 回退空标题卡（用户实测"一片空白/无头像/无表情无图片"）。这里透传，
+  // 页面优先用它；快照仅作 floorPost 缺失时的兜底。
+  const floorPost = data?.post
+    ? mapProtoPosts([data.post], threadId)[0]
+    : undefined;
   const rawPosts = data?.subpostList ?? [];
   // Kotlin uses: page.current_page < page.total_page (NOT has_more field!)
   const pg = data?.page;
@@ -139,6 +147,7 @@ export async function pbFloor(
       total: totPage,
       hasMore: computedHasMore,
     },
+    floorPost,
   };
 }
 
