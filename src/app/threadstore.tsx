@@ -423,7 +423,8 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   // 骨架容器与列表容器契约一致（列表卡片贴边 10pt、listContent paddingTop sm）：
   // 首行 y 偏移与水平缩进与真实列表对齐，替换瞬间不跳位（2026-08-29 错位修复）
-  skeletonWrap: { paddingHorizontal: 10, paddingTop: Spacing.sm },
+  // 骨架行自带卡片外边距 10（同 TweetCard），容器不再叠加横向 padding
+  skeletonWrap: { paddingHorizontal: 0, paddingTop: Spacing.sm },
   listContent: { paddingTop: Spacing.sm },
   emptyList: { flex: 1 },
   // 左滑「取消收藏」动作条（history.tsx 左滑删除同款：固定宽红色钮）

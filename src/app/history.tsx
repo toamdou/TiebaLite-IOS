@@ -598,7 +598,8 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   // 骨架容器与列表容器契约一致（列表无水平 padding、卡片贴边 10pt，
   // listContent paddingTop 2）：首行位置与缩进与真实列表对齐（2026-08-29 错位修复）
-  skeletonWrap: { paddingHorizontal: 10, paddingTop: 2 },
+  // 骨架行（thread variant）自带卡片外边距 10，容器不再加横向 padding
+  skeletonWrap: { paddingHorizontal: 0, paddingTop: 2 },
   // 液态玻璃「清除全部」胶囊（clear 玻璃 + 原生交互；realTime=false 显式
   // 静态：小按钮不值得占每屏实时玻璃预算）
   // alignSelf flex-start：宿主内 RN 视图直挂屏幕根节点（默认 alignItems

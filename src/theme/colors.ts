@@ -333,6 +333,15 @@ function shade(hex: string, amount: number): string {
 const darken = (hex: string, amount: number) => shade(hex, -amount);
 const lighten = (hex: string, amount: number) => shade(hex, amount);
 
+/**
+ * 封面渐变色对（用户主页通栏 cover 等场景）：主色 → 深化主色。
+ * 主题的 primaryDark 在夜间模式是增亮色（供文字压在主色上），不能当
+ * 渐变终点；这里两种模式恒定 darken(26)，都是从主色沉入深色的观感。
+ */
+export function coverGradientColors(primary: string): [string, string] {
+  return [primary, darken(primary, 26)];
+}
+
 function mixHex(hexA: string, hexB: string, weightB: number): string {
   const a = hexToRgb(hexA);
   const b = hexToRgb(hexB);

@@ -185,7 +185,9 @@ export function SearchThreadList({
   useSourceRevealConsumer(searchListRef, items, (it: unknown) => (it as SearchThreadResult).id);
   const listEmpty = useCallback(() => {
     if (loading && items.length === 0) {
-      return <SkeletonList variant="row" itemHeight={104} count={6} />;
+      // 帖子 tab 真实行是 TweetCard → 骨架用同形 thread 变体（行高自然撑出，
+      // 与列表卡同 10pt 外边距；2026-09-09 全量核查补齐，此前误用 row+104）
+      return <SkeletonList variant="thread" count={6} />;
     }
     if (error && items.length === 0) {
       return (

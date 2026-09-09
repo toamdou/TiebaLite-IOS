@@ -713,7 +713,9 @@ export function FeedContent({ segment, active }: { segment: 'personalized' | 'co
 
 const styles = StyleSheet.create({
   // 容器契约与列表一致：卡片贴边 10pt、列表 paddingVertical 8（2026-08-29 错位修复）
-  feedSkeleton: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 24 },
+  // 骨架行（thread variant）自带与 TweetCard 相同的 marginHorizontal 10，
+  // 容器不再加横向 padding，避免叠加成 20pt（骨架与真卡错位根因之一）
+  feedSkeleton: { paddingHorizontal: 0, paddingTop: 8, paddingBottom: 24 },
   // 不感兴趣原因面板（2026-09-01 重布局：紧凑贴内容、双列格栅胶囊、
   // 全宽提交 + 居中取消）
   dislikePanel: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 24 },

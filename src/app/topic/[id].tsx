@@ -406,7 +406,8 @@ export default function TopicDetailPage() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  skeletonWrap: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
+  // 骨架行（thread variant）自带卡片外边距 10，容器不再加横向 padding
+  skeletonWrap: { paddingHorizontal: 0, paddingTop: Spacing.md },
   listContent: { paddingBottom: Spacing.page },
   topicHeader: {
     padding: Spacing.lg,

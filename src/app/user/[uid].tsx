@@ -68,9 +68,9 @@ const PROFILE_LIST_PAD = 10;
 
 /**
  * 顶栏让位高度：headerTransparent 后内容从 y=0 起，手动补状态栏 + 实测
- * 导航栏。取吧页终局同款 56pt（卡片贴 bar 下沿、间隙取小）——此前页面级
- * ThemedHost 自动让位上再叠 insets.top+66 手动 padding 造成双重偏移，
- * 「卡片距顶栏大片空白」即由此而来。
+ * 导航栏 56pt。2026-09-09 资料卡改「profile screen」通栏封面版式后，主
+ * 列表的让位由封面自身承接（ProfileHeader），此常量只剩 loading/error/
+ * skeleton 与粉丝/关注覆盖层在用。
  */
 const PROFILE_TOP_CLEARANCE = 56;
 

@@ -42,11 +42,11 @@ import type { UserInfo } from '@/types';
 export const ProfileItemSeparator = () => <View style={{ height: Spacing.sm }} />;
 
 /**
- * 顶栏让位高度：页面已是纯 RN 根 + headerTransparent（吧页终局范式），
- * 内容从 y=0 起，由列表 contentContainerStyle 手动补状态栏 + 实测导航栏
- * （56pt，与 [uid].tsx PROFILE_TOP_CLEARANCE / 吧页同款，卡片贴 bar 下沿）。
+ * 顶部让位：headerTransparent 下内容从 y=0 起。2026-09-09 资料卡改
+ * 「profile screen」通栏封面版式后，顶部让位由封面自身高度承接
+ * （insets.top + 导航让位 + 色带，见 ProfileHeader），列表不再补
+ * paddingTop——封面才能通到状态栏之下。
  */
-const TOP_CLEARANCE = 56;
 
 // ---------- Rows ----------
 
@@ -197,7 +197,9 @@ export function UserTabList({
     if (loading) {
       return (
         <View style={styles.listEmptySkeleton}>
-          <SkeletonList variant="row" count={4} />
+          {/* 贴子/回复行即 TweetCard，骨架同形（thread）；关注的吧 tab 行是
+              ForumRow 圆卡，row 形状更接近 */}
+          <SkeletonList variant={tab === 'forums' ? 'row' : 'thread'} count={4} />
         </View>
       );
     }
@@ -246,11 +248,9 @@ export function UserTabList({
       contentContainerStyle={[
         // 帖子/回复 tab 用 TweetCard（自带 marginHorizontal:10），列表不再加横向 padding，
         // 避免双重缩进；关注的吧 tab 的行卡片仍需 listContent 的 10pt 边距。
-        // 顶部让位：headerTransparent 后内容从 y=0 起，资料卡+分段栏都在
-        // ListHeaderComponent 内随列表原生滚动、滑到顶自然从顶栏下方退出
-        //（吧页信息流同款跟手），此处手动补一次状态栏+导航栏高度。
+        // 顶部让位：资料卡封面自身承接（见文件头注释），列表只补底部安全区。
         tab === 'forums' ? styles.listContent : styles.listContentNoPad,
-        { paddingTop: insets.top + TOP_CLEARANCE, paddingBottom: insets.bottom + Spacing.lg },
+        { paddingBottom: insets.bottom + Spacing.lg },
       ]}
       refreshControl={
         <RefreshControl
