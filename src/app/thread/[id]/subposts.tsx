@@ -19,6 +19,7 @@ import {
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NAV_BAR_H } from '@/constants/layout';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useThemeColors } from '@/theme/ThemeContext';
@@ -289,7 +290,7 @@ export default function SubPostsPage() {
   // States
   if (loading && subPosts.length === 0) {
     return (
-      <View style={flattenStyle([styles.container, { backgroundColor: colors.systemGroupedBackground }])}>
+      <View style={flattenStyle([styles.container, { backgroundColor: colors.background }])}>
         <Stack.Screen options={{ title: `第${displayFloor}楼回复` }} />
         <View style={styles.loadingSkeleton}>
           <SkeletonList count={8} variant="row" />
@@ -299,7 +300,7 @@ export default function SubPostsPage() {
   }
   if (error && subPosts.length === 0) {
     return (
-      <View style={flattenStyle([styles.container, { backgroundColor: colors.systemGroupedBackground }])}>
+      <View style={flattenStyle([styles.container, { backgroundColor: colors.background }])}>
         <Stack.Screen options={{ title: `第${displayFloor}楼回复` }} />
         <ErrorState message={error} onRetry={handleRefresh} />
       </View>
@@ -307,7 +308,7 @@ export default function SubPostsPage() {
   }
 
   return (
-    <View style={flattenStyle([styles.container, { backgroundColor: colors.systemGroupedBackground }])}>
+    <View style={flattenStyle([styles.container, { backgroundColor: colors.background }])}>
       <Stack.Screen options={{ title: `第${displayFloor || '?'}楼回复` }} />
       <LegendList
         recycleItems
@@ -320,7 +321,7 @@ export default function SubPostsPage() {
         onViewableItemsChanged={subPostsOnViewableItemsChanged}
         ListHeaderComponent={mainPostCard}
         ListEmptyComponent={<EmptyState title="暂无回复" description="还没有楼中楼回复" icon="bubble.left" />}
-        contentContainerStyle={[styles.listContent, { paddingTop: insets.top + 66, paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.listContent, { paddingTop: insets.top + NAV_BAR_H, paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}

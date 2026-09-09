@@ -17,6 +17,7 @@ import PostContent from '@/components/thread/PostContent';
 import type { ImagePressHandler } from '@/components/thread/PostImages';
 import { hapticForScene } from '@/theme/hapticsMap';
 import {RadiusStyle} from '@/theme';
+import { typographyStyles } from '@/theme/typography';
 import { formatCount } from '@/utils';
 import { useTimeLabel } from '@/hooks/useTimeLabel';
 import { suppressNavDoubleTap } from '@/hooks/useNavDoubleTapToTop';
@@ -121,6 +122,11 @@ const ThreadHeader = memo(function ThreadHeader({
           },
         ]}
       >
+        {/* 标题：主贴卡首元素（此前只有导航栏截断标题，长标题帖无层次） */}
+        {thread.title ? (
+          <Text style={[styles.threadTitle, { color: colors.text }]}>{thread.title}</Text>
+        ) : null}
+
         {/* Author row */}
         <Link href={{ pathname: '/user/[uid]', params: { uid: thread.authorId } }} push asChild>
           <Pressable style={styles.authorRow}>
@@ -135,9 +141,6 @@ const ThreadHeader = memo(function ThreadHeader({
                 <Text style={[styles.authorDisplayName, { color: colors.text }]} numberOfLines={1}>
                   {thread.authorNameShow || thread.authorName}
                 </Text>
-                <View style={[styles.lzBadge, { backgroundColor: colors.primary + '18' }]}>
-                  <Text style={[styles.lzBadgeText, { color: colors.primary }]}>楼主</Text>
-                </View>
               </View>
               {/* IP 属地随发帖时间同栏（2026-09-02 用户：贴内作者名行保持干净，
                   属地并入时间栏） */}
@@ -237,6 +240,11 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingHorizontal: 16,
   },
+  // 主贴标题（卡内首元素，title3 20/600——与导航栏截断标题解耦）
+  threadTitle: {
+    ...typographyStyles.title3,
+    marginBottom: 8,
+  },
   mainPostContent: {
     marginTop: 12,
   },
@@ -248,10 +256,6 @@ const styles = StyleSheet.create({
   authorInfo: { flex: 1, gap: 2 },
   authorNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   authorDisplayName: { fontSize: 16, fontWeight: '600', flexShrink: 1 },
-  lzBadge: {
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
-  },
-  lzBadgeText: { fontSize: 11, fontWeight: '700', lineHeight: 15 },
   authorMeta: { fontSize: 13, fontWeight: '400' },
 
   // ── Reply toolbar ──
@@ -259,8 +263,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 12, paddingHorizontal: 16,
   },
-  replyCount: { fontSize: 16, fontWeight: '700' },
-  replyPageLabel: { fontSize: 13, fontWeight: '500' },
+  // 「回复 N」降为 subheadBold：工具栏是导航件，不再压过主贴作者名的视觉权重
+  replyCount: { ...typographyStyles.subheadBold },
+  replyPageLabel: { ...typographyStyles.caption1, fontWeight: '500' },
   replyToolbarRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   seeLzPill: {
     paddingHorizontal: 14, paddingVertical: 7,

@@ -37,6 +37,7 @@ import { SkeletonList } from '../../components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
 import { useThemeColors } from '@/theme/ThemeContext';
 import { RadiusStyle } from '@/theme';
+import { typographyStyles } from '@/theme/typography';
 import { EASE_OUT, DURATION } from '@/theme/springs';
 import { hapticForScene } from '@/theme/hapticsMap';
 import { useAuthStore } from '@/stores/authStore';
@@ -521,7 +522,7 @@ export default function ThreadPage() {
           styles.listContent,
           // headerTransparent 后内容从 y=0 起：顶部让位导航栏，底部让位浮动胶囊
           //（showShortcutInThread 关闭时压缩到底部默认留白，低9）
-          { paddingTop: insets.top + 66, paddingBottom: insets.bottom + (showShortcutInThread ? 80 : 12) },
+          { paddingTop: insets.top + NAV_BAR_H, paddingBottom: insets.bottom + (showShortcutInThread ? 80 : 12) },
         ]}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
@@ -620,7 +621,10 @@ export default function ThreadPage() {
 // ── 已知主贴区（initialKnown 快照占位，2026-08-30）──
 // 列表→详情携带已知数据（标题/作者/摘要/首图）的首帧渲染：帖子首包返回前
 // 不再整页空白/纯骨架；服务端详情返回后由完整 PostCard 整体替换。
-const KNOWN_PAGE_W = Dimensions.get('window').width - 32;
+// 2026-09-09 几何与真实主贴卡（ThreadHeader）逐项对齐：卡片外边距 10 /
+// 内边距 16 / 标题 title3 / 作者行 40 头像 + 16/600 名字——替换瞬间零跳变
+//（此前快照卡 16 边距 + 有标题，真实卡 10 边距 + 无标题，一闪一换肉眼可见）。
+const KNOWN_PAGE_W = Dimensions.get('window').width - 52;
 
 function KnownPostHeader({ thread, colors }: { thread: ThreadInfo; colors: any }) {
   const insets = useSafeAreaInsets();
@@ -630,7 +634,7 @@ function KnownPostHeader({ thread, colors }: { thread: ThreadInfo; colors: any }
     imgHeight = Math.min(Math.max((KNOWN_PAGE_W * firstImage.height) / firstImage.width, 1), 320);
   }
   return (
-    <View style={{ paddingTop: insets.top + 66 }}>
+    <View style={{ paddingTop: insets.top + NAV_BAR_H }}>
       <View style={[styles.knownCard, { backgroundColor: colors.card }]}>
         <Text style={[styles.knownTitle, { color: colors.text }]} numberOfLines={3}>
           {thread.title}
@@ -638,11 +642,11 @@ function KnownPostHeader({ thread, colors }: { thread: ThreadInfo; colors: any }
         <View style={styles.knownAuthorRow}>
           <Avatar
             source={thread.authorPortrait || undefined}
-            initials={(thread.authorName || '吧').charAt(0)}
-            size={36}
+            initials={(thread.authorName || '吧')?.slice(0, 2)}
+            size={40}
           />
-          <Text style={[styles.knownAuthorName, { color: colors.textSecondary }]} numberOfLines={1}>
-            {thread.authorName}
+          <Text style={[styles.knownAuthorName, { color: colors.text }]} numberOfLines={1}>
+            {thread.authorNameShow || thread.authorName}
           </Text>
         </View>
         {thread.abstract ? (
@@ -672,25 +676,22 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   knownCard: {
-    marginHorizontal: 16,
+    marginHorizontal: 10,
     padding: 16,
     gap: 12,
     ...RadiusStyle.card,
   },
   knownTitle: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: '500',
+    ...typographyStyles.title3,
   },
   knownAuthorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   knownAuthorName: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
+    ...typographyStyles.subheadBold,
+    flexShrink: 1,
   },
   knownAbstract: {
     fontSize: 14,
