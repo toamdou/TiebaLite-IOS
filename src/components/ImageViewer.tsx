@@ -311,9 +311,10 @@ export default function ImageViewer({
   // 长图判据：纯几何——fit-width 显示高度明显超过屏高才进阅读模式。服务端
   // isLongPic 标记对"稍高于屏"的图会过宽路由成阅读模式（顶部顶状态栏、
   // 底部被裁，用户 2026-08-29 反馈"部分图片靠上显示"）；有真实尺寸时以
-  // 几何为准，尺寸未知才信服务端标记。阈值 1.3 倍屏高：仅"明显长"的图进
-  // 阅读模式，略超屏的普通图保持捏合缩放浏览（用户 2026-08-30 反馈：未标
-  // 长图的图被误判成长图、上下滑退不出）。
+  // 几何为准，阈值 1.3 倍屏高：仅"明显长"的图进阅读模式。**尺寸未知时
+  // 不再信服务端标记、一律按普通图处理**（2026-09-09 用户：全屏显示的图
+  // 也退不出手势——贴吧给竖图乱标 isLongPic，无尺寸兜底误伤面过大；普通
+  // 图路由的错误成本（手势禁用）远高于漏掉一张真长图的阅读模式）。
   const isLongImageOf = useCallback(
     (index: number): boolean => {
       const meta = imageMeta?.[index];
@@ -323,7 +324,7 @@ export default function ImageViewer({
       if (w > 0 && h > 0) {
         return (SCREEN_WIDTH * h) / w > SCREEN_HEIGHT * 1.3;
       }
-      return meta.isLongPic === true;
+      return false;
     },
     [imageMeta],
   );
@@ -936,10 +937,12 @@ export default function ImageViewer({
 //   缩略条格（翻页后当前页）→ 沿手势方向缩小淡出（单图无缩略条）；
 //   未过阈值 → 弹簧回弹。缩放态（zoomedSV）下禁用，交给页内缩放 pan。
 const dismissGesture = usePanGesture({
-    // 长图页完全禁用退出手势（2026-09-01 修复多图横滑）：enabled=false 后
-    // RNGH 不参与该页触摸，PagerView 原生翻页无竞争、横向可正常切换；
-    // 长图阅读滚动走 readPan，关闭走 X（手势滑出本就禁用）。
-    enabled: !isLongImageOf(currentIndex),
+    // 长图页重新参与（2026-09-09）：9-01 曾整体禁用（enabled=false），病因
+    // 有二且均已另解——①横滑翻页被抢：onTouchesMove 对长图横移主导的拖动
+    // 显式 fail，触摸还回 PagerView（原 enabled=false 是唯一解，现精确化）；
+    // ②纵向误退：onUpdate 的 followY 方向/边界仲裁本就贴顶下拉才跟手，
+    // 未禁用前的冲突源自旧版无方向判定。其余逻辑同普通页（minDistance 5
+    // 自动激活 + 阈值退场）。
     // 死区 10→5（2026-09-01）：10pt 内画面完全不动是「不跟手」主感来源；
     // 5pt 是翻页手势轻微纵向抖动的容差下限，再小会误抢横向翻页。
     minDistance: 5,
@@ -972,11 +975,13 @@ const dismissGesture = usePanGesture({
     onTouchesMove: (e) => {
       'worklet';
       if (isDismissing.value || zoomedSV.value) return;
-      // 长图模式禁止手势滑出（2026-09-01 用户要求）：阅读滚动与退出
-      // 手势冲突（向上滑到边界被判为退出）。长图页一律 fail——触摸交还
-      // readPan（阅读滚动）与 PagerView（翻页），关闭走 X/系统返回。
+      // 长图页：横移主导的拖动显式 fail——触摸还回 PagerView 翻页（9-01
+      // 禁用手势的真因）。纵向拖动不干预，交给 onUpdate 的 followY 方向/
+      // 边界仲裁：仅贴顶下拉跟手退出，贴底上推/滚动区内全部容器归 0。
       if (isLongPageSV.value) {
-        GestureStateManager.fail(e.handlerTag);
+        const dx = Math.abs(e.changedTouches[0].x - touchStartX.value);
+        const dy = Math.abs(e.changedTouches[0].y - touchStartY.value);
+        if (dx > dy) GestureStateManager.fail(e.handlerTag);
         return;
       }
       // 兜底手动激活：minDistance=5 已能自动激活，这里做激活前仲裁
