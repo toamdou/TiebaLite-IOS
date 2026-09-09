@@ -72,7 +72,7 @@ import type { ThreadInfo } from '@/types';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { ForumTabList } from '@/components/forum/ForumTabList';
 import { ForumTabHeader } from '@/components/forum/ForumTabHeader';
-import { ForumSortBar } from '@/components/forum/ForumSortBar';
+import { ForumSortBar, ForumSortMenu } from '@/components/forum/ForumSortBar';
 import { ClassifyPickerSheet } from '@/components/forum/ClassifyPickerSheet';
 
 /** Tab segments for the native segmented control (对齐 Kotlin: 热门 | 最新 | 精品) */
@@ -159,6 +159,10 @@ export default function ForumPage() {
   const fabTop = screenH - insets.bottom - Spacing.md - 52;
   const [showClassifyPicker, setShowClassifyPicker] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  // 菜单卡锚点（窗口坐标 y）：点按钮时由 ForumSortBar measureInWindow 上报。
+  // 菜单挂页面根级 overlay——列表头子树内的绝对定位浮层会被 LegendList
+  // 回收容器裁剪/盖住（模拟器实测"弹不出"）。
+  const [sortMenuAnchorY, setSortMenuAnchorY] = useState(0);
   const sortMenuOpenAtRef = useRef(0);
 
   // 悬浮按钮随滚动下滑出屏幕的距离（pt）。顶部锚定下 FAB 底边距屏底
@@ -573,17 +577,6 @@ export default function ForumPage() {
     if (action === 'block') void feedActions.blockAuthor(item);
   }, [feedActions]);
 
-  // ── Follow button label ──
-  const followBtnLabel = !isLoggedIn
-    ? '关注'
-    : !currentForum?.isLike
-      ? '关注'
-      : currentForum?.signInInfo?.isSignIn
-        ? `已签到${currentForum.signInInfo.contSignNum > 0 ? ` ${currentForum.signInInfo.contSignNum}天` : ''}`
-        : '签到';
-
-  const followBtnActive = isLoggedIn && currentForum?.isLike;
-
   // ── 精品分类标签 ──
   const selectedClassifyLabel = goodClassifyId
     ? goodClassify.find((c) => c.classId === goodClassifyId)?.className
@@ -626,8 +619,8 @@ export default function ForumPage() {
     [],
   );
 
-  // 顶部固定区（吧名片 + 置顶帖）：位于 segment 栏之上、不随列表滚动
-  // 用户要求顺序：吧卡片 → 置顶帖 → segment → 帖子列表（对齐 Kotlin ForumHeader）
+  // 顶部固定区（hero 头部 + 置顶帖）：位于 segment 栏之上、不随列表滚动
+  // 用户要求顺序：吧头部 → 置顶帖 → segment → 帖子列表（对齐 Kotlin ForumHeader）
   const tabHeader = useMemo(
     () => (
       <ForumTabHeader
@@ -635,15 +628,14 @@ export default function ForumPage() {
         colors={colors}
         currentForum={currentForum}
         topThreads={topThreads}
-        followBtnLabel={followBtnLabel}
-        followBtnActive={followBtnActive}
         isLoggedIn={isLoggedIn}
         onAvatarPreview={handleAvatarPreview}
-        onFollowOrSign={handleFollowOrSign}
+        onFollowPress={handleFollowOrSign}
+        onSignPress={handleSign}
         onForumDetail={handleForumDetail}
       />
     ),
-    [name, colors, currentForum, topThreads, followBtnLabel, followBtnActive, isLoggedIn, handleAvatarPreview, handleFollowOrSign, handleForumDetail],
+    [name, colors, currentForum, topThreads, isLoggedIn, handleAvatarPreview, handleFollowOrSign, handleSign, handleForumDetail],
   );
 
   // 排序（最新 tab）/ 分类（精品 tab）行：菜单开合状态在本页持有
@@ -653,16 +645,15 @@ export default function ForumPage() {
         currentTab={currentTab}
         sortType={forumSortType}
         sortMenuOpen={sortMenuOpen}
-        onToggleSortMenu={() => {
+        onToggleSortMenu={(anchorY) => {
           hapticForScene('press');
+          setSortMenuAnchorY(anchorY);
           setSortMenuOpen((v) => {
             const next = !v;
             sortMenuOpenAtRef.current = next ? Date.now() : 0;
             return next;
           });
         }}
-        onCloseSortMenu={() => setSortMenuOpen(false)}
-        onSortChange={handleSortChange}
         classifyLabel={selectedClassifyLabel}
         hasClassifies={goodClassify.length > 0}
         onClearClassify={() => setGoodClassifyId(null)}
@@ -719,19 +710,18 @@ export default function ForumPage() {
   const topBlock = useMemo(
     () => (
       <>
-        {/* headerTransparent 下内容从 y=0 起：顶部板块（列表头）显式让位
-            顶栏（insets.top + NAV_BAR_H）。8-28 显式化——此前让位放在列表
-            contentContainerStyle 的 paddingTop，语义依赖 LegendList 容器
-            行为且随页面往返/insets 时序出现"顶栏包裹不足/足够"反复；
-            移入列表头自身后任何渲染路径都从顶栏下沿开始，滚动跟手滑出不变。 */}
-        <View style={{ paddingTop: insets.top + NAV_BAR_H }}>
+        {/* 顶部让位：hero 封面自身承接（insets.top + NAV_BAR_H 由封面高度
+            吸收，ForumTabHeader），此容器只做板块顺序编排。8-28 曾在此显式
+            paddingTop 让位；2026-09-09 封面改通栏后置 0，封面才能顶到
+            状态栏之下（与用户主页同款处理）。 */}
+        <View>
           {tabHeader}
           {segmentSlot}
           {fixedBar}
         </View>
       </>
     ),
-    [insets.top, tabHeader, segmentSlot, fixedBar],
+    [tabHeader, segmentSlot, fixedBar],
   );
 
   // ── Loading state ──
@@ -815,6 +805,24 @@ export default function ForumPage() {
           </SegmentPager>
         </Animated.View>
 
+        {/* ── 排序下拉菜单：页面根级 overlay（列表头子树外，防裁剪/盖层）── */}
+        {sortMenuOpen && currentTab === 1 && (
+          <ForumSortMenu
+            anchorTop={sortMenuAnchorY}
+            sortType={forumSortType}
+            onSelect={(sort) => {
+              setSortMenuOpen(false);
+              sortMenuOpenAtRef.current = 0;
+              handleSortChange(sort);
+            }}
+            onClose={() => {
+              setSortMenuOpen(false);
+              sortMenuOpenAtRef.current = 0;
+            }}
+            colors={colors}
+          />
+        )}
+
         {/* ── FAB（液态玻璃胶囊；位置走 fabTop 顶部锚定——page 级宿主底边不可信） ── */}
         {!fabHiddenBySetting && (
           <Animated.View style={[styles.fabContainer, { top: fabTop }, fabAnimatedStyle]}>
@@ -878,12 +886,12 @@ const styles = StyleSheet.create({
   // pager 单页容器
   pagerPage: { flex: 1 },
 
-  // ── 顶部板块列表头容器（卡片+置顶+segment+排序），随列表滚动 ──
+  // ── 顶部板块列表头容器（hero+置顶+segment+排序），随列表滚动 ──
   // 分段控件槽位：原生 UIKit 控件（TiebaSegmentedControl），横向入边距
-  // 对齐卡片；44pt 点击区（控件本身 ~32pt 居中）
+  // 与列表 TweetCard 卡片外边距统一 10pt（2026-09-09 左基线统一）
   segmentSlot: {
     width: '100%',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: 10,
   },
 
   fabContainer: {
