@@ -55,12 +55,16 @@ export const ForumTabHeader = React.memo(function ForumTabHeader({
   const contSignNum = currentForum?.signInInfo?.contSignNum ?? 0;
   const showLevel =
     isFollowed && currentForum?.levelId != null && currentForum.levelId > 0;
+  const levelColor = showLevel ? levelBadgeColor(currentForum?.levelId) : undefined;
+  /** 有升级阈值才画进度条；服务端只给等级不给经验数据时退化为"经验 N"。 */
+  const hasLevelProgress = showLevel && (currentForum?.levelupScore ?? 0) > 0;
+  const curScore = currentForum?.curScore ?? 0;
 
   return (
     <View style={styles.headerSection}>
       <View style={[styles.content, { paddingTop: insets.top + NAV_BAR_H }]}>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderCard }]}>
-          {/* 标题行：头像 | 名字+等级 / meta | 关注签到 */}
+          {/* 标题行：头像 | 名字 /（等级 + meta）| 关注签到 */}
           <View style={styles.titleRow}>
             <Avatar
               source={currentForum?.avatar || undefined}
@@ -69,29 +73,34 @@ export const ForumTabHeader = React.memo(function ForumTabHeader({
               onPress={onAvatarPreview}
             />
             <Pressable style={styles.titleCol} onPress={onForumDetail} accessibilityRole="button">
-              <View style={styles.titleLine}>
-                <Text style={[styles.forumTitle, { color: colors.text }]} numberOfLines={1}>
-                  {name}吧
-                </Text>
+              <Text style={[styles.forumTitle, { color: colors.text }]} numberOfLines={1}>
+                {name}吧
+              </Text>
+              {/* meta 行：等级徽标 + 成员/帖子数。等级徽标从标题行挪到这里
+                  （2026-09-12）：标题行右侧还要放「已关注 + 签到」两个 chip，
+                  375pt 屏上三样抢宽会把 Lv 徽标挤没、吧名也只剩两三个字。
+                  徽标 flexShrink:0 + 数字 numberOfLines:1，宽度再紧也不会
+                  把等级挤掉。 */}
+              <View style={styles.metaRow}>
                 {showLevel && (
                   <View
                     style={[
                       styles.levelBadgeSmall,
-                      { backgroundColor: levelBadgeColor(currentForum.levelId)?.bg },
+                      { backgroundColor: levelColor?.bg ?? colors.surfaceSecondary },
                     ]}
                   >
                     <Text
-                      style={[styles.levelBadgeSmallText, { color: levelBadgeColor(currentForum.levelId)?.color }]}
+                      style={[styles.levelBadgeSmallText, { color: levelColor?.color ?? colors.textSecondary }]}
                     >
                       Lv.{currentForum.levelId}
                     </Text>
                   </View>
                 )}
+                <Text style={[styles.metaLine, { color: colors.textTertiary }]} numberOfLines={1}>
+                  会员 {formatCount(currentForum?.memberCount || 0)} · 帖子{' '}
+                  {formatCount(currentForum?.threadCount || 0)}
+                </Text>
               </View>
-              <Text style={[styles.metaLine, { color: colors.textTertiary }]} numberOfLines={1}>
-                会员 {formatCount(currentForum?.memberCount || 0)} · 帖子{' '}
-                {formatCount(currentForum?.threadCount || 0)}
-              </Text>
             </Pressable>
 
             {/* 关注/签到：状态与动作拆开。未关注/未登录只显示「关注」；
@@ -135,23 +144,32 @@ export const ForumTabHeader = React.memo(function ForumTabHeader({
             </View>
           </View>
 
-          {/* 等级进度（已关注且有升级数据时显示） */}
-          {showLevel && !!currentForum?.levelupScore && currentForum.levelupScore > 0 && (
+          {/* 等级进度：已关注且有等级即占位（2026-09-12）。有升级阈值画进度条，
+              服务端只给等级/经验时退化为一行"经验 N"，避免这块整段消失。 */}
+          {showLevel && (
             <View style={styles.levelSection}>
-              <View style={[styles.levelTrack, { backgroundColor: colors.surfaceSecondary }]}>
-                <View
-                  style={[
-                    styles.levelFill,
-                    {
-                      width: `${Math.min(((currentForum.curScore ?? 0) / currentForum.levelupScore) * 100, 100)}%`,
-                      backgroundColor: colors.primary,
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.levelScoreText, { color: colors.textTertiary }]}>
-                {Math.min(currentForum.curScore ?? 0, currentForum.levelupScore)}/{currentForum.levelupScore}
-              </Text>
+              {hasLevelProgress ? (
+                <>
+                  <View style={[styles.levelTrack, { backgroundColor: colors.surfaceSecondary }]}>
+                    <View
+                      style={[
+                        styles.levelFill,
+                        {
+                          width: `${Math.min((curScore / (currentForum.levelupScore || 1)) * 100, 100)}%`,
+                          backgroundColor: levelColor?.bg ?? colors.primary,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={[styles.levelScoreText, { color: colors.textTertiary }]}>
+                    {Math.min(curScore, currentForum.levelupScore)}/{currentForum.levelupScore}
+                  </Text>
+                </>
+              ) : (
+                <Text style={[styles.levelScoreText, { color: colors.textTertiary }]}>
+                  经验 {curScore}
+                </Text>
+              )}
             </View>
           )}
 
@@ -203,30 +221,33 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 3,
   },
-  titleLine: {
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   forumTitle: { ...typographyStyles.title3, fontWeight: '800' },
-  metaLine: { ...typographyStyles.caption1, fontWeight: '500' },
+  // flexShrink:1 保证宽度紧张时截断的是"会员/帖子"这行，不是等级徽标。
+  metaLine: { ...typographyStyles.caption1, fontWeight: '500', flexShrink: 1 },
 
-  levelBadgeSmall: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  // 等级徽标不给缩小：标题行右边有「已关注 + 签到」两个 chip，宽度紧张时
+  // 牺牲成员数而不是等级（2026-09-12）。
+  levelBadgeSmall: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, flexShrink: 0 },
   levelBadgeSmallText: { ...typographyStyles.caption2, fontWeight: '800' },
 
   btnRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   btnFilled: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: Radius.capsule,
   },
   btnFilledText: { ...typographyStyles.footnoteBold },
   btnChip: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 9,
     borderRadius: Radius.capsule,
   },

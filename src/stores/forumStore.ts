@@ -151,6 +151,48 @@ function getForumTbs(currentForum: ForumDetail | null): string {
   return currentForum?.tbs || getTbsSync() || '';
 }
 
+/**
+ * 已关注吧的等级/签到兜底合并（2026-09-12）。
+ *
+ * 背景：吧名片要保证"登录 + 已关注 → 显示签到按钮、等级、等级进度"，但
+ * frsPage 响应里的 forum 对象在部分服务端形态下不带 is_like / user_level /
+ * sign_in_info（Kotlin 同源：ForumBean 这些字段可缺省），而已关注列表
+ * （forumGuide → mapForumInfo）一定带 levelId/isSign/signCount。
+ *
+ * 规则：只补"服务端没下发"的字段，绝不覆盖服务端明确给出的 0——
+ * - is_like 缺失且该吧在已关注列表里 → 视为已关注（在列表里本身即关注态）；
+ * - user_level 缺失且有 levelId → 补等级（等级只升不降，缓存值安全）；
+ * - 签到态取并集（签过就保持）：服务端未标已签而列表标了 → 补成已签。
+ */
+function mergeFollowedForumFallback(
+  detail: ForumDetail,
+  known: { isLikeKnown: boolean; levelKnown: boolean },
+): void {
+  if (!detail.forumId) return;
+  let entry: ForumInfo | undefined;
+  try {
+    entry = lazyForumFollowed().getCachedForumsMap().get(detail.forumId);
+  } catch {
+    return; // 缓存模块异常不该影响吧页加载
+  }
+  if (!entry) return;
+  if (!known.isLikeKnown && !detail.isLike) {
+    detail.isLike = true;
+  }
+  if (!known.levelKnown && !detail.levelId && entry.levelId > 0) {
+    detail.levelId = entry.levelId;
+    if (!detail.levelName && entry.levelName) detail.levelName = entry.levelName;
+  }
+  if (!detail.signInInfo?.isSignIn && entry.isSign) {
+    detail.signInInfo = {
+      isSignIn: true,
+      contSignNum: detail.signInInfo?.contSignNum ?? entry.signCount ?? 0,
+      userSignRank: detail.signInInfo?.userSignRank ?? 0,
+      signBonusPoint: detail.signInInfo?.signBonusPoint ?? 0,
+    };
+  }
+}
+
 export const useForumStore = create<ForumState>((set, get) => ({
   followedForums: [],
   isLoadingForums: false,
@@ -277,6 +319,12 @@ export const useForumStore = create<ForumState>((set, get) => ({
       // ── Parse forum detail (Kotlin ForumPageBean.ForumBean) ──
       if (forumData && page === 1) {
         const signInUser = forumData.signInInfo?.userInfo ?? forumData.sign_in_info?.user_info;
+        // 原始值 + 是否显式下发：服务端明确给 0（未关注/无等级）不能被本地
+        // 已关注列表缓存覆盖回去，只有"字段缺失"才走兜底合并（见
+        // mergeFollowedForumFallback）。
+        const rawIsLike = forumData.isLike ?? forumData.is_like;
+        const rawUserLevel = forumData.userLevel ?? forumData.levelId ?? forumData.level_id;
+        const parsedUserLevel = parseInt(String(rawUserLevel ?? '0'), 10) || 0;
         const detail: ForumDetail = {
           forumId: String(forumData.id ?? ''),
           forumName: forumData.name ?? forumName,
@@ -284,11 +332,11 @@ export const useForumStore = create<ForumState>((set, get) => ({
           memberCount: parseInt(String(forumData.memberNum ?? forumData.member_num ?? '0'), 10),
           threadCount: parseInt(String(forumData.threadNum ?? forumData.thread_num ?? '0'), 10),
           intro: forumData.slogan ?? forumData.intro ?? '',
-          isLike: forumData.isLike === 1 || forumData.is_like === 1 || forumData.is_like === '1',
-          levelId: parseInt(String(forumData.userLevel ?? forumData.levelId ?? forumData.level_id ?? '0'), 10) || undefined,
+          isLike: rawIsLike === 1 || rawIsLike === '1' || rawIsLike === true,
+          levelId: parsedUserLevel > 0 ? parsedUserLevel : undefined,
           levelName: forumData.levelName ?? forumData.level_name,
-          curScore: parseFloat(String(forumData.curScore ?? forumData.cur_score ?? '0')),
-          levelupScore: parseFloat(String(forumData.levelupScore ?? forumData.levelup_score ?? '1')),
+          curScore: parseFloat(String(forumData.curScore ?? forumData.cur_score ?? '0')) || 0,
+          levelupScore: parseFloat(String(forumData.levelupScore ?? forumData.levelup_score ?? '0')) || 0,
           tbs: data.anti?.tbs ?? forumData.tbs ?? '',
           signInInfo: signInUser ? {
             isSignIn: (signInUser.isSignIn ?? signInUser.is_sign_in) === 1,
@@ -297,6 +345,10 @@ export const useForumStore = create<ForumState>((set, get) => ({
             signBonusPoint: parseInt(String(signInUser.signBonusPoint ?? signInUser.sign_bonus_point ?? '0'), 10),
           } : undefined,
         };
+        mergeFollowedForumFallback(detail, {
+          isLikeKnown: rawIsLike != null,
+          levelKnown: rawUserLevel != null,
+        });
         // 2026-08-27 诊断：吧页等级数据是否进入（Lv 徽标/进度条的来源）
         if (__DEV__) {
           console.warn(
@@ -530,6 +582,9 @@ export const useForumStore = create<ForumState>((set, get) => ({
         state.currentForum?.forumId === forumId
           ? {
               ...state.currentForum,
+              // 签到经验直接加到进度上：卡片进度条要能立刻反映"经验+N"
+              // （否则要等下一次吧页加载，用户以为没签上）。
+              curScore: (state.currentForum.curScore ?? 0) + (exp > 0 ? exp : 0),
               signInInfo: {
                 isSignIn: true,
                 contSignNum: (state.currentForum.signInInfo?.contSignNum ?? 0) + 1,
