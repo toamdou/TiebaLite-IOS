@@ -9,7 +9,7 @@ import UIKit
 
 extension TiebaNativeModule {
   enum DoubleTapState {
-    /// 事件发送需要模块实例（sendEvent 是实例方法，手势回调是静态上下文）：
+    /// 事件发送需要模块实例（@Event 绑在实例上，手势回调是静态上下文）：
     /// protoInitialize 捕获，weak 不延长生命周期。
     nonisolated(unsafe) static weak var module: TiebaNativeModule?
     /// 双击门卫 delegate 的关联对象键（见 installNavDoubleTapToTop）。
@@ -18,11 +18,8 @@ extension TiebaNativeModule {
 
   // MARK: - 导航栏双击回顶（搜索/吧页/帖内/楼中楼；开关在设置-浏览）
 
-  // 事件发送需要模块实例（sendEvent 是实例方法，手势回调是静态上下文）：
-  // protoInitialize（启动首个 JS→原生调用）捕获，weak 不延长生命周期。
+  /// protoInitialize（启动首个 JS→原生调用）捕获模块实例。
   static func retainEventModule(_ module: TiebaNativeModule) { DoubleTapState.module = module }
-  /// 双击门卫 delegate 的关联对象键（见 installNavDoubleTapToTop）。
-  
 
   /// 安装幂等：force 由 timer/KVO 反复跑，按手势类型判重。
   /// iOS 27β 上 UITapGestureRecognizer(numberOfTapsRequired:2) 在导航栏上
@@ -54,7 +51,8 @@ extension TiebaNativeModule {
 
   @objc private static func navDoubleTapped(_ recognizer: UITapGestureRecognizer) {
     guard let module = DoubleTapState.module else { return }
-    module.sendEvent("onNavDoubleTap", ["source": "navbar"])
+    // 2.0 @Event：闭包内部经 core EventEmitter 调度到 JS 线程派发。
+    module.onNavDoubleTap(NavDoubleTapPayload(source: "navbar"))
   }
 }
 
