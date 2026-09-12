@@ -73,8 +73,10 @@ export interface TiebaNativeModule {
    *  null = 跟随系统（2026-09-02：自动切换模式下原生栏也不锁应用值，
    *  override 还原 unspecified 随系统，防"系统已深色但原生栏仍浅"）。 */
   setChromeUserInterfaceStyle(dark: boolean | null): void;
-  /** 顶栏透明度无级调节（0-1 均一 mask alpha；设置-浏览 Slider 拖动即时生效） */
-  setNavBarGlassAlpha(alpha: number): void;
+  /** 顶栏栏底路由门控（白名单）：仅吧页/帖子页开=系统默认栏背景（UIKit 原生
+   *  材质，v34 起）；主 tab（关注/动态/消息/我的，路径 '/'、'/explore'、
+   *  '/notifications'、'/profile'）与用户主页/搜索/设置等其余路由关=透明 */
+  setNavBarGlassEnabled(enabled: boolean): void;
   registerNotificationSync(minutes: number): void;
   cancelNotificationSync(): void;
   setNotificationCounts(

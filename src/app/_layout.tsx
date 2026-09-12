@@ -2,8 +2,7 @@ import '@/services/devNoiseFilter'; // 必须最先执行：过滤 expo-notifica
 import React, { useEffect, useCallback, useMemo } from 'react';
 import { View, Pressable, Appearance } from 'react-native';
 import { Text } from '../components/ui/CompatText';
-import { Stack, useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { enableFreeze } from 'react-native-screens';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -209,6 +208,7 @@ function RootLayoutInner() {
   const { colors, isDark } = useThemeColors();
   const checkAuth = useAuthStore((s) => s.checkAuth);
   const router = useRouter();
+  const pathname = usePathname();
   const toolbarPrimaryColor = useAppPreference('toolbarPrimaryColor', false);
   const statusBarFontDark = useAppPreference('statusBarFontDark', false);
   // 震动反馈总开关同步给原生：闸住 chrome 按压触觉（返回钮/导航右钮/底栏项
@@ -217,6 +217,21 @@ function RootLayoutInner() {
   useEffect(() => {
     TiebaNative.setHapticFeedbackEnabled(hapticFeedback ?? true);
   }, [hapticFeedback]);
+  // 顶栏滚动边缘模糊路由门控（v34，2026-09-11 用户定调）："凡是用到这个顶栏
+  // 的都换成一样的效果"——除四个主 tab 外全应用统一开系统的 soft 边缘模糊
+  //（吧页/帖子页/用户主页/搜索/设置/我的页里的子页…）。
+  // 主 tab 关：关注/动态/消息/我的的"顶栏"是 RN 自绘的搜索行与页签（原生栏
+  // 在它们上面是透明的空壳），内容滚到那一段被模糊没有意义，且会糊住自绘行
+  //（v31/v32 既有结论）。
+  // ⚠️ (tabs) 组名会被 expo-router 从 URL 剥掉，tab 实际路径是 '/'、
+  // '/explore'、'/notifications'、'/profile'——用 includes('(tabs)') 匹配永不
+  // 命中（v31 踩过）。这里用主 tab 路径黑名单，"不在黑名单即开"，新页面默认
+  // 拿到统一观感。
+  useEffect(() => {
+    const normalized = pathname === '' ? '/' : pathname;
+    const isMainTab = ['/', '/explore', '/notifications', '/profile'].includes(normalized);
+    TiebaNative.setNavBarGlassEnabled(!isMainTab);
+  }, [pathname]);
   // headerTint 需随主题明暗自适应：深色模式下导航栏是深色液态玻璃，
   // 勾选"工具栏使用主色调"时若再按 statusBarFontDark 取黑色字会黑字贴深底
   // 不可见，故深色一律用浅色（onNavBarSurface），浅色才尊重 statusBarFontDark。
@@ -253,22 +268,19 @@ function RootLayoutInner() {
     // 'default' 会把上一屏标题（如 tabs 页的“(tabs)”）当作返回文字显示；
     // 仅要箭头图标，用 'minimal'（iOS 只画 chevron，不带文字）。
     headerBackButtonDisplayMode: 'minimal' as const,
-    // 导航栏材质：headerBlurEffect 经 RNScreens 写 item 级 appearance，配合原生
-    // 模块的 bar 级 forceNavBarLiquidGlass（systemMaterial）。注意 expo-router 57
-    // 的 native-stack fork 用 headerTransparent 而不是 headerTranslucent 控制
-    // translucent（后者被静默忽略）；headerTransparent=true 让内容容器延伸到
-    // 导航栏下方（RNSScreenView 从 y=0 起），列表才能从 bar 下滚过、玻璃透出
-    // 内容；否则 bar 背后是纯背景色（浅色=白、深色模式=窗白底），看起来
-    // "纯色无玻璃"且"深色模式标题栏白色"。
-    // ⚠️ iOS 27 实测：item 级 appearance 材质已被 UIKit 弃走（渲染层
-    // effect=none），真正让玻璃出现的是 tieba-native 渲染层
-    // forceNavBarLiquidGlass + 下方 scrollEdgeEffects hidden。本 prop 仅作
-    // 旧系统兜底，排查玻璃问题勿从这里入手。
-    headerBlurEffect: 'systemMaterial' as const,
+    // 导航栏材质（v34，2026-09-11）：栏底完全交还 UIKit——不写 headerBlurEffect
+    //（RNScreens 会把它写成 item 级 appearance 的旧材质，盖掉系统原生栏背景），
+    // 由原生模块按路由写 UINavigationBarAppearance（内容页=系统默认栏背景，
+    // 主 tab 页=透明）。注意 expo-router 57 的 native-stack fork 用
+    // headerTransparent 而不是 headerTranslucent 控制 translucent（后者被静默
+    // 忽略）；headerTransparent=true 让内容容器延伸到导航栏下方（RNSScreenView
+    // 从 y=0 起），列表才能从 bar 下滚过、栏材质透出内容。
     headerTransparent: true,
     headerShadowVisible: false,
-    // 滚动时不附加 scrollEdge 材质（'hidden'）：否则 iOS 27 滚动瞬间系统给
-    // bar 加实心背景，玻璃失效（用户实测"滑动时顶栏不透明"）。
+    // 滚动边缘效果（iOS 26+ UIScrollEdgeEffect）：默认全关——主 tab 顶栏是
+    // RN 自绘搜索行/页签，不要系统给顶栏加任何模糊（v32 路由门控语义）。
+    // 吧页/帖子页在各自 <Stack.Screen options> 里覆盖 top: 'soft'
+    //（softStyle=软边模糊，即 iOS 26 规范形态；hardStyle 是硬切边+分隔线）。
     scrollEdgeEffects: {
       top: 'hidden' as const,
       bottom: 'hidden' as const,
@@ -353,6 +365,10 @@ function RootLayoutInner() {
           if (useAppLockStore.getState().enabled) useAppLockStore.getState().lock();
         });
       }
+      // 自动检测更新（设置里的「自动检测更新」开关；失败静默，不打扰启动）
+      void import('@/stores/updateStore')
+        .then((m) => m.useUpdateStore.getState().maybeAutoCheck())
+        .catch(() => {});
       void import('@/services/sign/BackgroundSignService')
         .then((m) => m.ensureAutoSignScheduled())
         .catch(() => {});
@@ -507,9 +523,13 @@ function RootLayoutInner() {
         SplashScreen.hideAsync().catch(() => {});
       }}
     >
-      {/* toolbarPrimaryColor=true 时深色模式一律浅字（白字贴深色导航栏），
-          浅色模式才尊重 statusBarFontDark 偏好——与 headerTint 的取色同源。 */}
-      <StatusBar style={statusBarStyle} />
+      {/* 这里不再放 <StatusBar>（expo-status-bar）：它内部就是 RN 的 StatusBar
+          （NativeStatusBarWrapper 把 style 转成 RN barStyle），而本 app 的
+          Info.plist 是 UIViewControllerBasedStatusBarAppearance=true，RN 的
+          RCTStatusBarManager 在此模式下 setStyle 会直接抛红屏
+          （"module requires that ... is set to NO"，设置类页面必现）。
+          状态栏字色仍由 native-stack 的逐屏 statusBarStyle 下发
+          （screens 走子 VC preferredStatusBarStyle，VC-based 模式下才生效）。 */}
       <Stack
         screenOptions={screenOpts}
         screenListeners={{

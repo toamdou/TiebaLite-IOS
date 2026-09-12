@@ -1,12 +1,11 @@
 /**
- * 吧页顶部固定区：Apple 大标题式头部 + 置顶帖。
+ * 吧页顶部固定区：吧名片卡片 + 置顶帖。
  *
- * 2026-09-09 v3：图带封面废弃——吧头像多为带文字的方标（如 QUALCOMM），
- * 模糊放大后整带变成巨大糊字（真机截图实锤），纯色渐变/图带两条路线均被
- * 用户否决。回归 Apple 留白排版：56 圆角头像 + 大标题「xx吧」+ 合并 meta
- * 行（会员 · 帖子）+ 关注/签到按钮右侧一行解决；等级进度与简介随后铺开。
- * 颜色只出现在按钮与等级徽章，留白即设计。顶部让位由本头部承接
- * （insets.top + NAV_BAR_H + 12）。
+ * 2026-09-09 v4：用户拍板"装进卡片、要 Apple 感"——v3 散排大标题式被否。
+ * 吧名片（头像+名字+等级+meta+关注签到+进度+简介）整体装进圆角卡片，
+ * 与列表 TweetCard 同款卡片语言（colors.card 底+hairline borderCard+
+ * continuous 圆角+左右 10 边距），系统分组样式观感。顶部让位由本头部
+ * 承接（insets.top + NAV_BAR_H + 8）。
  */
 
 import React from 'react';
@@ -59,108 +58,110 @@ export const ForumTabHeader = React.memo(function ForumTabHeader({
 
   return (
     <View style={styles.headerSection}>
-      <View style={[styles.content, { paddingTop: insets.top + NAV_BAR_H + 12 }]}>
-        {/* 标题行：头像 | 名字+等级 / meta | 关注签到 */}
-        <View style={styles.titleRow}>
-          <Avatar
-            source={currentForum?.avatar || undefined}
-            initials={(currentForum?.forumName || name)?.charAt(0)}
-            size={56}
-            onPress={onAvatarPreview}
-          />
-          <Pressable style={styles.titleCol} onPress={onForumDetail} accessibilityRole="button">
-            <View style={styles.titleLine}>
-              <Text style={[styles.forumTitle, { color: colors.text }]} numberOfLines={1}>
-                {name}吧
-              </Text>
-              {showLevel && (
-                <View
-                  style={[
-                    styles.levelBadgeSmall,
-                    { backgroundColor: levelBadgeColor(currentForum.levelId)?.bg },
-                  ]}
-                >
-                  <Text
-                    style={[styles.levelBadgeSmallText, { color: levelBadgeColor(currentForum.levelId)?.color }]}
+      <View style={[styles.content, { paddingTop: insets.top + NAV_BAR_H }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderCard }]}>
+          {/* 标题行：头像 | 名字+等级 / meta | 关注签到 */}
+          <View style={styles.titleRow}>
+            <Avatar
+              source={currentForum?.avatar || undefined}
+              initials={(currentForum?.forumName || name)?.charAt(0)}
+              size={52}
+              onPress={onAvatarPreview}
+            />
+            <Pressable style={styles.titleCol} onPress={onForumDetail} accessibilityRole="button">
+              <View style={styles.titleLine}>
+                <Text style={[styles.forumTitle, { color: colors.text }]} numberOfLines={1}>
+                  {name}吧
+                </Text>
+                {showLevel && (
+                  <View
+                    style={[
+                      styles.levelBadgeSmall,
+                      { backgroundColor: levelBadgeColor(currentForum.levelId)?.bg },
+                    ]}
                   >
-                    Lv.{currentForum.levelId}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <Text style={[styles.metaLine, { color: colors.textTertiary }]} numberOfLines={1}>
-              会员 {formatCount(currentForum?.memberCount || 0)} · 帖子{' '}
-              {formatCount(currentForum?.threadCount || 0)}
-            </Text>
-          </Pressable>
-
-          {/* 关注/签到：状态与动作拆开。未关注/未登录只显示「关注」；
-              关注后 = 「已关注」状态 chip（不承接点击，取关在右上角菜单）
-              + 「签到」动作（签完变「已签到 N 天」状态 chip） */}
-          <View style={styles.btnRow}>
-            {!isFollowed ? (
-              <HdrPressable
-                onPress={onFollowPress}
-                style={[styles.btnFilled, { backgroundColor: colors.primary }]}
-                flashRadius={Radius.capsule}
-                accessibilityRole="button"
-                accessibilityLabel={`关注${name}吧`}
-              >
-                <Text style={[styles.btnFilledText, { color: colors.textOnPrimary }]}>关注</Text>
-              </HdrPressable>
-            ) : (
-              <>
-                <View style={[styles.btnChip, { backgroundColor: colors.surfaceSecondary }]}>
-                  <Text style={[styles.btnChipText, { color: colors.textSecondary }]}>已关注</Text>
-                </View>
-                {isSigned ? (
-                  <View style={[styles.btnChip, { backgroundColor: colors.surfaceSecondary }]}>
-                    <Text style={[styles.btnChipText, { color: colors.textSecondary }]}>
-                      已签到{contSignNum > 0 ? ` ${contSignNum}天` : ''}
+                    <Text
+                      style={[styles.levelBadgeSmallText, { color: levelBadgeColor(currentForum.levelId)?.color }]}
+                    >
+                      Lv.{currentForum.levelId}
                     </Text>
                   </View>
-                ) : (
-                  <HdrPressable
-                    onPress={onSignPress}
-                    style={[styles.btnFilled, { backgroundColor: colors.primary }]}
-                    flashRadius={Radius.capsule}
-                    accessibilityRole="button"
-                    accessibilityLabel={`签到${name}吧`}
-                  >
-                    <Text style={[styles.btnFilledText, { color: colors.textOnPrimary }]}>签到</Text>
-                  </HdrPressable>
                 )}
-              </>
-            )}
-          </View>
-        </View>
+              </View>
+              <Text style={[styles.metaLine, { color: colors.textTertiary }]} numberOfLines={1}>
+                会员 {formatCount(currentForum?.memberCount || 0)} · 帖子{' '}
+                {formatCount(currentForum?.threadCount || 0)}
+              </Text>
+            </Pressable>
 
-        {/* 等级进度（已关注且有升级数据时显示） */}
-        {showLevel && !!currentForum?.levelupScore && currentForum.levelupScore > 0 && (
-          <View style={styles.levelSection}>
-            <View style={[styles.levelTrack, { backgroundColor: colors.surfaceSecondary }]}>
-              <View
-                style={[
-                  styles.levelFill,
-                  {
-                    width: `${Math.min(((currentForum.curScore ?? 0) / currentForum.levelupScore) * 100, 100)}%`,
-                    backgroundColor: colors.primary,
-                  },
-                ]}
-              />
+            {/* 关注/签到：状态与动作拆开。未关注/未登录只显示「关注」；
+                关注后 = 「已关注」状态 chip（不承接点击，取关在右上角菜单）
+                + 「签到」动作（签完变「已签到 N 天」状态 chip） */}
+            <View style={styles.btnRow}>
+              {!isFollowed ? (
+                <HdrPressable
+                  onPress={onFollowPress}
+                  style={[styles.btnFilled, { backgroundColor: colors.primary }]}
+                  flashRadius={Radius.capsule}
+                  accessibilityRole="button"
+                  accessibilityLabel={`关注${name}吧`}
+                >
+                  <Text style={[styles.btnFilledText, { color: colors.textOnPrimary }]}>关注</Text>
+                </HdrPressable>
+              ) : (
+                <>
+                  <View style={[styles.btnChip, { backgroundColor: colors.surfaceSecondary }]}>
+                    <Text style={[styles.btnChipText, { color: colors.textSecondary }]}>已关注</Text>
+                  </View>
+                  {isSigned ? (
+                    <View style={[styles.btnChip, { backgroundColor: colors.surfaceSecondary }]}>
+                      <Text style={[styles.btnChipText, { color: colors.textSecondary }]}>
+                        已签到{contSignNum > 0 ? ` ${contSignNum}天` : ''}
+                      </Text>
+                    </View>
+                  ) : (
+                    <HdrPressable
+                      onPress={onSignPress}
+                      style={[styles.btnFilled, { backgroundColor: colors.primary }]}
+                      flashRadius={Radius.capsule}
+                      accessibilityRole="button"
+                      accessibilityLabel={`签到${name}吧`}
+                    >
+                      <Text style={[styles.btnFilledText, { color: colors.textOnPrimary }]}>签到</Text>
+                    </HdrPressable>
+                  )}
+                </>
+              )}
             </View>
-            <Text style={[styles.levelScoreText, { color: colors.textTertiary }]}>
-              {Math.min(currentForum.curScore ?? 0, currentForum.levelupScore)}/{currentForum.levelupScore}
-            </Text>
           </View>
-        )}
 
-        {/* 简介 */}
-        {currentForum?.intro ? (
-          <Text style={[styles.intro, { color: colors.textSecondary }]} numberOfLines={2}>
-            {currentForum.intro}
-          </Text>
-        ) : null}
+          {/* 等级进度（已关注且有升级数据时显示） */}
+          {showLevel && !!currentForum?.levelupScore && currentForum.levelupScore > 0 && (
+            <View style={styles.levelSection}>
+              <View style={[styles.levelTrack, { backgroundColor: colors.surfaceSecondary }]}>
+                <View
+                  style={[
+                    styles.levelFill,
+                    {
+                      width: `${Math.min(((currentForum.curScore ?? 0) / currentForum.levelupScore) * 100, 100)}%`,
+                      backgroundColor: colors.primary,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.levelScoreText, { color: colors.textTertiary }]}>
+                {Math.min(currentForum.curScore ?? 0, currentForum.levelupScore)}/{currentForum.levelupScore}
+              </Text>
+            </View>
+          )}
+
+          {/* 简介 */}
+          {currentForum?.intro ? (
+            <Text style={[styles.intro, { color: colors.textSecondary }]} numberOfLines={2}>
+              {currentForum.intro}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       {/* ── 置顶帖：置于「热门|最新|精品」栏之前（TweetCard 对置顶帖渲染横幅） ── */}
@@ -180,25 +181,34 @@ const styles = StyleSheet.create({
   topSection: { paddingTop: 4 },
 
   content: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 8,
+  },
+  // 吧名片卡：与 TweetCard 同款卡片语言（左右 10、continuous 圆角、hairline）
+  card: {
+    marginHorizontal: 10,
+    borderRadius: Radius.card,
+    borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 14,
   },
 
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
   titleCol: {
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
   titleLine: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  forumTitle: { ...typographyStyles.title2, fontWeight: '800' },
+  forumTitle: { ...typographyStyles.title3, fontWeight: '800' },
   metaLine: { ...typographyStyles.caption1, fontWeight: '500' },
 
   levelBadgeSmall: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
@@ -210,25 +220,26 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   btnFilled: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
     borderRadius: Radius.capsule,
   },
   btnFilledText: { ...typographyStyles.footnoteBold },
   btnChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     borderRadius: Radius.capsule,
   },
   btnChipText: { ...typographyStyles.footnote, fontWeight: '600' },
 
-  levelSection: { marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  levelSection: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   levelTrack: { height: 6, borderRadius: 3, overflow: 'hidden', flex: 1 },
   levelFill: { height: 6, borderRadius: 3 },
   levelScoreText: { ...typographyStyles.caption2, fontWeight: '600', fontVariant: ['tabular-nums'] },
 
   intro: {
-    ...typographyStyles.subhead,
-    marginTop: 12,
+    ...typographyStyles.footnote,
+    marginTop: 10,
+    lineHeight: 18,
   },
 });

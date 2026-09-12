@@ -9,7 +9,6 @@ import {
 import { buttonBorderShape, buttonStyle } from '@expo/ui/swift-ui/modifiers';
 
 import { ThemedHost } from '@/components/ui/ThemedHost';
-import { useThemeColors } from '@/theme/ThemeContext';
 import { Spacing } from '@/theme';
 
 /**
@@ -18,11 +17,11 @@ import { Spacing } from '@/theme';
  */
 export default function NotFoundScreen() {
   const router = useRouter();
-  const { colors } = useThemeColors();
 
   return (
     <ThemedHost style={{ flex: 1 }}>
-      <Stack.Screen options={{ title: '找不到页面', headerStyle: { backgroundColor: colors.toolbar } }} />
+      {/* 顶栏配置统一由根 Stack screenOptions 提供（v34）：页面不再覆盖 */}
+      <Stack.Screen options={{ title: '找不到页面' }} />
 
       <VStack alignment="center" spacing={Spacing.lg}>
         <Spacer />

@@ -195,6 +195,10 @@ public class TiebaBackgroundAppDelegate: ExpoAppDelegateSubscriber {
   }
 
   private func registerHandler(for identifier: String) {
+    // 模拟器守卫：BGTaskScheduler 注册在模拟器不可用（同 submit）。
+    #if targetEnvironment(simulator)
+    return
+    #endif
     BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
       TiebaBackgroundSync.shared.handle(task)
     }
@@ -244,6 +248,12 @@ final class TiebaBackgroundSync: @unchecked Sendable {
   }
 
   func registerNotificationPoll(minutes: Double) throws {
+    // BGTaskScheduler 仅真机可用：模拟器上访问即抛 "not available on this
+    // platform"（每次启动红屏，2026-09-09 模拟器实测）。模拟器静默跳过——
+    // 后台调度本就是真机能力，JS 侧注册语义保持成功。
+    #if targetEnvironment(simulator)
+    return
+    #endif
     defaults.set(minutes, forKey: intervalKey)
     let request = BGAppRefreshTaskRequest(identifier: Self.notificationTaskIdentifier)
     request.earliestBeginDate = Date(timeIntervalSinceNow: minutes * 60)
@@ -258,6 +268,10 @@ final class TiebaBackgroundSync: @unchecked Sendable {
   }
 
   func registerAutoSign(hour: Int, minute: Int) throws {
+    // 模拟器守卫：同 registerNotificationPoll（BGTaskScheduler 真机专属）。
+    #if targetEnvironment(simulator)
+    return
+    #endif
     defaults.set("\(hour):\(minute)", forKey: autoSignTimeKey)
     let request = BGProcessingTaskRequest(identifier: Self.autoSignTaskIdentifier)
     request.requiresNetworkConnectivity = true
@@ -271,11 +285,17 @@ final class TiebaBackgroundSync: @unchecked Sendable {
   }
 
   func cancelAutoSign() {
+    #if targetEnvironment(simulator)
+    return
+    #endif
     BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.autoSignTaskIdentifier)
     defaults.removeObject(forKey: autoSignTimeKey)
   }
 
   func cancelNotificationSync() {
+    #if targetEnvironment(simulator)
+    return
+    #endif
     BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.notificationTaskIdentifier)
     defaults.removeObject(forKey: intervalKey)
   }

@@ -135,14 +135,15 @@ public final class TiebaNativeModule: Module {
       }
     }
 
-    // 顶栏磨砂强度无级调节（v20 均一 mask 的 α，2026-09-03）：拖动即时
-    // 生效——更新共享 alpha 并刷新已挂 mask 的强度（未挂 bar 由 force
-    // 的 v20 均一 mask 创建路径读取）。设置-浏览 Slider 实验已撤销，无 UI
-    // 消费方，保留为可编程管线。
-    Function("setNavBarGlassAlpha") { (alpha: Double) in
-      TiebaNativeModule.navBarGlassAlpha = CGFloat(min(max(alpha, 0), 1))
+    // v31 路由门控：四个主 tab（关注/动态/消息/我的）顶栏是 RN 自绘搜索行/
+    // 页签，栏材质会把它们糊掉（用户实测"无差别模糊"）——JS 按路由开关。
+    // v34（2026-09-11）：开=系统默认栏背景（UIKit 原生材质），关=透明；
+    // 路由切换即清空"已规范化"标记，让 force 按新路由重写一遍外观。
+    Function("setNavBarGlassEnabled") { (enabled: Bool) in
+      TiebaNativeModule.navGlassRouteEnabled = enabled
       DispatchQueue.main.async {
-        TiebaNativeModule.refreshNavBarGlassMaskAlpha()
+        TiebaNativeModule.nativeAppearanceBars.removeAllObjects()
+        TiebaNativeModule.forceNavBarLiquidGlass()
       }
     }
 
@@ -431,15 +432,15 @@ public final class TiebaNativeModule: Module {
     }
   }
 
-  // 顶栏渐变模糊（v3，2026-08-22 起；2026-09-03 液态玻璃撤销后回归本方案）：
-  // 实测（iOS 27）写 UINavigationBar 级 / UINavigationItem 级 appearance 的
-  // backgroundEffect 全部无效——渲染层 _UIBarBackground 的 UIVisualEffectView
-  // 始终 effect=none（UIKit 对 UINavigationBar 不再走 appearance 材质路径，
-  // 与底栏 NativeTabs 结论一致：写 appearance 反而退出系统自动玻璃管线）。
-  // 正确做法是直接操作渲染层：给 _UIBarBackground 下的 UIVisualEffectView 设
-  // effect=systemMaterial，并挂自上而下渐变 mask（顶部磨砂、底部渐隐——
-  // 内容从 bar 底部平滑透入、无硬底边横线）。UIKit 在页面切换/布局变化时
-  // 会重建 _UIBarBackground（effect 复位为 none），所以启动后持续幂等重挂。
+  // 顶栏 chrome 的幂等重挂入口（v3 起，2026-08-22；v34 起职责收窄）：窗口/
+  // 导航容器底色、栏 trait、栏外观（透明）、双击回顶手势、滚动边缘模糊按
+  // 路由幂等重挂。入口=启动 + 回前台 + 转场完成（didShow）+ 1.5s timer +
+  // bar 的 didMoveToWindow/layoutSubviews。
+  //
+  // 历史（勿再回头）：v3–v33 曾在渲染层直接操作 _UIBarBackground 里的
+  // UIVisualEffectView（设 systemMaterial/ultraThin + 渐变 mask）自建磨砂——
+  // iOS 27 上栏底材质会被 UIKit 按 appearance 重建（双图层感/矩形磨砂），
+  // v34 起全部撤除，模糊改由系统的滚动边缘效果承担（softStyle）。
   private static let navBarGlassDump: Void = {
     let nc = NotificationCenter.default
     nc.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
@@ -529,59 +530,179 @@ public final class TiebaNativeModule: Module {
     return ()
   }()
 
-  // ── v21 自建全高玻璃层（2026-09-03 架构重写）──
-  // 系统材质视图（_UIBarBackground 内）的布局/高度/重建由 iOS 27 私有管理，
-  // 吧页首进"覆盖不全、往返后才全"及多轮 mask 观感漂移均源于它。v21 起
-  // 不再操作系统材质视图（直接隐藏，防双层模糊），模糊由导航容器里自建的
-  // UIVisualEffectView 承担：覆盖从导航容器顶部（状态栏顶）到 bar 底 +
-  // navGlassLayerExtension 延伸段，bar 区内均一磨砂（navBarGlassAlpha）、
-  // 延伸段渐隐到 0——渐变模糊、全覆盖、无系统边框全部由本层决定。
-  private static let navGlassLayerIdentifier = "tieba.navGlassLayer.v1"
-  private static let navGlassLayerExtension: CGFloat = 32
-  // v25（2026-09-03）：玻璃层停用——用户实测 0.5 磨砂在顶栏上表现成
-  // "盖了一层遮罩"（雾化盖住内容）。恢复干净顶栏（完全透明、内容直穿），
-  // 渐变模糊方案后续按用户观感重新设计；存量层由 force 移除。
-  private static let navGlassLayerEnabled = false
+  // ── v34 原生顶栏（2026-09-11 用户定调）──
+  // 用户要求："顶栏完全使用 UIKit，并遵循 iOS 26 之后的 UIKit 设计规范"，
+  // 且点名要 iOS 26 的"无边界"模糊（当前系统 iOS 27 的默认观感是矩形硬边磨砂）。
+  //
+  // 结论（SDK 原文）：iOS 26 起顶栏的模糊由滚动边缘效果承担——
+  // UIScrollEdgeEffect.Style.soft = "A soft-edged scroll edge effect"
+  //（无边界渐进模糊，内容滚到栏下才出现，看得清背后内容）；
+  // .hard = "hard cutoff and dividing line"（矩形硬边+分隔线，用户嫌的那种）。
+  // 因此 v19–v33 的自建磨砂层（自建 UIVisualEffectView + CAGradientLayer 渐变
+  // mask）、系统材质清空（clearBarEffects）、发丝隐藏（hideBarHairlines）、
+  // 三套 appearance 置透明/置默认（v30/v30b）全部撤除：栏底不画任何材质，
+  // 模糊交还 UIKit 的 UIScrollView.topEdgeEffect（见 applyTopScrollEdgeEffect）。
+  //
+  // 栏外观只保留"透明"这一个决定，并由 setter swizzle 拦住 RNScreens 按
+  // headerTransparent/headerBlurEffect 的写入（它会把旧材质/默认栏底写回来，
+  // 垫出一块矩形磨砂）。
+  private static let navGlassLayerLegacyPrefix = "tieba.navGlassLayer."
 
-  // 顶栏磨砂强度（玻璃层 mask alpha）：v22（2026-09-03）起顶部 0.5、bar 底
-  // 0.15、延伸段 0——bar 内顶部→底部渐变（明显可见的磨砂层次，用户要求
-  // 的"渐变模糊"；0.15 均一实测视觉上等于没有模糊）。顶部强度走
-  // setNavBarGlassAlpha/refreshNavBarGlassMaskAlpha 可编程管线（默认 0.5；
-  // 设置-浏览 Slider 实验已撤销，无 UI 消费方）。
-  nonisolated(unsafe) fileprivate static var navBarGlassAlpha: CGFloat = 0.5
-  /// mask 底部（bar 底）强度：与顶部形成 bar 内渐变，延伸段继续 → 0。
-  private static let navBarGlassBottomAlpha: CGFloat = 0.15
-  /// 顶部均一段占层高比例（bar 内 0→barTopFade 保持顶部强度后开始渐变）。
-  private static let navGlassTopFade: CGFloat = 0.55
+  // v31 路由门控（setNavBarGlassEnabled）：主 tab 页关、吧页/帖子页开——
+  // v34 起门控的对象是滚动边缘模糊（栏底材质已全应用撤除）。
+  nonisolated(unsafe) fileprivate static var navGlassRouteEnabled = true
 
-  /// 无级调节即时生效：把当前所有玻璃层的 mask 强度刷成新 alpha。
-  /// 只改 colors 不动 name/结构（幂等路径不冲突）；无层的 bar 交给 force
-  /// 的创建路径（读取 navBarGlassAlpha）。
-  private static func refreshNavBarGlassMaskAlpha() {
-    guard Thread.isMainThread else {
-      DispatchQueue.main.async { refreshNavBarGlassMaskAlpha() }
-      return
-    }
-    for navBar in cachedNavBars.allObjects {
-      guard let layer = navBar.subviews
-        .compactMap({ $0 as? UIVisualEffectView })
-        .first(where: { $0.accessibilityIdentifier == navGlassLayerIdentifier }),
-        let mask = layer.layer.mask as? CAGradientLayer,
-        mask.name == navGlassLayerIdentifier else { continue }
-      mask.colors = [
-        UIColor(white: 1, alpha: navBarGlassAlpha).cgColor,
-        UIColor(white: 1, alpha: navBarGlassAlpha).cgColor,
-        UIColor(white: 1, alpha: navBarGlassBottomAlpha).cgColor,
-        UIColor(white: 1, alpha: 0).cgColor,
-      ]
+  /// 已按当前路由规范化过外观的 bar（路由切换时清空）。外观只在"该 bar 还没
+  /// 规范化"时写一次——重写会让 UIKit 重建栏底，每 1.5s 重写就是滚动闪烁源。
+  private static let nativeAppearanceBars = NSHashTable<UINavigationBar>.weakObjects()
+
+  /// 栏外观：一律透明（栏底材质=矩形磨砂，用户点名不要；模糊由边缘效果承担）。
+  /// 三套外观槽（standard / compact / scrollEdge）同值：滚动全程同一观感。
+  private static func applyNativeBarAppearance(to bar: UINavigationBar) {
+    let appearance = makeNativeBarAppearance()
+    bar.standardAppearance = appearance
+    bar.compactAppearance = appearance
+    bar.scrollEdgeAppearance = appearance
+    // item 级外观优先于栏级：RNScreens 的 headerTransparent / headerBlurEffect
+    // 写的就是这一层，留着会把栏级外观整个盖掉（v30b 同源结论）→ 置 nil
+    // 继承栏级。
+    if let item = bar.topItem {
+      if item.standardAppearance != nil { item.standardAppearance = nil }
+      if item.scrollEdgeAppearance != nil { item.scrollEdgeAppearance = nil }
+      if item.compactAppearance != nil { item.compactAppearance = nil }
     }
   }
 
-  // 共享材质常量：热路径只做比较与复用，不再分配。
-  // v15（2026-09-01）：ultraThin 模糊太弱像水渍 → .systemMaterial 常规磨砂，
-  // mask α0.38；v16 用户再降 → α0.25。9-02 液态玻璃实验（.regular/.clear）已
-  // 整体撤销，9-03 回归 systemMaterial；v21 起材质由自建玻璃层使用。
-  fileprivate static let barGlassEffect: UIVisualEffect = UIBlurEffect(style: .systemMaterial)
+  private static func makeNativeBarAppearance() -> UINavigationBarAppearance {
+    let appearance = UINavigationBarAppearance()
+    appearance.configureWithTransparentBackground()
+    return appearance
+  }
+
+  /// 外部 appearance 写入的规范化：保留写入方的标题/按钮排版属性，背景一律
+  /// 归一成透明（headerBlurEffect 的旧材质、系统默认栏底都不作数）。
+  fileprivate static func normalizedBarAppearance(
+    _ incoming: UINavigationBarAppearance?
+  ) -> UINavigationBarAppearance {
+    let appearance = (incoming?.copy() as? UINavigationBarAppearance) ?? UINavigationBarAppearance()
+    appearance.configureWithTransparentBackground()
+    return appearance
+  }
+
+  /// 外部栏外观写入拦截：RNScreens 应用 screen options 时直接写 standard /
+  /// compact / scrollEdge（headerTransparent → 透明底，headerBlurEffect →
+  /// 旧材质），会把系统原生材质覆盖掉。拦下每次写入做背景规范化后落库——
+  /// 既不必周期性重写 appearance，也不怕 RN 侧后写覆盖。
+  nonisolated(unsafe) private static var navGlassAppearanceSwizzled = false
+  private static let navGlassAppearanceSwizzle: Void = {
+    guard !navGlassAppearanceSwizzled else { return }
+    navGlassAppearanceSwizzled = true
+    let selectors = [
+      NSSelectorFromString("setStandardAppearance:"),
+      NSSelectorFromString("setCompactAppearance:"),
+      NSSelectorFromString("setScrollEdgeAppearance:"),
+    ]
+    for selector in selectors {
+      guard let method = class_getInstanceMethod(UINavigationBar.self, selector) else { continue }
+      let original = method_getImplementation(method)
+      typealias SetAppearanceFn = @convention(c) (UINavigationBar, Selector, UINavigationBarAppearance?) -> Void
+      let originalFn = unsafeBitCast(original, to: SetAppearanceFn.self)
+      let block: @convention(block) (UINavigationBar, UINavigationBarAppearance?) -> Void = { bar, incoming in
+        originalFn(bar, selector, TiebaNativeModule.normalizedBarAppearance(incoming))
+      }
+      method_setImplementation(method, imp_implementationWithBlock(block))
+    }
+    return ()
+  }()
+
+  // v21–v33 自建层存量清扫：老版本升级/同进程换实现时把残留层拆掉，否则它会
+  // 一直盖在栏底（前缀扫描；只扫 bar 子树与宿主 bar 的直接子视图——自建层当年
+  // 就挂在这两处，不做整屏递归）。幂等。
+  private static func removeStaleGlassLayers(in bar: UINavigationBar) {
+    func scan(_ view: UIView, deep: Bool) {
+      for sub in view.subviews {
+        if let id = sub.accessibilityIdentifier, id.hasPrefix(navGlassLayerLegacyPrefix) {
+          sub.removeFromSuperview()
+          continue
+        }
+        if deep { scan(sub, deep: true) }
+      }
+    }
+    scan(bar, deep: true)
+    if let host = bar.superview { scan(host, deep: false) }
+  }
+
+  /// 顶层可见页面视图（presented 链 → 导航栈顶）：顶栏模糊的作用域。
+  private static func topScreenView() -> UIView? {
+    let windows = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap { $0.windows }
+    let keyWindow = windows.first { $0.isKeyWindow && $0.windowLevel == .normal } ?? windows.first
+    guard let window = keyWindow, var vc = window.rootViewController else { return nil }
+    while let presented = vc.presentedViewController { vc = presented }
+    if let nav = vc as? UINavigationController, let top = nav.topViewController { vc = top }
+    return vc.view
+  }
+
+  /// 顶栏模糊 = 系统的滚动边缘效果（iOS 26 规范形态）。给顶层页面里"顶边贴着
+  /// 屏幕顶"的滚动视图打开 topEdgeEffect 的 soft 样式：内容滚到栏下时由 UIKit
+  /// 做渐进模糊——无边界、无硬切边、看得清背后内容。hard 样式（"hard cutoff
+  /// and dividing line"，即用户嫌的矩形硬边）与栏底材质一律不用。
+  ///
+  /// 路由链：内容页（吧页/帖子页/用户主页/搜索/设置…）全开 soft；主 tab
+  ///（RN 自绘顶栏，无原生栏）显式关 hidden。关的一侧必须自己写，不能靠
+  /// RNScreens 的 scrollEdgeEffects prop——那个 prop 用
+  /// findScrollViewInFirstDescendantChainFrom（沿 subviews[0] 逐层下沉）定位，
+  /// 命中谁不可控，漏配的滚动视图会落到系统默认样式（iOS 27 = hard 矩形硬边）。
+  ///
+  /// 只有"**整屏竖向列表**"配 soft：栏下真正滚动的是它。其余顶边贴屏幕顶的
+  /// 滚动视图（吧页分段页的原生 pager=横向分页、行内横滑条…）一律显式关掉：
+  /// effect 的 hidden 默认是 false，不写就是系统 automatic 样式（iOS 27 上解析成
+  /// hard 矩形磨砂+分隔线），而 pager 的顶边同样在栏下、又盖在列表之上，
+  /// 于是 hard 叠 soft，用户看到的就是"矩形磨砂 + 明显底边"。
+  /// 反过来给 pager 也开 soft 更糟（2026-09-11 v36 实测）：两层软模糊叠在一起，
+  /// 滑动时栏下内容被糊死。幂等：已是目标状态时不写（写会打断进行中的模糊动画）。
+  @discardableResult
+  private static func applyTopScrollEdgeEffect(glass: Bool) -> Bool {
+    guard #available(iOS 26.0, *) else { return false }
+    guard let screen = topScreenView(), screen.bounds.height > 0 else { return false }
+    var changed = false
+    func configure(_ scroll: UIScrollView) {
+      let frameInScreen = scroll.convert(scroll.bounds, to: screen)
+      let vertical = scroll.contentSize.width <= scroll.bounds.width + 1
+      // 横向可见性：分页器并排放着各段页面，屏幕外的页面也有列表，只有当前
+      // 可见那一屏的列表才算候选（否则会把栏交给一个看不见的列表）。
+      let onScreenX = frameInScreen.minX >= -1
+        && frameInScreen.maxX <= screen.bounds.width + 1
+      let isList = vertical && !scroll.isPagingEnabled && onScreenX
+        && frameInScreen.height > screen.bounds.height * 0.4
+      let qualifies = frameInScreen.minY <= 1 && frameInScreen.height > 80
+        && !scroll.isHidden && scroll.alpha > 0.01
+      guard qualifies else { return }
+      if glass && isList {
+        if scroll.topEdgeEffect.isHidden {
+          scroll.topEdgeEffect.isHidden = false
+          changed = true
+        }
+        if scroll.topEdgeEffect.style !== UIScrollEdgeEffect.Style.soft {
+          scroll.topEdgeEffect.style = .soft
+          changed = true
+        }
+      } else if !scroll.topEdgeEffect.isHidden {
+        // 顶边同样贴屏幕顶但不是"整屏竖向列表"的（分页器 pager、横滑条…）
+        // 一律显式关掉：effect 的 hidden 默认是 false，不写就落到系统
+        // automatic 样式（iOS 27 上解析成 hard 矩形磨砂+分隔线）。
+        scroll.topEdgeEffect.isHidden = true
+        changed = true
+      }
+    }
+    func scan(_ view: UIView) {
+      if let scroll = view as? UIScrollView { configure(scroll) }
+      for sub in view.subviews { scan(sub) }
+    }
+    scan(screen)
+    return changed
+  }
 
   // 导航栏弱引用缓存：force 扫到的 bar 登记，供 refresh 等按需遍历。
   private static let cachedNavBars = NSHashTable<UINavigationBar>.weakObjects()
@@ -630,31 +751,6 @@ public final class TiebaNativeModule: Module {
         navView.backgroundColor = navContainerBG
       }
     }
-    // 诊断（2026-09-02 临时，验完即删）：回弹漏白——打印窗口/导航容器
-    // 背景与实际 override 状态，确认哪一层仍按系统浅色渲染。
-    if !TiebaNativeModule.bounceDiagLogged {
-      TiebaNativeModule.bounceDiagLogged = true
-      let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-      for scene in scenes {
-        for window in scene.windows where window.isKeyWindow {
-          NSLog("[bounce-debug] chromeDark=%{public}@ windowBG=%@ windowOverride=%ld rootVC=%{public}@",
-                TiebaNativeModule.chromeDarkMode.map(String.init) ?? "nil",
-                String(describing: window.backgroundColor),
-                window.overrideUserInterfaceStyle.rawValue,
-                String(describing: type(of: window.rootViewController)))
-          if let navVC = window.rootViewController as? UINavigationController {
-            NSLog("[bounce-debug] navVC.view.bg=%@ override=%ld",
-                  String(describing: navVC.view.backgroundColor),
-                  navVC.overrideUserInterfaceStyle.rawValue)
-          }
-          if let root = window.rootViewController?.view {
-            NSLog("[bounce-debug] rootView.bg=%@ override=%ld",
-                  String(describing: root.backgroundColor),
-                  root.overrideUserInterfaceStyle.rawValue)
-          }
-        }
-      }
-    }
     guard !bars.isEmpty else { return false }
     var applied = false
     CATransaction.begin()
@@ -679,48 +775,24 @@ public final class TiebaNativeModule: Module {
       // 之下被一并模糊，整条 bar 变成纯色带而非玻璃——"返回按钮栏有背景色"
       // 根因（2026-08-27 真机实测）。材质落地前的白闪由 didMoveToWindow
       // 立即写 trait + layoutSubviews force + 主窗口底色兜底覆盖。
-      // 底边界来源之二=系统发丝分隔线（bar 内容视图底部的细 imageView）：
-      // 在材质视图 mask 作用范围之外，mask 终端 α0 盖不住，必须单独隐藏
-      // （用户实测"底部有一条很明显边界"，2026-08-26）。幂等：已隐藏即跳过。
-      hideBarHairlines(in: navBar)
-      // v21（2026-09-03 架构重写）：不再给系统材质视图挂 effect/mask——
-      // 那块的布局/高度/重建节奏由 iOS 27 _UIBarBackground 私有管理，吧页
-      // 首进"覆盖不全"、往返后才全即其重建所致（用户连续多轮实测）。
-      // 系统材质视图隐藏 + effect 置空（v25 起 effect 也置空：仅 hidden 会被
-      // 系统布局重置回显，effect 置空在渲染层兜底，双保险防"遮罩"残留）。
-      // v26：全面清理——bar 子树所有 UIVisualEffectView 一并清空（主材质
-      // 视图之外可能还有局部毛玻璃小块，"顶栏缺一点"观感来源）；UISearchBar
-      // 内部材质不碰（独立搜索页的搜索框有正常模糊背景）。
-      TiebaNativeModule.clearBarEffects(in: navBar)
-      if let bgC = findBarBackgroundContainer(in: navBar), bgC.backgroundColor != nil {
-        bgC.backgroundColor = .clear
-      }
-      // v25：玻璃层停用——移除已存在的层（v24 装在设备上的旧层必须清掉，
-      // 否则遮罩残留；开关重新打开后由 ensureNavGlassLayer 重建）。
-      if !TiebaNativeModule.navGlassLayerEnabled {
-        if let old = navBar.subviews
-          .compactMap({ $0 as? UIVisualEffectView })
-          .first(where: { $0.accessibilityIdentifier == TiebaNativeModule.navGlassLayerIdentifier }) {
-          old.removeFromSuperview()
-        }
-      }
-      // appearance 一律不写（写了会让 UIKit 退出自动玻璃管线，底栏同结论）；
-      // 仅确保 translucent，使内容可以延伸到 bar 下。
-      if navBar.isTranslucent != true {
-        navBar.isTranslucent = true
+      // v34（2026-09-11）：栏外观整体交还 UIKit——不再清材质、不再隐藏发丝
+      // 线、不再写透明 appearance，由 applyNativeBarAppearance 按路由写系统
+      // 默认/透明外观，其余（材质、分隔、滚动行为）全部按 iOS 26 规范由系统
+      // 自渲染。只在"该 bar 还没按当前路由规范化"时写一次（重写会触发 UIKit
+      // 重建栏底，周期性重写即滚动闪烁源）；外部后写由 setter swizzle 兜住。
+      if !TiebaNativeModule.nativeAppearanceBars.contains(navBar) {
+        _ = TiebaNativeModule.navGlassAppearanceSwizzle
+        TiebaNativeModule.removeStaleGlassLayers(in: navBar)
+        TiebaNativeModule.applyNativeBarAppearance(to: navBar)
+        TiebaNativeModule.nativeAppearanceBars.add(navBar)
         applied = true
       }
-      // 底部发丝影线兜底（2026-08-26 起）：系统 shadow image 独立于材质
-      // mask 的细线，单独设破，不写 appearance。
-      if navBar.shadowImage != nil {
-        navBar.shadowImage = UIImage()
-        applied = true
-      }
-      // 自建全高玻璃层：bar 布局未定（bounds 零尺寸）时跳过，下一轮 force
-      //（layoutSubviews/didShow/timer）补建并对齐。
-      if navBar.bounds.width > 0, navBar.bounds.height > 20 {
-        TiebaNativeModule.ensureNavGlassLayer(in: navBar)
-      }
+    }
+    // v34：顶栏模糊 = 系统滚动边缘效果（soft，iOS 26 规范形态），按路由门控
+    //（吧页/帖子页开，其余页面显式关）。随 force 的节奏幂等重挂：push 新页、
+    // 分段切换、列表重建都会带来新的滚动视图。
+    if TiebaNativeModule.applyTopScrollEdgeEffect(glass: TiebaNativeModule.navGlassRouteEnabled) {
+      applied = true
     }
     CATransaction.commit()
     // Fabric 的 JS 线程会在任意时刻 flush CA transaction：若导航栏仍带 dirty
@@ -731,141 +803,6 @@ public final class TiebaNativeModule: Module {
       CATransaction.flush()
     }
     return applied
-  }
-
-  // 在 UINavigationBar 子树中找背景材质视图（_UIBarBackground 内的
-  // UIVisualEffectView——渲染层材质宿主；bar 直接子视图里没有则返回 nil）。
-  // 先按高度 ≥90 找（过滤 52pt 版按钮等小 effect view）；扑空时降级按
-  // 高度 ≥40 再找一遍——iOS 26/27 的 bar 背景布局曾变化（材质视图高度
-  // 不恒定），找不到等于效果没施加（顶栏退回系统默认遮罩）。
-  private static func findBarBackgroundView(in bar: UINavigationBar) -> UIVisualEffectView? {
-    if let v = findVisualEffectView(in: bar, minHeight: barBackgroundMinHeight) {
-      return v
-    }
-    return findVisualEffectView(in: bar, minHeight: 40)
-  }
-
-  private static func findVisualEffectView(in view: UIView, minHeight: CGFloat) -> UIVisualEffectView? {
-    if let v = view as? UIVisualEffectView, v.frame.height >= minHeight {
-      return v
-    }
-    for subview in view.subviews {
-      if let v = findVisualEffectView(in: subview, minHeight: minHeight) {
-        return v
-      }
-    }
-    return nil
-  }
-
-  // bar 背景材质视图最小高度：过滤掉 52pt 版按钮等小 effect view。
-  private static let barBackgroundMinHeight: CGFloat = 90
-
-  // ── v21 自建全高玻璃层实现 ──
-  // 玻璃层覆盖范围：导航容器顶部（状态栏顶）→ bar 底 + 延伸段。mask 在
-  // bar 区内均一（navBarGlassAlpha），延伸段渐隐到 0。每轮 force 对齐
-  // frame/mask（bar 布局变化 → layoutSubviews 兜底 force）；identifier
-  // 幂等复用，不在系统 bar 子树内，系统重置/重建不影响本层。
-
-  /// _UIBarBackground 容器（系统 bar 私有背景根）：透明化以防止它盖住
-  /// 自建玻璃层（系统若置了不透明底色，材质视图隐藏后会露出实色带）。
-  private static func findBarBackgroundContainer(in bar: UINavigationBar) -> UIView? {
-    for sub in bar.subviews
-    where String(describing: type(of: sub)).contains("UIBarBackground") {
-      return sub
-    }
-    return nil
-  }
-
-  private static func ensureNavGlassLayer(in bar: UINavigationBar) {
-    guard navGlassLayerEnabled else { return }
-    let layer: UIVisualEffectView
-    if let existing = bar.subviews
-      .compactMap({ $0 as? UIVisualEffectView })
-      .first(where: { $0.accessibilityIdentifier == navGlassLayerIdentifier }) {
-      layer = existing
-      if layer.isHidden { layer.isHidden = false }
-    } else {
-      // v24（2026-09-03）：层插 bar 最底层——v23 插"BarContentView 之下"
-      // 实效是盖住了标题文字（用户实测"字上有遮罩看不清"）。最底层 +
-      // 标题内容永远在其上；背景容器透明且系统材质已隐藏，模糊采样穿透。
-      layer = UIVisualEffectView(effect: barGlassEffect)
-      layer.accessibilityIdentifier = navGlassLayerIdentifier
-      layer.isUserInteractionEnabled = false
-      bar.insertSubview(layer, at: 0)
-    }
-    // 每轮保证最底：iOS 27 bar 布局可能重排子视图顺序（v23 盖字教训）。
-    if bar.subviews.first !== layer {
-      bar.sendSubviewToBack(layer)
-    }
-    // frame：window 坐标换算。bar 顶部可能在状态栏之下（"少一截"根因）
-    // ——层上边缘用负 y 上移到 bar 顶对应的屏幕顶部区，下边缘 = bar 底 +
-    // 延伸段。层高 = barTop(屏幕) + bar 高 + 延伸。
-    guard bar.bounds.width > 0, bar.bounds.height > 20 else { return }
-    let barTopInWindow = bar.convert(CGPoint(x: 0, y: 0), to: nil).y
-    let height = barTopInWindow + bar.bounds.height + navGlassLayerExtension
-    let target = CGRect(x: 0, y: -barTopInWindow, width: bar.bounds.width, height: height)
-    if !layer.frame.equalTo(target) {
-      layer.frame = target
-    }
-    // mask：bar 内渐变（顶部 navBarGlassAlpha → bar 底 navBarGlassBottomAlpha），
-    // 延伸段 → 0。fade = bar 底位置（层高比例），渐隐带落在 bar 外，bar 底
-    // 无硬分界。
-    let barH = barTopInWindow + bar.bounds.height
-    let fade = min(max(barH / height, 0.3), 0.9)
-    let mask: CAGradientLayer
-    if let existing = layer.layer.mask as? CAGradientLayer,
-       existing.name == navGlassLayerIdentifier {
-      mask = existing
-    } else {
-      mask = CAGradientLayer()
-      mask.name = navGlassLayerIdentifier
-      mask.startPoint = CGPoint(x: 0.5, y: 0)
-      mask.endPoint = CGPoint(x: 0.5, y: 1)
-      layer.layer.mask = mask
-    }
-    mask.frame = layer.bounds
-    mask.colors = [
-      UIColor(white: 1, alpha: navBarGlassAlpha).cgColor,
-      UIColor(white: 1, alpha: navBarGlassAlpha).cgColor,
-      UIColor(white: 1, alpha: navBarGlassBottomAlpha).cgColor,
-      UIColor(white: 1, alpha: 0).cgColor,
-    ]
-    mask.locations = [
-      0,
-      NSNumber(value: min(navGlassTopFade, fade * 0.8)),
-      NSNumber(value: fade),
-      1,
-    ]
-  }
-
-  // 隐藏 bar 子树里的发丝分隔线：细（≤2pt）imageView 即命中。正常图标
-  // （返回箭头/按钮 icon）高度远大于此，不受影响。
-  private static func hideBarHairlines(in bar: UINavigationBar) {
-    func scan(_ view: UIView) {
-      if let iv = view as? UIImageView, iv.bounds.height <= 2, !iv.isHidden {
-        iv.isHidden = true
-      }
-      for sub in view.subviews { scan(sub) }
-    }
-    scan(bar)
-  }
-
-  /// v26 全面材质清理：bar 子树所有 UIVisualEffectView 置空 effect + 隐藏
-  ///（遮罩残留的通用清除；UISearchBar 内部材质跳过）。幂等，每轮 force 跑。
-  private static func clearBarEffects(in bar: UINavigationBar) {
-    func scan(_ view: UIView) {
-      if view is UISearchBar { return }
-      if let ev = view as? UIVisualEffectView {
-        if ev.effect != nil {
-          ev.effect = UIVisualEffect()
-        }
-        if !ev.isHidden {
-          ev.isHidden = true
-        }
-      }
-      for sub in view.subviews { scan(sub) }
-    }
-    scan(bar)
   }
 
   /// 扫描全部窗口的 VC 层级找 UINavigationController（可能嵌套）的 view：
@@ -974,7 +911,6 @@ public final class TiebaNativeModule: Module {
   /// nil = 跟随系统（自动切换模式），非 nil = 应用手动指定深/浅。
   nonisolated(unsafe) fileprivate static var chromeDarkMode: Bool? = nil
   /// 回弹漏白诊断一次性旗标（2026-09-02 临时，验完即删）
-  nonisolated(unsafe) fileprivate static var bounceDiagLogged = false
   /// 应用主题对应的窗口底色：push 转场期间新屏内容未渲染、透出窗口背景时
   /// 不发白的兜底（深色模式"先白后黑"的最后一环，2026-08-26）。
   /// nil 随系统：动态色跟随系统 trait（自动切换模式下不锁应用值，

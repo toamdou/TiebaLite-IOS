@@ -466,9 +466,8 @@ export default function HistoryPage() {
         {/* RN 内容（列表/骨架/错误） */}
         <RNHostView>
           <View style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* 透明顶栏（系统玻璃）：内容从 y=0 延伸，顶部由顶栏 HStack 的
-                padding 让位，不再叠 RN 层 paddingTop */}
-            <Stack.Screen options={{ headerTransparent: true }} />
+            {/* 顶栏（透明 + 边缘模糊）由根 Stack screenOptions 统一提供 */}
+            <Stack.Screen options={{}} />
       {/* 顶栏（HStack 直接后代）已在 SwiftUI 层渲染；这里只有列表/骨架/错误 */}
       {loading && history.length === 0 ? (
         <View style={styles.skeletonWrap}>

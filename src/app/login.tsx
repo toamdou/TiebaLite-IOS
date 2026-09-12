@@ -298,9 +298,6 @@ export default function LoginPage() {
       <Stack.Screen
         options={{
           title: '登录百度账号',
-          headerTransparent: true,
-          headerShadowVisible: false,
-          headerTintColor: colors.text,
           // 关闭入口：左上角 xmark（用户要求显式关闭钮）+ formSheet 抓条手势
           //（_layout.tsx 已设 sheetGrabberVisible: true + headerBackVisible: false）。
           headerLeft: () => (
