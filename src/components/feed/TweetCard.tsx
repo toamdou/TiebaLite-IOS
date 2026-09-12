@@ -50,7 +50,7 @@ import {RadiusStyle, Radius} from '@/theme/spacing';
 import { typographyStyles } from '@/theme/typography';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useAppPreference } from '@/hooks/useAppPreference';
-import { formatCount } from '@/utils';
+import { contentToText, formatCount } from '@/utils';
 import { useTimeLabel } from '@/hooks/useTimeLabel';
 import { pickViewerImages, pickViewerPreviews } from '@/utils/thumbnail';
 import { useRecyclingState } from '@legendapp/list/react-native';
@@ -173,6 +173,13 @@ const TweetCard = React.memo(function TweetCard({
   const stripViewportWidth = contentWidth + CARD_PADDING_X * 2;
   // 图片带初始左缘对齐内容列左界 L0 的位移 = 卡片 padding + CONTENT_INDENT
   const stripLeadInset = CARD_PADDING_X + CONTENT_INDENT;
+
+  // 引用帖正文：proto 里 content 可能是富文本 runs 数组（贴吧转发帖），
+  // 直接塞进 <Text> 会抛 "Objects are not valid as a React child"（精品 tab
+  // 转发帖实测崩溃）——统一走 contentToText 归一成字符串。
+  const quoteContent = thread.originThreadInfo?.content
+    ? contentToText(thread.originThreadInfo.content)
+    : '';
 
   // ── 导航 ──
   // 吧名徽章按压窗口守卫：Fabric 嵌套 Pressable 下外层整卡偶发同时触发
@@ -472,9 +479,9 @@ const TweetCard = React.memo(function TweetCard({
                   {thread.originThreadInfo.title}
                 </Text>
               ) : null}
-              {thread.originThreadInfo.content ? (
+              {quoteContent ? (
                 <Text style={[styles.quoteContent, { color: colors.textSecondary }]} numberOfLines={2}>
-                  {thread.originThreadInfo.content}
+                  {quoteContent}
                 </Text>
               ) : null}
             </View>

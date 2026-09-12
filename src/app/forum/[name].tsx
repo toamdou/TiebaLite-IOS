@@ -41,7 +41,6 @@ import { useLocalSearchParams, Stack, Link, useRouter, useIsFocused } from 'expo
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Menu, Button as SWButton } from '@expo/ui/swift-ui';
 import { labelStyle, buttonStyle, frame, contentShape, shapes } from '@expo/ui/swift-ui/modifiers';
-import { SegmentPager } from '@/components/ui/SegmentPager';
 import { TiebaSegmentedControl } from '@/components/ui/TiebaSegmentedControl';
 import { SymbolView } from '@/components/ui/SymbolView';
 import { HdrPressable } from '@/components/ui/HdrPressable';
@@ -485,11 +484,6 @@ export default function ForumPage() {
     if (!isNaN(tab)) setCurrentTab(tab);
   }, [setCurrentTab]);
 
-  const handlePagerChange = useCallback((index: number) => {
-    setSortMenuOpen(false);
-    if (index !== currentTab) setCurrentTab(index);
-  }, [currentTab, setCurrentTab]);
-
   // 列表滚动共用处理：排序下拉随真实滚动收起、FAB 随滚动方向收放。
   // 顶部板块（卡片+置顶+segment）已在 LegendList 头内，天然跟手滚动，
   // 无需额外收起动画。底栏收纳由 NativeTabs minimizeBehavior 原生驱动。
@@ -732,7 +726,7 @@ export default function ForumPage() {
   if ((isLoadingForums || (!loaded && !error)) && latestThreads.length === 0) {
     return (
       <View style={flattenStyle([styles.container, { backgroundColor: colors.background }, { paddingTop: insets.top + NAV_BAR_H }])}>
-        <Stack.Screen options={{ title: `${name}吧`, headerRight, headerTransparent: true }} />
+        <Stack.Screen options={{ title: `${name}吧`, headerRight }} />
         <SkeletonList count={6} variant="thread" />
       </View>
     );
@@ -742,7 +736,7 @@ export default function ForumPage() {
   if (error && latestThreads.length === 0) {
     return (
       <View style={flattenStyle([styles.container, { backgroundColor: colors.background }, { paddingTop: insets.top + NAV_BAR_H }])}>
-        <Stack.Screen options={{ title: `${name}吧`, headerRight, headerTransparent: true }} />
+        <Stack.Screen options={{ title: `${name}吧`, headerRight }} />
         <ErrorState message={error} onRetry={() => void refreshTab(0)} />
       </View>
     );
@@ -753,13 +747,11 @@ export default function ForumPage() {
         <Stack.Screen
           options={{
             title: `${name}吧`,
-            headerLargeTitle: false,
             headerRight,
             // 最左侧右滑交给原生栈返回手势（整屏滑动退出，2026-08-28 用户反馈：
             // pager 橡皮筋让组件先位移再退出的观感很差）。页间横滑由 PagerView
             // 处理（SegmentPager 不传 canExit → overdrag 关，不再让内容位移）
-            // 透明模糊顶栏（用户要求的玻璃效果）：内容从 y=0 延伸
-            headerTransparent: true,
+            // 顶栏（透明 + 边缘模糊）统一由根 Stack screenOptions 提供
           }}
         />
 
@@ -769,40 +761,42 @@ export default function ForumPage() {
             滚动信号走 JS onScroll（~15Hz）追不上原生 120Hz 滚动 → 板块相对
             帖子顿挫；且平移上限只抵自身高度、未计起始让位 → 永远停在顶栏
             下沿滑不出去。 */}
+        {/* 顶栏模糊与原生分页器不可兼得（2026-09-11 实测定案）：分页器
+            （react-native-pager-view，UICollectionView）是列表的祖先滚动视图，
+            系统给"栏的滚动边缘效果"挑宿主时命中的是它——效果层建在分页器上且
+            永不绘制（实拍验证：alpha=1 也不渲染），真正的列表一条效果层都拿不到，
+            吧页顶栏因此完全透明。绕开分页器后系统立刻把效果层建到列表上
+            （ScrollEdgeEffectView 402x156 alpha=1，与帖子页同规格）。
+            代价：不再支持左右滑动切换板块（点击 segment 仍切换；JS 平移层
+            方案已否决——onScroll ~15Hz 追不上原生 120Hz 滚动）。 */}
         <Animated.View style={[{ flex: 1 }, listAnimatedStyle]}>
-          <SegmentPager
-            pageIndex={currentTab}
-            onPageIndexChange={handlePagerChange}
-          >
-            {TAB_SEGMENTS.map((s, i) => {
-              const sem = tabSemantics(i, forumSortType);
-              return (
-                <View key={s.value} style={styles.pagerPage}>
-                  <ForumTabList
-                    tab={i}
-                    timeType={sem.timeType}
-                    colors={colors}
-                    insets={insets}
-                    isFocused={isFocused}
-                    loaded={loaded}
-                    header={topBlock}
-                    refreshing={refreshing}
-                    loadingMore={loadingMore}
-                    animateEntry={!hasStaggeredInitialRef.current}
-                    onRefresh={refreshCb}
-                    onLoadMore={loadMoreCb}
-                    onScroll={handleListScroll}
-                    onAgree={feedActions.like}
-                    onShare={feedActions.share}
-                    onMenuAction={handleForumMenuAction}
-                    onImagePress={imageViewer.handleImagePress}
-                    setListRef={setListRef(i)}
-                    loadTab={loadTabCb(i)}
-                  />
-                </View>
-              );
-            })}
-          </SegmentPager>
+          {/* 单实例列表换数据（2026-09-11）：去掉原生分页器后不能再按 tab 各挂
+              一个列表——切 tab 会卸载重挂，列表头（吧卡片/置顶/segment）跟着重挂，
+              表现为吧头像闪烁、首次切换顶部整块消失（原生 segment 首挂失效）。
+              改成一个 LegendList 常驻、只换 tab 数据；代价是切换后回到列表顶部。 */}
+          <View style={styles.pagerPage}>
+            <ForumTabList
+              tab={currentTab}
+              timeType={tabSemantics(currentTab, forumSortType).timeType}
+              colors={colors}
+              insets={insets}
+              isFocused={isFocused}
+              loaded={loaded}
+              header={topBlock}
+              refreshing={refreshing}
+              loadingMore={loadingMore}
+              animateEntry={!hasStaggeredInitialRef.current}
+              onRefresh={refreshCb}
+              onLoadMore={loadMoreCb}
+              onScroll={handleListScroll}
+              onAgree={feedActions.like}
+              onShare={feedActions.share}
+              onMenuAction={handleForumMenuAction}
+              onImagePress={imageViewer.handleImagePress}
+              setListRef={setListRef(currentTab)}
+              loadTab={loadTabCb(currentTab)}
+            />
+          </View>
         </Animated.View>
 
         {/* ── 排序下拉菜单：页面根级 overlay（列表头子树外，防裁剪/盖层）── */}

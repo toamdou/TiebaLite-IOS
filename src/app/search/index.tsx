@@ -36,7 +36,6 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import { hapticForScene } from '@/theme/hapticsMap';
 import { SymbolView } from '@/components/ui/SymbolView';
-import { SegmentPager } from '@/components/ui/SegmentPager';
 import { TiebaSegmentedControl } from '@/components/ui/TiebaSegmentedControl';
 import { TiebaSearchBar } from '@/components/ui/TiebaSearchBar';
 import { HdrPressable } from '@/components/ui/HdrPressable';
@@ -179,15 +178,6 @@ export default function SearchPage() {
       hapticForScene('segment');
       setSortMenuOpen(false);
       const tab = TABS.find((t) => t.key === value)?.key ?? activeTab;
-      selectTab(tab);
-    },
-    [activeTab, selectTab],
-  );
-
-  const handlePagerChange = useCallback(
-    (index: number) => {
-      setSortMenuOpen(false);
-      const tab = TABS[index]?.key ?? activeTab;
       selectTab(tab);
     },
     [activeTab, selectTab],
@@ -367,11 +357,12 @@ export default function SearchPage() {
       ) : (
         /* ── 搜索后：三页可横滑；列表头随各自列表滚动退出 ── */
         <View style={styles.flex}>
-          <SegmentPager
-            pageIndex={TAB_INDEX[activeTab]}
-            onPageIndexChange={handlePagerChange}
-          >
-            {TABS.map((t) => {
+          {/* 单实例挂载（2026-09-11，同吧页）：原生分页器是列表的祖先滚动视图，
+              会抢走系统"栏滚动边缘效果"宿主（效果层建在分页器上且永不渲染 →
+              顶栏纯透明）。去掉分页器后系统把效果层建到列表上。代价=不再支持
+              左右滑动切换结果页（点击 segment 仍切换）。 */}
+          {TABS.map((t) => {
+              if (t.key !== activeTab) return null;
               const header = listHeaders[t.key];
               if (t.key === 'thread') {
                 return (
@@ -429,7 +420,6 @@ export default function SearchPage() {
                 </View>
               );
             })}
-          </SegmentPager>
         </View>
       )}
 

@@ -17,7 +17,7 @@ import {
   View,
 } from 'react-native';
 import type { EdgeInsets } from 'react-native-safe-area-context';
-import { LegendList } from '@legendapp/list/react-native';
+import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
 import { Link } from 'expo-router';
 
 import { SymbolView } from '@/components/ui/SymbolView';
@@ -164,6 +164,13 @@ export function UserTabList({
     await loadMore();
   }, [hasMore, loadingMore, loading, loadMore]);
 
+  // 切 tab = 同一个列表换数据（用户主页去分页器后不再一 tab 一实例）：
+  // 视口显式回到顶部，否则新 tab 数据会从上一个 tab 的滚动位置开始。
+  const listRef = useRef<LegendListRef | null>(null);
+  useEffect(() => {
+    listRef.current?.scrollToOffset?.({ offset: 0, animated: false });
+  }, [tab]);
+
   // 首屏批次入场（全 App 统一 EntranceRow 效果）：仅首次数据到达播放，
   // 分页/刷新/回收复用不重播（entranceDoneRef 冻结）
   const entranceDoneRef = useRef(false);
@@ -237,6 +244,7 @@ export function UserTabList({
   //（subposts/历史/收藏同款处理）。
   return (
     <LegendList
+      ref={listRef}
       recycleItems
       data={items}
       keyExtractor={userKeyExtractor}

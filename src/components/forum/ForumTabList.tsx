@@ -95,6 +95,12 @@ export const ForumTabList = React.memo(function ForumTabList({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅首次 loaded 翻转时尝试一次
   }, [loaded]);
 
+  // 切 tab = 同一个列表换数据（吧页去分页器后不再一 tab 一列表实例）：
+  // 视口显式回到顶部，否则新桶数据会从上一个 tab 的滚动位置开始。
+  useEffect(() => {
+    internalListRef.current?.scrollToOffset?.({ offset: 0, animated: false });
+  }, [tab]);
+
   // 渲染层统一过滤（广告过滤与 blockedWords 逻辑并列）
   const filterAdThreads = useAppPreference('filterAdThreads', true);
   const listThreads = useMemo(() => {

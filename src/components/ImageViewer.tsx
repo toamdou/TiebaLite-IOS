@@ -981,6 +981,9 @@ const dismissGesture = usePanGesture({
       if (isLongPageSV.value) {
         const dx = Math.abs(e.changedTouches[0].x - touchStartX.value);
         const dy = Math.abs(e.changedTouches[0].y - touchStartY.value);
+        // 同下方普通分支：抖动期（双轴均未过阈值）不裁决，防起手期误杀
+        // 整个触摸序列（长图横滑退不出同根因）。
+        if (dx < 5 && dy < 5) return;
         if (dx > dy) GestureStateManager.fail(e.handlerTag);
         return;
       }
@@ -992,6 +995,14 @@ const dismissGesture = usePanGesture({
       // 仲裁前接管横滑（多图中间页左右滑退出）。
       const dx = e.changedTouches[0].x - touchStartX.value;
       const dy = e.changedTouches[0].y - touchStartY.value;
+      // ⚠️ fail 前的距离下限（2026-09-11）：起手 5px 内位移未过阈值，
+      // yGo/xGo 必然全 false——此阶段 fail 会在 minDistance 自动激活之前
+      // 把整个触摸序列杀死（fail 终态，后续 move 全部不再进入）。真实
+      // 拖拽起手必有方向抖动：第一帧位移即过 5px 的快起手→活；慢起手
+      // 第一帧 1-3px→被 fail→必死。用户实测「同一张图有时滑得出有时
+      // 滑不出」即此（成功样本 len259/254ms=快拖）。数据不足时静观，
+      // 仲裁推迟到位移过阈值的那一帧（该帧仍抢在激活评估之前）。
+      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
       const yGo = Math.abs(dy) >= 5 && Math.abs(dy) > Math.abs(dx);
       const xGo =
         Math.abs(dx) >= 5 &&

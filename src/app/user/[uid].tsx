@@ -31,7 +31,6 @@ import { Alert, StyleSheet, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
-import { SegmentPager } from '@/components/ui/SegmentPager';
 import { TiebaSegmentedControl } from '@/components/ui/TiebaSegmentedControl';
 import { HdrPressable } from '@/components/ui/HdrPressable';
 import { SymbolView } from '@/components/ui/SymbolView';
@@ -95,7 +94,7 @@ function PageShell({
   const { colors } = useThemeColors();
   return (
     <View style={flattenStyle([styles.container, { backgroundColor: colors.background }])}>
-      <Stack.Screen options={{ title, headerTransparent: true, gestureEnabled, headerRight }} />
+      <Stack.Screen options={{ title, gestureEnabled, headerRight }} />
       {children}
     </View>
   );
@@ -128,12 +127,6 @@ export default function UserProfilePage() {
     tabParam === 'threads' || tabParam === 'replies' || tabParam === 'forums' ? tabParam : 'threads',
   );
   const displayedTab = !isOwnProfile && activeTab === 'replies' ? 'threads' : activeTab;
-  // 三 tab 按需懒挂载：首屏只挂当前 tab，segment 点击/滑动落地时再补挂
-  // 目标 tab —— 三个列表并发拉首屏的问题不再存在，pager 语义保持不变。
-  const [mountedTabs, setMountedTabs] = useState<Set<string>>(() => new Set([displayedTab]));
-  const activateTab = useCallback((value: string) => {
-    setMountedTabs((prev) => (prev.has(value) ? prev : new Set(prev).add(value)));
-  }, []);
 
   // 粉丝/关注独立视图（从头部统计区进入，外层 segmented 不再嵌套；以
   // absolute 覆盖层展示，主视图保持挂载 → 三 tab 列表状态不丢）
@@ -193,9 +186,8 @@ export default function UserProfilePage() {
 
   const handleTabChange = useCallback((value: string) => {
     hapticForScene('toggle');
-    activateTab(value);
     setActiveTab(value);
-  }, [activateTab]);
+  }, []);
 
   // ---------- Actions ----------
 
@@ -348,35 +340,21 @@ export default function UserProfilePage() {
     // 最左侧右滑走原生栈返回手势（整屏滑动退出，2026-08-28 与吧页统一：
     // SegmentPager 不传 canExit → overdrag 关，不再橡皮筋接管退出）
     <PageShell title={user?.nameShow || user?.name || '用户'} headerRight={headerRight}>
-      <SegmentPager
-        pageIndex={visibleTabs.findIndex((t) => t.value === displayedTab)}
-        onPageIndexChange={(i) => {
-          const target = visibleTabs[i];
-          if (target) {
-            activateTab(target.value);
-            if (target.value !== activeTab) {
-              hapticForScene('toggle');
-              setActiveTab(target.value);
-            }
-          }
-        }}
-      >
-        {visibleTabs.map((tab) => (
-          <View key={tab.value} style={styles.tabListWrap}>
-            {mountedTabs.has(tab.value) ? (
-              <UserTabList
-                tab={tab.value}
-                uid={uid}
-                colors={colors}
-                insets={insets}
-                header={renderListHeader(user)}
-                profileUser={user}
-                onHeaderRefresh={() => loadProfile(uid)}
-              />
-            ) : null}
-          </View>
-        ))}
-      </SegmentPager>
+      {/* 单实例列表换数据（2026-09-11，同吧页）：原生分页器是列表的祖先滚动
+          视图，会抢走系统"栏滚动边缘效果"的宿主（效果层建在分页器上且永不
+          渲染，顶栏纯透明）。去掉分页器后系统把效果层建到列表上，顶栏与帖子页
+          一致；代价=不再支持左右滑动切换 tab（点击 segment 仍切换）。 */}
+      <View style={styles.tabListWrap}>
+        <UserTabList
+          tab={displayedTab}
+          uid={uid}
+          colors={colors}
+          insets={insets}
+          header={renderListHeader(user)}
+          profileUser={user}
+          onHeaderRefresh={() => loadProfile(uid)}
+        />
+      </View>
 
       {/* 粉丝/关注覆盖层：absolute fill 盖在完整主视图上（主视图不卸载，
           三 tab 状态/滚动位置保留）；背景实色防止主列表从行间距透出。
