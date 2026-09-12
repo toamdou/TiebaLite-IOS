@@ -1,6 +1,6 @@
 PODS:
   - boost (1.84.0)
-  - CookieManager (6.4.0):
+  - CookieManager (6.4.1):
     - boost
     - DoubleConversion
     - fast_float
@@ -29,11 +29,11 @@ PODS:
     - SocketRocket
     - Yoga
   - DoubleConversion (1.1.6)
-  - EXApplication (57.0.2):
+  - EXApplication (57.0.3):
     - ExpoModulesCore
-  - EXConstants (57.0.15):
+  - EXConstants (57.0.18):
     - ExpoModulesCore
-  - Expo (57.0.17):
+  - Expo (57.0.22):
     - boost
     - DoubleConversion
     - ExpoModulesCore
@@ -65,40 +65,40 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - ExpoAsset (57.0.15):
+  - ExpoAsset (57.0.17):
     - ExpoModulesCore
-  - ExpoAudio (57.0.4):
+  - ExpoAudio (57.0.5):
     - ExpoModulesCore
-  - ExpoClipboard (57.0.1):
+  - ExpoClipboard (57.0.2):
     - ExpoModulesCore
   - ExpoDomWebView (57.0.1):
     - ExpoModulesCore
-  - ExpoFileSystem (57.0.6):
+  - ExpoFileSystem (57.0.7):
     - ExpoModulesCore
-  - ExpoFont (57.0.1):
+  - ExpoFont (57.0.4):
     - ExpoModulesCore
-  - ExpoGlassEffect (57.0.1):
+  - ExpoGlassEffect (57.0.3):
     - ExpoModulesCore
-  - ExpoImage (57.0.3):
+  - ExpoImage (57.0.5):
     - ExpoModulesCore
     - SDWebImage (~> 5.21.0)
     - SDWebImageAVIFCoder (~> 0.11.0)
     - SDWebImageSVGCoder (~> 1.7.0)
     - SDWebImageWebPCoder (~> 0.14.6)
-  - ExpoKeepAwake (57.0.1):
+  - ExpoKeepAwake (57.0.2):
     - ExpoModulesCore
-  - ExpoLinearGradient (57.0.1):
+  - ExpoLinearGradient (57.0.2):
     - ExpoModulesCore
-  - ExpoLinking (57.0.8):
+  - ExpoLinking (57.0.10):
     - ExpoModulesCore
-  - ExpoLocalAuthentication (57.0.2):
+  - ExpoLocalAuthentication (57.0.3):
     - ExpoModulesCore
   - ExpoLogBox (57.0.4):
     - React-Core
-  - ExpoMediaLibrary (57.0.4):
+  - ExpoMediaLibrary (57.0.5):
     - ExpoModulesCore
     - React-Core
-  - ExpoModulesCore (57.0.14):
+  - ExpoModulesCore (57.0.18):
     - boost
     - DoubleConversion
     - ExpoModulesJSI
@@ -128,41 +128,41 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - ExpoModulesJSI (57.0.6):
+  - ExpoModulesJSI (57.1.0):
     - React-Core
     - ReactCommon
-  - ExpoModulesWorklets (57.0.14):
+  - ExpoModulesWorklets (57.0.18):
     - ExpoModulesCore
     - ExpoModulesJSI
-  - ExpoModulesWorkletsAdapter (57.0.14):
+  - ExpoModulesWorkletsAdapter (57.0.18):
     - ExpoModulesCore
     - ExpoModulesJSI
     - ExpoModulesWorklets
     - RNWorklets
-  - ExpoNotifications (57.0.15):
+  - ExpoNotifications (57.0.18):
     - ExpoModulesCore
-  - ExpoRouter (57.0.17):
+  - ExpoRouter (57.0.21):
     - ExpoModulesCore
     - RNScreens
-  - ExpoSecureStore (57.0.2):
+  - ExpoSecureStore (57.0.4):
     - ExpoModulesCore
-  - ExpoSharing (57.0.16):
+  - ExpoSharing (57.0.19):
     - ExpoModulesCore
-  - ExpoSplashScreen (57.0.8):
+  - ExpoSplashScreen (57.0.9):
     - ExpoModulesCore
-  - ExpoSQLite (57.0.2):
+  - ExpoSQLite (57.0.3):
     - ExpoModulesCore
-  - ExpoSymbols (57.0.2):
+  - ExpoSymbols (57.0.3):
     - ExpoModulesCore
-  - ExpoSystemUI (57.0.3):
+  - ExpoSystemUI (57.0.4):
     - ExpoModulesCore
-  - ExpoUI (57.0.14):
+  - ExpoUI (57.0.18):
     - ExpoModulesCore
     - ExpoModulesWorklets
     - React-RCTFabric
-  - ExpoVideo (57.0.3):
+  - ExpoVideo (57.0.4):
     - ExpoModulesCore
-  - ExpoWebBrowser (57.0.2):
+  - ExpoWebBrowser (57.0.3):
     - ExpoModulesCore
   - fast_float (8.0.0)
   - FBLazyVector (0.86.3)
@@ -185,7 +185,7 @@ PODS:
   - libwebp/webp (1.6.0):
     - libwebp/sharpyuv
   - MMKVCore (2.4.0)
-  - NitroFetch (1.6.2):
+  - NitroFetch (1.6.3):
     - boost
     - DoubleConversion
     - fast_float
@@ -246,7 +246,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - NitroModules (0.37.0):
+  - NitroModules (0.37.1):
     - boost
     - DoubleConversion
     - fast_float
@@ -2973,7 +2973,7 @@ PODS:
     - RNWorklets (>= 0.8.0)
     - SocketRocket
     - Yoga
-  - RNPlainText (0.8.0):
+  - RNPlainText (0.8.2):
     - boost
     - DoubleConversion
     - fast_float
@@ -3722,40 +3722,40 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   boost: 7e761d76ca2ce687f7cc98e698152abd03a18f90
-  CookieManager: 916481f82b8319fa07fdc7620d5bd0f57ed1ef72
+  CookieManager: d848c5125d49acce581d93dd6da613e213a935d9
   DoubleConversion: cb417026b2400c8f53ae97020b2be961b59470cb
-  EXApplication: bbd517d50878ca1d121fb3843392beb210181e28
-  EXConstants: e05664c2e0470c274210b8d0857ac2c4cc5e963c
-  Expo: 74dd1b220a41959daa7852c69a8a38e0f1b1da92
-  ExpoAsset: ff225ee16cea2409800b20fe4945a7c720a24cee
-  ExpoAudio: bd075db379c5a70b7f9a7b5b541d5c67f59b5dca
-  ExpoClipboard: 95055b11758f339b61d4d8064dd799df1cf03b7f
+  EXApplication: a727f05eb8592f0bc764f6ab8d51eacc158652ec
+  EXConstants: 8948a340eb14bf2bdaaa0e21a63cb9343860b87a
+  Expo: 41f966a75c24443725a8bc29b3b946b7681ec53d
+  ExpoAsset: b3999ffb3d4049b6c870708c60ea2209ace9f170
+  ExpoAudio: edc9230b788be6f65238a53907d5c176b57a7ce0
+  ExpoClipboard: 15b8cc88075d7c50af165ed8fca0a76915903bba
   ExpoDomWebView: beaec034e51bd028428b98bb1f2633ab79c6d095
-  ExpoFileSystem: cc500f33804065aacc7b3366007267b84deca8c8
-  ExpoFont: 59e1faf66ba9bcd232ae1e2ce58d202a48b6f65e
-  ExpoGlassEffect: 4b62afb489e6b84357701737ce002137c9d5fdbc
-  ExpoImage: 1c203250b92f6591aed640c15245c9e6aa464164
-  ExpoKeepAwake: c26f14275017370cc8a4b7b43a0e23361f2053a5
-  ExpoLinearGradient: 903b3f5fe566c666ff78b2599add51d094483613
-  ExpoLinking: b616f5d0c2e11db3a5cccd8ae6bff45294929fd2
-  ExpoLocalAuthentication: 96989637e567a10cdeabe61e5c6026d30c0dc53f
+  ExpoFileSystem: 28778f942725170102f7c6cf4dee05a526ddacd0
+  ExpoFont: f8198a952ba2ff53c9b393b5269ea435f232cfc3
+  ExpoGlassEffect: ac454a05346de8610d61dc1324d624893ca22d14
+  ExpoImage: d54e0f42b98596ec79f111fb75305075ca535716
+  ExpoKeepAwake: 72af0b3be3615e59bc819d26061ff4e06b155ee0
+  ExpoLinearGradient: f08a0dea5ad3fe23042d15b1ced831312c9141b8
+  ExpoLinking: 15c8ddb0eb4a778950712ea4a6feedf021778852
+  ExpoLocalAuthentication: 1e4aef156a3a1f953f8278b8d8309f6118919640
   ExpoLogBox: 80957303325cd4439137765c90a87d7f22aaf2ff
-  ExpoMediaLibrary: 344f5b528a71f34794e9d7396e32589531df146e
-  ExpoModulesCore: 04ccd82dac76627d9d840a33afe46a6b2f2be3c3
-  ExpoModulesJSI: fb279421fb76e371f05b966244f13ae5cb2643c4
-  ExpoModulesWorklets: 57a11e6ae984c2680e7967b785ded96199caed8c
-  ExpoModulesWorkletsAdapter: 35dfc2c4593efb1fcf4243c78695b898bac97dea
-  ExpoNotifications: dd1288ca85d320ea163105e5efdf0a1cc05760f8
-  ExpoRouter: 9bf293bba85908c1834190e6913b22da1e573689
-  ExpoSecureStore: cc7c4f560528e7a644b1342b0cc2790576e677e1
-  ExpoSharing: b1797248b8dbb7bf32a670a8df582189a65aa5d4
-  ExpoSplashScreen: 6f422fd595600d78520c6b7dcf8a908fb8a7fec0
-  ExpoSQLite: 57b23ab9fbb72215fa33763246d00ce6e6e531b4
-  ExpoSymbols: 0efd93edf0f825bf3c762582b0769dd3b296235c
-  ExpoSystemUI: e5f9a81b45481222f6b8b45b86fa37b18d0a86c9
-  ExpoUI: 6867422a567a251dcc25444c706b53f479e457ae
-  ExpoVideo: fad16dd734258a757b78c6287988ab7beb4e2f16
-  ExpoWebBrowser: 9b98d939d5f1c5dd8f523f0a0683056fb1204434
+  ExpoMediaLibrary: 341321256621e7bf220b6272c42fedcb095607d0
+  ExpoModulesCore: cfff5545e4ce059bbfba80e56bd1771d9a620ed1
+  ExpoModulesJSI: 21c947f0cc559401c86995dad7a0b1112c7fd656
+  ExpoModulesWorklets: 986cf72c18400743869b4642d243115f831e404d
+  ExpoModulesWorkletsAdapter: ae4dd675418c2bbdf802ae74f7f78442e7010ab7
+  ExpoNotifications: b353d8b1c939dc935d9634925491e1480be7b999
+  ExpoRouter: 8f978c2ecb68bfb1f2eeff765ba2ddd8d66c54e0
+  ExpoSecureStore: ff1fd5e073957417ba8f9dec0bebcbd55a60e747
+  ExpoSharing: c5da4721c1c539fde2db3fe83e46338550e3691d
+  ExpoSplashScreen: e771da4f26d550ea4fd067d8fb942657e47bb846
+  ExpoSQLite: 72e6ada0504a27cd043eb1bf172db70485a761b6
+  ExpoSymbols: 37a3a6e5847edb08b83a5ee04d3b46525e205f00
+  ExpoSystemUI: 05ee8d4aaba1b6af330f3621e19b39ff9f21e718
+  ExpoUI: 97c741e691148862d8032f467c708671d28809b1
+  ExpoVideo: 56ed2863b981dd5ae946d8ef23ecfcae855863a0
+  ExpoWebBrowser: a4d7c382116fbe33c1ec7f60293f02b7e97042e4
   fast_float: b32c788ed9c6a8c584d114d0047beda9664e7cc6
   FBLazyVector: 94a9e5b949d0f65bbc1a741f8a7c72499da32567
   fmt: 530618a01105dae0fa3a2f27c81ae11fa8f67eac
@@ -3764,9 +3764,9 @@ SPEC CHECKSUMS:
   libavif: 5f8e715bea24debec477006f21ef9e95432e254d
   libwebp: af5937a13536ef73f3784d69cc342b98961acf33
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
-  NitroFetch: 0f353a00b92d23e8b32f5d91ca625e00d35762ff
+  NitroFetch: 17438f954ff7665719cd08a8fd4de01420b44022
   NitroMmkv: 5d6c3a5cca0e47be9a4dd3f66262dbad0799c087
-  NitroModules: cb33eb22137731df70bf4970561cfa2c9cd654ea
+  NitroModules: f2a165630c12aed5793d6b42b9002c6a649ea04e
   RCT-Folly: 36c4f904fb6cd0219dcb76b94e9502d2a72fab0b
   RCTDeprecation: 5268fe9d45036e52deb765d242297f1011e17333
   RCTRequired: 4ecfd325edd95cbbdc202163fb9cb2ba54ac3c9f
@@ -3843,7 +3843,7 @@ SPEC CHECKSUMS:
   ReactCommon: 322cf4b51be09a3cbf5ae891c8dd9f52091c4011
   RNCMaskedView: d707a83784c67099b54b37d056ababb2767ce15e
   RNGestureHandler: 8f92f7836ebbc8e372c2374b8d3043dd058451cf
-  RNPlainText: d58368595fc2ce89ea74f5b0b09a49eb35b726bd
+  RNPlainText: 6b60a9e04749ed8085ac4309cb6944b0caf0bc37
   RNReanimated: 56b12744833e5d677b5a2b7fe191913d09618058
   RNScreens: cd316d11b2eadd658804e5d956194d4588d05e2b
   RNWorklets: 57279243f09ce1f3a4fc9cea2ce9b8e379688f30
