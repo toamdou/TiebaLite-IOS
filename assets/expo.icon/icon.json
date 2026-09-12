@@ -3,8 +3,14 @@
     {
       "layers" : [
         {
-          "image-name" : "expo-symbol 2.svg",
-          "name" : "expo-symbol 2"
+          "image-name" : "icon-light.png",
+          "image-name-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : "icon-dark.png"
+            }
+          ],
+          "name" : "mark"
         }
       ]
     }
