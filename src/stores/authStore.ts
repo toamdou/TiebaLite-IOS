@@ -101,6 +101,15 @@ async function refreshAccountProfile(account: Account): Promise<Account> {
   }
 }
 
+/** 登出/切号清空关注吧内存列表（与 invalidateFollowedForumsCache 成对：
+ *  缓存清了但 store 里的列表还留着，下一个账号在"鉴权未定案"窗口会先渲染
+ *  出上一个账号的关注列表——2026-09-12）。lazy import 避开 store 循环依赖。 */
+function resetFollowedForumsStore(): void {
+  void import('./forumStore')
+    .then((m) => m.useForumStore.getState().resetFollowedForums())
+    .catch(() => {});
+}
+
 /** Kick off the login-state dependent screens after auth changes. */
 async function refreshPostLoginStores(): Promise<void> {
   try {
@@ -158,6 +167,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (next) {
         // 切号激活（setAuthCredentials/saveAccountProfile/轮询重启等）
         // 已在 AuthService.logout → activateAccount 内完成。
+        resetFollowedForumsStore();
         set({ isLoggedIn: true, isLoading: false, account: next, error: null });
       } else {
         lazyInterceptors().clearAuthCredentials();
@@ -165,6 +175,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         lazyPoller().cancelNativeBackgroundSync();
         void clearAccountProfile();
         lazyForumFollowed().invalidateFollowedForumsCache();
+        resetFollowedForumsStore();
         if (previousUid) {
           await lazyPoller().clearNotificationBaseline(previousUid);
         }
@@ -179,6 +190,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       lazyPoller().cancelNativeBackgroundSync();
       void clearAccountProfile();
       lazyForumFollowed().invalidateFollowedForumsCache();
+      resetFollowedForumsStore();
       if (previousUid) {
         await lazyPoller().clearNotificationBaseline(previousUid);
       }

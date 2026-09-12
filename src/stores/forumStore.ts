@@ -105,6 +105,12 @@ export interface ForumState {
 
   // ── Actions ──
   loadFollowedForums(): Promise<void>;
+  /**
+   * 登出/切号：清空内存里的关注吧列表（缓存与磁盘由
+   * invalidateFollowedForumsCache 负责）。不做这一步的话，下一个账号在
+   * "鉴权未定案"窗口里会先渲染出上一个账号的关注列表（2026-09-12）。
+   */
+  resetFollowedForums(): void;
   loadForumData(forumName: string, page: number, sortType: ForumSortType, isGood?: boolean, tab?: number): Promise<void>;
   setForumSortType(sortType: ForumSortType): void;
   setCurrentTab(tab: number): void;
@@ -170,6 +176,25 @@ export const useForumStore = create<ForumState>((set, get) => ({
 
   // ── loadFollowedForums ──
   loadFollowedForums: async () => {
+    const auth = useAuthStore.getState();
+    // 鉴权未定案（冷启动 checkAuth 在途）：只出缓存、不发网络请求。首页在
+    // 这段窗口里已经渲染 LoggedInHome（2026-08-28 的"缓存直出"设计），
+    // 未登录用户会在这一枪里白发一次 forumGuide（无 Cookie、tbs 空串），
+    // 10s 守卫后报一条界面看不到的超时（2026-09-12 实测）。真实加载交给
+    // 登录成功后的 refreshPostLoginStores（authStore）触发。
+    if (auth.isLoading) {
+      const cached = lazyForumFollowed().readFollowedForumsCache();
+      if (cached) {
+        set({ followedForums: cached, isLoadingForums: false });
+      }
+      return;
+    }
+    // 鉴权已定案且未登录：不发请求，也不留上一个账号的列表（切号/温和登出
+    // 后内存列表可能残留，登录未定案窗口里会被渲染出来）。
+    if (!auth.isLoggedIn) {
+      set({ followedForums: [], isLoadingForums: false });
+      return;
+    }
     set({ isLoadingForums: true });
     try {
       const list = await lazyForumFollowed().fetchAllFollowedForums();
@@ -191,6 +216,10 @@ export const useForumStore = create<ForumState>((set, get) => ({
       console.error('[ForumStore] Failed to load followed forums:', error);
       throw error;
     }
+  },
+
+  resetFollowedForums: () => {
+    set({ followedForums: [], isLoadingForums: false });
   },
 
   // ── loadForumData — 对齐 Kotlin FrsPageRepository.frsPage() ──

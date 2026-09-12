@@ -228,6 +228,26 @@ export function invalidateFollowedForumsCache(): void {
 export const invalidateNow = invalidateFollowedForumsCache;
 
 /**
+ * 只读缓存读取（严格无网络、不写缓存）：鉴权未定案时首页只出缓存。
+ * 2026-09-12：冷启动 `isLoading`（checkAuth 在途）期间会渲染 LoggedInHome，
+ * 它无条件调 loadFollowedForums —— 未登录用户也会白发一次 forumGuide
+ * （无 Cookie、tbs 空串），10s 守卫后打一条界面看不到的超时错误。鉴权未定
+ * 时改走本函数：内存 TTL 5min 优先、磁盘 TTL 24h 兜底，未命中返回 null，
+ * 真实加载交给登录后的 refreshPostLoginStores（authStore）。
+ */
+export function readFollowedForumsCache(): ForumInfo[] | null {
+  const now = Date.now();
+  if (followedCache && followedCache.expiresAt > now) {
+    return [...followedCache.forums];
+  }
+  const disk = readDiskCache();
+  if (disk && disk.expiresAt > now) {
+    return [...disk.forums];
+  }
+  return null;
+}
+
+/**
  * 只读导出：已关注吧缓存快照（内存 TTL 5min 优先，磁盘 TTL 24h 兜底）。
  * 不触发网络、不写缓存（严格只读：不赋值 followedCache，磁盘缓存过期的
  * 冷启动由 fetchAllFollowedForums 正常预热覆盖）；缓存过期/损坏返回空 Map。

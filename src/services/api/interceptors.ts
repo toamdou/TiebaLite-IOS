@@ -163,6 +163,10 @@ export function handleAuthExpired(): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy require avoids API→store circular imports.
     const authStore = require('@/stores/authStore').useAuthStore;
     authStore.setState({ isLoggedIn: false, account: null, error: '登录已过期，请重新登录' });
+    // 温和登出同样清关注吧内存列表：不清的话下一个账号在"鉴权未定案"窗口
+    // 会先渲染出上一个账号的关注列表（2026-09-12，与 authStore.logout 成对）。
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy require avoids API→store circular imports.
+    require('@/stores/forumStore').useForumStore.getState().resetFollowedForums();
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy require avoids API→poller circular imports.
     const poller = require('@/services/NotificationPoller');
     poller.stopNotificationPoller?.();
