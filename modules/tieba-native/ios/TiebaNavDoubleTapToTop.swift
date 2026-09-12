@@ -21,7 +21,8 @@ extension TiebaNativeModule {
   /// protoInitialize（启动首个 JS→原生调用）捕获模块实例。
   static func retainEventModule(_ module: TiebaNativeModule) { DoubleTapState.module = module }
 
-  /// 安装幂等：force 由 timer/KVO 反复跑，按手势类型判重。
+  /// 安装幂等：chrome 重扫（事件驱动，见 TiebaNavBarChrome 的空转治理）会反复
+  /// 走到这里，按手势类型判重。
   /// iOS 27β 上 UITapGestureRecognizer(numberOfTapsRequired:2) 在导航栏上
   /// 偶发"单击即触发"（真机 2026-09-01 实证：点一次就回顶）——双击判定改放
   /// JS 侧（useNavDoubleTapToTop 400ms 窗口），原生只上报 bar 标题/空白区的
@@ -64,10 +65,15 @@ private final class NavDoubleTapGesture: UITapGestureRecognizer {}
 // （返回钮/右侧按钮群所在，药丸等非 UIControl 宿主也在）同样不识别——
 // 用户在小目标周围空白处连点瞄准时不应触发回顶（真机实测反直觉）。
 private final class NavDoubleTapGate: NSObject, UIGestureRecognizerDelegate {
+  /// 左右边缘不识别区宽度：返回钮 + 右钮群所在的系统 chrome 区域（经验值，
+  /// 覆盖两种按钮布局在最窄机型上的宽度）。
+  private static let edgeExclusion: CGFloat = 64
+
   func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
     guard let bar = g.view else { return true }
     let p = g.location(in: bar)
-    if p.x < 64 || p.x > bar.bounds.width - 64 { return false }
+    let edge = Self.edgeExclusion
+    if p.x < edge || p.x > bar.bounds.width - edge { return false }
     var hit = bar.hitTest(p, with: nil)
     while hit != nil, hit !== bar {
       if hit is UIControl { return false }

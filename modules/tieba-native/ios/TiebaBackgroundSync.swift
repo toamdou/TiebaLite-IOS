@@ -3,8 +3,8 @@ import Foundation
 import os
 
 /// BGTask 调度器单例：expirationHandler（系统队列）与 Task 工作体（协作池）
-/// 按设计并发，finish 由 completionLock 串行化（setTaskCompleted 恰好一次）。
-/// Swift 6 下以 @unchecked Sendable 声明该不变量。
+/// 按设计并发，finish 由 TaskCompletionFlag 的锁保证 setTaskCompleted 恰好
+/// 一次。Swift 6 下以 @unchecked Sendable 声明该不变量。
 ///
 /// 实现按职责拆文件：本地状态/JSON 辅助见 TiebaBackgroundSync+State.swift，
 /// 通知轮询见 +Notifications.swift，自动签到与签到提醒见 +AutoSign.swift；
@@ -15,18 +15,17 @@ final class TiebaBackgroundSync: @unchecked Sendable {
   static let autoSignTaskIdentifier = "com.tiebalite.app.auto-sign"
 
   /// 关键错误点日志（注册失败/任务失败等，非同帧级日志，不会刷屏）。
-  private static let log = Logger(
+  /// internal 而非 private：+Notifications/+AutoSign 是跨文件 extension，
+  /// private 在 Swift 里是文件级可见，扩展读不到（编译期报 inaccessible）。
+  static let log = Logger(
     subsystem: "com.tiebalite.app",
     category: "background-sync"
   )
 
   /// 跨文件 extension 读写（+State/+Notifications/+AutoSign），故为 internal。
   let defaults = UserDefaults.standard
-  // `expirationHandler` runs on a system queue while the async work body runs
-  // on the cooperative pool; both may call `finish` concurrently, and
-  // `setTaskCompleted` must fire exactly once. This serial queue makes every
-  // read/write of the `completed` flag mutually exclusive.
-  private let completionLock = DispatchQueue(label: "com.tiebalite.background-sync.completion")
+  /// 时间常量：自动签到的"明天此刻"兜底用。
+  static let oneDay: TimeInterval = 24 * 60 * 60
   private let intervalKey = "tiebalite.native.notification_interval_minutes"
   private let autoSignTimeKey = "tiebalite.native.auto_sign_time"
   private let autoSignSuccessPrefixKey = "tiebalite.native.auto_sign_success"
@@ -111,9 +110,9 @@ final class TiebaBackgroundSync: @unchecked Sendable {
   }
 
   func handle(_ task: BGTask) {
-    var completed = false
+    let completion = TaskCompletionFlag()
     task.expirationHandler = {
-      self.finish(task, completed: &completed, success: false)
+      self.finish(task, completion: completion, success: false)
     }
     Task {
       do {
@@ -124,11 +123,11 @@ final class TiebaBackgroundSync: @unchecked Sendable {
           try await performAutoSign()
         }
         reschedule(for: task)
-        finish(task, completed: &completed, success: true)
+        finish(task, completion: completion, success: true)
       } catch {
         Self.log.error("background task \(task.identifier, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
         reschedule(for: task)
-        finish(task, completed: &completed, success: false)
+        finish(task, completion: completion, success: false)
       }
     }
   }
@@ -141,29 +140,50 @@ final class TiebaBackgroundSync: @unchecked Sendable {
     }
   }
 
-  /// Mark the BGTask completed exactly once. Both the expiration handler and
-  /// the async work body call this, potentially on different threads; the
-  /// serial queue serializes the flag check-and-set so the task is completed
-  /// at most once (a second `setTaskCompleted` would abort the process).
-  private func finish(_ task: BGTask, completed: inout Bool, success: Bool) {
-    completionLock.sync {
-      guard !completed else { return }
-      completed = true
-      task.setTaskCompleted(success: success)
+  /// BGTask 的一次性完成标志。expirationHandler（系统队列）与工作体（协作
+  /// 线程池）可能并发调用 finish：用锁保护"恰好一次 setTaskCompleted"
+  /// （重复调用会 abort 进程）。用引用类型而不是 `inout` 捕获局部变量——
+  /// 后者要求对捕获变量独占访问贯穿整个调用，两线程并发进入时 Swift 独占性
+  /// 检查会直接 trap（release 下为未定义行为），锁挡不住。
+  private final class TaskCompletionFlag {
+    private var done = false
+    private let lock = NSLock()
+
+    /// 第一次调用返回 true（应当调用 setTaskCompleted），此后恒为 false。
+    func take() -> Bool {
+      lock.lock()
+      defer { lock.unlock() }
+      guard !done else { return false }
+      done = true
+      return true
     }
+  }
+
+  private func finish(_ task: BGTask, completion: TaskCompletionFlag, success: Bool) {
+    guard completion.take() else { return }
+    task.setTaskCompleted(success: success)
   }
 
   private func rescheduleNotificationPoll() {
     let minutes = defaults.double(forKey: intervalKey)
     guard minutes > 0 else { return }
-    try? registerNotificationPoll(minutes: minutes)
+    do {
+      try registerNotificationPoll(minutes: minutes)
+    } catch {
+      // 吞掉会让"后台提醒失效"无声无息（旧实现 try? 的教训，见注册路径注释）。
+      Self.log.error("reschedule notification poll failed: \(error.localizedDescription, privacy: .public)")
+    }
   }
 
   private func rescheduleAutoSign() {
     guard let raw = defaults.string(forKey: autoSignTimeKey) else { return }
     let parts = raw.split(separator: ":").compactMap { Int($0) }
     guard parts.count == 2 else { return }
-    try? registerAutoSign(hour: parts[0], minute: parts[1])
+    do {
+      try registerAutoSign(hour: parts[0], minute: parts[1])
+    } catch {
+      Self.log.error("reschedule auto sign failed: \(error.localizedDescription, privacy: .public)")
+    }
   }
 
   private func nextAutoSignDate(hour: Int, minute: Int) -> Date {
@@ -171,7 +191,10 @@ final class TiebaBackgroundSync: @unchecked Sendable {
     var components = calendar.dateComponents([.year, .month, .day], from: Date())
     components.hour = hour
     components.minute = minute
-    guard let candidate = calendar.date(from: components) else { return Date(timeIntervalSinceNow: 86400) }
+    // 取不到今天的候选（日历异常）时退化为"明天此刻"。
+    guard let candidate = calendar.date(from: components) else {
+      return Date(timeIntervalSinceNow: Self.oneDay)
+    }
     return candidate > Date() ? candidate : calendar.date(byAdding: .day, value: 1, to: candidate) ?? candidate
   }
 }

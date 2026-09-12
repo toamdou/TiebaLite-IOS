@@ -8,8 +8,9 @@
 // 自然撑出而非写死；呼吸动画尊重 Reduce Motion（静态占位）。
 // ============================================================
 
-import React, { useEffect, useMemo } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AppState, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useIsFocused } from 'expo-router';
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -65,13 +66,30 @@ const MEDIA_RADIUS = Radius.card - 4;
 // ---------- 呼吸动画 ----------
 // opacity 0.45 → 0.9 → 0.45，每段 500ms，无限循环（withRepeat reverse 对称
 // 呼吸，无首段空转）；Reduce Motion 时静态 0.9
-function useBreathing(reduceMotion: boolean) {
+//
+// 2026-09-12（发热审查）：呼吸只在"屏幕聚焦 + 应用前台"时跑。内容显示后马上
+// 停——调用点全部以 `loading && items.length === 0` 门控，内容落地即卸载、
+// 动画随之 cancel；这里的门控再盖住"骨架还在但用户看不到"的情况（切到别的
+// tab/页面、退到后台），否则它会一直 60fps 空转。
+function useSkeletonVisible(): boolean {
+  const isFocused = useIsFocused();
+  const [appActive, setAppActive] = useState(() => AppState.currentState === 'active');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      setAppActive(state === 'active');
+    });
+    return () => sub.remove();
+  }, []);
+  return isFocused && appActive;
+}
+
+function useBreathing(reduceMotion: boolean, visible: boolean) {
   const opacity = useSharedValue(0.45);
   const pulseStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
   useEffect(() => {
-    if (reduceMotion) {
-      // Reduce Motion：静态占位，不做脉冲
+    if (reduceMotion || !visible) {
+      // Reduce Motion / 不在前台或失焦：静态占位，不做脉冲
       cancelAnimation(opacity);
       opacity.value = 0.9;
       return;
@@ -82,7 +100,7 @@ function useBreathing(reduceMotion: boolean) {
       true, // reverse：0.45→0.9→0.45 对称呼吸，去掉旧版 withSequence 首段 500ms 空转
     );
     return () => cancelAnimation(opacity);
-  }, [reduceMotion, opacity]);
+  }, [reduceMotion, visible, opacity]);
 
   return pulseStyle;
 }
@@ -222,8 +240,9 @@ export function SkeletonList({
   style,
 }: SkeletonListProps) {
   const { reduceMotion } = useReducedMotion();
-  // 列表级共享呼吸：一次驱动，全列表同相位
-  const pulse = useBreathing(reduceMotion);
+  // 列表级共享呼吸：一次驱动，全列表同相位（仅在聚焦 + 前台时跑，见 useBreathing）
+  const visible = useSkeletonVisible();
+  const pulse = useBreathing(reduceMotion, visible);
   const natural = NATURAL_VARIANTS.includes(variant);
   const height = itemHeight ?? (natural ? undefined : DEFAULT_ITEM_HEIGHT[variant]);
 

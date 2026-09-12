@@ -240,13 +240,6 @@ public enum DiagnosticLogCenter {
     try? Data(body.utf8).write(to: logsDir().appendingPathComponent("crash-\(stamp()).log"))
   }
 
-  static func writeHangLog(stalledNs: UInt64) {
-    let body = environmentHeader(kind: "hang")
-      + "main_thread_stalled_ms: \(stalledNs / 1_000_000)\n"
-      + "note: 冻结中的主线程栈无法安全抓取，v1 仅记录事件\n"
-    try? Data(body.utf8).write(to: logsDir().appendingPathComponent("hang-\(stamp()).log"))
-  }
-
   /// 启动轮转：pending 信号日志转正 → 过期清理 → 数量/总量上限（最旧优先）
   static func rotateIfNeeded() {
     let fm = FileManager.default
@@ -289,83 +282,12 @@ public final class TiebaSystemCrashReporter: NSObject {
     guard !installed else { return }
     installed = true
     DiagnosticLogCenter.rotateIfNeeded()
-    TiebaSystemHangDetector.shared.start()
     prepareSignalBuffers()
     NSSetUncaughtExceptionHandler(tiebaUncaughtExceptionHandler)
     for sig in [SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTRAP] {
       signal(sig, tiebaSignalHandler)
     }
 #endif
-  }
-}
-
-// ── 主线程卡死检测 ──
-
-final class TiebaSystemHangDetector {
-  static let shared = TiebaSystemHangDetector()
-
-  private let thresholdNs: UInt64 = 4_000_000_000
-  private let reportCooldownNs: UInt64 = 60_000_000_000
-  // 主线程写、后台队列读的启发式整数：竞态最坏只是漏拍/多拍一次，无需锁
-  private var heartbeat: UInt64 = 0
-  private var lastReportAt: UInt64 = 0
-  private var consecutiveStalls = 0
-  private var paused = false
-  private var observer: CFRunLoopObserver?
-  private var timer: DispatchSourceTimer?
-
-  func start() {
-    let activity = CFRunLoopActivity.beforeWaiting.rawValue | CFRunLoopActivity.afterWaiting.rawValue
-    let obs = CFRunLoopObserverCreateWithHandler(kCFAllocatorDefault, activity, true, 0) {
-      [weak self] _, _ in
-      self?.heartbeat = DispatchTime.now().uptimeNanoseconds
-    }
-    CFRunLoopAddObserver(CFRunLoopGetMain(), obs, CFRunLoopMode.commonModes)
-    observer = obs
-    heartbeat = DispatchTime.now().uptimeNanoseconds
-
-    // 进后台暂停：后台主 RunLoop 本就不跑，不暂停则回前台必误报一次巨长卡死
-    let center = NotificationCenter.default
-    center.addObserver(
-      forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
-    ) { [weak self] _ in
-      guard let self else { return }
-      self.paused = true
-      self.consecutiveStalls = 0
-      self.heartbeat = DispatchTime.now().uptimeNanoseconds
-    }
-    center.addObserver(
-      forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
-    ) { [weak self] _ in
-      guard let self else { return }
-      self.heartbeat = DispatchTime.now().uptimeNanoseconds
-      self.paused = false
-    }
-
-    let source = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
-    source.schedule(deadline: .now() + 1.0, repeating: 1.0)
-    source.setEventHandler { [weak self] in self?.checkOnQueue() }
-    source.resume()
-    timer = source
-  }
-
-  private func checkOnQueue() {
-    guard !paused, heartbeat != 0 else {
-      consecutiveStalls = 0
-      return
-    }
-    let now = DispatchTime.now().uptimeNanoseconds
-    let gap = now - heartbeat
-    if gap >= thresholdNs {
-      // 连续两拍都超阈值才认定：滤掉「进程恢复瞬间读到陈旧心跳」的假阳性
-      consecutiveStalls += 1
-      if consecutiveStalls >= 2, now - lastReportAt >= reportCooldownNs {
-        lastReportAt = now
-        DiagnosticLogCenter.writeHangLog(stalledNs: gap)
-      }
-    } else {
-      consecutiveStalls = 0
-    }
   }
 }
 

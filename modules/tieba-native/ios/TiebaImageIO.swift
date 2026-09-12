@@ -36,12 +36,14 @@ final class TiebaImageIO {
   private let cacheDirectory: URL
   // Disk budget cap (default ~200MB). Exceeding it evicts least-recently-used
   // files. Settable at runtime from JS (设置 → 最大缓存大小).
-  // ⚠️ 跨线程读写（Swift 6 严格并发下是 data race，本轮不做并发改造，仅声明
-  // 契约）：JS 桥 setThumbnailCacheLimit 在 RN 调用线程写；enforceDiskLimit
-  // 在磁盘写入后的后台队列读（evictionLock 只护目录遍历，不护本属性）。写入
-  // 是 8 字节对齐的 Int64 赋值，实际不会撕裂；后续若做并发迁移，给本属性
-  // 加锁或改 @MainActor + 后台侧经锁读取。
-  var diskLimitBytes: Int64 = 200 * 1024 * 1024
+  // 2026-09-12（并发审查）：JS 桥线程写、淘汰线程读，原先注释自认 data race；
+  // 现在用锁保护（同一把锁也保证"读到的上限"不会与写入撕裂）。
+  private let diskLimitLock = NSLock()
+  private var diskLimitBytesValue: Int64 = 200 * 1024 * 1024
+  var diskLimitBytes: Int64 {
+    get { diskLimitLock.withLock { diskLimitBytesValue } }
+    set { diskLimitLock.withLock { diskLimitBytesValue = newValue } }
+  }
   private let evictionLock = NSLock()
   // Bump when the on-disk key encoding changes: files written under the old
   // scheme can never be found again, so purge them once on launch instead of
@@ -243,17 +245,23 @@ final class TiebaImageIO {
         return (url, Int64(values.fileSize ?? 0), values.contentModificationDate ?? .distantPast)
       }
       let total = entries.reduce(Int64(0)) { $0 + $1.size }
-      guard total > diskLimitBytes else { return }
+      // 上限只读一次：循环里反复读会与 JS 侧的写入竞争，也可能出现"边淘汰
+      // 边被改小/改大"的中途语义。
+      let limit = diskLimitBytes
+      guard total > limit else { return }
 
       let sorted = entries.sorted { $0.date < $1.date }
       var freed: Int64 = 0
       for entry in sorted {
-        guard total - freed > diskLimitBytes else { break }
+        guard total - freed > limit else { break }
         if (try? fileManager.removeItem(at: entry.url)) != nil {
           freed += entry.size
         }
       }
-    } catch {}
+    } catch {
+      // 目录枚举失败（权限/磁盘异常）原先被空 catch 吞掉：缓存超限后无任何线索。
+      Self.log.error("thumbnail cache eviction failed: \(error.localizedDescription, privacy: .public)")
+    }
   }
 
   private func writeAtomically(_ data: Data, to url: URL) throws {

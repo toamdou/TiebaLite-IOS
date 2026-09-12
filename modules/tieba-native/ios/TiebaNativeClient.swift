@@ -1,5 +1,5 @@
 import Foundation
-import CommonCrypto
+import CryptoKit
 
 enum TiebaClientError: LocalizedError {
   case invalidUrl
@@ -31,13 +31,13 @@ enum TiebaSigner {
   static let secret = "tiebaclient!!!"
   static let boundary = "--------7da3d81520810*"
 
+  /// MD5（协议要求，算法无法更换）：走 CryptoKit `Insecure.MD5`，与
+  /// TiebaNativeModule.md5Hex 同一实现——CommonCrypto 的 CC_MD5 自 iOS 13
+  /// 起废弃，SDK 会报 deprecation。
   static func md5Hex(_ input: String) -> String {
-    let data = Data(input.utf8)
-    var digest = [UInt8](repeating: 0, count: Int(CC_MD5_DIGEST_LENGTH))
-    _ = data.withUnsafeBytes { bytes in
-      CC_MD5(bytes.baseAddress, CC_LONG(data.count), &digest)
-    }
-    return digest.map { String(format: "%02x", $0) }.joined()
+    Insecure.MD5.hash(data: Data(input.utf8))
+      .map { String(format: "%02x", $0) }
+      .joined()
   }
 
   static func signFields(_ fields: [[String]], secret: String = secret) -> String {

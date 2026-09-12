@@ -94,6 +94,24 @@ public final class TiebaRichTextView: ExpoView, UITextViewDelegate {
     invalidateIntrinsicContentSize()
   }
 
+  /// 链接点击：iOS 17 起走 `primaryActionForTextItem`（新的公开回调），
+  /// 16.4 部署目标下同时保留旧的 `shouldInteractWith` 实现——旧方法自 iOS 17
+  /// 起已废弃（SDK: API_DEPRECATED ios(10.0, 17.0)），新系统上用新回调。
+  @available(iOS 17.0, *)
+  public func textView(
+    _ textView: UITextView,
+    primaryActionFor textItem: UITextItem,
+    defaultAction: UIAction
+  ) -> UIAction? {
+    guard case .link(let url) = textItem.content else { return defaultAction }
+    // 用 UIAction 替掉系统默认行为：链接一律交回 JS（站内跳转或 WebView），
+    // 与原 shouldInteractWith 返回 false 的语义一致。
+    return UIAction(title: defaultAction.title) { [weak self] _ in
+      self?.handle(url)
+    }
+  }
+
+  /// iOS 16 及以下：旧的链接交互回调（新系统已不用，保留兼容）。
   public func textView(
     _ textView: UITextView,
     shouldInteractWith url: URL,

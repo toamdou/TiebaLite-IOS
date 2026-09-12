@@ -19,7 +19,30 @@ extension TiebaNativeModule {
     static let appearanceBars = NSHashTable<UINavigationBar>.weakObjects()
     /// bar 弱引用缓存：force 扫到的 bar 登记，供 refresh 等按需遍历。
     static let cachedBars = NSHashTable<UINavigationBar>.weakObjects()
+
+    // ── 空转治理（2026-09-12 发热审查）──
+    // force 每次要做两趟视图树全量遍历：collectNavigationBars 扫所有窗口的
+    // 整棵树，applyTopScrollEdgeEffect 再扫顶层页面整棵树。改前 1.5s timer
+    // 无条件全扫，且 UINavigationBar.layoutSubviews 每次布局也全扫——转场/
+    // 滚动期间栏逐帧布局，等于接近每帧两趟遍历（持续发热的真凶之一）。
+    // 现在没有周期任务：timer 已删（轮询整棵视图树不是 UIKit 的做法），所有
+    // 触发源都是事件（挂载/布局/转场完成/回前台/JS 设置），且只在标脏时遍历。
+    /// 视图层级已变化（新 bar / 新滚动视图挂载、栏布局、回前台、转场完成、
+    /// JS 改主题或路由门控），下一次重扫需要全量遍历。
+    nonisolated(unsafe) static var needsRescan = true
+    /// 上次全量重扫时间（CACurrentMediaTime），节流用。
+    nonisolated(unsafe) static var lastScanAt: CFTimeInterval = 0
+    /// tick 路径（栏/滚动视图挂载与布局这类高频事件）的最小重扫间隔：滚动中
+    /// 反复挂载会把脏标记刷成高频，合并到 2s 一次（列表挂载 → 顶栏模糊最迟
+    /// 2s 到位；空闲时零成本）。
+    static let tickScanInterval: CFTimeInterval = 2.0
+    /// 事件路径（回前台 / 转场完成 / JS 设置）的最小重扫间隔：只用于合并同一
+    /// 事件的多次回调，不牺牲"新 bar 首帧就要深色"的时效。
+    static let eventScanInterval: CFTimeInterval = 0.1
   }
+
+  /// 标记视图层级已变化：下一次 tick / 事件会做一次全量重扫（幂等、零遍历）。
+  static func markChromeDirty() { ChromeState.needsRescan = true }
 
   static func setChromeDarkMode(_ dark: Bool?) { ChromeState.darkMode = dark }
 
@@ -30,8 +53,9 @@ extension TiebaNativeModule {
 
   // 顶栏 chrome 的幂等重挂入口（v3 起，2026-08-22；v34 起职责收窄）：窗口/
   // 导航容器底色、栏 trait、栏外观（透明）、双击回顶手势、滚动边缘模糊按
-  // 路由幂等重挂。入口=启动 + 回前台 + 转场完成（didShow）+ 1.5s timer +
-  // bar 的 didMoveToWindow/layoutSubviews。
+  // 路由幂等重挂。**全事件驱动、无周期任务**（2026-09-12 起）：入口=启动首扫
+  // + 回前台（didBecomeActive）+ 转场完成（didShow）+ bar/滚动视图的
+  // didMoveToWindow/layoutSubviews + JS 侧主题与路由门控 setter。
   //
   // 历史（勿再回头）：v3–v33 曾在渲染层直接操作 _UIBarBackground 里的
   // UIVisualEffectView（设 systemMaterial/ultraThin + 渐变 mask）自建磨砂——
@@ -44,10 +68,9 @@ extension TiebaNativeModule {
         TiebaNativeModule.forceNavBarLiquidGlass()
       }
     }
-    // 转场完成兜底（2026-09-02 代码修复）：push/pop 动画期间 RunLoop 处于
-    // tracking 模式，1.5s timer 被跳过；_UIBarBackground 在转场中重建，
-    // 新 bar 的材质要等 timer 恢复才挂（"进帖子页无效果"的 timing 缺口）。
-    // didShow 在动画完成时触发 → 主线程强制 force，重建窗口压到一帧内。
+    // 转场完成重扫（2026-09-02 修复）：push/pop 动画期间 RunLoop 处于 tracking
+    // 模式，动画结束后新 bar 已建成但还没被处理（"进帖子页无效果"的 timing
+    // 缺口）。didShow 在动画完成时触发 → 主线程立即 force，缺口压到一帧内。
     nc.addObserver(
       forName: Notification.Name("UINavigationControllerDidShowNotification"),
       object: nil,
@@ -57,22 +80,15 @@ extension TiebaNativeModule {
         TiebaNativeModule.forceNavBarLiquidGlass()
       }
     }
-    // 持续幂等重挂：KVO 覆盖"effect 被系统改动"，timer 兜底 "_UIBarBackground
-    // 整个重建（新 bar 无人接管材质）。1.5s 一次成本可忽略。
-    // 必须用非调度构造器再显式挂主 run loop：本静态初始化在 JS 线程触发
-    // （protoInitialize），scheduledTimer 会把 timer 挂上 JS run loop，
-    // 之后 RunLoop.main.add 无法迁移——每 1.5s 在 JS 线程执行视图写入
-    // 触发 Auto Layout 仅主线程断言 SIGABRT（进二级页面必崩，2026-08-26）。
-    // 用默认模式而非 .common：tracking 期间（滚动、系统手势动画）不打断主
-    // 线程；布局完成事件由 navGlassScrollDump 的 didMoveToWindow/layout
-    // Subviews swizzle 兜底（v21 起玻璃层自建、不受系统重置，无需滚动恢复）。
-    let timer = Timer(timeInterval: 1.5, repeats: true) { _ in
-      TiebaNativeModule.forceNavBarLiquidGlass()
-    }
-    RunLoop.main.add(timer, forMode: .default)
-    // 新 bar 挂载/布局即 force：didMoveToWindow 首帧深色防"先白后黑"、
-    // layoutSubviews 收尾材质视图建成/布局变化后的时机缺口。
-    _ = navChromeScrollHooks
+    // 兜底重扫：**没有周期性 timer**（2026-09-12 用户质询后删除）。
+    // 定时轮询整棵视图树不是 UIKit 的做法——UIKit 的规范是事件驱动：栏/滚动件
+    // 挂载与布局、转场完成、回前台、trait 变化各有回调。改前 1.5s 无条件全量
+    // 遍历是 v21–v33 自建玻璃层时代的遗留（那时 UIKit 会重建 _UIBarBackground
+    // 里的材质视图，只能靠轮询重挂）；v34 起栏外观只写一次且由 setter swizzle
+    // 兜住后写，自建层已全部撤除，轮询失去存在理由。
+    // 现在的触发源全是事件：本函数注册的通知（回前台 / 转场完成）、
+    // navChromeScrollHooks 的 didMoveToWindow/layoutSubviews swizzle、JS 侧
+    // setChromeUserInterfaceStyle / setNavBarGlassEnabled。
     return ()
   }()
 
@@ -80,7 +96,7 @@ extension TiebaNativeModule {
     guard !ChromeState.scrollHooked else { return }
     ChromeState.scrollHooked = true
     // 新 bar 挂载即应用：页面 push 瞬间新 UINavigationBar 首次进 window，
-    // 等 1.5s 兜底扫描的话深色模式下会先渲染系统浅色（真机实测"先白后黑"）。
+    // 若等下一次事件才处理，深色模式下会先渲染系统浅色（真机实测"先白后黑"）。
     // didMoveToWindow 必在主线程；这里同步直写 override（不必等 force 扫描
     // ——bar 未入 window 时 collectNavigationBars 扫不到、force 会早退，
     // trait 一旦写入，UIKit 自带的初始渲染就是深色），再补一轮 force。
@@ -104,8 +120,9 @@ extension TiebaNativeModule {
       }
       method_setImplementation(moveMethod, imp_implementationWithBlock(moveBlock))
     }
-    // layoutSubviews 兜底：bar 每次布局（含 _UIBarBackground 建成）后异步
-    // 重挂。放在布局结束后执行，避免在布局 pass 内 flush 引起递归。
+    // layoutSubviews：bar 尺寸/外观变化（外观重写、安全区、旋屏、栏底重建都
+    // 会带来一次布局）是"结构可能变了"的事件源——标脏，再由 tick 路径按
+    // 最小间隔合并重扫。放在布局结束后执行，避免在布局 pass 内 flush 递归。
     let layoutSelector = #selector(UIView.layoutSubviews)
     if let layoutMethod = class_getInstanceMethod(UINavigationBar.self, layoutSelector) {
       let layoutOriginal = method_getImplementation(layoutMethod)
@@ -113,15 +130,37 @@ extension TiebaNativeModule {
       let layoutOriginalFn = unsafeBitCast(layoutOriginal, to: LayoutFn.self)
       let layoutBlock: @convention(block) (AnyObject) -> Void = { bar in
         layoutOriginalFn(bar, layoutSelector)
+        TiebaNativeModule.markChromeDirty()
         DispatchQueue.main.async {
-          _ = TiebaNativeModule.forceNavBarLiquidGlass()
+          _ = TiebaNativeModule.forceNavBarLiquidGlass(tick: true)
         }
       }
       method_setImplementation(layoutMethod, imp_implementationWithBlock(layoutBlock))
     }
-    // v21 说明：不再有 setContentOffset swizzle/滚动恢复——自建玻璃层不属
-    // 系统材质管理，系统不会重置它；滚动中玻璃层持续存在（layoutSubviews
-    // 兜底 force 收尾布局变化）。
+    // 滚动视图挂载/卸载即标脏（2026-09-12）：列表在页面 didShow 之后才挂载是
+    // 常见路径（骨架 → 列表、加载完成后换数据），事件驱动下必须把这个来源
+    // 接上，否则新列表的顶栏模糊要等到下次转场才生效。只写一个布尔，无遍历；
+    // 真正的重扫由 tick 路径按最小间隔合并（滚动中反复挂载不会变成每帧遍历）。
+    if let scrollMoveMethod = class_getInstanceMethod(UIScrollView.self, moveSelector) {
+      let scrollOriginal = method_getImplementation(scrollMoveMethod)
+      typealias ScrollMoveFn = @convention(c) (AnyObject, Selector) -> Void
+      let scrollOriginalFn = unsafeBitCast(scrollOriginal, to: ScrollMoveFn.self)
+      let scrollBlock: @convention(block) (AnyObject) -> Void = { scrollView in
+        scrollOriginalFn(scrollView, moveSelector)
+        TiebaNativeModule.markChromeDirty()
+        DispatchQueue.main.async {
+          _ = TiebaNativeModule.forceNavBarLiquidGlass(tick: true)
+        }
+      }
+      method_setImplementation(scrollMoveMethod, imp_implementationWithBlock(scrollBlock))
+    }
+    // 启动首扫（原 1.5s timer 的第一拍职责）：钩子安装时可能已经有滚动视图/
+    // 导航栏挂载过（swizzle 装晚了错过 didMoveToWindow），标脏 + 立即扫一次，
+    // 保证首屏状态确定（needsRescan 初值就是 true，这里只是显式化）。
+    TiebaNativeModule.markChromeDirty()
+    DispatchQueue.main.async {
+      _ = TiebaNativeModule.forceNavBarLiquidGlass()
+    }
     return ()
   }()
 
@@ -284,14 +323,27 @@ extension TiebaNativeModule {
   // 导航栏弱引用缓存：force 扫到的 bar 登记，供 refresh 等按需遍历。
 
   @discardableResult
-  static func forceNavBarLiquidGlass() -> Bool {
+  static func forceNavBarLiquidGlass(tick: Bool = false) -> Bool {
     // 全部工作（视图树遍历 + effect/mask 写入）只允许主线程：setEffect:
     // 内部走 NSISEngine，非主线程直接触发 Auto Layout 断言 SIGABRT。
-    // timer/KVO/通知各入口理论都应主线程，这里统一兜底跳转而非崩溃。
+    // 各入口理论都应主线程，这里统一兜底跳转而非崩溃。
     guard Thread.isMainThread else {
-      DispatchQueue.main.async { TiebaNativeModule.forceNavBarLiquidGlass() }
+      DispatchQueue.main.async { _ = TiebaNativeModule.forceNavBarLiquidGlass(tick: tick) }
       return false
     }
+    // 空转治理（2026-09-12）：tick 路径（栏/滚动件挂载与布局这类高频事件）
+    // 只有在视图层级被标脏后才真的遍历；事件路径（回前台 / 转场完成 / JS
+    // 改主题或路由）先标脏再按 0.1s 合并同一事件的多次回调。两条路径都按
+    // 最小间隔节流，被节流跳过时脏标记保留，下一次调用补齐。
+    if !tick {
+      ChromeState.needsRescan = true
+    }
+    guard ChromeState.needsRescan else { return false }
+    let now = CACurrentMediaTime()
+    let minInterval = tick ? ChromeState.tickScanInterval : ChromeState.eventScanInterval
+    guard now - ChromeState.lastScanAt >= minInterval else { return false }
+    ChromeState.lastScanAt = now
+    ChromeState.needsRescan = false
     let bars = collectNavigationBars()
     // 无导航栏（splash/首帧前）直接短路：不碰 CATransaction。此前每 1.5s
     // 无条件 CATransaction.flush() 会反复强制主线程完成挂起布局，打断
@@ -333,7 +385,8 @@ extension TiebaNativeModule {
     CATransaction.setDisableActions(true)
     for navBar in bars {
       ChromeState.cachedBars.add(navBar)
-      // 双击回顶手势：随 force 的 timer/KVO 扫描覆盖新建的 bar（≤1.5s 延迟）。
+      // 双击回顶手势：新 bar 由 didMoveToWindow 钩子标脏后经重扫安装，
+      // 这里幂等判重（同一 bar 只装一次）。
       installNavDoubleTapToTop(on: navBar)
       // 回弹/转场漏白（2026-09-02 二轮）：页面实际所在的是导航容器
       // （UINavigationController.view，可能嵌套非 window.rootViewController），

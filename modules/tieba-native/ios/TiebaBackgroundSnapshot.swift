@@ -1,46 +1,108 @@
 import Foundation
 import Security
+import os
 
-/// 后台快照（BDUSS/STOKEN/签到目标等）：JS 桥主线程写入、BGTask 后台读取，
-/// 按设计跨线程。Swift 6 下以 @unchecked Sendable 声明（字段均为 String/
-/// [String] 值类型，Keychain 落盘由本类串行执行）。
+/// 后台快照（BDUSS/STOKEN/签到目标等）：JS 桥线程写入、BGTask 与请求组装线程
+/// 读取，按设计跨线程。
+///
+/// 2026-09-12（并发审查）：此前字段是裸 `var`，读方可能读到写了一半的字段组合
+/// （String 非原子，撕裂读写是未定义行为，而且这是凭据）。现在**所有读写都在
+/// 同一把 NSLock 内**：单字段读走计算属性，`save/load/clear` 在锁内整体替换，
+/// 保证读到的一定是自洽的一份快照。Swift 6 下以 @unchecked Sendable 声明。
 final class TiebaBackgroundSnapshot: @unchecked Sendable {
   static let shared = TiebaBackgroundSnapshot()
+
+  private static let log = Logger(
+    subsystem: "com.tiebalite.app",
+    category: "background-snapshot"
+  )
 
   private let keychainService = "app"
   private let keychainAccount = "tiebalite.native.background_snapshot"
 
-  var bduss = ""
-  var stoken = ""
-  var cookie = ""
-  var uid = ""
-  var tbs = ""
-  var zid = ""
-  var clientId = ""
-  var forumIds: [String] = []
-  var forumNames: [String] = []
+  /// 保护下列全部字段：单字段读写与 save/load/clear 的整体替换互斥。
+  private let lock = NSLock()
+
+  private var bdussValue = ""
+  private var stokenValue = ""
+  private var cookieValue = ""
+  private var uidValue = ""
+  private var tbsValue = ""
+  private var zidValue = ""
+  private var clientIdValue = ""
+  private var forumIdsValue: [String] = []
+  private var forumNamesValue: [String] = []
+
+  var bduss: String {
+    get { lock.withLock { bdussValue } }
+    set { lock.withLock { bdussValue = newValue } }
+  }
+  var stoken: String {
+    get { lock.withLock { stokenValue } }
+    set { lock.withLock { stokenValue = newValue } }
+  }
+  var cookie: String {
+    get { lock.withLock { cookieValue } }
+    set { lock.withLock { cookieValue = newValue } }
+  }
+  var uid: String {
+    get { lock.withLock { uidValue } }
+    set { lock.withLock { uidValue = newValue } }
+  }
+  var tbs: String {
+    get { lock.withLock { tbsValue } }
+    set { lock.withLock { tbsValue = newValue } }
+  }
+  var zid: String {
+    get { lock.withLock { zidValue } }
+    set { lock.withLock { zidValue = newValue } }
+  }
+  var clientId: String {
+    get { lock.withLock { clientIdValue } }
+    set { lock.withLock { clientIdValue = newValue } }
+  }
+  var forumIds: [String] {
+    get { lock.withLock { forumIdsValue } }
+    set { lock.withLock { forumIdsValue = newValue } }
+  }
+  var forumNames: [String] {
+    get { lock.withLock { forumNamesValue } }
+    set { lock.withLock { forumNamesValue = newValue } }
+  }
 
   func save(_ payload: [String: Any]) {
-    bduss = string(payload["bduss"])
-    stoken = string(payload["stoken"])
-    cookie = string(payload["cookie"])
-    uid = string(payload["uid"])
-    tbs = string(payload["tbs"])
-    zid = string(payload["zid"])
-    clientId = string(payload["clientId"])
-    forumIds = payload["forumIds"] as? [String] ?? []
-    forumNames = payload["forumNames"] as? [String] ?? []
+    let nextBduss = string(payload["bduss"])
+    let nextStoken = string(payload["stoken"])
+    let nextCookie = string(payload["cookie"])
+    let nextUid = string(payload["uid"])
+    let nextTbs = string(payload["tbs"])
+    let nextZid = string(payload["zid"])
+    let nextClientId = string(payload["clientId"])
+    let nextForumIds = payload["forumIds"] as? [String] ?? []
+    let nextForumNames = payload["forumNames"] as? [String] ?? []
+
+    lock.withLock {
+      bdussValue = nextBduss
+      stokenValue = nextStoken
+      cookieValue = nextCookie
+      uidValue = nextUid
+      tbsValue = nextTbs
+      zidValue = nextZid
+      clientIdValue = nextClientId
+      forumIdsValue = nextForumIds
+      forumNamesValue = nextForumNames
+    }
 
     let payload: [String: Any] = [
-      "bduss": bduss,
-      "stoken": stoken,
-      "cookie": cookie,
-      "uid": uid,
-      "tbs": tbs,
-      "zid": zid,
-      "clientId": clientId,
-      "forumIds": forumIds,
-      "forumNames": forumNames
+      "bduss": nextBduss,
+      "stoken": nextStoken,
+      "cookie": nextCookie,
+      "uid": nextUid,
+      "tbs": nextTbs,
+      "zid": nextZid,
+      "clientId": nextClientId,
+      "forumIds": nextForumIds,
+      "forumNames": nextForumNames
     ]
     if let json = try? JSONSerialization.data(withJSONObject: payload),
        let encoded = String(data: json, encoding: .utf8) {
@@ -51,27 +113,31 @@ final class TiebaBackgroundSnapshot: @unchecked Sendable {
   func load() {
     guard let raw = readKeychain(), let data = raw.data(using: .utf8) else { return }
     guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-    bduss = string(json["bduss"])
-    stoken = string(json["stoken"])
-    cookie = string(json["cookie"])
-    uid = string(json["uid"])
-    tbs = string(json["tbs"])
-    zid = string(json["zid"])
-    clientId = string(json["clientId"])
-    forumIds = json["forumIds"] as? [String] ?? []
-    forumNames = json["forumNames"] as? [String] ?? []
+    lock.withLock {
+      bdussValue = string(json["bduss"])
+      stokenValue = string(json["stoken"])
+      cookieValue = string(json["cookie"])
+      uidValue = string(json["uid"])
+      tbsValue = string(json["tbs"])
+      zidValue = string(json["zid"])
+      clientIdValue = string(json["clientId"])
+      forumIdsValue = json["forumIds"] as? [String] ?? []
+      forumNamesValue = json["forumNames"] as? [String] ?? []
+    }
   }
 
   func clear() {
-    bduss = ""
-    stoken = ""
-    cookie = ""
-    uid = ""
-    tbs = ""
-    zid = ""
-    clientId = ""
-    forumIds = []
-    forumNames = []
+    lock.withLock {
+      bdussValue = ""
+      stokenValue = ""
+      cookieValue = ""
+      uidValue = ""
+      tbsValue = ""
+      zidValue = ""
+      clientIdValue = ""
+      forumIdsValue = []
+      forumNamesValue = []
+    }
     deleteKeychain()
   }
 
@@ -150,7 +216,12 @@ final class TiebaBackgroundSnapshot: @unchecked Sendable {
       kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
     ]
     SecItemDelete(query as CFDictionary)
-    SecItemAdd(query as CFDictionary, nil)
+    // Keychain 写入必须回读状态：失败静默丢弃会让下次冷启动凭据丢失（用户表现
+    // 为"莫名掉登录"，无任何线索）。这里只记日志，不改变失败语义。
+    let status = SecItemAdd(query as CFDictionary, nil)
+    if status != errSecSuccess {
+      Self.log.error("background snapshot keychain write failed: OSStatus \(status, privacy: .public)")
+    }
   }
 
   private func readKeychain() -> String? {

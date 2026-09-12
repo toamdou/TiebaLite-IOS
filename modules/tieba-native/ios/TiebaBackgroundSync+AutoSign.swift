@@ -165,7 +165,12 @@ extension TiebaBackgroundSync {
     date.minute = minute
     let trigger = UNCalendarNotificationTrigger(dateMatching: date, repeats: true)
     let request = UNNotificationRequest(identifier: "auto_sign_reminder", content: content, trigger: trigger)
-    UNUserNotificationCenter.current().add(request)
+    // 投递结果回读：未授权时 add 会失败，静默丢弃等于提醒悄悄失效。
+    UNUserNotificationCenter.current().add(request) { error in
+      if let error {
+        Self.log.error("add sign reminder failed: \(error.localizedDescription, privacy: .public)")
+      }
+    }
   }
 
   func cancelSignReminder() {

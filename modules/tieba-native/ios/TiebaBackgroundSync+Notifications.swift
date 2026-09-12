@@ -54,8 +54,12 @@ extension TiebaBackgroundSync {
       }
     }
     saveLastCounts(uid: snapshot.uid, reply: reply, at: at, agree: agree, total: total)
-    await MainActor.run {
-      UIApplication.shared.applicationIconBadgeNumber = total
+    // 角标走 UNUserNotificationCenter.setBadgeCount（applicationIconBadgeNumber
+    // 自 iOS 17 起废弃）。失败只记日志：角标不显示不影响未读计数本身。
+    do {
+      try await UNUserNotificationCenter.current().setBadgeCount(total)
+    } catch {
+      Self.log.error("setBadgeCount failed: \(error.localizedDescription, privacy: .public)")
     }
   }
 
@@ -114,6 +118,11 @@ extension TiebaBackgroundSync {
       content.userInfo = ["type": "message", "url": deepLink]
     }
     let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
-    UNUserNotificationCenter.current().add(request)
+    // 投递结果必须回读：未授权/被限流时 add 会失败，静默丢弃等于通知悄悄失效。
+    UNUserNotificationCenter.current().add(request) { error in
+      if let error {
+        Self.log.error("add notification failed: \(error.localizedDescription, privacy: .public)")
+      }
+    }
   }
 }

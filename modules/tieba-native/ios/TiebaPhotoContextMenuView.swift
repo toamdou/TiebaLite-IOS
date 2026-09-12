@@ -168,13 +168,24 @@ final class TiebaPhotoPreviewViewController: UIViewController {
   private let fullUrl: String?
   private var loadTask: Task<Void, Never>?
 
+  /// 预览尺寸基准：活动场景里 key window 的 bounds（`UIScreen.main` 自 iOS 26
+  /// 起废弃，多场景/外接屏下语义错误）。
+  private static func activeWindowBounds() -> CGRect? {
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    let window = scenes.first { $0.activationState == .foregroundActive }?.keyWindow
+      ?? scenes.compactMap(\.keyWindow).first
+      ?? scenes.first?.windows.first
+    return window?.bounds
+  }
+
   init(initialImage: UIImage?, fullUrl: String?, pixelWidth: Double, pixelHeight: Double) {
     self.fullUrl = fullUrl
 
-    // 预览尺寸：宽不超过屏宽 - 48，高按原图比例并给下方菜单留空间
-    let screen = UIScreen.main.bounds
-    let maxWidth = screen.width - 48
-    let maxHeight = screen.height * 0.62
+    // 预览尺寸：宽不超过窗口宽 - 48，高按原图比例并给下方菜单留空间。
+    // 无窗口（不可能：本菜单只在屏上创建）时按最窄机型 375pt 保守取值。
+    let windowBounds = Self.activeWindowBounds() ?? CGRect(x: 0, y: 0, width: 375, height: 667)
+    let maxWidth = windowBounds.width - 48
+    let maxHeight = windowBounds.height * 0.62
     let ratio = pixelWidth > 0 && pixelHeight > 0 ? pixelHeight / pixelWidth : 1
     var previewWidth = min(maxWidth, pixelWidth > 0 ? pixelWidth : 260)
     var previewHeight = previewWidth * ratio
@@ -225,7 +236,11 @@ final class TiebaPhotoPreviewViewController: UIViewController {
           self.imageView.image = image
         }
       } catch {
-        // 弱网 / 加载失败：保持缩略图首帧；不打断菜单交互
+        // 弱网 / 加载失败：保持缩略图首帧，不打断菜单交互（有意的产品行为）。
+        // 仍留一条 debug 日志：否则"菜单里一直是缩略图"永远查不到原因。
+        #if DEBUG
+        NSLog("[tieba-photo-menu] full image load failed: %@", error.localizedDescription)
+        #endif
       }
     }
   }

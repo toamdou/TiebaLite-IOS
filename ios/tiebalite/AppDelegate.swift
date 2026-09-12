@@ -1,6 +1,7 @@
 internal import Expo
 import React
 import ReactAppDependencyProvider
+import os
 
 @main
 class AppDelegate: ExpoAppDelegate, UIWindowSceneDelegate {
@@ -9,17 +10,22 @@ class AppDelegate: ExpoAppDelegate, UIWindowSceneDelegate {
   var reactNativeDelegate: ExpoReactNativeFactoryDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
 
+  private static let log = Logger(subsystem: "com.tiebalite.app", category: "app-delegate")
+
   public override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
 #if !DEBUG
     // 诊断日志（仅 Release）：运行时查找 tieba-system 模块内的安装器——
-    // 不跨 pod import（模块名由 autolinking 生成，硬编码易碎）；类不存在
-    // （老二进制/未链接）时静默跳过。安装动作本身 <1ms。
+    // 不跨 pod import（模块名由 autolinking 生成，硬编码易碎）；安装动作 <1ms。
+    // 找不到类时**记一条日志**：该模块当前没有 podspec（未编进 App），静默
+    // 跳过会让"诊断日志/闪退采集整条链路不存在"永远无人发现。
     if let crashReporterClass = NSClassFromString("TiebaSystemCrashReporter") as? NSObject.Type,
        crashReporterClass.responds(to: NSSelectorFromString("install")) {
       _ = crashReporterClass.perform(NSSelectorFromString("install"))
+    } else {
+      Self.log.warning("TiebaSystemCrashReporter not linked; crash/hang diagnostics disabled")
     }
 #endif
     // RN 初始化移入 scene(_:willConnectTo:)，这里只转发 super。

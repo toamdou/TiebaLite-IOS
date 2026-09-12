@@ -100,11 +100,20 @@ final class TiebaPrivacyShield: @unchecked Sendable {
     observers.removeAll()
   }
 
+  /// 活动窗口场景。iOS 26 起 `UIScreen.main` 已废弃（多场景/外接屏下语义
+  /// 错误），窗口与尺寸一律取自 scene：优先前台活跃场景，退而取第一个场景。
+  private func activeWindowScene() -> UIWindowScene? {
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+  }
+
   private func show() {
     guard enabled else { return }
-    let w = ensureWindow()
-    // 遮罩存续期间不会旋转（失活态），但保险起见每次显示前对齐当前屏幕。
-    w.frame = UIScreen.main.bounds
+    // 场景尚未接入（启动极早期）时不强行造窗：本方法只在意"失活瞬间要盖住"，
+    // 下一次 willResignActive 仍会走到这里，届时场景必然存在。
+    guard let w = ensureWindow() else { return }
+    // 归属场景的窗口 frame 由 windowScene 管理（旋屏/多场景自动跟随），
+    // 不再逐次对齐屏幕。
     w.isHidden = false
   }
 
@@ -112,9 +121,12 @@ final class TiebaPrivacyShield: @unchecked Sendable {
     window?.isHidden = true
   }
 
-  private func ensureWindow() -> UIWindow {
+  private func ensureWindow() -> UIWindow? {
     if let window { return window }
-    let w = UIWindow(frame: UIScreen.main.bounds)
+    guard let scene = activeWindowScene() else { return nil }
+    // 用 windowScene 构造（场景化 App 的规范写法）：窗口天然归属正确场景，
+    // 多任务快照/外接屏语义正确。
+    let w = UIWindow(windowScene: scene)
     w.windowLevel = .alert + 100
     let viewController = UIViewController()
     viewController.view.backgroundColor = .clear
