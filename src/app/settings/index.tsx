@@ -34,6 +34,7 @@ export default function SettingsPage() {
   const rowTint = (c: string) => (isDefaultTheme ? c : colors.primary);
   const setPreference = usePreferencesStore((s) => s.setPreference);
   const hapticFeedback = usePreferencesStore((s) => s.preferences.hapticFeedback);
+  const autoCheckUpdate = usePreferencesStore((s) => s.preferences.autoCheckUpdate ?? true);
   const appLockEnabled = useAppLockStore((s) => s.enabled);
   const setAppLockEnabled = useAppLockStore((s) => s.setEnabled);
   const [appLockBusy, setAppLockBusy] = useState(false);
@@ -169,6 +170,23 @@ export default function SettingsPage() {
 
         {/* ── 通用 ── */}
         <FieldGroup.Section title="通用">
+          <ListItem
+            leading={<RowIcon icon="arrow.triangle.2.circlepath" tint={rowTint('#4477E0')} />}
+            supportingText="启动时检查 GitHub 最新 Release（关于页可手动检查）"
+            trailing={
+              <Switch
+                value={autoCheckUpdate}
+                modifiers={isDefaultTheme ? [] : [tint(colors.primary)]}
+                onValueChange={(v) => {
+                  setPreference('autoCheckUpdate', v);
+                  if (v) hapticForScene('toggle');
+                  showToast(v ? '已开启自动检测更新' : '已关闭自动检测更新');
+                }}
+              />
+            }
+          >
+            自动检测更新
+          </ListItem>
           <ListItem
             leading={<RowIcon icon="ellipsis.circle" tint={rowTint('#8E8E93')} />}
             supportingText="缓存与数据、外部链接、日志与关于"

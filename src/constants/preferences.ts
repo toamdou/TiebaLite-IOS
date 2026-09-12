@@ -38,6 +38,7 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   failAutoStop: true,
   useOfficialSign: true,
   liveActivitySignEnabled: true,
+  autoCheckUpdate: true,
   /** 默认在灵动岛显示签到进度（可在设置改为通知栏） */
   signDisplayMode: 'liveActivity',
   /** 默认关闭静默签到（完成通知带声音提示） */

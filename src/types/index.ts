@@ -588,6 +588,8 @@ export interface AppPreferences {
   useOfficialSign: boolean;
   /** Whether one-click sign progress is shown as an iOS Live Activity. */
   liveActivitySignEnabled: boolean;
+  /** 启动时自动检查 GitHub 最新 Release（关于页可手动检查） */
+  autoCheckUpdate: boolean;
   /** 签到进度显示位置：灵动岛 Live Activity / 通知栏横幅（二选一）。 */
   signDisplayMode: 'liveActivity' | 'notification';
   /** 签到静默显示：完成通知不发声、不振动（横幅照常显示）。 */
