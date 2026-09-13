@@ -1,0 +1,9 @@
+# 设备签名描述文件（app 与扩展各一份，扩展不继承 app 的 profile）。
+#
+# 目录内容不入库：CI 用 Tools/make-unsigned-profile.sh 现场生成占位件，本地调试放
+# 自己的 .mobileprovision。这里只声明目标，让 --config=device 的 select 有东西可指。
+package(default_visibility = ["//visibility:public"])
+
+filegroup(name = "profile_app", srcs = ["app.mobileprovision"])
+
+filegroup(name = "profile_ext", srcs = ["ext.mobileprovision"])

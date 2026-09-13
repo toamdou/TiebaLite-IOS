@@ -1,0 +1,42 @@
+# 依赖（JS 时代遗留，仓库已无 JS；留一条兜底避免误入）
+node_modules/
+
+# 构建产物
+dist/
+/build/
+*.ipa
+/xcodeproj.xcodeproj/
+/bazel-*
+
+# 签名材料与本地密钥（**永不入库**：描述文件含 Apple ID/团队/设备 UDID）
+Signing/*.mobileprovision
+*.mobileprovision
+.env*.local
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+
+# 本机 Bazel 缓存路径（含用户名）
+/.bazelrc.user
+
+# 工具状态与 IDE
+.mimosa/
+.zcode/
+.vscode/
+.idea/
+.claude/
+.Qoder/
+.DS_Store
+*.local
+
+# 本地开发脚本与产物（含本机路径）
+/scripts/
+
+# 所有 Markdown 一律不入库（用户规则 2026-08-25），README 例外（GitHub 文档）
+*.md
+!README.md
+
+# 第三方文档抓取（Nuke 官方文档离线副本，非本项目文档）
+docs/nuke/

@@ -1,0 +1,44 @@
+# Bazel entry point: `bazel build //:App` (simulator Debug by default, see .bazelrc).
+load("@rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "xcodeproj")
+
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "TiebaNative",
+    actual = "//Sources/TiebaNative:TiebaNative",
+)
+
+ios_application(
+    name = "App",
+    app_icons = ["//TiebaLite:app_icon"],
+    bundle_id = "com.tiebalite.app",
+    bundle_name = "tiebalite",
+    entitlements = "//TiebaLite:tiebalite.entitlements",
+    extensions = ["//Extensions/TiebaLiveActivity:extension"],
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["//TiebaLite:app_info_plist"],
+    minimum_os_version = "17.0",
+    # Unset unless --config=device (or --define=apple.device_signing=1) is passed.
+    provisioning_profile = select({
+        "//TiebaLite:device_signing": "//Signing:profile_app",
+        "//conditions:default": None,
+    }),
+    resources = ["//TiebaLite:app_resources"],
+    sdk_frameworks = [
+        "BackgroundTasks",
+        "CoreGraphics",
+        "ImageIO",
+        "Security",
+        "UIKit",
+    ],
+    deps = ["//TiebaLite:tiebalite_lib"],
+)
+
+xcodeproj(
+    name = "xcodeproj",
+    top_level_targets = ["//:App"],
+)

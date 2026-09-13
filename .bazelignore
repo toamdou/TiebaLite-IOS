@@ -1,0 +1,4 @@
+# 目录级忽略（.bazelignore 只接受目录）。构建产物与本地文档目录不需要 Bazel 遍历。
+dist
+docs
+review-reports

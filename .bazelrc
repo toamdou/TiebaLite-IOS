@@ -1,0 +1,29 @@
+# 纯 Swift 工程的 Bazel 构建（CocoaPods / xcodebuild 路径已退役）。
+
+build --apple_platform_type=ios
+build --ios_minimum_os=17.0
+build --compilation_mode=dbg
+build --verbose_failures
+
+# 缓存路径含本机用户名，不入库：复制下面两行到 .bazelrc.user（已 gitignore）并改成自己的
+# 绝对路径即可（.bazelrc 不展开 ~）。不配也能跑，只是每次全量重编。
+#   build --disk_cache=/Users/<you>/.bazel_cache/disk
+#   build --repository_cache=/Users/<you>/.bazel_cache/repository
+try-import %workspace%/.bazelrc.user
+
+# ⚠️ --ios_multi_cpus 是累加型：架构必须落在互斥的 config 里，
+# 否则全局值会和 config 值叠起来，lipo 报 "same architectures (arm64)"。
+build:sim --ios_multi_cpus=sim_arm64          # 模拟器，无需签名
+build:device --ios_multi_cpus=arm64           # 真机，无签名（CI 出包用这个）
+build:device --apple_generate_dsym
+build:sign --define=apple.device_signing=1    # 叠加在 device 上：需 Signing/*.mobileprovision
+
+# CI 出包：真机架构 + ad-hoc 身份。设备构建必须有 profile 工件（rules_apple 的打包 partial
+# 要求），但身份是 ad-hoc 时 rules_apple 明确不拿它去签名
+# （codesigning_support.bzl:528：描述文件的限制会让 ad-hoc 产物验签必失败），
+# 所以 Signing/ 里放一个占位文件即可（Tools/make-unsigned-profile.sh 生成），产物是 ad-hoc
+# 签名 = 无签名口径。
+build:ci --ios_multi_cpus=arm64
+build:ci --ios_signing_cert_name=-
+build:ci --define=apple.device_signing=1
+build:ci --apple_generate_dsym

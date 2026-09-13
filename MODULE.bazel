@@ -1,0 +1,13 @@
+module(
+    name = "tiebalite",
+    version = "1.0.0",
+)
+
+# Versions must stay Bazel 7.4.0-compatible: rules_apple 5 / rules_swift 4 / rules_xcodeproj 4
+# all require Bazel >= 8.
+bazel_dep(name = "apple_support", version = "2.8.2")
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_apple", version = "4.5.3")
+bazel_dep(name = "rules_swift", version = "3.6.1")
+bazel_dep(name = "rules_xcodeproj", version = "3.6.0")
