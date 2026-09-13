@@ -1,0 +1,99 @@
+//
+//  ZoomDismissAnimator.swift
+//  JXPhotoBrowser
+//
+
+import UIKit
+
+open class JXZoomDismissAnimator: NSObject, UIViewControllerAnimatedTransitioning {
+    open func transitionDuration(using ctx: UIViewControllerContextTransitioning?) -> TimeInterval {
+        return 0.25
+    }
+    
+    open func animateTransition(using ctx: UIViewControllerContextTransitioning) {
+        let container = ctx.containerView
+        let duration = transitionDuration(using: ctx)
+        
+        guard let fromVC = ctx.viewController(forKey: .from) as? JXPhotoBrowserViewController,
+              let fromView = ctx.view(forKey: .from) else {
+            ctx.completeTransition(false)
+            return
+        }
+        
+        if let toView = ctx.view(forKey: .to) {
+            container.insertSubview(toView, belowSubview: fromView)
+            toView.alpha = 1
+            toView.layoutIfNeeded()
+        }
+        
+        let pageIndex = fromVC.pageIndex
+        // 前置条件不满足则直接降级为淡出
+        guard let srcCell = fromVC.visibleCell(),
+              let srcIV = srcCell.transitionImageView, srcIV.bounds.size != .zero,
+              let thumbnailView = fromVC.delegate?.photoBrowser(fromVC, thumbnailViewAt: pageIndex) else {
+            // 降级为淡出前先恢复列表缩略图显示，避免淡出完成后缩略图永久隐藏
+            fromVC.delegate?.photoBrowser(fromVC, setThumbnailHidden: false, at: pageIndex)
+            animateFadeOut(view: fromView, duration: duration, ctx: ctx)
+            return
+        }
+        
+        // 以当前图片视图为蓝本构建临时缩放视图
+        let zoomIV = UIImageView()
+        zoomIV.image = srcIV.image
+        zoomIV.contentMode = srcIV.contentMode
+        zoomIV.clipsToBounds = srcIV.clipsToBounds
+        zoomIV.layer.cornerRadius = srcIV.layer.cornerRadius
+        zoomIV.backgroundColor = srcIV.backgroundColor
+        
+        // 起止几何
+        let startFrame = srcIV.convert(srcIV.bounds, to: container)
+        let endFrame = thumbnailView.convert(thumbnailView.bounds, to: container)
+        
+        // 隐藏真实视图，避免重影
+        // 缩略图显隐统一走 delegate 通道（setThumbnailHidden），不直接操作视图；
+        // 浏览期间缩略图理应已隐藏，此处再设一次以覆盖列表 Cell 复用导致隐藏状态丢失的情况
+        srcIV.isHidden = true
+        fromVC.delegate?.photoBrowser(fromVC, setThumbnailHidden: true, at: pageIndex)
+        
+        zoomIV.frame = startFrame
+        container.addSubview(zoomIV)
+        
+        UIView.animate(withDuration: duration, animations: {
+            zoomIV.frame = endFrame
+            fromView.alpha = 0
+        }) { _ in
+            let completed = !ctx.transitionWasCancelled
+            zoomIV.removeFromSuperview()
+            if completed {
+                fromVC.delegate?.photoBrowser(fromVC, setThumbnailHidden: false, at: pageIndex)
+                fromView.removeFromSuperview()
+                fromView.alpha = 1
+                srcIV.isHidden = false
+            } else {
+                srcIV.isHidden = false
+                fromView.alpha = 1
+                fromVC.delegate?.photoBrowser(fromVC, setThumbnailHidden: true, at: pageIndex)
+            }
+            ctx.completeTransition(completed)
+        }
+    }
+    
+    // MARK: - Helpers
+    
+    /// 降级为淡出动画（不缩放，可覆写）
+    open func animateFadeOut(view: UIView, duration: TimeInterval, ctx: UIViewControllerContextTransitioning) {
+        UIView.animate(withDuration: duration, animations: {
+            view.alpha = 0
+        }) { _ in
+            let wasCancelled = ctx.transitionWasCancelled
+            if wasCancelled {
+                view.alpha = 1
+                ctx.completeTransition(false)
+            } else {
+                view.removeFromSuperview()
+                view.alpha = 1
+                ctx.completeTransition(true)
+            }
+        }
+    }
+}

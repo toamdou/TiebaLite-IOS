@@ -1,0 +1,42 @@
+//
+//  JXPhotoBrowserDelegate.swift
+//  Pods
+//
+//  Created by jxing on 2025/12/18.
+//
+
+import UIKit
+
+public typealias JXPhotoBrowserAnyCell = UICollectionViewCell & JXPhotoBrowserCellProtocol
+
+public protocol JXPhotoBrowserDelegate: AnyObject {
+    /// 返回图片总数，必须实现
+    func numberOfItems(in browser: JXPhotoBrowserViewController) -> Int
+    
+    /// 返回指定索引的 item 对应的 Cell，必须实现
+    func photoBrowser(_ browser: JXPhotoBrowserViewController, cellForItemAt index: Int, at indexPath: IndexPath) -> JXPhotoBrowserAnyCell
+    
+    /// 当 Cell 将要显示时调用，可选实现
+    func photoBrowser(_ browser: JXPhotoBrowserViewController, willDisplay cell: JXPhotoBrowserAnyCell, at index: Int)
+    
+    /// 当 Cell 已经显示时调用，可选实现
+    func photoBrowser(_ browser: JXPhotoBrowserViewController, didEndDisplaying cell: JXPhotoBrowserAnyCell, at index: Int)
+    
+    /// 返回指定索引的 item 在列表中的缩略图视图（用于 Zoom 转场的起止位置计算）
+    /// 返回 nil 时 Zoom 转场将降级为 Fade 动画
+    func photoBrowser(_ browser: JXPhotoBrowserViewController, thumbnailViewAt index: Int) -> UIView?
+    
+    /// 设置指定索引的 item 的缩略图视图的显隐状态（Zoom 转场时隐藏源视图，避免视觉重叠）
+    /// 默认实现会切换 `thumbnailViewAt` 返回视图的 `isHidden`；仅当需要自定义显隐方式（如渐隐、隐藏容器视图）时才需实现
+    func photoBrowser(_ browser: JXPhotoBrowserViewController, setThumbnailHidden hidden: Bool, at index: Int)
+    
+}
+
+public extension JXPhotoBrowserDelegate {
+    func photoBrowser(_ browser: JXPhotoBrowserViewController, willDisplay cell: JXPhotoBrowserAnyCell, at index: Int) {}
+    func photoBrowser(_ browser: JXPhotoBrowserViewController, didEndDisplaying cell: JXPhotoBrowserAnyCell, at index: Int) {}
+    func photoBrowser(_ browser: JXPhotoBrowserViewController, thumbnailViewAt index: Int) -> UIView? { nil }
+    func photoBrowser(_ browser: JXPhotoBrowserViewController, setThumbnailHidden hidden: Bool, at index: Int) {
+        photoBrowser(browser, thumbnailViewAt: index)?.isHidden = hidden
+    }
+}

@@ -1,0 +1,116 @@
+// The MIT License (MIT)
+//
+// Copyright (c) 2015-2026 Alexander Grebenyuk (github.com/kean).
+
+import Foundation
+
+#if !os(macOS)
+import UIKit
+#else
+import AppKit
+#endif
+
+/// Transforms an image as part of the pipeline processing step.
+///
+/// For basic processing needs, implement the following method:
+///
+/// ```swift
+/// func process(image: PlatformImage) -> PlatformImage?
+/// ```
+///
+/// If your processor needs to manipulate image metadata (``ImageContainer``), or
+/// get access to more information via the context (``ImageProcessingContext``),
+/// there is an additional method that allows you to do that:
+///
+/// ```swift
+/// func process(image container: ImageContainer, context: ImageProcessingContext) -> ImageContainer?
+/// ```
+///
+/// You must implement either one of those methods.
+public protocol ImageProcessing: Sendable {
+    /// Returns a processed image. By default, returns `nil`.
+    ///
+    /// - note: Gets called on a background queue managed by the pipeline.
+    func process(_ image: PlatformImage) -> PlatformImage?
+
+    /// Optional method. Returns a processed image. By default, this calls the
+    /// basic `process(image:)` method.
+    ///
+    /// - note: Gets called on a background queue managed by the pipeline.
+    func process(_ container: ImageContainer, context: ImageProcessingContext) throws -> ImageContainer
+
+    /// Returns a string that uniquely identifies the processor.
+    ///
+    /// Consider using the reverse DNS notation.
+    var identifier: String { get }
+
+    /// Returns a unique processor identifier.
+    ///
+    /// The default implementation simply returns `var identifier: String` but
+    /// can be overridden as a performance optimization - creating and comparing
+    /// strings is _expensive_ so you can opt-in to return something which is
+    /// fast to create and to compare. See ``ImageProcessors/Resize`` for an example.
+    ///
+    /// - note: A common approach is to make your processor `Hashable` and return `self`
+    /// as a hashable identifier.
+    var hashableIdentifier: AnyHashable { get }
+}
+
+extension ImageProcessing {
+    /// The default implementation simply calls the basic
+    /// `process(_ image: PlatformImage) -> PlatformImage?` method.
+    public func process(_ container: ImageContainer, context: ImageProcessingContext) throws -> ImageContainer {
+        guard let output = process(container.image) else {
+            throw ImageProcessingError.unknown
+        }
+        var container = container
+        container.image = output
+        return container
+    }
+
+    /// The default implementation simply returns `var identifier: String`.
+    public var hashableIdentifier: AnyHashable { identifier }
+}
+
+extension ImageProcessing where Self: Hashable {
+    public var hashableIdentifier: AnyHashable { self }
+}
+
+/// Context passed to an ``ImageProcessing`` implementation.
+///
+/// Provides access to the originating request, the current response, and
+/// whether the response is the final (fully downloaded) image or a progressive
+/// preview.
+public struct ImageProcessingContext: Sendable {
+    /// The request that initiated the image load.
+    public var request: ImageRequest
+    /// The current image response being processed.
+    public var response: ImageResponse
+    /// `true` when this is the final (fully downloaded) image; `false` for
+    /// progressive previews.
+    public var isCompleted: Bool
+
+    public init(request: ImageRequest, response: ImageResponse, isCompleted: Bool) {
+        self.request = request
+        self.response = response
+        self.isCompleted = isCompleted
+    }
+}
+
+/// An error thrown by an ``ImageProcessing`` implementation.
+public enum ImageProcessingError: Error, CustomStringConvertible, Sendable {
+    /// The processor failed for an unspecified reason.
+    case unknown
+
+    public var description: String { "Unknown" }
+}
+
+func == (lhs: [any ImageProcessing], rhs: [any ImageProcessing]) -> Bool {
+    if lhs.isEmpty && rhs.isEmpty { return true }
+    guard lhs.count == rhs.count else { return false }
+    // Lazily creates `hashableIdentifiers` because for some processors the
+    // identifiers might be expensive to compute.
+    return zip(lhs, rhs).allSatisfy {
+        $0.hashableIdentifier == $1.hashableIdentifier
+    }
+}

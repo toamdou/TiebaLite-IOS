@@ -1,0 +1,370 @@
+// The MIT License (MIT)
+//
+// Copyright (c) 2015-2026 Alexander Grebenyuk (github.com/kean).
+
+import Foundation
+
+/// Represents a task with support for multiple observers, cancellation,
+/// progress reporting, dependencies – everything that `ImagePipeline` needs.
+///
+/// A `AsyncTask` can have zero or more subscriptions (`TaskSubscription`) which can
+/// be used to later unsubscribe or change the priority of the subscription.
+///
+/// The task has built-in support for operations (`Foundation.Operation`) – it
+/// automatically cancels them, updates the priority, etc. Most steps in the
+/// image pipeline are represented using Operation to take advantage of these features.
+@ImagePipelineActor
+class AsyncTask<Value: Sendable, Error: Sendable>: AsyncTaskSubscriptionDelegate {
+
+    private final class Subscription {
+        let closure: (Event) -> Void
+        weak var subscriber: AnyObject?
+        var priority: TaskPriority
+
+        init(closure: @escaping (Event) -> Void, subscriber: AnyObject, priority: TaskPriority) {
+            self.closure = closure
+            self.subscriber = subscriber
+            self.priority = priority
+        }
+    }
+
+    // In most situations, especially for intermediate tasks, the almost almost
+    // only one subscription.
+    private var inlineSubscription: Subscription?
+    // Typically 0–2 overflow entries; linear scan is faster than a dictionary
+    // and avoids hashing and allocation overhead.
+    private var subscriptions: ContiguousArray<(key: TaskSubscriptionKey, sub: Subscription)>? // Create lazily
+    private var nextSubscriptionKey = 0
+
+    var subscribers: [AnyObject] {
+        var output = [AnyObject?]()
+        output.append(inlineSubscription?.subscriber)
+        if let subscriptions {
+            for entry in subscriptions { output.append(entry.sub.subscriber) }
+        }
+        return output.compactMap { $0 }
+    }
+
+    func hasSubscriber<T>(of type: T.Type) -> Bool {
+        if inlineSubscription?.subscriber is T { return true }
+        if let subscriptions {
+            for entry in subscriptions where entry.sub.subscriber is T { return true }
+        }
+        return false
+    }
+
+    /// Returns `true` if the task was either cancelled, or was completed.
+    private(set) var isDisposed = false
+    private var isStarted = false
+
+    /// Gets called when the task is either cancelled, or was completed.
+    var onDisposed: (@ImagePipelineActor @Sendable() -> Void)?
+
+    var onCancelled: (@ImagePipelineActor @Sendable () -> Void)?
+
+    var priority: TaskPriority = .normal {
+        didSet {
+            guard oldValue != priority else { return }
+            operation?.priority = priority
+            dependency?.setPriority(priority)
+        }
+    }
+
+    /// A task might have a dependency. The task automatically unsubscribes
+    /// from the dependency when it gets cancelled, and also updates the
+    /// priority of the subscription to the dependency when its own
+    /// priority is updated.
+    var dependency: TaskSubscription? {
+        didSet {
+            dependency?.setPriority(priority)
+        }
+    }
+
+    /// The outstanding operation: either the one that runs the task itself
+    /// (data loading), or the work it awaits (decoding, processing). It's only
+    /// cancelled when the task is cancelled – cancelling it on completion would
+    /// cancel the very operation that reports the completion.
+    var operation: TaskQueue.Operation? {
+        didSet {
+            guard priority != .normal else { return }
+            operation?.priority = priority
+        }
+    }
+
+    /// Publishes the results of the task.
+    var publisher: Publisher { Publisher(task: self) }
+
+    /// Override this to start image task. Only gets called once.
+    func start() {}
+
+    // MARK: - Managing Observers
+
+    /// - note: Returns `nil` if the task was disposed.
+    private func subscribe(priority: TaskPriority = .normal, subscriber: AnyObject, _ closure: @escaping (Event) -> Void) -> TaskSubscription? {
+        guard !isDisposed else { return nil }
+
+        let subscriptionKey = nextSubscriptionKey
+        nextSubscriptionKey += 1
+        let subscription = TaskSubscription(task: self, key: subscriptionKey)
+
+        if subscriptionKey == 0 {
+            inlineSubscription = Subscription(closure: closure, subscriber: subscriber, priority: priority)
+        } else {
+            if subscriptions == nil { subscriptions = [] }
+            subscriptions!.append((key: subscriptionKey, sub: Subscription(closure: closure, subscriber: subscriber, priority: priority)))
+        }
+
+        updatePriority(suggestedPriority: priority)
+
+        if !isStarted {
+            isStarted = true
+            start()
+        }
+
+        // The task may have been completed synchronously by `starter`.
+        guard !isDisposed else { return nil }
+        return subscription
+    }
+
+    // MARK: - TaskSubscriptionDelegate
+
+    fileprivate func setPriority(_ priority: TaskPriority, for key: TaskSubscriptionKey) {
+        guard !isDisposed else { return }
+
+        if key == 0 {
+            inlineSubscription?.priority = priority
+        } else if let idx = subscriptions?.firstIndex(where: { $0.key == key }) {
+            subscriptions![idx].sub.priority = priority
+        }
+        updatePriority(suggestedPriority: priority)
+    }
+
+    fileprivate func unsubsribe(key: TaskSubscriptionKey) {
+        if key == 0 {
+            guard inlineSubscription != nil else { return }
+            inlineSubscription = nil
+        } else {
+            guard let idx = subscriptions?.firstIndex(where: { $0.key == key }) else { return }
+            subscriptions!.remove(at: idx)
+        }
+
+        guard !isDisposed else { return }
+
+        if inlineSubscription == nil && subscriptions?.isEmpty ?? true {
+            terminate(reason: .cancelled)
+        } else {
+            updatePriority(suggestedPriority: nil)
+        }
+    }
+
+    // MARK: - Sending Events
+
+    func send(value: Value, isCompleted: Bool = false) {
+        send(event: .value(value, isCompleted: isCompleted))
+    }
+
+    func send(error: Error) {
+        send(event: .error(error))
+    }
+
+    func send(progress: TaskProgress) {
+        send(event: .progress(progress))
+    }
+
+    private func send(event: Event) {
+        guard !isDisposed else { return }
+
+        switch event {
+        case let .value(_, isCompleted):
+            if isCompleted {
+                terminate(reason: .finished)
+            }
+        case .progress:
+            break // Simply send the event
+        case .error:
+            terminate(reason: .finished)
+        }
+
+        inlineSubscription?.closure(event)
+        if let subscriptions {
+            for entry in subscriptions {
+                entry.sub.closure(event)
+            }
+        }
+    }
+
+    // MARK: - Termination
+
+    private enum TerminationReason {
+        case finished, cancelled
+    }
+
+    private func terminate(reason: TerminationReason) {
+        guard !isDisposed else { return }
+        isDisposed = true
+
+        if reason == .cancelled {
+            operation?.cancel()
+            dependency?.unsubscribe()
+            onCancelled?()
+        }
+        onDisposed?()
+    }
+
+    // MARK: - Priority
+
+    private func updatePriority(suggestedPriority: TaskPriority?) {
+        if let suggestedPriority, suggestedPriority >= priority {
+            // No need to recompute, won't go higher than that
+            priority = suggestedPriority
+            return
+        }
+
+        var newPriority = inlineSubscription?.priority
+        // Same as subscriptions.map { $0?.priority }.max() but without allocating
+        // any memory for redundant arrays
+        if let subscriptions {
+            for entry in subscriptions {
+                if newPriority == nil {
+                    newPriority = entry.sub.priority
+                } else if entry.sub.priority > newPriority! {
+                    newPriority = entry.sub.priority
+                }
+            }
+        }
+        self.priority = newPriority ?? .normal
+    }
+}
+
+// MARK: - AsyncTask (Publisher)
+
+extension AsyncTask {
+    /// Publishes the results of the task.
+    @ImagePipelineActor struct Publisher {
+        fileprivate let task: AsyncTask
+
+        /// Attaches the subscriber to the task.
+        /// - note: Returns `nil` if the task is already disposed.
+        func subscribe(priority: TaskPriority = .normal, subscriber: AnyObject, _ closure: @escaping (Event) -> Void) -> TaskSubscription? {
+            task.subscribe(priority: priority, subscriber: subscriber, closure)
+        }
+
+        /// Attaches the subscriber to the task. Automatically forwards progress
+        /// and error events to the given task.
+        /// - note: Returns `nil` if the task is already disposed.
+        func subscribe<NewValue>(_ task: AsyncTask<NewValue, Error>, onValue: @escaping (Value, Bool) -> Void) -> TaskSubscription? {
+            subscribe(priority: task.priority, subscriber: task) { [weak task] event in
+                guard let task else { return }
+                switch event {
+                case let .value(value, isCompleted):
+                    onValue(value, isCompleted)
+                case let .progress(progress):
+                    task.send(progress: progress)
+                case let .error(error):
+                    // Cancel the orphaned progressive work – unlike the
+                    // completed values, the errors bypass the call sites that
+                    // normally do it. Safe here: the task is terminated by its
+                    // dependency, so it isn't running inside this operation.
+                    task.operation?.cancel()
+                    task.send(error: error)
+                }
+            }
+        }
+    }
+}
+
+typealias TaskProgress = ImageTask.Progress // Using typealias for simplicity
+
+enum TaskPriority: Int, Comparable, CaseIterable {
+    case veryLow = 0, low, normal, high, veryHigh
+
+    static func < (lhs: TaskPriority, rhs: TaskPriority) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
+// MARK: - AsyncTask.Event {
+extension AsyncTask {
+    enum Event {
+        case value(Value, isCompleted: Bool)
+        case progress(TaskProgress)
+        case error(Error)
+    }
+}
+
+extension AsyncTask.Event: Equatable where Value: Equatable, Error: Equatable {}
+
+// MARK: - TaskSubscription
+
+/// Represents a subscription to a task. The observer must retain a strong
+/// reference to a subscription.
+@ImagePipelineActor
+struct TaskSubscription: Sendable {
+    private let task: any AsyncTaskSubscriptionDelegate
+    private let key: TaskSubscriptionKey
+
+    fileprivate init(task: any AsyncTaskSubscriptionDelegate, key: TaskSubscriptionKey) {
+        self.task = task
+        self.key = key
+    }
+
+    /// Removes the subscription from the task. The observer won't receive any
+    /// more events from the task.
+    ///
+    /// If there are no more subscriptions attached to the task, the task gets
+    /// cancelled along with its dependencies. The cancelled task is
+    /// marked as disposed.
+    func unsubscribe() {
+        task.unsubsribe(key: key)
+    }
+
+    /// Updates the priority of the subscription. The priority of the task is
+    /// calculated as the maximum priority out of all of its subscription. When
+    /// the priority of the task is updated, the priority of a dependency also is.
+    ///
+    /// - note: The priority also automatically gets updated when the subscription
+    /// is removed from the task.
+    func setPriority(_ priority: TaskPriority) {
+        task.setPriority(priority, for: key)
+    }
+}
+
+@ImagePipelineActor
+private protocol AsyncTaskSubscriptionDelegate: AnyObject, Sendable {
+    func unsubsribe(key: TaskSubscriptionKey)
+    func setPriority(_ priority: TaskPriority, for observer: TaskSubscriptionKey)
+}
+
+private typealias TaskSubscriptionKey = Int
+
+// MARK: - TaskPool
+
+/// Contains the tasks which haven't completed yet.
+@ImagePipelineActor
+final class TaskPool<Key: Hashable, Value: Sendable, Error: Sendable> {
+    private let isCoalescingEnabled: Bool
+    private var map = [Key: AsyncTask<Value, Error>]()
+
+    nonisolated init(_ isCoalescingEnabled: Bool) {
+        self.isCoalescingEnabled = isCoalescingEnabled
+    }
+
+    /// Creates a task with the given key. If there is an outstanding task with
+    /// the given key in the pool, the existing task is returned. Tasks are
+    /// automatically removed from the pool when they are disposed.
+    func publisherForKey(_ key: @autoclosure () -> Key, _ make: () -> AsyncTask<Value, Error>) -> AsyncTask<Value, Error>.Publisher {
+        guard isCoalescingEnabled else {
+            return make().publisher
+        }
+        let key = key()
+        if let task = map[key] {
+            return task.publisher
+        }
+        let task = make()
+        map[key] = task
+        task.onDisposed = { [weak self] in
+            self?.map[key] = nil
+        }
+        return task.publisher
+    }
+}

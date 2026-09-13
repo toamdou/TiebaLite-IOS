@@ -1,0 +1,167 @@
+// The MIT License (MIT)
+//
+// Copyright (c) 2015-2026 Alexander Grebenyuk (github.com/kean).
+
+#if os(iOS) || os(tvOS) || os(macOS) || os(visionOS)
+
+import Foundation
+import CoreImage
+
+#if !os(macOS)
+import UIKit
+#else
+import AppKit
+#endif
+
+extension ImageProcessors {
+
+    /// Applies Core Image filter (`CIFilter`) to the image.
+    ///
+    /// # Performance Considerations.
+    ///
+    /// Prefer chaining multiple `CIFilter` objects using `Core Image` facilities
+    /// instead of using multiple instances of `ImageProcessors.CoreImageFilter`.
+    ///
+    /// # References
+    ///
+    /// - [Core Image Programming Guide](https://developer.apple.com/library/ios/documentation/GraphicsImaging/Conceptual/CoreImaging/ci_intro/ci_intro.html)
+    /// - [Core Image Filter Reference](https://developer.apple.com/library/prerelease/ios/documentation/GraphicsImaging/Reference/CoreImageFilterReference/index.html)
+    public struct CoreImageFilter: ImageProcessing, CustomStringConvertible, @unchecked Sendable {
+        let filter: Filter
+        public let identifier: String
+
+        enum Filter {
+            case named(String, parameters: [String: Any])
+            case custom(CIFilter)
+        }
+
+        /// Initializes the processor with a name of the `CIFilter` and its parameters.
+        ///
+        /// - parameter name: The name of the `CIFilter` to apply.
+        /// - parameter parameters: The parameters for the filter.
+        /// - parameter identifier: Uniquely identifies the processor.
+        public init(name: String, parameters: [String: Any], identifier: String) {
+            self.filter = .named(name, parameters: parameters)
+            self.identifier = identifier
+        }
+
+        /// Initializes the processor with a name of the `CIFilter`.
+        public init(name: String) {
+            self.filter = .named(name, parameters: [:])
+            self.identifier = "com.github.kean/nuke/core_image?name=\(name))"
+        }
+
+        /// Initializes the processor with the given `CIFilter`.
+        ///
+        /// The filter is never used directly: the processor applies a copy of it
+        /// to the image, which makes it safe to use the same processor – and the
+        /// same filter – for multiple images processed concurrently.
+        ///
+        /// - parameter filter: The `CIFilter` to apply.
+        /// - parameter identifier: Uniquely identifies the processor.
+        public init(_ filter: CIFilter, identifier: String) {
+            self.filter = .custom(filter)
+            self.identifier = identifier
+        }
+
+        public func process(_ image: PlatformImage) -> PlatformImage? {
+            try? _process(image)
+        }
+
+        public func process(_ container: ImageContainer, context: ImageProcessingContext) throws -> ImageContainer {
+            try container.map(_process)
+        }
+
+        private func _process(_ image: PlatformImage) throws -> PlatformImage {
+            switch filter {
+            case let .named(name, parameters):
+                return try CoreImageFilter.applyFilter(named: name, parameters: parameters, to: image)
+            case .custom(let filter):
+                return try CoreImageFilter.apply(filter: filter, to: image)
+            }
+        }
+
+        // MARK: - Apply Filter
+
+        /// A default context shared between all Core Image filters. The context
+        /// has `.priorityRequestLow` option set to `true`.
+        public static var context: CIContext {
+            get { _context.value }
+            set { _context.withLock { $0 = newValue } }
+        }
+
+        private static let _context = Mutex(value: CIContext(options: [.priorityRequestLow: true]))
+
+        static func applyFilter(named name: String, parameters: [String: Any] = [:], to image: PlatformImage) throws -> PlatformImage {
+            guard let filter = CIFilter(name: name, parameters: parameters) else {
+                throw Error.failedToCreateFilter(name: name, parameters: parameters)
+            }
+            // The filter is created here and is used exclusively by this call
+            return try _apply(filter: filter, to: image)
+        }
+
+        /// Applies filter to the given image.
+        ///
+        /// The given filter is not modified: the image is processed by a copy of
+        /// it, which makes it safe to call this method concurrently with the same
+        /// filter instance.
+        public static func apply(filter: CIFilter, to image: PlatformImage) throws -> PlatformImage {
+            // `CIFilter` is mutable and is not safe to use from multiple threads:
+            // `apply` sets the input image on it and then reads the output image.
+            // The same processor (and the same filter) can be shared by multiple
+            // requests processed concurrently, so each call gets its own copy.
+            try _apply(filter: (filter.copy() as? CIFilter) ?? filter, to: image)
+        }
+
+        private static func _apply(filter: CIFilter, to image: PlatformImage) throws -> PlatformImage {
+            func getCIImage() throws -> CoreImage.CIImage {
+                if let image = image.ciImage {
+                    return image
+                }
+                if let image = image.cgImage {
+                    return CoreImage.CIImage(cgImage: image)
+                }
+                throw Error.inputImageIsEmpty(inputImage: image)
+            }
+            filter.setValue(try getCIImage(), forKey: kCIInputImageKey)
+            guard let outputImage = filter.outputImage else {
+                throw Error.failedToApplyFilter(filter: filter)
+            }
+            guard let imageRef = context.createCGImage(outputImage, from: outputImage.extent) else {
+                throw Error.failedToCreateOutputCGImage(image: outputImage)
+            }
+            return PlatformImage.make(cgImage: imageRef, source: image)
+        }
+
+        public var description: String {
+            switch filter {
+            case let .named(name, parameters):
+                return "CoreImageFilter(name: \(name), parameters: \(parameters))"
+            case .custom(let filter):
+                return "CoreImageFilter(filter: \(filter))"
+            }
+        }
+
+        public enum Error: Swift.Error, CustomStringConvertible, @unchecked Sendable {
+            case failedToCreateFilter(name: String, parameters: [String: Any])
+            case inputImageIsEmpty(inputImage: PlatformImage)
+            case failedToApplyFilter(filter: CIFilter)
+            case failedToCreateOutputCGImage(image: CIImage)
+
+            public var description: String {
+                switch self {
+                case let .failedToCreateFilter(name, parameters):
+                    return "Failed to create filter named \(name) with parameters: \(parameters)"
+                case let .inputImageIsEmpty(inputImage):
+                    return "Failed to create input CIImage for \(inputImage)"
+                case let .failedToApplyFilter(filter):
+                    return "Failed to apply filter: \(filter.name)"
+                case let .failedToCreateOutputCGImage(image):
+                    return "Failed to create output image for extent: \(image.extent) from \(image)"
+                }
+            }
+        }
+    }
+}
+
+#endif

@@ -1,0 +1,14 @@
+# JXPhotoBrowser 4.1.0 sources, vendored from the CocoaPods checkout (ios/Pods/JXPhotoBrowser).
+# Used by modules/tieba-native/ios/TiebaPhotoBrowser.swift.
+# The pod's PrivacyInfo.xcprivacy is a no-op manifest (empty collections, no tracking) and is not
+# embedded, to avoid clashing with the app's own PrivacyInfo.xcprivacy in the app bundle.
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+swift_library(
+    name = "JXPhotoBrowser",
+    srcs = glob(["Sources/**/*.swift"]),
+    features = ["swift.enable_v6"],
+    module_name = "JXPhotoBrowser",
+)
