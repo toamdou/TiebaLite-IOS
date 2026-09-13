@@ -1,0 +1,48 @@
+# Live Activity widget extension (own copy of the ActivityKit attributes, like the Xcode target).
+load("@bazel_skylib//rules:expand_template.bzl", "expand_template")
+load("@rules_apple//apple:ios.bzl", "ios_extension")
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+swift_library(
+    name = "live_activity_lib",
+    srcs = glob(["*.swift"]),
+    features = ["swift.enable_v6"],
+    module_name = "TiebaLiveActivity",
+)
+
+# rules_apple does not substitute MARKETING_VERSION / CURRENT_PROJECT_VERSION (the Xcode build
+# resolves them from the project); these must equal the app's Info.plist values (1.0.0 / 1),
+# since rules_apple rejects a child bundle whose version differs from its parent. The pbxproj's
+# MARKETING_VERSION = 1.1 was already inconsistent with the app's hardcoded 1.0.0.
+expand_template(
+    name = "info_plist",
+    out = "Info.bazel.plist",
+    substitutions = {
+        "$(CURRENT_PROJECT_VERSION)": "1",
+        "$(EXECUTABLE_NAME)": "TiebaLiveActivity",
+        "$(MARKETING_VERSION)": "1.0.0",
+    },
+    template = "Info.plist",
+)
+
+ios_extension(
+    name = "extension",
+    bundle_id = "com.tiebalite.app.TiebaLiveActivity",
+    bundle_name = "TiebaLiveActivity",
+    entitlements = "TiebaLiveActivity.entitlements",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = [":info_plist"],
+    # 设备构建时 rules_apple 要求每个 bundle 都有自己的 profile 工件（app 的不继承）。
+    provisioning_profile = select({
+        "//TiebaLite:device_signing": "//Signing:profile_ext",
+        "//conditions:default": None,
+    }),
+    minimum_os_version = "17.0",
+    resources = ["AppIcon.png"],
+    deps = [":live_activity_lib"],
+)

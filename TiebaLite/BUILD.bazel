@@ -1,0 +1,58 @@
+# App 目标（壳）：入口源码、资源、Info.plist 与签名开关。
+load("@bazel_skylib//rules:expand_template.bzl", "expand_template")
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Referenced from //:App (cross-package file reference).
+exports_files([
+    "PrivacyInfo.xcprivacy",
+    "tiebalite.entitlements",
+])
+
+swift_library(
+    name = "tiebalite_lib",
+    srcs = ["AppDelegate.swift"],
+    features = ["swift.enable_v6"],
+    # Xcode build uses PRODUCT_MODULE_NAME = tiebalite (see $(PRODUCT_MODULE_NAME) in Info.plist).
+    module_name = "tiebalite",
+    deps = ["//Sources/TiebaNative:TiebaNative"],
+)
+
+# App icon is an Xcode 26 Icon Composer document (see app_icons in //:App) and is passed as a
+# loose *.icon bundle: rules_apple rejects mixing *.icon with *.appiconset in the same target,
+# and Images.xcassets/AppIcon.appiconset is an empty placeholder, so it is excluded here.
+filegroup(
+    name = "app_icon",
+    srcs = glob(["expo.icon/**"]),
+)
+
+filegroup(
+    name = "app_resources",
+    srcs = glob(
+        ["Images.xcassets/**"],
+        exclude = ["Images.xcassets/AppIcon.appiconset/**"],
+    ) + [
+        "PrivacyInfo.xcprivacy",
+        "SplashScreen.storyboard",
+        "//Sources/TiebaNative:Proto/proto-descriptors.json",
+    ],
+)
+
+# rules_apple substitutes most $(...) build variables itself, but not PRODUCT_MODULE_NAME (used by
+# UISceneDelegateClassName); resolving it here keeps the checked-in Info.plist untouched.
+expand_template(
+    name = "app_info_plist",
+    out = "Info.bazel.plist",
+    substitutions = {
+        "$(EXECUTABLE_NAME)": "tiebalite",
+        "$(PRODUCT_MODULE_NAME)": "tiebalite",
+    },
+    template = "Info.plist",
+)
+
+# Device Debug signing is opt-in: drop the .mobileprovision files in Signing/ and use --config=device.
+config_setting(
+    name = "device_signing",
+    define_values = {"apple.device_signing": "1"},
+)
