@@ -1,0 +1,119 @@
+name: Build iOS Unsigned IPA
+
+# 产出未签名（ad-hoc 签名）真机 IPA（Artifact + 打 tag 时发布 Release），供 SideStore / AltStore 重签侧载。
+# 纯 Swift + Bazel：无 Node / npm / Metro / CocoaPods，也不需要任何 Apple 账号或 secret。
+#
+# 为什么 ad-hoc 等于"无签名"口径：rules_apple 对设备构建强制要求每个 bundle 都有
+# provisioning_profile 工件（ios_rules.bzl 无条件挂 partial），但把签名身份设为
+# ad-hoc（--ios_signing_cert_name=-）时它明确不拿该描述文件去签名
+# （codesigning_support.bzl:528）。所以 Tools/make-unsigned-profile.sh 现场生成一个
+# 结构合法的占位件，产物是 ad-hoc 签名、无团队标识 —— 侧载工具会重签，不影响安装。
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'Build configuration'
+        type: choice
+        options:
+          - Release
+          - Debug
+        default: Release
+      tag_name:
+        description: '发布到的 tag（如 v1.0.1；留空则只出 Artifact 不发 Release）'
+        type: string
+        required: false
+        default: ''
+      release_title:
+        description: 'Release 标题（留空则用 tag 名）'
+        type: string
+        required: false
+        default: ''
+      release_notes:
+        description: 'Release 说明（发布 Release 时填这里的文本）'
+        type: string
+        required: false
+        default: ''
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & package unsigned IPA
+    # macos-26 自带 Xcode 26.x。如需固定版本可加：
+    #   - uses: maxim-lobanov/setup-xcode@v1
+    #     with:
+    #       xcode-version: '26.2.0'
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      IPA_NAME: TiebaLite-unsigned.ipa
+      CONFIGURATION: ${{ inputs.configuration || 'Release' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # Bazel 磁盘/仓库缓存：命中后整包十几秒（冷编约 100 s）。
+      - name: Cache Bazel
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bazel_cache/disk
+            ~/.bazel_cache/repository
+          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', '.bazelrc', '.bazelversion', 'BUILD.bazel', '**/BUILD.bazel') }}
+          restore-keys: |
+            bazel-${{ runner.os }}-
+
+      - name: Build (bazel, ad-hoc signed device IPA)
+        run: |
+          brew install bazelisk
+          bazel --version
+          ./Tools/make-unsigned-profile.sh
+          MODE=$([ "$CONFIGURATION" = "Release" ] && echo opt || echo dbg)
+          bazel build //:App --config=ci -c "$MODE"
+
+      - name: Package IPA
+        run: |
+          mkdir -p build/Payload
+          unzip -q bazel-bin/App.ipa -d build
+          # 隐私消毒：把产物内嵌的构建机绝对路径（含 runner 用户名）做等长替换
+          python3 Tools/privacy-scrub.py build/Payload/*.app
+          ( cd build && zip -qry "$IPA_NAME" Payload )
+          unzip -l "build/$IPA_NAME" | head -20
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TiebaLite-unsigned-${{ github.sha }}
+          path: build/TiebaLite-unsigned.ipa
+          if-no-files-found: error
+
+      # 两种发布路径：
+      # 1. 手动触发且填了 tag_name 输入框 → 在该 tag（不存在则建）发 Release，
+      #    说明文本用 release_notes 输入框的内容
+      # 2. push 了 v* tag → 用 tag 原名发 Release
+      - name: Publish to GitHub Releases
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.tag_name != '') ||
+          startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+          name: ${{ (github.event_name == 'workflow_dispatch' && inputs.release_title != '') && inputs.release_title || (github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name) }}
+          body: ${{ github.event_name == 'workflow_dispatch' && inputs.release_notes || '' }}
+          generate_release_notes: ${{ github.event_name != 'workflow_dispatch' }}
+          files: build/TiebaLite-unsigned.ipa
+          fail_on_unmatched_files: true
