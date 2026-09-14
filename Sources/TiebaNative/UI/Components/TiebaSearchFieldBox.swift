@@ -15,9 +15,12 @@ import UIKit
 public final class TiebaSearchFieldBox: UIView {
   public let searchBar = UISearchBar()
 
+  private let fieldHeight: CGFloat
+
   /// - Parameter fieldHeight: 搜索框高度（对齐旧页 `TiebaSearchBar` 的 36pt，
   ///   也是系统搜索框的自然高度）。
   public init(fieldHeight: CGFloat = 36) {
+    self.fieldHeight = fieldHeight
     super.init(frame: .zero)
     addSubview(searchBar)
     searchBar.translatesAutoresizingMaskIntoConstraints = false
@@ -31,4 +34,12 @@ public final class TiebaSearchFieldBox: UIView {
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  /// ⚠️ 容器必须自己报出高度：顶栏只拉伸 titleView 的宽度，高度取自视图自身，
+  /// 而本容器没有任何决定自身高度的约束/内在尺寸（搜索框只有 centerY + 定高）
+  /// → bounds 高 0，搜索框画在 bounds 之外（不裁剪所以看得见、位置也对），
+  /// 但 hitTest 只认 bounds → "看得见点不到"（吧内搜索页实证）。
+  public override var intrinsicContentSize: CGSize {
+    CGSize(width: UIView.noIntrinsicMetric, height: fieldHeight)
+  }
 }

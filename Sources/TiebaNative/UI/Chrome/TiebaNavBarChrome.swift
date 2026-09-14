@@ -544,10 +544,8 @@ enum TiebaChrome {
         applied = true
       }
     }
-    // 底栏按压判定同样幂等补齐（底栏没有 didMoveToWindow 钩子，靠重扫覆盖）。
-    for tabBar in chromeBars.tabBars {
-      installChromePressHaptics(on: tabBar)
-    }
+    // 底栏不装按压手势：底栏项的视图层级不是公开的 UIControl 保证（栏内 hitTest
+    // 找不到 UIControl ⇒ 手势永远不发触觉）；底栏触觉走 UITabBarControllerDelegate。
     // v34：栏模糊 = 系统滚动边缘效果（soft，iOS 26 规范形态），按路由门控
     //（吧页/帖子页开，其余页面顶边显式关；底边归整屏竖向列表）。随 force 的
     // 节奏幂等重挂：push 新页、列表重建都会带来新的滚动视图。

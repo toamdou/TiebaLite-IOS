@@ -25,7 +25,8 @@
 //   - avatarFrame                      → 用户页
 //   - cardFrame 内除下方子区域         → 进帖子（现有 useFeedCardActions 路径）
 //   - mediaFrame / mediaItemFrames[i]  → 图片查看器（带序号 i）
-//   - 图片长按（UIContextMenuInteraction）→ 保存照片/分享照片（回传 JS 执行）
+//   - 图片长按（UIContextMenuInteraction）→ 保存照片/分享照片（回传 JS 执行）；
+//     点长按预览 = 进大图（onMediaOpen 外传，列表侧复用点图查看器入口）
 //   - showMoreFrame                    → 长文展开（命中矩形 = 文本矩形外扩 6pt，
 //                                       等价 TweetCard 的 hitSlop；文本绘制用 showMoreTextFrame）
 //   - chipFrame                        → 吧页
@@ -317,6 +318,9 @@ private final class TiebaFeedRowMediaItemView: UIView {
   var mediaIndex = 0
   var contextMenuEnabled = false
   var onMenuAction: ((Int, String) -> Void)?
+  /// 长按预览提交（点预览进大图）：媒体序号向行视图冒泡，由列表侧按格现算
+  /// 几何并复用点图入口；本视图不构造任何几何、不开查看器。
+  var onPreviewCommit: ((Int) -> Void)?
   /// 预览加载目标 = 压缩显示档（产品要求：长按菜单预览仍显示压缩图）；
   /// 保存/分享用原图不经这里——动作 payload 由行模型单独取 originURL。
   private var fullURL: URL?
@@ -395,7 +399,8 @@ private final class TiebaFeedRowMediaItemView: UIView {
     contentMode: UIView.ContentMode,
     imageContextMenu: Bool,
     contextMenuIndex: Int,
-    onMenuAction: ((Int, String) -> Void)?
+    onMenuAction: ((Int, String) -> Void)?,
+    onPreviewCommit: ((Int) -> Void)?
   ) {
     layer.cornerRadius = cornerRadius
     layer.cornerCurve = .continuous
@@ -404,6 +409,7 @@ private final class TiebaFeedRowMediaItemView: UIView {
 
     mediaIndex = contextMenuIndex
     self.onMenuAction = onMenuAction
+    self.onPreviewCommit = onPreviewCommit
     // 视频 poster 不进图片菜单（RN 的 MediaPager 同样只在图片上挂 contextMenu）。
     contextMenuEnabled = imageContextMenu && !isVideoPoster && media != nil
     fullURL = media?.url ?? media?.originURL
@@ -580,6 +586,19 @@ extension TiebaFeedRowMediaItemView: UIContextMenuInteractionDelegate {
   ) {
     TiebaSceneHaptics.playImageLift()
   }
+
+  /// 点长按预览 = 提交：收起动画走完再冒泡「打开查看器」（菜单还在时 present
+  /// 会与收起动画时序打架）。保存/分享菜单项仍走 onMenuAction，互不影响。
+  func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction,
+    willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration,
+    animator: any UIContextMenuInteractionCommitAnimating
+  ) {
+    let index = mediaIndex
+    animator.addCompletion { [weak self] in
+      self?.onPreviewCommit?(index)
+    }
+  }
 }
 
 // MARK: - 操作栏单元（图标 + 计数）
@@ -662,6 +681,10 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   /// 图片长按菜单选中项（媒体序号, save-image / share-image）：保存/分享与
   /// 水印都在 JS 侧现有链路执行（PostImageContextMenu 同款），原生只出菜单。
   public var onMediaMenuAction: ((Int, String) -> Void)?
+
+  /// 图片长按「点预览进大图」（媒体序号）：列表侧复用它走点图同款查看器入口
+  ///（几何 = 该格当前窗口矩形，由列表按格现算；行视图不提供几何）。
+  public var onMediaOpen: ((Int) -> Void)?
 
   /// 主题色板（TiebaListView 的 themeColors prop 下发；默认=默认亮/暗主题）。
   /// 只影响绘制，不参与测量：换主题无需整页重测。
@@ -1211,6 +1234,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     let mediaMenuHandler: (Int, String) -> Void = { [weak self] index, action in
       self?.onMediaMenuAction?(index, action)
     }
+    let mediaOpenHandler: (Int) -> Void = { [weak self] index in
+      self?.onMediaOpen?(index)
+    }
 
     if model.mediaIsStrip {
       let shown = min(model.media.count, TiebaFeedRowLayout.maxImagesPerRow)
@@ -1247,7 +1273,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
           contentMode: .scaleAspectFill,
           imageContextMenu: model.showsImageContextMenu,
           contextMenuIndex: index,
-          onMenuAction: mediaMenuHandler
+          onMenuAction: mediaMenuHandler,
+          onPreviewCommit: mediaOpenHandler
         )
         if !isSameRow, model.plan.mediaItemFrames.indices.contains(index) {
           // 显示尺寸取帧计划里这一格的真实尺寸：宽图会被 plan 钳到 300pt，按未钳
@@ -1274,7 +1301,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
         contentMode: .scaleAspectFit,
         imageContextMenu: model.showsImageContextMenu,
         contextMenuIndex: 0,
-        onMenuAction: mediaMenuHandler
+        onMenuAction: mediaMenuHandler,
+        onPreviewCommit: mediaOpenHandler
       )
       if !isSameRow {
         let height = model.singleMediaHeight ?? 0

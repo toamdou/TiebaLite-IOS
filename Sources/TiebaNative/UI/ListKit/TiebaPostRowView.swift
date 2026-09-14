@@ -1308,7 +1308,13 @@ final class TiebaPostRowView: UIView {
   @objc private func handleImageTap(_ gesture: UITapGestureRecognizer) {
     guard let view = gesture.view as? UIImageView else { return }
     TiebaSceneHaptics.fire("press")
-    onEvent?(.image(index: view.tag, rect: view.convert(view.bounds, to: nil)))
+    emitImageOpen(index: view.tag, rect: view.convert(view.bounds, to: nil))
+  }
+
+  /// 图片打开出口（点图与长按预览提交共用）：rect = 该图当前窗口矩形，宿主收到
+  /// 后自己开查看器（本行不开）。长按提交在提交当刻取几何、收起动画完成后再发。
+  private func emitImageOpen(index: Int, rect: CGRect) {
+    onEvent?(.image(index: index, rect: rect))
   }
 
   // MARK: 图片几何查询（查看器退出重算；本视图仍不装任何额外手势）
@@ -1521,6 +1527,21 @@ extension TiebaPostRowView: UIContextMenuInteractionDelegate {
     animator: UIContextMenuInteractionAnimating?
   ) {
     TiebaSceneHaptics.playImageLift()
+  }
+
+  /// 点长按预览 = 提交：收起动画走完再发图片打开事件（与点图共用 emitImageOpen；
+  /// 菜单还在时开查看器会与收起动画时序打架）。几何在提交当刻取，与点图同式。
+  func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction,
+    willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration,
+    animator: any UIContextMenuInteractionCommitAnimating
+  ) {
+    guard let view = interaction.view as? UIImageView else { return }
+    let index = view.tag
+    let rect = view.convert(view.bounds, to: nil)
+    animator.addCompletion { [weak self] in
+      self?.emitImageOpen(index: index, rect: rect)
+    }
   }
 }
 

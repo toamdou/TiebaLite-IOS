@@ -88,8 +88,8 @@ public final class TiebaMainTabBarController: UITabBarController {
     super.viewDidLoad()
     delegate = self
     applyTheme(theme)
-    // 底栏项的按压判定（光效；触觉归本控制器的场景表）：挂载点即装好。
-    TiebaChrome.installChromePressHaptics(on: tabBar)
+    // 底栏不发按压手势：底栏项的视图层级不是公开的 UIControl 保证（栏内 hitTest
+    // 找不到 UIControl ⇒ 手势永远不发触觉）。底栏触觉由下面的 delegate 回调发。
   }
 
   func applyTheme(_ theme: TiebaChromeTheme) {
@@ -123,12 +123,18 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
     shouldSelect viewController: UIViewController
   ) -> Bool {
     let tapped = viewControllers?.firstIndex(of: viewController) ?? -1
-    if tapped == selectedIndex, tapped >= 0 {
+    guard tapped >= 0 else { return true }
+    if tapped == selectedIndex {
       // 重按已选中 tab（回顶/刷新由各 tab 根屏的 tabReselected 受理），档位
       // 对齐原 JS handleTabReselect 的 'press'。触觉只在这里发：didSelect 对
       // 同一 tab 也会回调一次，放那边会重复。
       TiebaSceneHaptics.fire("press")
       onReselect?(tapped)
+    } else {
+      // 换 tab：档位对齐原 JS 底栏按钮的 'segment'（RN 在 onPress 时机发，
+      // 即抬手，本回调同刻）。程序化 selectedIndex 赋值不触发本回调，深链
+      // 切 tab 不会误振。
+      TiebaSceneHaptics.fire("segment")
     }
     return true
   }

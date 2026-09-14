@@ -79,7 +79,7 @@ private enum Ahap {
 /// 引擎与播放器状态。只允许主线程访问（所有入口经 onMain 收束）。
 enum TiebaHapticState {
   /// 触觉总闸（偏好 hapticFeedback；启动与设置页经 TiebaHaptics.setEnabled 同步）。
-  /// 真相源在引擎层：读方（TiebaHaptics / HdrChromeFlash / chrome 按压）全走
+  /// 真相源在引擎层：读方（TiebaSceneHaptics / chrome 按压）全走
   /// TiebaHaptics.isEnabled，chrome 文件不再持有一份 enabled。
   nonisolated(unsafe) static var enabled = true
   nonisolated(unsafe) static var engine: CHHapticEngine?

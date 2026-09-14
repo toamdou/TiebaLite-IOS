@@ -112,6 +112,9 @@ final class TiebaKindListFeedCell: UICollectionViewCell {
   var onRowMenuAction: ((String) -> Void)?
   /// 行内图片长按菜单选中项（媒体序号, save-image / share-image）。
   var onMediaMenuAction: ((Int, String) -> Void)?
+  /// 行内图片长按「点预览进大图」请求（媒体序号）：列表侧现算该格窗口矩形
+  /// 后复用点图入口（presentPhotoBrowser）。
+  var onMediaOpen: ((Int) -> Void)?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -135,6 +138,7 @@ final class TiebaKindListFeedCell: UICollectionViewCell {
   func apply(pageKey: String, index: Int) {
     rowView.onMenuAction = onRowMenuAction
     rowView.onMediaMenuAction = onMediaMenuAction
+    rowView.onMediaOpen = onMediaOpen
     rowView.apply(pageKey: pageKey, index: index)
   }
 
@@ -703,6 +707,9 @@ public final class TiebaKindListContentView: UIView {
       cell.onMediaMenuAction = { [weak self] mediaIndex, action in
         self?.handleMediaMenuAction(action, mediaIndex: mediaIndex, at: indexPath)
       }
+      cell.onMediaOpen = { [weak self] mediaIndex in
+        self?.openViewerFromPreview(at: indexPath, mediaIndex: mediaIndex)
+      }
       cell.applyPalette(self.palette.base)
       if let sub = TiebaKindRowPages.shared.subIndex(pageKey: item.pageKey, index: item.index) {
         cell.apply(pageKey: item.pageKey, index: sub)
@@ -1151,6 +1158,21 @@ public final class TiebaKindListContentView: UIView {
           let cell = collectionView.cellForItem(at: indexPath) as? TiebaKindListPostCell
     else { return nil }
     return cell.imageWindowRect(at: imageIndex)
+  }
+
+  /// 图片长按「点预览进大图」：只受理仍在本页/在屏的 feed 行，几何用该格当前
+  /// 窗口矩形（mediaWindowRect，与点图/退出重算同一份换算）；拿不到（行已复用、
+  /// 图滑出视口）就不开——不另造几何。入口与点图完全相同（presentPhotoBrowser）。
+  private func openViewerFromPreview(at indexPath: IndexPath, mediaIndex: Int) {
+    let index = indexPath.item
+    guard !pageKey.isEmpty,
+          TiebaKindRowPages.shared.kind(pageKey: pageKey, index: index) == .feed,
+          let item = dataSource.itemIdentifier(for: indexPath), item.pageKey == pageKey,
+          let row = feedModel(at: index),
+          let cell = collectionView.cellForItem(at: indexPath) as? TiebaKindListFeedCell,
+          let windowRect = cell.mediaWindowRect(atMediaIndex: mediaIndex)
+    else { return }
+    _ = presentPhotoBrowser(row: row, media: (index: mediaIndex, windowRect: windowRect), at: indexPath)
   }
 
   /// 图片点击 → 原生查看器（TiebaPhotoBrowser）直开：items/transition 全原生

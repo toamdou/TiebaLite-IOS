@@ -33,6 +33,8 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
   private lazy var driver = TiebaRowPageDriver(list: list, keyPrefix: "user-\(uid)")
   private var expandedKeys: Set<String> = []
   private var likeMirror: [String: Bool] = [:]
+  /// 头像补齐后的合并重推任务（见 scheduleAvatarRepublish）。
+  private var avatarRepublishWork: DispatchWorkItem?
 
   private static let tabs: [(label: String, value: String)] = [
     ("贴子", "threads"), ("回复", "replies"), ("关注的吧", "forums"),
@@ -166,6 +168,11 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
       }
       hasMore = result.hasMore
       rowItems = result.items
+      // 吧头像补齐（userPost 不下发吧头像）：命中先写回行，未命中异步拉取后重推。
+      if tab != "forums" {
+        fillCachedForumAvatars()
+        ensureForumAvatars(seq: seq, tab: tab)
+      }
       // 分页同页键重推（换页键会整页重测）；刷新/切 tab 才换页键。
       publish(fresh: reset)
     } catch {
@@ -226,6 +233,60 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
 
   private func rowKey(_ row: [String: Any]) -> String {
     "\(TiebaSimpleRowParser.string(row["threadId"]) ?? "")-\(TiebaSimpleRowParser.string(row["firstPostId"]) ?? "")"
+  }
+
+  /// 吧头像补齐：userPost 接口不下发吧头像（行内 `forumAvatar` 恒空），与浏览记录 /
+  /// 我的收藏同一做法——按 forumId 优先、退 `n:<吧名>` 走全站缓存，未命中现拉。
+  private func ensureForumAvatars(seq: Int, tab: String) {
+    var seen = Set<String>()
+    var pending: [(key: String, name: String)] = []
+    for row in rows {
+      let forumName = TiebaSimpleRowParser.string(row["forumName"]) ?? ""
+      guard
+        let key = TiebaForumAvatarCache.key(
+          forumId: TiebaSimpleRowParser.string(row["forumId"]) ?? "",
+          forumName: forumName
+        ),
+        seen.insert(key).inserted
+      else { continue }
+      pending.append((key: key, name: forumName))
+    }
+    guard !pending.isEmpty else { return }
+    TiebaForumAvatarCache.shared.ensure(entries: pending) { [weak self] in
+      // 旧页后到不覆盖新页：页序号/分段变过就当本次回调没发生（同 loadList 守卫）。
+      guard let self, self.loadSeq == seq, self.activeTab == tab else { return }
+      self.scheduleAvatarRepublish(seq: seq, tab: tab)
+    }
+  }
+
+  /// 补齐后的重推必须换页键：图只随换行重建（同行重配会保留在途/旧图，见
+  /// TiebaFeedRowView.configureChip），而 ensure 每个 key 各回调一次（2 并发 +
+  /// 120ms 间隔），逐次换键会连闪——尾部合并成一次。
+  private func scheduleAvatarRepublish(seq: Int, tab: String) {
+    avatarRepublishWork?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      guard let self, self.loadSeq == seq, self.activeTab == tab, !self.rows.isEmpty
+      else { return }
+      self.fillCachedForumAvatars()
+      self.publish(fresh: true)
+    }
+    avatarRepublishWork = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+  }
+
+  /// 缓存命中即写回行字典（只补空值），行模型与吧徽章点击都按同一份行数据取。
+  private func fillCachedForumAvatars() {
+    for index in rows.indices {
+      let row = rows[index]
+      guard (TiebaSimpleRowParser.string(row["forumAvatar"]) ?? "").isEmpty,
+        let key = TiebaForumAvatarCache.key(
+          forumId: TiebaSimpleRowParser.string(row["forumId"]) ?? "",
+          forumName: TiebaSimpleRowParser.string(row["forumName"]) ?? ""
+        )
+      else { continue }
+      let avatar = TiebaForumAvatarCache.shared.cached(key: key)
+      if !avatar.isEmpty { rows[index]["forumAvatar"] = avatar }
+    }
   }
 
   private func forumRow(_ forum: TiebaProfileForum) -> [String: Any] {
