@@ -787,8 +787,10 @@ final class TiebaFormRowCell: UITableViewCell {
   private static var iconCache: [String: UIImage] = [:]
 
   private let toggle = UISwitch()
-  /// picker 行的系统菜单按钮（UITableViewCell 没有 UICollectionViewListCell 的
-  /// accessories，附件按钮是等价物：自带点按弹菜单，无需铺满热区与置顶 hack）。
+  /// picker 行的系统菜单按钮：**铺满整行**（点行内任意处都弹菜单，与系统设置一致），
+  /// 箭头靠配置右对齐画在尾随边。
+  /// ⚠️ 不再当 `accessoryView`：真机上它被画到了行首、半掩在卡片圆角外，命中区
+  /// 也跟着跑偏 —— 整页 picker 都点不动（用户实证）。覆盖层的 frame 由我们说了算。
   private let pickerMenuButton = UIButton(type: .system)
   /// 取色行的系统色井（自带色环外观与取色浮层，点击回调 .valueChanged）
   private let colorWell = UIColorWell()
@@ -823,6 +825,19 @@ final class TiebaFormRowCell: UITableViewCell {
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+  /// picker 行把菜单按钮铺满 contentView（幂等：同一 cell 复用多次只挂一次）。
+  private func attachPickerOverlay() {
+    guard pickerMenuButton.superview !== contentView else { return }
+    pickerMenuButton.translatesAutoresizingMaskIntoConstraints = false
+    contentView.addSubview(pickerMenuButton)
+    NSLayoutConstraint.activate([
+      pickerMenuButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+      pickerMenuButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+      pickerMenuButton.topAnchor.constraint(equalTo: contentView.topAnchor),
+      pickerMenuButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+    ])
+  }
+
   /// 配置一行（上下文见 TiebaFormCellContext）。
   func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
     self.onToggle = context.onToggle
@@ -841,9 +856,11 @@ final class TiebaFormRowCell: UITableViewCell {
     var pickerConfig = UIButton.Configuration.plain()
     pickerConfig.image = UIImage(systemName: "chevron.up.chevron.down")
     pickerConfig.imagePlacement = .trailing
-    pickerConfig.baseForegroundColor = .secondaryLabel
-    pickerConfig.contentInsets = .zero
+    // 「值 + 箭头」整块靠右：箭头恒在文字右边（各自排布，不会叠字）。
+    pickerConfig.imagePadding = 6
+    pickerConfig.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 16)
     pickerMenuButton.configuration = pickerConfig
+    pickerMenuButton.contentHorizontalAlignment = .trailing
     pickerMenuButton.showsMenuAsPrimaryAction = true
 
     pickerMenuButton.isHidden = true
@@ -902,14 +919,6 @@ final class TiebaFormRowCell: UITableViewCell {
       config.secondaryTextProperties.color = row.disabled ? disabledColor : .secondaryLabel
       config.secondaryTextProperties.numberOfLines = 0
     }
-    if row.kind == .picker, let value = row.value {
-      config.secondaryText = value
-      config.secondaryTextProperties.font = UIFont.preferredFont(forTextStyle: .body)
-      // useFormTint 的语义：Picker 选中值随主色染色；默认主题下是次级灰。
-      config.secondaryTextProperties.color = row.disabled
-        ? disabledColor
-        : (explicitTint ? emphasized : .secondaryLabel)
-    }
     if row.kind == .text {
       config.textProperties.font = row.resolvedTitleWeight == .regular
         ? row.font
@@ -949,13 +958,22 @@ final class TiebaFormRowCell: UITableViewCell {
       selectionStyle = .none
 
     case .picker:
-      // 系统菜单按钮：自带上下箭头 + 点按弹菜单，选中态由菜单项画。
+      // 整行可点：按钮铺满 contentView（自带弹菜单），并**自己画**「选中项文字 + 箭头」。
+      // ⚠️ 值文本不能走 content 的 secondaryText：它是原始 value（"default"/"1"），
+      // 菜单里却是 label（"默认"/"标准"），两者对不上（用户实证）；而且 secondaryText
+      // 固定贴尾随边，会和覆盖层的箭头叠在一起。
       selectionStyle = .none
       if !row.options.isEmpty {
+        attachPickerOverlay()
         pickerMenuButton.isHidden = false
         pickerMenuButton.isEnabled = !row.disabled
         pickerMenuButton.menu = buildMenu(row: row)
-        accessoryView = pickerMenuButton
+        var buttonConfig = pickerMenuButton.configuration ?? .plain()
+        buttonConfig.title = row.options.first { $0.value == row.value }?.label ?? row.value
+        buttonConfig.baseForegroundColor = row.disabled
+          ? .tertiaryLabel
+          : (explicitTint ? emphasized : .secondaryLabel)
+        pickerMenuButton.configuration = buttonConfig
       }
 
     case .button, .confirm:

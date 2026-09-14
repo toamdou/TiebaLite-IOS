@@ -100,6 +100,20 @@ final class TiebaLiveActivityManager {
     return handle
   }
 
+  /// 结束「签到」类中断残留的活动（切换展示位 / 上次中途退出）：文案与旧页
+  /// 的「签到已中断」一致，immediate = 立刻从锁屏与通知中心撤掉。
+  func endAllInterrupted() async {
+    let state: [String: Any] = [
+      "title": "签到已中断", "subtitle": "签到进程已停止", "status": "中断", "pill": "中断",
+      "progress": 0.0, "imageName": "xmark.circle.fill",
+      "tintColorHex": "#3B82F6", "accent": "#FF6B5E",
+    ]
+    await endAll(
+      state: LiveActivityKitAttributes.ContentState(raw: state),
+      dismissalPolicy: "immediate"
+    )
+  }
+
   func endAll(state: LiveActivityKitAttributes.ContentState, dismissalPolicy: String) async {
     let content = ActivityContent(
       state: state,

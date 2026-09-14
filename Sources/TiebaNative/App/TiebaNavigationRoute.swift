@@ -127,10 +127,12 @@ public enum TiebaRouteTable {
     // ── 上推表单（原 expo-router 的 presentation: 'formSheet'）──
     // login 与「更多」在 _layout.tsx 里声明了 formSheet；更多那张固定三档
     // detents + 贴底可拖拽（fitToContents 会不贴底、不可拉伸，用户实测过）。
+    // 登录是整页 WKWebView：半屏（0.5）放不下百度通行证页面，且下方会露出底下的
+    // 界面（用户实证"窗口不够大 / 最下面透明"）。用近全高（1.0 → .large）。
     entry(
       "login",
       title: "登录",
-      presentation: .sheet(detents: [0.5], grabber: true, cornerRadius: 28)
+      presentation: .sheet(detents: [1.0], grabber: true, cornerRadius: 28)
     ),
     entry(
       "thread/[id]/more",

@@ -127,10 +127,11 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     super.viewDidAppear(animated)
     guard !didPerformInitialLoad else { return }
     didPerformInitialLoad = true
-    Task { @MainActor in
-      await Self.syncSharedCookiesToWebKit(webView: webView)
-      webView.load(URLRequest(url: Self.loginURL))
-    }
+    // 先发起加载：Cookie 同步原来是 await 在 load 之前，且逐条等 setCookie 的
+    // 完成回调 —— 任何一条 cookie 的回调不来，页面就永远不开始加载（真机现象：
+    // 一直停在"正在加载登录页面"转圈）。改为不等待、并行写入。
+    webView.load(URLRequest(url: Self.loginURL))
+    Self.syncSharedCookiesToWebKit(webView: webView)
   }
 
   // MARK: - 底部安全说明
@@ -245,7 +246,8 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
       phase = .extracting
       TiebaSceneHaptics.fire("press")
       Task { @MainActor in await processLogin() }
-    } else if phase == .loading, url.contains("passport.baidu.com") {
+    } else if phase == .loading,
+      url.contains("passport.baidu.com") || url.contains("wappass.baidu.com") {
       phase = .idle
       startTimeout()
     }
@@ -306,12 +308,13 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     return merged
   }
 
-  private static func syncSharedCookiesToWebKit(webView: WKWebView) async {
+  /// 共享 Cookie → WebKit（同名时 WK 覆盖，与 JS getNativeCookies 一致）。
+  /// **不等待完成**：这条链路只影响通行证页看到的登录态，一条坏 cookie 不该让整页
+  /// 卡在加载中。
+  private static func syncSharedCookiesToWebKit(webView: WKWebView) {
     let store = webView.configuration.websiteDataStore.httpCookieStore
     for cookie in HTTPCookieStorage.shared.cookies ?? [] {
-      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-        store.setCookie(cookie) { continuation.resume() }
-      }
+      store.setCookie(cookie, completionHandler: nil)
     }
   }
 

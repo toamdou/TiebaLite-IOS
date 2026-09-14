@@ -56,6 +56,12 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
   }
 
   private var isLoggedIn: Bool { TiebaUserAPI.isLoggedIn }
+  /// 观察者是 non-Sendable，deinit 非隔离：与 TiebaPostRowView 同款声明。
+  private nonisolated(unsafe) var sessionObserver: NSObjectProtocol?
+
+  deinit {
+    if let sessionObserver { NotificationCenter.default.removeObserver(sessionObserver) }
+  }
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -69,6 +75,22 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     TiebaSignService.shared.onFinished = { [weak self] in
       TiebaFollowedForums.invalidate()
       self?.loadFollowedForums(force: true)
+    }
+    // 登录/登出会清关注吧缓存（TiebaSession.activate/logout → invalidate）：本页必须
+    // 跟着重拉。否则登录完成时本页还停在"未登录"的空态，要先去别的 tab 转一圈才出列表
+    //（用户实证：登录后切到「关注」还是空白）。
+    sessionObserver = NotificationCenter.default.addObserver(
+      forName: TiebaSession.didChangeNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      guard let self else { return }
+      TiebaUserAPI.refreshLoginSnapshot()
+      hasLoadedOnce = false
+      applyLoginState()
+      loadFollowedForums(force: true)
+      loadRecentForums()
+      applySignButton()
     }
     pill.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(pill)

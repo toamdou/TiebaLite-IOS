@@ -354,16 +354,8 @@ final class TiebaOKSignViewController: UIViewController {
 
   /// 切「通知栏」/关灵动岛时结束在场的签到 Live Activity（与旧页同款清理）。
   private func recoverStaleSignActivities() {
-    let state: [String: Any] = [
-      "title": "签到已中断", "subtitle": "签到进程已停止", "status": "中断", "pill": "中断",
-      "progress": 0.0, "imageName": "xmark.circle.fill",
-      "tintColorHex": "#3B82F6", "accent": "#FF6B5E",
-    ]
     Task { @MainActor in
-      await TiebaLiveActivityManager.shared.endAll(
-        state: LiveActivityKitAttributes.ContentState(raw: state),
-        dismissalPolicy: "immediate"
-      )
+      await TiebaLiveActivityManager.shared.endAllInterrupted()
     }
   }
 }

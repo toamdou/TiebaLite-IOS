@@ -76,6 +76,29 @@ final class TiebaSignService {
     for observer in progressObservers.values { observer() }
   }
 
+  /// 一次进度刷新：页内观察者 + 当前展示位（灵动岛 / 通知栏横幅）一起推。
+  /// 展示位原来只在开始与结束各写一次，中途完全不动（用户："没有实时同步进度"）。
+  private func publishProgress(
+    activityId: String?,
+    banner: Bool,
+    total: Int,
+    silent: Bool,
+    success: Int,
+    fail: Int,
+    exp: Int,
+    name: String
+  ) {
+    notifyProgress()
+    let done = success + fail
+    if banner {
+      Notifications.setProgress(done: done, total: total, silent: silent)
+    } else if let activityId {
+      updateActivity(
+        activityId, done: done, total: total, name: name, success: success, fail: fail, exp: exp
+      )
+    }
+  }
+
   private let alreadySignedCode = 1101
 
   private init() {}
@@ -105,7 +128,13 @@ final class TiebaSignService {
       && TiebaPreferenceSnapshot.bool("liveActivitySignEnabled", default: true)
     var activityId: String? = islandMode ? startActivity(total: 0) : nil
     if bannerMode {
+      // 切到通知栏：顺手结束在场的签到灵动岛（上次中途退出/换过展示位留下的）。
+      // 否则通知中心里「实时活动 + 通知」两条并存（用户实证，设置里选了只显示一个）。
+      Task { @MainActor in await TiebaLiveActivityManager.shared.endAllInterrupted() }
       Notifications.setProgress(done: 0, total: 0, silent: silent)
+    } else if islandMode {
+      // 灵动岛模式：撤掉可能残留的进度通知（后台自动签到投的）。
+      Notifications.cancelProgress()
     }
 
     Task { @MainActor in
@@ -133,21 +162,43 @@ final class TiebaSignService {
           && !TiebaPreferenceSnapshot.bool("slowSignMode", default: false)
         var remaining = targets
         if official {
-          let outcomes = try await signBatch(targets)
-          for item in outcomes {
-            if item.signed { success += 1; exp += item.exp; signedIds.append(item.forumId) }
-            else { fail += 1 }
-            if let index = progressItems.firstIndex(where: { $0.forumId == item.forumId }) {
-              progressItems[index].status = item.signed ? "success" : "failed"
-              progressItems[index].exp = item.exp
+          // 官方 msign 原来一次提交全部吧：服务端一次返回，进度只能"从准备中直接跳
+          // 完成"（用户实证"没有实时同步进度"）。按每批 5 个切块，每批回来就推进度。
+          let chunkSize = 5
+          var handled = Set<String>()
+          var offset = 0
+          while offset < targets.count, !cancelRequested {
+            let chunk = Array(targets[offset..<min(offset + chunkSize, targets.count)])
+            for forum in chunk {
+              if let index = progressItems.firstIndex(where: { $0.forumId == forum.forumId }) {
+                progressItems[index].status = "signing"
+              }
             }
+            publishProgress(
+              activityId: activityId, banner: bannerMode, total: targets.count, silent: silent,
+              success: success, fail: fail, exp: exp, name: chunk.first?.forumName ?? ""
+            )
+            let outcomes = try await signBatch(chunk)
+            for item in outcomes {
+              handled.insert(item.forumId)
+              if item.signed { success += 1; exp += item.exp; signedIds.append(item.forumId) }
+              else { fail += 1 }
+              if let index = progressItems.firstIndex(where: { $0.forumId == item.forumId }) {
+                progressItems[index].status = item.signed ? "success" : "failed"
+                progressItems[index].exp = item.exp
+              }
+            }
+            progressSuccess = success
+            progressFail = fail
+            progressExp = exp
+            progressDone = success + fail
+            publishProgress(
+              activityId: activityId, banner: bannerMode, total: targets.count, silent: silent,
+              success: success, fail: fail, exp: exp, name: chunk.last?.forumName ?? ""
+            )
+            offset += chunkSize
           }
-          progressSuccess = success
-          progressFail = fail
-          progressExp = exp
-          progressDone = success + fail
-          notifyProgress()
-          remaining = targets.filter { forum in !outcomes.contains { $0.forumId == forum.forumId } }
+          remaining = targets.filter { !handled.contains($0.forumId) }
         }
         let failAutoStop = TiebaPreferenceSnapshot.bool("failAutoStop", default: true)
         let slow = TiebaPreferenceSnapshot.bool("slowSignMode", default: false)
@@ -155,7 +206,10 @@ final class TiebaSignService {
           if cancelRequested { break }
           if let itemIndex = progressItems.firstIndex(where: { $0.forumId == forum.forumId }) {
             progressItems[itemIndex].status = "signing"
-            notifyProgress()
+            publishProgress(
+              activityId: activityId, banner: bannerMode, total: targets.count, silent: silent,
+              success: success, fail: fail, exp: exp, name: forum.forumName
+            )
           }
           let result = try? await signOne(forum)
           if let result, result.signed {
@@ -173,7 +227,10 @@ final class TiebaSignService {
           progressFail = fail
           progressExp = exp
           progressDone = success + fail
-          notifyProgress()
+          publishProgress(
+            activityId: activityId, banner: bannerMode, total: targets.count, silent: silent,
+            success: success, fail: fail, exp: exp, name: forum.forumName
+          )
           if failAutoStop, !(result?.signed ?? false), fail > 0 { break }
           if index < remaining.count - 1 {
             // slowSignMode 对齐 Kotlin 的 3.5–8s 随机间隔；常规路径 1.2s 防风控。

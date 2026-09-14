@@ -202,6 +202,11 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     )
     TiebaSettingsForm.applyTheme(dark: dark, accentHex: accent)
     TiebaChrome.setChromeDarkMode(dark)
-    _ = TiebaChrome.forceNavBarLiquidGlass()
+    // 整树重扫（栏/滚动件遍历 + 材质写入）是这条链路里最贵的一步，放在开关自己
+    // 那 0.25s 动画的同一帧里就会把动画卡住（真机反馈"开关动画很不流畅"）。
+    // 配色与栏外观上面已经改完，这里只把重扫挪到动画之后。
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+      _ = TiebaChrome.forceNavBarLiquidGlass()
+    }
   }
 }
