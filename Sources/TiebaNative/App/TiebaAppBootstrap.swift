@@ -40,7 +40,15 @@ public final class TiebaAppBootstrap {
   }
 
   /// 模拟器守卫：BGTaskScheduler 注册在模拟器不可用（同 submit）。
-  private func registerBackgroundTask(_ identifier: String) {
+  ///
+  /// ⚠️ `nonisolated` 是必需的，不是风格问题：launch handler 由 BGTaskScheduler 在
+  /// **后台队列**上调用（真机崩溃报告实证：BGTaskScheduler _runTask: →
+  /// closure #1 in registerBackgroundTask → swift_task_checkIsolated →
+  /// dispatch_assert_queue_fail，SIGTRAP，2026-09-13 两次）。本类是 @MainActor，
+  /// 闭包会被推断成 @MainActor，于是运行期隔离检查在后台队列上直接崩；标
+  /// nonisolated 后闭包不再继承主 actor，而 handle(_:) 本身是非隔离方法
+  /// （TiebaBackgroundSync 用 @unchecked Sendable 声明线程纪律），无需跳主线程。
+  private nonisolated func registerBackgroundTask(_ identifier: String) {
     #if targetEnvironment(simulator)
     return
     #else
