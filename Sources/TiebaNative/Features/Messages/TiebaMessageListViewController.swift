@@ -294,12 +294,14 @@ final class TiebaMessageListViewController: UIViewController {
     if region == "avatar" {
       guard !item.fromUserId.isEmpty else { return }
       TiebaSceneHaptics.fire("press")
-      TiebaNavigator.shared.navigate(path: "/user/\(item.fromUserId)", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.user(uid: item.fromUserId))
       return
     }
     guard !item.threadId.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    let path = item.postId.isEmpty ? "/thread/\(item.threadId)" : "/thread/\(item.threadId)?postId=\(item.postId)"
-    TiebaNavigator.shared.navigate(path: path, params: [:], mode: "push")
+    // postId 空 = 只进主帖（原 ?postId= 查询串的类型化等价）。
+    TiebaNavigator.shared.navigate(
+      .thread(id: item.threadId, postId: item.postId.isEmpty ? nil : item.postId)
+    )
   }
 }

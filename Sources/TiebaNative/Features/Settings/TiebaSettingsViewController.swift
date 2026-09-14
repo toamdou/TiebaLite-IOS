@@ -123,10 +123,24 @@ final class TiebaSettingsViewController: TiebaFormPageController {
   override func handle(_ event: TiebaFormEvent) {
     switch event {
     case .press(let id):
+      // 行 id 仍是 /settings/… 字符串（它是表格行的身份），在这里换成类型化路由。
       switch id {
-      case "/settings/theme", "/settings/habit", "/settings/haptics", "/settings/oksign",
-        "/settings/image", "/settings/block", "/settings/account", "/settings/more":
-        TiebaSettingsForm.push(id)
+      case "/settings/theme":
+        TiebaSettingsForm.push(.settingsTheme)
+      case "/settings/habit":
+        TiebaSettingsForm.push(.settingsHabit)
+      case "/settings/haptics":
+        TiebaSettingsForm.push(.settingsHaptics)
+      case "/settings/oksign":
+        TiebaSettingsForm.push(.settingsOKSign)
+      case "/settings/image":
+        TiebaSettingsForm.push(.settingsImage)
+      case "/settings/block":
+        TiebaSettingsForm.push(.blockSettings)
+      case "/settings/account":
+        TiebaSettingsForm.push(.account)
+      case "/settings/more":
+        TiebaSettingsForm.push(.settingsMore)
       default:
         break
       }

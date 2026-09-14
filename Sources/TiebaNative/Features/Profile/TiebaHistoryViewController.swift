@@ -448,17 +448,13 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
     let id = entry.threadId.isEmpty ? entry.id : entry.threadId
     guard !id.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/thread/\(id)", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.thread(id: id))
   }
 
   private func openForum(_ name: String) {
     guard !name.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(
-      path: "/forum/\(TiebaRoutePath.segment(name))",
-      params: [:],
-      mode: "push"
-    )
+    TiebaNavigator.shared.navigate(.forum(name: name))
   }
 
   // MARK: - 删除 / 清空 / 分段

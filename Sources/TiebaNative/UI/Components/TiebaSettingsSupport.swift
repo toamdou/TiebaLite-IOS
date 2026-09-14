@@ -153,9 +153,10 @@ enum TiebaSettingsForm {
     isDark(systemIsDark: viewController.traitCollection.userInterfaceStyle == .dark)
   }
 
-  static func push(_ path: String) {
+  /// 设置行的统一压栈入口（触觉 + 类型化路由）。
+  static func push(_ route: TiebaRoute) {
     TiebaSceneHaptics.fire("press")
-    _ = TiebaNavigator.shared.navigate(path: path, params: [:], mode: "push")
+    _ = TiebaNavigator.shared.navigate(route)
   }
 
   static func makeForm() -> TiebaFormListView {

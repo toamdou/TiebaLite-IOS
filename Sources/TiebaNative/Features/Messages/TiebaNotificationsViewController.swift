@@ -18,7 +18,7 @@ final class TiebaNotificationsViewController: UIViewController, TiebaTabReselect
   )
   private var current: TiebaMessageListViewController?
   private var activeIndex = 0
-  /// viewDidLoad 之前到达的深链目标段（宿主先切 tab 再投 params）。
+  /// viewDidLoad 之前到达的深链目标段（宿主先切 tab 再投初始分段）。
   private var pendingIndex: Int?
 
   override func viewDidLoad() {
@@ -30,7 +30,7 @@ final class TiebaNotificationsViewController: UIViewController, TiebaTabReselect
     stateView.isHidden = true
     stateView.onButtonPress = { [weak self] id in
       if id == "login" {
-        TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+        TiebaNavigator.shared.navigate(.login)
       } else {
         self?.reloadCurrent()
       }
@@ -102,10 +102,8 @@ final class TiebaNotificationsViewController: UIViewController, TiebaTabReselect
   }
 
   /// 深链 tiebalite://notifications/N —— 选中对应分段（N = 0/1/2）。
-  func receiveTabParams(_ params: [String: String]) {
-    guard let raw = params["initialTab"], let index = Int(raw),
-      index >= 0, index < TiebaMessageTab.allCases.count
-    else { return }
+  func receiveInitialTab(_ index: Int) {
+    guard index >= 0, index < TiebaMessageTab.allCases.count else { return }
     guard isViewLoaded else {
       pendingIndex = index
       return

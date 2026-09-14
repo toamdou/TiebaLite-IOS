@@ -539,7 +539,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
       case "chip":
         let forumName = TiebaSimpleRowParser.string(thread.row["forumName"]) ?? ""
         guard !forumName.isEmpty else { return }
-        TiebaNavigator.shared.navigate(path: "/forum/\(TiebaRoutePath.segment(forumName))", params: [:], mode: "push")
+        TiebaNavigator.shared.navigate(.forum(name: forumName))
       case "action":
         switch actionIndex {
         case 1: shareThread(thread)
@@ -558,13 +558,13 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
       let name = forumHits[index].name
       guard !name.isEmpty else { return }
       TiebaSceneHaptics.fire("press")
-      TiebaNavigator.shared.navigate(path: "/forum/\(TiebaRoutePath.segment(name))", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.forum(name: name))
     case .user:
       guard userHits.indices.contains(index) else { return }
       let uid = userHits[index].uid
       guard !uid.isEmpty else { return }
       TiebaSceneHaptics.fire("press")
-      TiebaNavigator.shared.navigate(path: "/user/\(uid)", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.user(uid: uid))
     }
   }
 
@@ -644,7 +644,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private func openThread(_ hit: TiebaSearchAPI.ThreadHit) {
     guard !hit.id.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/thread/\(hit.id)", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.thread(id: hit.id))
   }
 
   private func shareThread(_ hit: TiebaSearchAPI.ThreadHit) {
@@ -665,7 +665,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private func toggleLike(_ hit: TiebaSearchAPI.ThreadHit, index: Int) {
     guard !hit.id.isEmpty else { return }
     guard !TiebaBackgroundSnapshot.shared.bduss.isEmpty else {
-      TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.login)
       return
     }
     let latest = likeMirror[hit.id] ?? (TiebaSimpleRowParser.bool(hit.row["hasAgree"]) ?? false)

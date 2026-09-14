@@ -551,7 +551,7 @@ extension TiebaForumMembersViewController: UICollectionViewDelegate {
     let member = groups[group].members[index]
     guard !member.userId.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/user/\(member.userId)", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.user(uid: member.userId))
   }
 
   func collectionView(_ collectionView: UICollectionView, shouldHighlightItemAt indexPath: IndexPath) -> Bool {

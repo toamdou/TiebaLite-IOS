@@ -185,7 +185,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
 
   private func handleStateButton(_ id: String) {
     if id == "login" {
-      TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.login)
       return
     }
     reload()
@@ -380,12 +380,12 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
       let uid = value(thread, "authorId")
       guard !uid.isEmpty else { return }
       TiebaSceneHaptics.fire("press")
-      TiebaNavigator.shared.navigate(path: "/user/\(uid)", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.user(uid: uid))
     case "chip":
       let forumName = value(thread, "forumName")
       guard !forumName.isEmpty else { return }
       TiebaSceneHaptics.fire("press")
-      TiebaNavigator.shared.navigate(path: "/forum/\(TiebaRoutePath.segment(forumName))", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.forum(name: forumName))
     case "showMore":
       let id = value(thread, "id")
       guard !id.isEmpty, expandedIds.insert(id).inserted else { return }
@@ -448,7 +448,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     let id = value(thread, "id")
     guard !id.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/thread/\(id)", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.thread(id: id))
   }
 
   private func shareThread(_ thread: [String: Any]) {
@@ -476,7 +476,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
       TiebaSimpleRowParser.string(($0["threadInfo"] as? [String: Any])?["id"]) == id
     }) else { return }
     guard isLoggedIn else {
-      TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.login)
       return
     }
     let latest = likeMirror[id] ?? (TiebaSimpleRowParser.bool(thread["hasAgree"]) ?? false)

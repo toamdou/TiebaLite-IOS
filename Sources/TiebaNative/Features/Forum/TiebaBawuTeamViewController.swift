@@ -253,7 +253,7 @@ final class TiebaBawuTeamViewController: UIViewController {
         let member = rowItems[index], !member.userId.isEmpty
       else { return }
       TiebaSceneHaptics.fire("press")
-      TiebaNavigator.shared.navigate(path: "/user/\(member.userId)", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.user(uid: member.userId))
     case .refreshRequested:
       isUserRefresh = true
       reload()

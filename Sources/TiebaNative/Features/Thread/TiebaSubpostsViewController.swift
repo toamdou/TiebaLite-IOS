@@ -24,14 +24,23 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
   override var reachEndThreshold: CGFloat { 0.5 }
   override var emptySecondaryText: String { "还没有楼中楼回复" }
 
-  init(route: TiebaRoute) {
-    self.threadId = route.params["threadId"] ?? route.params["id"] ?? ""
-    self.postId = route.params["postId"] ?? ""
-    self.forumId = route.params["forumId"] ?? ""
-    self.displayFloor = route.params["floor"] ?? ""
-    self.threadAuthorId = route.params["threadAuthorId"] ?? ""
-    self.forumName = route.params["forumName"] ?? ""
-    self.threadTitle = route.params["threadTitle"] ?? ""
+  /// 类型化入口：floor = nil 表示楼层未知（显示「第?楼」，首包后由 floorPost.floor 补）。
+  init(
+    threadId: String,
+    postId: String,
+    forumId: String,
+    floor: Int?,
+    threadAuthorId: String,
+    forumName: String,
+    threadTitle: String
+  ) {
+    self.threadId = threadId
+    self.postId = postId
+    self.forumId = forumId
+    self.displayFloor = floor.map(String.init) ?? ""
+    self.threadAuthorId = threadAuthorId
+    self.forumName = forumName
+    self.threadTitle = threadTitle
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -238,7 +247,7 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     switch event {
     case .avatar:
       guard !post.authorId.isEmpty else { return }
-      TiebaNavigator.shared.navigate(path: "/user/\(post.authorId)", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.user(uid: post.authorId))
     case .agree:
       toggleAgree(post, objType: isParent ? 1 : 2)
     case .copyContent:
@@ -263,7 +272,7 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
       TiebaLinkOpener.open(url)
     case .user(let uid):
       guard !uid.isEmpty else { return }
-      TiebaNavigator.shared.navigate(path: "/user/\(uid)", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.user(uid: uid))
     case .toggleSeeLz, .toggleSort:
       break
     }
@@ -376,7 +385,7 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
   private func openThread() {
     guard !threadId.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/thread/\(threadId)", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.thread(id: threadId))
   }
 
   // MARK: - 顶栏

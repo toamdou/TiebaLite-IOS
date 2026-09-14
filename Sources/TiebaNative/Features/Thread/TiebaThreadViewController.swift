@@ -49,16 +49,17 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   override var pillBottomInset: CGFloat { 96 }
   override var emptySecondaryText: String { "还没有人回复这个帖子" }
 
-  init(route: TiebaRoute) {
-    let id = route.params["id"] ?? ""
-    self.threadId = id
+  /// 类型化入口：参数由 TiebaNativeRouteTable 从 TiebaRoute.thread 解好，
+  /// 页面不再自己从字符串读回。
+  init(threadId: String, postId: String?, seeLz: Bool, fromFavorites: Bool) {
+    self.threadId = threadId
     // 快照只在首帧消费一次（一次性交付）：未命中/深链进来都返回 nil。
-    self.knownSnapshot = TiebaThreadSnapshots.consume(id: id)
-    self.postId = route.params["postId"].flatMap { $0.isEmpty ? nil : $0 }
-    self.fromFavorites = route.params["fromFavorites"] == "1"
+    self.knownSnapshot = TiebaThreadSnapshots.consume(id: threadId)
+    self.postId = postId
+    self.fromFavorites = fromFavorites
     let collectSeeLz = TiebaPreferenceSnapshot.bool("collectSeeLz", default: true)
     let collectDescSort = TiebaPreferenceSnapshot.bool("collectDescSort", default: false)
-    self.seeLz = route.params["seeLz"] == "1" || (fromFavorites && collectSeeLz)
+    self.seeLz = seeLz || (fromFavorites && collectSeeLz)
     self.reverse = fromFavorites && collectDescSort
     self.isCollected = fromFavorites
     super.init(nibName: nil, bundle: nil)
@@ -409,7 +410,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     switch event {
     case .avatar:
       guard !post.authorId.isEmpty else { return }
-      TiebaNavigator.shared.navigate(path: "/user/\(post.authorId)", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.user(uid: post.authorId))
     case .agree:
       toggleAgree(post)
     case .copyContent:
@@ -431,7 +432,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       TiebaLinkOpener.open(url)
     case .user(let uid):
       guard !uid.isEmpty else { return }
-      TiebaNavigator.shared.navigate(path: "/user/\(uid)", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.user(uid: uid))
     case .toggleSeeLz:
       seeLz.toggle()
       reloadReplies()
@@ -454,19 +455,15 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       toggleCollect()
     case .more:
       TiebaSceneHaptics.fire("sheet-present")
+      // title/forumId/forumName/isCollected 在迁移前也只是随路由携带、sheet 从未读取，
+      // 类型化后不再传（sheet 实际消费的只有这四项）。
       TiebaNavigator.shared.navigate(
-        path: "/thread/\(threadId)/more",
-        params: [
-          "id": threadId,
-          "title": thread?.title ?? "",
-          "forumId": thread?.forumId ?? "",
-          "forumName": thread?.forumName ?? "",
-          "canDelete": thread?.authorId == TiebaBackgroundSnapshot.shared.uid ? "1" : "0",
-          "seeLz": seeLz ? "1" : "0",
-          "isCollected": isCollected ? "1" : "0",
-          "reverse": reverse ? "1" : "0",
-        ],
-        mode: "push"
+        .threadMore(
+          id: threadId,
+          canDelete: thread?.authorId == TiebaBackgroundSnapshot.shared.uid,
+          seeLz: seeLz,
+          reverse: reverse
+        )
       )
     }
   }
@@ -700,17 +697,15 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private func openSubPosts(_ post: TiebaThreadPost) {
     guard !post.id.isEmpty else { return }
     TiebaNavigator.shared.navigate(
-      path: "/thread/\(threadId)/subposts",
-      params: [
-        "postId": post.id,
-        "threadId": threadId,
-        "forumId": thread?.forumId ?? "",
-        "floor": String(post.floor),
-        "threadAuthorId": thread?.authorId ?? "",
-        "forumName": thread?.forumName ?? "",
-        "threadTitle": thread?.title ?? "",
-      ],
-      mode: "push"
+      .subposts(
+        threadId: threadId,
+        postId: post.id,
+        forumId: thread?.forumId ?? "",
+        floor: post.floor,
+        threadAuthorId: thread?.authorId ?? "",
+        forumName: thread?.forumName ?? "",
+        threadTitle: thread?.title ?? ""
+      )
     )
   }
 
@@ -776,11 +771,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private func openForum() {
     guard let name = thread?.forumName, !name.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(
-      path: "/forum/\(name)",
-      params: ["forumId": thread?.forumId ?? ""],
-      mode: "push"
-    )
+    TiebaNavigator.shared.navigate(.forum(name: name, forumId: thread?.forumId ?? ""))
   }
 
   // MARK: - 浏览记录 / 收藏图片快照（原生 KV / SQLite，与 JS 同一份存储）

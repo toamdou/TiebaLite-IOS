@@ -93,10 +93,10 @@ final class TiebaAccountViewController: UIViewController {
   private func handleRowPress(_ id: String) {
     switch id {
     case "editProfile":
-      TiebaSettingsForm.push("/settings/edit-profile")
+      TiebaSettingsForm.push(.editProfile)
     case "addAccount":
       TiebaSceneHaptics.fire("press")
-      TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.login)
     default:
       guard let target = accounts.first(where: { $0.uid == id }) else { return }
       switchAccount(target)

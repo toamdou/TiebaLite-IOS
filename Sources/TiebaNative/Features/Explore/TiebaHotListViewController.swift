@@ -199,11 +199,7 @@ final class TiebaHotListViewController: UIViewController, TiebaTabReselectable {
 
   private func openTopic(_ topic: TiebaFeedAPI.Hot.Topic) {
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(
-      path: "/topic/\(topic.id)",
-      params: ["name": topic.name],
-      mode: "push"
-    )
+    TiebaNavigator.shared.navigate(.topic(id: topic.id, name: topic.name))
   }
 
   private func openThread(_ index: Int) {
@@ -211,7 +207,7 @@ final class TiebaHotListViewController: UIViewController, TiebaTabReselectable {
     let id = TiebaSimpleRowParser.string(threads[index].row["id"]) ?? ""
     guard !id.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/thread/\(id)", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.thread(id: id))
   }
 
   private func openForum(_ index: Int) {
@@ -219,7 +215,7 @@ final class TiebaHotListViewController: UIViewController, TiebaTabReselectable {
     let name = TiebaFeedRowFallback.resolve(threads[index].row).name
     guard !name.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/forum/\(TiebaRoutePath.segment(name))", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.forum(name: name))
   }
 
   private func openAuthor(_ index: Int) {
@@ -227,7 +223,7 @@ final class TiebaHotListViewController: UIViewController, TiebaTabReselectable {
     let uid = TiebaSimpleRowParser.string(threads[index].row["authorId"]) ?? ""
     guard !uid.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/user/\(uid)", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.user(uid: uid))
   }
 }
 

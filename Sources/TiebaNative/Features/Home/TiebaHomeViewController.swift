@@ -167,7 +167,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     searchButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     searchButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
     searchButton.addAction(UIAction { _ in
-      TiebaNavigator.shared.navigate(path: "/search/index", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.search())
     }, for: .touchUpInside)
 
     for button in [signButton, sortButton] {
@@ -397,7 +397,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     stateView.skeletonInsets = UIEdgeInsets(top: 8, left: 16, bottom: 24, right: 16)
     stateView.onButtonPress = { [weak self] id in
       if id == "login" {
-        TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+        TiebaNavigator.shared.navigate(.login)
       } else {
         self?.loadFollowedForums(force: true)
       }
@@ -566,7 +566,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
 
   private func openForum(_ name: String) {
     guard !name.isEmpty else { return }
-    TiebaNavigator.shared.navigate(path: "/forum/\(TiebaRoutePath.segment(name))", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.forum(name: name))
   }
 
   // MARK: - 动作
@@ -595,7 +595,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     guard isLoggedIn else {
       let alert = UIAlertController(title: "提示", message: "签到需要先登录百度账号", preferredStyle: .alert)
       alert.addAction(UIAlertAction(title: "去登录", style: .default) { _ in
-        TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+        TiebaNavigator.shared.navigate(.login)
       })
       alert.addAction(UIAlertAction(title: "取消", style: .cancel))
       present(alert, animated: true)

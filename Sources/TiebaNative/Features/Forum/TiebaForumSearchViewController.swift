@@ -336,20 +336,19 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
     guard !hit.threadId.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
     if hit.postId.isEmpty {
-      TiebaNavigator.shared.navigate(path: "/thread/\(hit.threadId)", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.thread(id: hit.threadId))
       return
     }
     TiebaNavigator.shared.navigate(
-      path: "/thread/\(hit.threadId)/subposts",
-      params: [
-        "id": hit.threadId,
-        "postId": hit.postId,
-        "threadId": hit.threadId,
-        "floor": hit.floor > 0 ? String(hit.floor) : "",
-        "forumId": forumId,
-        "forumName": forumName,
-      ],
-      mode: "push"
+      .subposts(
+        threadId: hit.threadId,
+        postId: hit.postId,
+        forumId: forumId,
+        floor: hit.floor > 0 ? hit.floor : nil,
+        threadAuthorId: "",
+        forumName: forumName,
+        threadTitle: ""
+      )
     )
   }
 }

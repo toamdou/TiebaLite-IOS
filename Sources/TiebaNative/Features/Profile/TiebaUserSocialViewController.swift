@@ -221,7 +221,7 @@ final class TiebaUserSocialViewController: UIViewController {
     guard !uid.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
     dismiss(animated: true) {
-      TiebaNavigator.shared.navigate(path: "/user/\(uid)", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.user(uid: uid))
     }
   }
 }

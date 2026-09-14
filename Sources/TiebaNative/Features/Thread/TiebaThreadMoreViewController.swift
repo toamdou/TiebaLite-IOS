@@ -1,6 +1,8 @@
 import UIKit
 
-/// 帖子「更多」sheet（原 src/app/thread/[id]/more.tsx）：全部行来自路由参数。
+/// 帖子「更多」sheet（原 src/app/thread/[id]/more.tsx）：行状态来自类型化路由参数
+///（canDelete / seeLz / reverse——旧 params 里的 title/forumId/forumName/isCollected
+/// 本页从未读取，迁移时未保留）。
 ///
 /// 点行先收起 sheet；本页 viewDidDisappear（收起转场结束）时经 TiebaThreadMoreSignal
 /// 把动作交给帖子页（原 DeviceEventEmitter 通道的原生替身）。
@@ -13,11 +15,11 @@ final class TiebaThreadMoreViewController: UIViewController {
   /// 选中动作暂存：等本页 viewDidDisappear（收起转场结束）再经 signal 发出。
   private var pendingAction: TiebaThreadMoreSignal.Action?
 
-  init(route: TiebaRoute) {
-    self.threadId = route.params["id"] ?? ""
-    self.canDelete = route.params["canDelete"] == "1"
-    self.seeLz = route.params["seeLz"] == "1"
-    self.reverse = route.params["reverse"] == "1"
+  init(threadId: String, canDelete: Bool, seeLz: Bool, reverse: Bool) {
+    self.threadId = threadId
+    self.canDelete = canDelete
+    self.seeLz = seeLz
+    self.reverse = reverse
     super.init(nibName: nil, bundle: nil)
   }
 

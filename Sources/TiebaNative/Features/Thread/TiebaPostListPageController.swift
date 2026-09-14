@@ -189,7 +189,7 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
   func requireLogin() -> Bool {
     guard isLoggedIn else {
       pill.showResult(success: false, text: "请先登录")
-      TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.login)
       return false
     }
     return true

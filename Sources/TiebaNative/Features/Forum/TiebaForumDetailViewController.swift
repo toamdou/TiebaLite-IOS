@@ -15,7 +15,7 @@ final class TiebaForumDetailViewController: UIViewController, TiebaNativeScreen 
   private enum Row {
     case profile
     case stats
-    case link(key: String, title: String, subtitle: String, icon: String, tint: UIColor)
+    case link(route: TiebaRoute, title: String, subtitle: String, icon: String, tint: UIColor)
     case text(String, icon: String?, color: UIColor?)
     case value(String, String)
     case browser
@@ -113,9 +113,10 @@ final class TiebaForumDetailViewController: UIViewController, TiebaNativeScreen 
     var sections: [Section] = [
       Section(title: nil, rows: [.profile, .stats]),
       Section(title: "吧管理", rows: [
-        .link(key: "bawu", title: "吧务团队", subtitle: "查看本吧管理团队", icon: "person.2.fill", tint: .systemBlue),
-        .link(key: "members", title: "吧成员", subtitle: "查看本吧成员信息", icon: "person.3.fill", tint: .systemGreen),
-        .link(key: "rules", title: "吧规", subtitle: "发帖前请先阅读吧规", icon: "doc.text.fill", tint: .systemOrange),
+        // 行直接带类型化路由（原 "bawu"/"members"/"rules" 字符串拼 path 的替换）。
+        .link(route: .forumBawu(name: name, forumId: forumId), title: "吧务团队", subtitle: "查看本吧管理团队", icon: "person.2.fill", tint: .systemBlue),
+        .link(route: .forumMembers(name: name, forumId: forumId), title: "吧成员", subtitle: "查看本吧成员信息", icon: "person.3.fill", tint: .systemGreen),
+        .link(route: .forumRules(name: name, forumId: forumId), title: "吧规", subtitle: "发帖前请先阅读吧规", icon: "doc.text.fill", tint: .systemOrange),
       ]),
     ]
     if !detail.intro.isEmpty {
@@ -159,11 +160,9 @@ final class TiebaForumDetailViewController: UIViewController, TiebaNativeScreen 
 
   private func open(_ row: Row) {
     switch row {
-    case .link(let key, _, _, _, _):
+    case .link(let route, _, _, _, _):
       TiebaSceneHaptics.fire("press")
-      // 路径段编码唯一实现（.urlPathAllowed 会放行 / 与 ?，字符集是错的）。
-      let path = "/forum/\(TiebaRoutePath.segment(name))/\(key)"
-      TiebaNavigator.shared.navigate(path: path, params: ["forumId": forumId], mode: "push")
+      TiebaNavigator.shared.navigate(route)
     case .browser:
       TiebaSceneHaptics.fire("press")
       // 原 handleOpenInBrowser = openLink(buildForumUrl(name))：贴吧吧链接命中

@@ -104,13 +104,13 @@ enum TiebaUserAPI {
   /// 顶栏头像的同一分支）。
   static func navigateToOwnProfile() {
     guard isLoggedIn else {
-      TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.login)
       return
     }
     guard !uid.isEmpty else {
-      TiebaNavigator.shared.navigate(path: "/settings/account", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.account)
       return
     }
-    TiebaNavigator.shared.navigate(path: "/user/\(uid)", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.user(uid: uid))
   }
 }

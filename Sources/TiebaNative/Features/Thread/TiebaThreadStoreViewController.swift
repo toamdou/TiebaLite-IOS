@@ -247,7 +247,7 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
       buttonTitle: "登录百度账号",
       buttonImage: "person.crop.circle.badge.checkmark",
       onButton: {
-        TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+        TiebaNavigator.shared.navigate(.login)
       }
     )
   }
@@ -299,11 +299,7 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
     let id = TiebaSimpleRowParser.string(row["threadId"]) ?? ""
     guard !id.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(
-      path: "/thread/\(id)",
-      params: ["fromFavorites": "1"],
-      mode: "push"
-    )
+    TiebaNavigator.shared.navigate(.thread(id: id, fromFavorites: true))
   }
 
   // MARK: - 取消收藏 / 撤销

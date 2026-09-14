@@ -491,23 +491,19 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
     let id = TiebaSimpleRowParser.string(row["threadId"]) ?? ""
     guard !id.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/thread/\(id)", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.thread(id: id))
   }
 
   private func openForum(_ name: String) {
     guard !name.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(
-      path: "/forum/\(TiebaRoutePath.segment(name))",
-      params: [:],
-      mode: "push"
-    )
+    TiebaNavigator.shared.navigate(.forum(name: name))
   }
 
   private func openUser(_ uid: String) {
     guard !uid.isEmpty, uid != self.uid else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/user/\(uid)", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.user(uid: uid))
   }
 
   private func shareThread(_ row: [String: Any]) {
@@ -535,7 +531,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
     let id = TiebaSimpleRowParser.string(row["threadId"]) ?? ""
     guard !id.isEmpty else { return }
     guard !TiebaBackgroundSnapshot.shared.bduss.isEmpty else {
-      TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.login)
       return
     }
     let latest = likeMirror[id] ?? (TiebaSimpleRowParser.bool(row["hasAgree"]) ?? false)
@@ -655,7 +651,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
     let alert = UIAlertController(title: "提示", message: "请先登录", preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "取消", style: .cancel))
     alert.addAction(UIAlertAction(title: "去登录", style: .default) { _ in
-      TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.login)
     })
     present(alert, animated: true)
   }

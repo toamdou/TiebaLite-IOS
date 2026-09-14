@@ -46,7 +46,7 @@ final class TiebaClipboardLinkDetector {
       present(
         title: "检测到贴吧帖子链接",
         message: "帖子ID: \(threadId)\n\n\(text)",
-        path: "thread/\(threadId)"
+        route: .thread(id: threadId)
       )
       return
     }
@@ -55,12 +55,12 @@ final class TiebaClipboardLinkDetector {
       present(
         title: "检测到贴吧链接",
         message: "吧名: \(forumName)\n\n\(text)",
-        path: "forum/\(forumName)"
+        route: .forum(name: forumName)
       )
     }
   }
 
-  private func present(title: String, message: String, path: String) {
+  private func present(title: String, message: String, route: TiebaRoute) {
     // 让路：最上层已是系统弹窗（JS 检测器同帧的 Alert.alert）或压着模态时，
     // 同一段剪贴板内容不再叠第二个提示。
     guard let host = TiebaTopViewController.find(),
@@ -70,7 +70,7 @@ final class TiebaClipboardLinkDetector {
     let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "取消", style: .cancel))
     alert.addAction(UIAlertAction(title: "打开", style: .default) { _ in
-      _ = TiebaNavigator.shared.navigate(path: path, params: [:], mode: "push")
+      _ = TiebaNavigator.shared.navigate(route)
     })
     host.present(alert, animated: true)
   }

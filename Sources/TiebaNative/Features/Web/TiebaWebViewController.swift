@@ -5,7 +5,7 @@
 //（TiebaWebView 是给原生宿主复用的内嵌 WebView 视图）。
 //
 // 逐项对齐旧页面（行为是硬指标，勿"顺手优化"）：
-//   · 路由参数：TiebaRoute.params 的 url / title（原生解析，JS 侧不参与）。
+//   · 路由参数：TiebaRoute.webview(url:title:) 的类型化值（原生解析，JS 侧不参与）。
 //   · 可信域名：WEBVIEW_TRUSTED_HOSTS 整表下沉（tieba.baidu.com / tiebac /
 //     static.tieba / tb1.bdstatic / passport / wappass / wapp），host 等于或为其
 //     子域；只对**顶层导航**裁决，子资源一律放行（否则贴吧页面内嵌第三方资源
@@ -45,7 +45,8 @@ final class TiebaWebViewController: UIViewController {
   private static let defaultURL = "https://tieba.baidu.com"
 
   // MARK: - 页面状态（原 useState）
-  private let params: [String: String]
+  /// 初始地址（空串 = 走 defaultURL，见 viewDidAppear）。
+  private let url: String
   private let webView: WKWebView
   private var isLoading = true
   private var canGoBack = false
@@ -73,8 +74,8 @@ final class TiebaWebViewController: UIViewController {
   private let loadingOverlay = TiebaWebLoadingOverlayView()
   private var hairlineHeightConstraint: NSLayoutConstraint?
 
-  init(route: TiebaRoute) {
-    self.params = route.params
+  init(url: String, title: String) {
+    self.url = url
     let configuration = WKWebViewConfiguration()
     configuration.websiteDataStore = .default()
     // 旧包 iOS 默认值（TiebaWebView 的同款配置）：不允许内联播放、媒体播放需要手势。
@@ -83,8 +84,8 @@ final class TiebaWebViewController: UIViewController {
     configuration.defaultWebpagePreferences.allowsContentJavaScript = true
     webView = WKWebView(frame: .zero, configuration: configuration)
     super.init(nibName: nil, bundle: nil)
-    // 初始标题 = params.title（原 useState(title || '')，空串时界面显示「加载中…」）。
-    pageTitle = route.params["title"] ?? ""
+    // 初始标题 = title（原 useState(title || '')，空串时界面显示「加载中…」）。
+    pageTitle = title
     webView.allowsBackForwardNavigationGestures = true  // allowsBackForwardNavigationGestures
   }
 
@@ -109,7 +110,7 @@ final class TiebaWebViewController: UIViewController {
     super.viewDidAppear(animated)
     guard !didPerformInitialNavigation else { return }
     didPerformInitialNavigation = true
-    let raw = params["url"] ?? ""
+    let raw = url
     if !raw.isEmpty, !Self.isTrustedWebURL(raw) {
       // 原 useEffect：非可信 → 外开 + dismissTo('/')。见文件头的说明（不加载）。
       openInBrowser(raw)

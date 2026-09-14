@@ -1,54 +1,14 @@
-import UIKit
+import Foundation
 
 // 原生路由表（替 expo-router 的文件路由）。
 //
 // 名字仍是「文件路径即路由名」——"thread/[id]"、"settings/about"，方括号段是
-// 参数占位。保持这个形状的理由：JS 侧 200+ 文件的 href 写法（'/thread/123'、
-// '/forum/某个吧'）与 params 形状完全不用改，迁移期只剩 import 路径一处改动。
+// 参数占位。这张表只解决两件事：
+//   ① 深链字符串（path + query）→ 类型化路由：唯一的字符串解析器（parse）；
+//   ② 路由名 → 标题 / 呈现方式 / chrome / 是否 tab 根屏（entry）。
 //
-// ⚠️ 这张表是**唯一**一份：路径解析、标题、呈现方式、是否 tab 根屏全部在此
-// 决定，JS 侧不再复制。JS 只说「去 /thread/123」，原生自己解析成
-// (name: "thread/[id]", params: {id: "123"})。两处各存一张表必然会漂移。
-
-/// 一个具体路由实例：名字 + 参数。
-/// Sendable：TiebaNavigator.makeHost 要把 route 传进主 actor 构造宿主 VC
-/// （UIViewController init 是 @MainActor）；纯值类型（String + [String: String]），
-/// 显式声明后这个既有传递不再被判成 sending 'route'（public 类型不隐式推断）。
-public struct TiebaRoute: Equatable, Hashable, Sendable {
-  public var name: String
-  public var params: [String: String]
-
-  public init(name: String, params: [String: String] = [:]) {
-    self.name = name
-    self.params = params
-  }
-
-  /// 还原成可读路径（'/thread/123'）。仅用于日志与 JS 侧 usePathname()。
-  public var path: String {
-    var out = "/"
-    let segs = name.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
-    var parts: [String] = []
-    for seg in segs {
-      if seg.hasPrefix("["), seg.hasSuffix("]") {
-        let key = String(seg.dropFirst().dropLast())
-        parts.append(params[key] ?? "")
-      } else {
-        parts.append(seg)
-      }
-    }
-    out += parts.joined(separator: "/")
-    // 查询串按 key 排序输出，保证同一 params 每次得到同一字符串（usePathname
-    // 进了 JS 的依赖数组，顺序不定会让它每次渲染都"变"）。
-    let extra = params.filter { key, _ in
-      !segs.contains { $0 == "[\(key)]" }
-    }
-    if !extra.isEmpty {
-      let q = extra.keys.sorted().map { "\($0)=\(extra[$0] ?? "")" }.joined(separator: "&")
-      out += "?" + q
-    }
-    return out
-  }
-}
+// ⚠️ 本文件**不构造 VC**：页面构造只有 TiebaNativeRouteTable 一条路径，解析器
+// 只产出类型化路由再交给它——两套构造逻辑必然漂移。
 
 /// 呈现方式。login 与 thread/[id]/more 在 expo-router 时代是 formSheet，
 /// 其余一律压栈。
@@ -83,7 +43,13 @@ public struct TiebaRouteEntry {
 
 public enum TiebaRouteTable {
   /// tab 根屏（顺序 = 底栏顺序，与 NativeTabs.Trigger 的声明顺序一致）。
-  nonisolated(unsafe) public static let tabNames = ["index", "explore", "notifications", "profile"]
+  /// 名字由 TiebaRoute.name 提供，不再另抄一份字符串。
+  public static let tabRoots: [TiebaRoute] = [
+    .index, .explore, .notifications(initialTab: nil), .profile,
+  ]
+
+  /// 底栏标识 / 「启动默认页」偏好值：由 tabRoots 派生，两者永不漂移。
+  public static var tabNames: [String] { tabRoots.map(\.name) }
 
   /// 路由表本体。nonisolated(unsafe)：**静态初始化时一次性建好，此后只读**，
   /// 没有任何注册/追加路径（要加路由只能改这个字面量）。三个可变全局都靠
@@ -155,9 +121,9 @@ public enum TiebaRouteTable {
     byName[name]
   }
 
-  // MARK: - 路径解析
+  // MARK: - 深链解析（唯一一处「字符串 → 类型化路由」）
 
-  /// 路径 → 路由。找不到返回 nil（调用方决定落 +not-found 还是丢弃）。
+  /// 路径 → 类型化路由。找不到返回 nil（深链入口落 +not-found，绝不静默吞掉）。
   ///
   /// 匹配规则：段数相同、字面段逐段相等；参数段收集成 params。多个候选时取
   /// 「字面段最多」的那个（比如 /forum/x/bawu 必须命中 forum/[name]/bawu 而
@@ -166,7 +132,7 @@ public enum TiebaRouteTable {
   /// 两条与 expo-router 对齐的规范化（否则老链接/深链会落 +not-found）：
   ///   - `/` 与空串 = tab 0 根屏（'index'）
   ///   - 末段缺省 = index：`/settings` → `settings/index`、`/search` → `search/index`
-  public static func parse(path rawPath: String, extraParams: [String: String] = [:]) -> TiebaRoute? {
+  public static func parse(path rawPath: String) -> TiebaRoute? {
     var path = rawPath
     var query: [String: String] = [:]
     if let qIdx = path.firstIndex(of: "?") {
@@ -180,26 +146,16 @@ public enum TiebaRouteTable {
       }
     }
     // 根路径 = 关注页（tab 0），不是"未命中"。
-    if path.isEmpty || path == "/" {
-      guard let root = byName["index"] else { return nil }
-      _ = root
-      var merged = query
-      for (k, v) in extraParams { merged[k] = v }
-      return TiebaRoute(name: "index", params: merged)
-    }
+    if path.isEmpty || path == "/" { return .index }
     for candidate in [path, path + "/index"] {
-      if let hit = match(path: candidate, query: query, extraParams: extraParams) { return hit }
+      if let hit = match(path: candidate, query: query) { return hit }
     }
     return nil
   }
 
-  private static func match(
-    path: String,
-    query: [String: String],
-    extraParams: [String: String]
-  ) -> TiebaRoute? {
-    // 允许调用方直接传路由名（'thread/[id]'）——Stack.Screen / Link 的旧写法里
-    // 路径与名字两种都出现过；按段匹配对两者同时成立，无需特判。
+  private static func match(path: String, query: [String: String]) -> TiebaRoute? {
+    // 允许直接传路由名（'thread/[id]'）——按段匹配对路径与名字两种写法同时成立，
+    // 无需特判（深链现在都走路径形状，这条兼容保留不影响语义）。
     let input = rawSegments(path)
     var best: (entry: TiebaRouteEntry, params: [String: String])?
     for entry in byName.values where entry.segments.count == input.count {
@@ -235,8 +191,83 @@ public enum TiebaRouteTable {
     guard let hit = best else { return nil }
     var merged = hit.params
     for (k, v) in query { merged[k] = v }
-    for (k, v) in extraParams { merged[k] = v }
-    return TiebaRoute(name: hit.entry.name, params: merged)
+    return typedRoute(named: hit.entry.name, params: merged)
+  }
+
+  /// 路由名 + 字符串参数 → 类型化路由：**唯一**的字符串→领域值转换点。
+  /// 旧实现是「VC 各自从 params 里 Int(raw)/== "1" 解」，读取点分散且各解各的；
+  /// 这里一次解完，缺省值与原 `?? ""` / `== "1"` 逐条等价。
+  private static func typedRoute(named name: String, params: [String: String]) -> TiebaRoute? {
+    switch name {
+    case "+not-found":
+      // 深链显式打到 +not-found：真正的原始路径由未命中分支（TiebaNavigator）补。
+      return .notFound(path: "")
+    case "index": return .index
+    case "explore": return .explore
+    case "notifications": return .notifications(initialTab: Int(params["initialTab"] ?? ""))
+    case "profile": return .profile
+    case "forum/[name]":
+      return .forum(name: params["name"] ?? "", forumId: params["forumId"] ?? "")
+    case "forum/[name]/detail":
+      return .forumDetail(name: params["name"] ?? "", forumId: params["forumId"] ?? "")
+    case "forum/[name]/bawu":
+      return .forumBawu(name: params["name"] ?? "", forumId: params["forumId"] ?? "")
+    case "forum/[name]/members":
+      return .forumMembers(name: params["name"] ?? "", forumId: params["forumId"] ?? "")
+    case "forum/[name]/rules":
+      return .forumRules(name: params["name"] ?? "", forumId: params["forumId"] ?? "")
+    case "forum/[name]/search":
+      return .forumSearch(name: params["name"] ?? "", forumId: params["forumId"] ?? "")
+    case "thread/[id]":
+      return .thread(
+        id: params["id"] ?? "",
+        postId: params["postId"].flatMap { $0.isEmpty ? nil : $0 },
+        seeLz: params["seeLz"] == "1",
+        fromFavorites: params["fromFavorites"] == "1"
+      )
+    case "thread/[id]/subposts":
+      return .subposts(
+        threadId: params["threadId"] ?? params["id"] ?? "",
+        postId: params["postId"] ?? "",
+        forumId: params["forumId"] ?? "",
+        floor: Int(params["floor"] ?? ""),
+        threadAuthorId: params["threadAuthorId"] ?? "",
+        forumName: params["forumName"] ?? "",
+        threadTitle: params["threadTitle"] ?? ""
+      )
+    case "thread/[id]/more":
+      return .threadMore(
+        id: params["id"] ?? "",
+        canDelete: params["canDelete"] == "1",
+        seeLz: params["seeLz"] == "1",
+        reverse: params["reverse"] == "1"
+      )
+    case "search/index": return .search(keyword: params["q"] ?? "")
+    case "user/[uid]": return .user(uid: params["uid"] ?? "", tab: optionalTab(params["tab"]))
+    case "history": return .history(tab: optionalTab(params["tab"]))
+    case "threadstore": return .threadstore
+    case "webview": return .webview(url: params["url"] ?? "", title: params["title"] ?? "")
+    case "topic/[id]": return .topic(id: params["id"] ?? "", name: params["name"] ?? "")
+    case "login": return .login
+    case "settings/index": return .settings
+    case "settings/theme": return .settingsTheme
+    case "settings/habit": return .settingsHabit
+    case "settings/haptics": return .settingsHaptics
+    case "settings/image": return .settingsImage
+    case "settings/oksign": return .settingsOKSign
+    case "settings/more": return .settingsMore
+    case "settings/about": return .settingsAbout
+    case "settings/account": return .account
+    case "settings/edit-profile": return .editProfile
+    case "settings/block": return .blockSettings
+    default: return nil
+    }
+  }
+
+  /// 空串与缺省同义（原 VC 拿到的都是 `?? ""` 后再判空）。
+  private static func optionalTab(_ raw: String?) -> String? {
+    guard let raw, !raw.isEmpty else { return nil }
+    return raw
   }
 
   private static func rawSegments(_ path: String) -> [String] {

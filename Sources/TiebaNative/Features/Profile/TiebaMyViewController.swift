@@ -147,7 +147,7 @@ final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
     loginButton.configuration = config
     loginButton.addAction(UIAction { _ in
       TiebaSceneHaptics.fire("press")
-      TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.login)
     }, for: .touchUpInside)
   }
 
@@ -312,17 +312,18 @@ final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
 
   private func handleRowPress(_ id: String) {
     let uid = account?.uid ?? TiebaUserAPI.uid
-    let routes: [String: String] = [
-      "profile": "/user/\(uid)",
-      "threads": "/user/\(uid)?tab=threads",
-      "forums": "/user/\(uid)?tab=forums",
-      "history": "/history",
-      "threadstore": "/threadstore",
-      "settings": "/settings/index",
-      "about": "/settings/about",
+    // 行 id → 类型化路由：原 "/user/<uid>?tab=xxx" 查询串改由 tab 领域值携带。
+    let routes: [String: TiebaRoute] = [
+      "profile": .user(uid: uid),
+      "threads": .user(uid: uid, tab: "threads"),
+      "forums": .user(uid: uid, tab: "forums"),
+      "history": .history(),
+      "threadstore": .threadstore,
+      "settings": .settings,
+      "about": .settingsAbout,
     ]
-    guard let path = routes[id] else { return }
+    guard let route = routes[id] else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: path, params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(route)
   }
 }

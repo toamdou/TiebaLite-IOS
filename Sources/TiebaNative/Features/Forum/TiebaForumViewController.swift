@@ -215,9 +215,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     guard !forumName.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
     TiebaNavigator.shared.navigate(
-      path: "/forum/\(TiebaRoutePath.segment(forumName))/search",
-      params: ["forumId": card?.forumId ?? routeForumId],
-      mode: "push"
+      .forumSearch(name: forumName, forumId: card?.forumId ?? routeForumId)
     )
   }
 
@@ -546,16 +544,12 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       let uid = value("authorId")
       guard !uid.isEmpty else { return }
       TiebaSceneHaptics.fire("press")
-      TiebaNavigator.shared.navigate(path: "/user/\(uid)", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.user(uid: uid))
     case "chip":
       let forum = value("forumName")
       guard !forum.isEmpty else { return }
       TiebaSceneHaptics.fire("press")
-      TiebaNavigator.shared.navigate(
-        path: "/forum/\(TiebaRoutePath.segment(forum))",
-        params: [:],
-        mode: "push"
-      )
+      TiebaNavigator.shared.navigate(.forum(name: forum))
     case "showMore":
       let id = value("id")
       guard !id.isEmpty, expandedIds.insert(id).inserted else { return }
@@ -658,7 +652,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     let id = TiebaSimpleRowParser.string(row["id"]) ?? ""
     guard !id.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/thread/\(id)", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(.thread(id: id))
   }
 
   private func shareThread(_ row: [String: Any]) {
@@ -855,7 +849,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     let alert = UIAlertController(title: "提示", message: message, preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "取消", style: .cancel))
     alert.addAction(UIAlertAction(title: "去登录", style: .default) { _ in
-      TiebaNavigator.shared.navigate(path: "/login", params: [:], mode: "push")
+      TiebaNavigator.shared.navigate(.login)
     })
     presenterViewController.present(alert, animated: true)
   }
@@ -890,12 +884,8 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   private func openForumDetail() {
     guard !forumName.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    // 路径段编码唯一实现（TiebaRoutePath.segment）：吧名含 ? / % 不编码会被
-    // TiebaRouteTable.parse 的首个 ? 切成查询串、命中别的路由。
     TiebaNavigator.shared.navigate(
-      path: "/forum/\(TiebaRoutePath.segment(forumName))/detail",
-      params: ["forumId": card?.forumId ?? routeForumId],
-      mode: "push"
+      .forumDetail(name: forumName, forumId: card?.forumId ?? routeForumId)
     )
   }
 

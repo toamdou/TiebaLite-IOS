@@ -45,15 +45,15 @@ enum TiebaLinkOpener {
     if components.path.hasPrefix("/p/") {
       let threadId = components.path.dropFirst(3).prefix { $0.isNumber }
       if !threadId.isEmpty {
-        return TiebaNavigator.shared.navigate(path: "/thread/\(threadId)", params: [:], mode: "push")
+        return TiebaNavigator.shared.navigate(.thread(id: String(threadId)))
       }
     }
     // /f?kw=<吧名>
     if components.path == "/f",
       let kw = components.queryItems?.first(where: { $0.name == "kw" })?.value, !kw.isEmpty
     {
-      let encoded = kw.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? kw
-      return TiebaNavigator.shared.navigate(path: "/forum/\(encoded)", params: [:], mode: "push")
+      // 类型化参数直接带吧名：路径段编码（原 .urlPathAllowed）已无处需要。
+      return TiebaNavigator.shared.navigate(.forum(name: kw))
     }
     return false
   }
