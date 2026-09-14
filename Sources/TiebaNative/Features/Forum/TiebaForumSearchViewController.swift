@@ -68,7 +68,7 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
     // 吧内搜索骨架：thread 卡片（原 forum/[name]/search.tsx count={6} variant="thread"）
     stateView.skeletonVariant = .thread
     stateView.skeletonCount = 6
-    list.onEvent = { [weak self] name, payload in self?.handleEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleEvent(event) }
 
     for subview in [toolRow, historyView, list, stateView, pill] as [UIView] {
       subview.translatesAutoresizingMaskIntoConstraints = false
@@ -314,14 +314,14 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
 
   // MARK: - 事件
 
-  private func handleEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "rowTap":
-      guard let index = payload["index"] as? Int, hits.indices.contains(index) else { return }
+  private func handleEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .rowTap(let index, _, _):
+      guard hits.indices.contains(index) else { return }
       openPost(hits[index])
-    case "reachEnd", "footerTap":
+    case .reachEnd, .footerTap:
       loadMore()
-    case "refreshRequested":
+    case .refreshRequested:
       isUserRefresh = true
       runSearch(reset: true)
     default:

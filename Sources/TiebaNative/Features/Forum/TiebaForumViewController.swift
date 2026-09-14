@@ -66,7 +66,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     applyPalette()
     fabFunction = TiebaPreferenceSnapshot.string("forumFabFunction") ?? "refresh"
     list.isHidden = true
-    list.onEvent = { [weak self] name, payload in self?.handleListEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleListEvent(event) }
     list.onScroll = { [weak self] scrollView in self?.handleScroll(scrollView) }
     stateView.isHidden = true
     stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
@@ -473,17 +473,19 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
 
   // MARK: - 列表事件
 
-  private func handleListEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "rowTap":
-      handleRowTap(payload)
-    case "menuAction":
-      handleMenuAction(payload)
-    case "headerAction":
-      handleHeaderAction(payload["action"] as? String ?? "", payload)
-    case "reachEnd", "footerTap":
+  private func handleListEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .rowTap(let index, let region, let actionIndex):
+      handleRowTap(index: index, region: region, actionIndex: actionIndex)
+    case .menuAction(let index, let action):
+      handleMenuAction(index: index, action: action)
+    case .mediaAction(let index, _, let action, let url, let originURL):
+      handleMediaAction(index: index, action: action, url: url, originURL: originURL)
+    case .headerAction(let action, let payload):
+      handleHeaderAction(action, payload)
+    case .reachEnd, .footerTap:
       loadMore()
-    case "refreshRequested":
+    case .refreshRequested:
       isUserRefresh = true
       load(tab: currentTab, page: 1)
     default:
@@ -535,12 +537,12 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     }
   }
 
-  private func handleRowTap(_ payload: [String: Any]) {
+  private func handleRowTap(index: Int, region: String, actionIndex: Int?) {
     let rows = makeRows()
-    guard let index = payload["index"] as? Int, rows.indices.contains(index) else { return }
+    guard rows.indices.contains(index) else { return }
     let row = rows[index]
     func value(_ key: String) -> String { TiebaSimpleRowParser.string(row[key]) ?? "" }
-    switch payload["region"] as? String ?? "card" {
+    switch region {
     case "avatar":
       let uid = value("authorId")
       guard !uid.isEmpty else { return }
@@ -561,7 +563,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       TiebaSceneHaptics.fire("toggle")
       publish(fresh: false)
     case "action":
-      switch payload["actionIndex"] as? Int {
+      switch actionIndex {
       case 0: openThread(row)
       case 1: shareThread(row)
       case 2: toggleLike(row)
@@ -575,11 +577,11 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     }
   }
 
-  private func handleMenuAction(_ payload: [String: Any]) {
+  private func handleMenuAction(index: Int, action: String) {
     let rows = makeRows()
-    guard let index = payload["index"] as? Int, rows.indices.contains(index) else { return }
+    guard rows.indices.contains(index) else { return }
     let row = rows[index]
-    switch payload["action"] as? String {
+    switch action {
     case "block":
       blockAuthor(row)
     case "dislike":
@@ -588,23 +590,30 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       let title = TiebaSimpleRowParser.string(row["title"]) ?? ""
       guard !title.isEmpty else { return }
       TiebaClipboard.setString(title)
-    case "save-image", "share-image":
-      let url = TiebaSimpleRowParser.nonEmpty(payload["originUrl"])
-        ?? TiebaSimpleRowParser.string(payload["url"]) ?? ""
-      guard !url.isEmpty else { return }
-      let forum = TiebaSimpleRowParser.string(row["forumName"])
-      if (payload["action"] as? String) == "save-image" {
-        TiebaFeedImageActions.save(url: url, forumName: forum, presenter: presenterViewController)
-      } else {
-        TiebaFeedImageActions.share(
-          url: url,
-          forumName: forum,
-          presenter: presenterViewController,
-          sourceRect: CGRect(x: view.bounds.midX, y: view.bounds.maxY - 40, width: 1, height: 1)
-        )
-      }
     default:
       break
+    }
+  }
+
+  /// 行内图片长按菜单（保存照片 / 分享照片）：url 优先 originURL（空串按缺省，
+  /// 与旧 payload 判读同）。
+  private func handleMediaAction(index: Int, action: String, url: String?, originURL: String?) {
+    let rows = makeRows()
+    guard rows.indices.contains(index) else { return }
+    let row = rows[index]
+    let source = TiebaSimpleRowParser.nonEmpty(originURL)
+      ?? TiebaSimpleRowParser.string(url) ?? ""
+    guard !source.isEmpty else { return }
+    let forum = TiebaSimpleRowParser.string(row["forumName"])
+    if action == "save-image" {
+      TiebaFeedImageActions.save(url: source, forumName: forum, presenter: presenterViewController)
+    } else {
+      TiebaFeedImageActions.share(
+        url: source,
+        forumName: forum,
+        presenter: presenterViewController,
+        sourceRect: CGRect(x: view.bounds.midX, y: view.bounds.maxY - 40, width: 1, height: 1)
+      )
     }
   }
 

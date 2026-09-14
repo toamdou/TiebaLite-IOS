@@ -2,7 +2,7 @@
 // TiebaLite — 通用行列表（TiebaKindListView）
 //
 // 纯 UIView：UICollectionView + CompositionalLayout（帧由测量缓存逐个给出）+
-// DiffableDataSource（CellRegistration 分派 simple/feed/post）；事件经 onEvent 外传。
+// DiffableDataSource（CellRegistration 分派 simple/feed/post）；事件经 onListEvent 外传。
 // 行宽契约 = TiebaLayout.quantize(列表宽 - 2×horizontalInset)，行种类路由见 TiebaKindRowPages。
 // ============================================================
 
@@ -15,6 +15,23 @@ import Nuke
 struct TiebaKindItem: Hashable {
   let pageKey: String
   let index: Int
+}
+
+// MARK: - 列表事件（原生语义出口）
+
+/// 列表外传事件（替代旧的 (name, payload) 字符串事件；页面用 switch 模式匹配消费）。
+/// headerAction 例外：payload 仍是 [String: Any]——含吧页头像转场矩形（frameX/Y/W/H）
+/// 等结构，尚未类型化；页头 onAction 的契约见 TiebaKindListHeaderView。
+enum TiebaKindListEvent {
+  case rowTap(index: Int, region: String, actionIndex: Int?)
+  case swipeAction(index: Int, action: String)
+  case menuAction(index: Int, action: String)
+  case mediaAction(index: Int, mediaIndex: Int, action: String, url: String?, originURL: String?)
+  case headerAction(action: String, payload: [String: Any])
+  case footerTap
+  case refreshRequested
+  case reachEnd(count: Int)
+  case visibleRangeChange(start: Int, end: Int, count: Int)
 }
 
 // MARK: - 单元格
@@ -387,16 +404,15 @@ private final class TiebaKindFooterView: UICollectionReusableView {
 // MARK: - 列表 view body（纯 UIView）
 
 /// 通用行列表的实体：UICollectionView + CompositionalLayout（custom group，
-/// 帧由测量缓存逐个给出）+ DiffableDataSource。事件经 `onEvent` 闭包外传
-/// （闭包内只声明 name + payload）。
+/// 帧由测量缓存逐个给出）+ DiffableDataSource。事件经 `onListEvent` 闭包外传。
 public final class TiebaKindListContentView: UIView {
   // MARK: 接口（纯 Swift）
 
-  /// 事件出口（name ∈ {"rowTap","visibleRangeChange","reachEnd",
-  /// "refreshRequested","footerTap","swipeAction","menuAction","headerAction"}）。
-  public var onEvent: ((String, [String: Any]) -> Void)?
+  /// 事件出口（TiebaKindListEvent；页面按 case 模式匹配）。
+  /// internal：事件枚举只在模块内使用。
+  var onListEvent: ((TiebaKindListEvent) -> Void)?
 
-  /// post 行的语义动作出口（原生页面用；与 onEvent 并存，互不影响）。
+  /// post 行的语义动作出口（原生页面用；与 onListEvent 并存，互不影响）。
   /// internal：TiebaPostRowEvent 只在模块内使用。
   var onPostEvent: ((_ index: Int, _ event: TiebaPostRowEvent) -> Void)?
 
@@ -472,7 +488,7 @@ public final class TiebaKindListContentView: UIView {
   /// 拖尾侧滑动作（**系统实现**：trailingSwipeActionsConfigurationForItemAt +
   /// UIContextualAction）。每项 [{ action, title, icon, destructive,
   /// backgroundColor }]；空 = 无侧滑。系统负责手势/物理/揭示动画，点击回调
-  /// 经 onEvent("swipeAction") 外传，数据变更仍由调用方执行。
+  /// 经 onListEvent(.swipeAction) 外传，数据变更仍由调用方执行。
   public var swipeActions: [[String: Any]] = []
 
   public var palette: TiebaSimpleRowPalette = .default {
@@ -929,12 +945,9 @@ public final class TiebaKindListContentView: UIView {
     )
   }
 
+  /// 页头动作转事件（payload 原样透传，未类型化；页头 onAction 只报 name + 字典）。
   private func handleHeaderAction(_ name: String, _ payload: [String: Any]) {
-    var event: [String: Any] = ["pageKey": pageKey, "action": name]
-    for (key, value) in payload {
-      event[key] = value
-    }
-    emit("headerAction", event)
+    onListEvent?(.headerAction(action: name, payload: payload))
   }
 
   /// spec 等值比较（Fabric 每次 commit 都可能给新字典；引用比较会重建视图）。
@@ -1050,10 +1063,6 @@ public final class TiebaKindListContentView: UIView {
 
   // MARK: 事件
 
-  private func emit(_ name: String, _ payload: [String: Any]) {
-    onEvent?(name, payload)
-  }
-
   private func handleTap(at indexPath: IndexPath, point: CGPoint) {
     guard !pageKey.isEmpty else { return }
     let index = indexPath.item
@@ -1061,7 +1070,7 @@ public final class TiebaKindListContentView: UIView {
     // 真实图片点击 → 原生查看器直开（不发事件）。
     if TiebaKindRowPages.shared.kind(pageKey: pageKey, index: index) == .feed {
       guard let row = feedModel(at: index) else {
-        emit("rowTap", ["pageKey": pageKey, "index": index, "region": "card"])
+        onListEvent?(.rowTap(index: index, region: "card", actionIndex: nil))
         return
       }
       // 列表→详情已知数据快照（原 TweetCard 的 setThreadSnapshot）：帖子页首帧
@@ -1075,28 +1084,18 @@ public final class TiebaKindListContentView: UIView {
          presentPhotoBrowser(row: row, media: media, at: indexPath) {
         return
       }
-      var payload: [String: Any] = [
-        "pageKey": pageKey,
-        "index": index,
-        "region": hit.region,
-      ]
-      if let actionIndex = hit.actionIndex { payload["actionIndex"] = actionIndex }
-      emit("rowTap", payload)
+      onListEvent?(.rowTap(index: index, region: hit.region, actionIndex: hit.actionIndex))
       return
     }
     // 简单行：命中区域由行视图给出（"avatar" = 作者点击区，其余 = 整卡）。
     let cell = collectionView.cellForItem(at: indexPath) as? TiebaKindListViewCell
     let region = cell?.hitRegion(at: point) ?? "card"
-    emit("rowTap", ["pageKey": pageKey, "index": index, "region": region])
+    onListEvent?(.rowTap(index: index, region: region, actionIndex: nil))
   }
 
   /// 行内菜单（右上角 × 的 ActionSheet；行视图自弹，选中项只回传）。
   private func handleRowMenuAction(_ action: String, at indexPath: IndexPath) {
-    emit("menuAction", [
-      "pageKey": pageKey,
-      "index": indexPath.item,
-      "action": action,
-    ])
+    onListEvent?(.menuAction(index: indexPath.item, action: action))
   }
 
   /// 不感兴趣退场：先让该行播折叠动画（数据保持在位），动画结束（真 completion，
@@ -1114,20 +1113,22 @@ public final class TiebaKindListContentView: UIView {
   }
 
   /// 图片长按菜单（保存照片 / 分享照片）事件外传（水印偏好/相册权限/toast 由
-  /// 调用方执行）。
+  /// 调用方执行）。url/originURL 缺媒体或对应字段时传 nil。
   private func handleMediaMenuAction(_ action: String, mediaIndex: Int, at indexPath: IndexPath) {
-    var payload: [String: Any] = [
-      "pageKey": pageKey,
-      "index": indexPath.item,
-      "mediaIndex": mediaIndex,
-      "action": action,
-    ]
+    var url: String?
+    var originURL: String?
     if let row = feedModel(at: indexPath.item), mediaIndex >= 0, mediaIndex < row.media.count {
       let media = row.media[mediaIndex]
-      if let url = media.url { payload["url"] = url.absoluteString }
-      if let origin = media.originURL { payload["originUrl"] = origin.absoluteString }
+      url = media.url?.absoluteString
+      originURL = media.originURL?.absoluteString
     }
-    emit("menuAction", payload)
+    onListEvent?(.mediaAction(
+      index: indexPath.item,
+      mediaIndex: mediaIndex,
+      action: action,
+      url: url,
+      originURL: originURL
+    ))
   }
 
   // MARK: 查看器退出重算（几何只读查询；行不可见/未挂载 → nil 走框架 Fade）
@@ -1172,8 +1173,8 @@ public final class TiebaKindListContentView: UIView {
     ) else {
       return false
     }
-    // onEvent 只剩 dismiss（浏览器内部原生回调）；会话同一时刻只有一个，present
-    // 未受理时把原 handler 放回（防御性，不吞掉别人的订阅）。
+    // TiebaPhotoBrowser.onEvent 只剩 dismiss（浏览器自己的出口，非列表事件）；会话
+    // 同一时刻只有一个，present 未受理时把原 handler 放回（防御性，不吞掉别人的订阅）。
     let previousHandler = TiebaPhotoBrowser.onEvent
     TiebaPhotoBrowser.onEvent = { [weak self] name, _ in
       guard name == "dismiss" else { return }
@@ -1222,7 +1223,7 @@ public final class TiebaKindListContentView: UIView {
 
   private func handleFooterTap() {
     TiebaSceneHaptics.fire("press")
-    emit("footerTap", ["pageKey": pageKey])
+    onListEvent?(.footerTap)
   }
 
   private func updateVisibleFooter() {
@@ -1233,7 +1234,7 @@ public final class TiebaKindListContentView: UIView {
   }
 
   @objc private func handleRefreshControl() {
-    emit("refreshRequested", ["pageKey": pageKey])
+    onListEvent?(.refreshRequested)
   }
 
   /// 视口区间（含端点）：仅变化时上报（调用方用它做页存活兜底）。
@@ -1251,12 +1252,7 @@ public final class TiebaKindListContentView: UIView {
     }
     guard lastVisibleRange?.start != first || lastVisibleRange?.end != last else { return }
     lastVisibleRange = (first, last)
-    emit("visibleRangeChange", [
-      "pageKey": pageKey,
-      "start": first,
-      "end": last,
-      "count": itemCount,
-    ])
+    onListEvent?(.visibleRangeChange(start: first, end: last, count: itemCount))
   }
 
   /// 触底（阈值制）：距内容底 < 阈值×视口高 且已武装 → 发一次 reachEnd；
@@ -1279,7 +1275,7 @@ public final class TiebaKindListContentView: UIView {
     }
     guard reachEndArmed else { return }
     reachEndArmed = false
-    emit("reachEnd", ["pageKey": pageKey, "count": itemCount])
+    onListEvent?(.reachEnd(count: itemCount))
   }
 
   /// 首屏入场批次边界：首个布局趟里所有 willDisplay 已走完（下个 runloop 才清
@@ -1350,11 +1346,7 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
           completion(false)
           return
         }
-        self.emit("swipeAction", [
-          "pageKey": self.pageKey,
-          "index": indexPath.item,
-          "action": actionId,
-        ])
+        self.onListEvent?(.swipeAction(index: indexPath.item, action: actionId))
         // 数据变更由调用方执行，系统只负责收拢动作条。
         completion(true)
       }

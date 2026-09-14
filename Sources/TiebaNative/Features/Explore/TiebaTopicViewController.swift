@@ -43,7 +43,7 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
     super.viewDidLoad()
     view.backgroundColor = .systemBackground
     applyPalette()
-    list.onEvent = { [weak self] name, payload in self?.handleEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     list.isHidden = true
     stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
     stateView.onButtonPress = { [weak self] _ in self?.reload() }
@@ -266,20 +266,17 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
 
   // MARK: - 事件
 
-  private func handleEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "rowTap":
-      handleRowTap(payload)
-    case "menuAction":
-      handleMenuAction(payload)
-    case "headerAction":
-      handleHeaderAction(
-        payload["action"] as? String ?? "",
-        payload["name"] as? String ?? ""
-      )
-    case "reachEnd", "footerTap":
+  private func handleEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .rowTap(let index, let region, let actionIndex):
+      handleRowTap(index: index, region: region, actionIndex: actionIndex)
+    case .menuAction(let index, let action):
+      handleMenuAction(index: index, action: action)
+    case .headerAction(let action, let payload):
+      handleHeaderAction(action, payload["name"] as? String ?? "")
+    case .reachEnd, .footerTap:
       loadMore()
-    case "refreshRequested":
+    case .refreshRequested:
       isUserRefresh = true
       reload()
     default:
@@ -293,9 +290,9 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
     TiebaNavigator.shared.navigate(path: "/forum/\(TiebaRoutePath.segment(forumName))", params: [:], mode: "push")
   }
 
-  private func handleRowTap(_ payload: [String: Any]) {
-    guard let index = payload["index"] as? Int, threads.indices.contains(index) else { return }
-    switch payload["region"] as? String ?? "card" {
+  private func handleRowTap(index: Int, region: String, actionIndex: Int?) {
+    guard threads.indices.contains(index) else { return }
+    switch region {
     case "avatar":
       let uid = value(index, "authorId")
       guard !uid.isEmpty else { return }
@@ -312,7 +309,7 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
       TiebaSceneHaptics.fire("toggle")
       driver.publish(fresh: false, makeRows: makeRows)
     case "action":
-      switch payload["actionIndex"] as? Int {
+      switch actionIndex {
       case 0: openThread(index)
       case 1: shareThread(index)
       case 2: toggleLike(index)
@@ -327,9 +324,9 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
     }
   }
 
-  private func handleMenuAction(_ payload: [String: Any]) {
-    guard let index = payload["index"] as? Int, threads.indices.contains(index) else { return }
-    switch payload["action"] as? String {
+  private func handleMenuAction(index: Int, action: String) {
+    guard threads.indices.contains(index) else { return }
+    switch action {
     case "copy-title":
       let title = value(index, "title")
       guard !title.isEmpty else { return }

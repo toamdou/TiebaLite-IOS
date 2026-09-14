@@ -75,7 +75,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     stateView.skeletonVariant = .thread
     stateView.skeletonInsets = UIEdgeInsets(top: 8, left: 0, bottom: 24, right: 0)
     stateView.onButtonPress = { [weak self] id in self?.handleStateButton(id) }
-    list.onEvent = { [weak self] name, payload in self?.handleEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     for subview in [list, stateView, pill] as [UIView] {
       subview.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(subview)
@@ -346,15 +346,17 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
 
   // MARK: - 事件
 
-  private func handleEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "rowTap":
-      handleRowTap(payload)
-    case "menuAction":
-      handleMenuAction(payload)
-    case "reachEnd", "footerTap":
+  private func handleEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .rowTap(let index, let region, let actionIndex):
+      handleRowTap(index: index, region: region, actionIndex: actionIndex)
+    case .menuAction(let index, let action):
+      handleMenuAction(index: index, action: action)
+    case .mediaAction(let index, _, let action, let url, let originURL):
+      handleMediaAction(index: index, action: action, url: url, originURL: originURL)
+    case .reachEnd, .footerTap:
       loadMore()
-    case "refreshRequested":
+    case .refreshRequested:
       isUserRefresh = true
       reload()
     default:
@@ -371,9 +373,9 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     TiebaSimpleRowParser.string(thread[key]) ?? ""
   }
 
-  private func handleRowTap(_ payload: [String: Any]) {
-    guard let index = payload["index"] as? Int, let thread = thread(at: index) else { return }
-    switch payload["region"] as? String ?? "card" {
+  private func handleRowTap(index: Int, region: String, actionIndex: Int?) {
+    guard let thread = thread(at: index) else { return }
+    switch region {
     case "avatar":
       let uid = value(thread, "authorId")
       guard !uid.isEmpty else { return }
@@ -390,7 +392,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
       TiebaSceneHaptics.fire("toggle")
       publishFresh()
     case "action":
-      switch payload["actionIndex"] as? Int {
+      switch actionIndex {
       case 0: openThread(thread)
       case 1: shareThread(thread)
       case 2: toggleLike(thread)
@@ -405,9 +407,9 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     }
   }
 
-  private func handleMenuAction(_ payload: [String: Any]) {
-    guard let index = payload["index"] as? Int, let thread = thread(at: index) else { return }
-    switch payload["action"] as? String {
+  private func handleMenuAction(index: Int, action: String) {
+    guard let thread = thread(at: index) else { return }
+    switch action {
     case "dislike":
       presentDislikeSheet(thread)
     case "block":
@@ -416,23 +418,27 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
       let title = value(thread, "title")
       guard !title.isEmpty else { return }
       TiebaClipboard.setString(title)
-    case "save-image", "share-image":
-      let url = (payload["originUrl"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-        ?? payload["url"] as? String ?? ""
-      guard !url.isEmpty, let action = payload["action"] as? String else { return }
-      let forumName = value(thread, "forumName")
-      if action == "save-image" {
-        TiebaFeedImageActions.save(url: url, forumName: forumName, presenter: self)
-      } else {
-        TiebaFeedImageActions.share(
-          url: url,
-          forumName: forumName,
-          presenter: self,
-          sourceRect: CGRect(x: view.bounds.midX, y: view.bounds.maxY - 40, width: 1, height: 1)
-        )
-      }
     default:
       break
+    }
+  }
+
+  /// 行内图片长按菜单（保存照片 / 分享照片）：url 优先 originURL（空串按缺省，
+  /// 与旧 payload 判读同）。
+  private func handleMediaAction(index: Int, action: String, url: String?, originURL: String?) {
+    guard let thread = thread(at: index) else { return }
+    let source = (originURL.flatMap { $0.isEmpty ? nil : $0 }) ?? url ?? ""
+    guard !source.isEmpty else { return }
+    let forumName = value(thread, "forumName")
+    if action == "save-image" {
+      TiebaFeedImageActions.save(url: source, forumName: forumName, presenter: self)
+    } else {
+      TiebaFeedImageActions.share(
+        url: source,
+        forumName: forumName,
+        presenter: self,
+        sourceRect: CGRect(x: view.bounds.midX, y: view.bounds.maxY - 40, width: 1, height: 1)
+      )
     }
   }
 

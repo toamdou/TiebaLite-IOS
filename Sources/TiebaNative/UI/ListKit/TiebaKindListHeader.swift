@@ -4,7 +4,8 @@
 // 页头 = 原生 UIView，挂在 section 的 top boundary supplementary item 上（与页脚
 // 同一机制）。契约：headerHeight(forWidth:) 是"测多少画多少"的唯一来源（宽度 =
 // 列表全宽；不含 contentInsetTop，由列表另加在 host 里）；spec.colors 覆盖色板默认，
-// 页头内点击经 onAction 外传 → headerAction 事件。
+// 页头内点击经 onAction 外传（name + 未类型化 payload），列表统一升格为
+// TiebaKindListEvent.headerAction（payload 含转场矩形等结构，本次不类型化）。
 // ============================================================
 
 import UIKit
@@ -17,7 +18,9 @@ import NukeExtensions
 /// "能自适应高度 + 能应用主题 + 能把点击外传"这三件事。
 @MainActor
 public protocol TiebaKindListHeaderView: UIView {
-  /// 页头内交互外传（name + payload；当前只有 "forum"）。
+  /// 页头内交互外传（name + payload；具体键由各页头自定，如 "forum" 的 name、
+  /// 吧页 avatar 的 frameX/Y/W/H）。payload 未类型化：列表只把它包进
+  /// TiebaKindListEvent.headerAction，不解释键。
   var onAction: ((String, [String: Any]) -> Void)? { get set }
   /// 主题色板（缺省值来源；spec 的 colors 子字典优先）。
   func applyPalette(_ palette: TiebaSimpleRowPalette)

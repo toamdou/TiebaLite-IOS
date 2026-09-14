@@ -35,7 +35,7 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
     super.viewDidLoad()
     view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
     applyPalette()
-    list.onEvent = { [weak self] name, payload in self?.handleEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     list.swipeActions = Self.swipeActions
     list.reachEndThreshold = 0.3
     stateView.isHidden = true
@@ -254,40 +254,40 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
 
   // MARK: - 事件
 
-  private func handleEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "refreshRequested":
+  private func handleEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .refreshRequested:
       reload()
-    case "reachEnd", "footerTap":
+    case .reachEnd, .footerTap:
       loadMore()
-    case "rowTap":
-      guard let index = payload["index"] as? Int, rows.indices.contains(index) else { return }
+    case .rowTap(let index, _, _):
+      guard rows.indices.contains(index) else { return }
       openThread(rows[index])
-    case "swipeAction":
-      guard TiebaSimpleRowParser.string(payload["action"]) == "uncollect",
-        let index = payload["index"] as? Int, rows.indices.contains(index)
-      else { return }
+    case .swipeAction(let index, let action):
+      guard action == "uncollect", rows.indices.contains(index) else { return }
       TiebaSceneHaptics.fire("destructive")
       uncollect(rows[index])
-    case "menuAction":
-      handleMenuAction(payload)
+    case .mediaAction(let index, _, let action, let url, let originURL):
+      handleMediaAction(index: index, action: action, url: url, originURL: originURL)
     default:
       break
     }
   }
 
-  private func handleMenuAction(_ payload: [String: Any]) {
-    let url = TiebaSimpleRowParser.string(payload["originUrl"])
-      ?? TiebaSimpleRowParser.string(payload["url"]) ?? ""
-    guard !url.isEmpty else { return }
-    guard let index = payload["index"] as? Int, rows.indices.contains(index) else { return }
+  /// 行内图片长按菜单（保存照片 / 分享照片）：url 优先 originURL（空串按缺省，
+  /// 与旧 payload 判读同）。
+  private func handleMediaAction(index: Int, action: String, url: String?, originURL: String?) {
+    let source = TiebaSimpleRowParser.string(originURL)
+      ?? TiebaSimpleRowParser.string(url) ?? ""
+    guard !source.isEmpty else { return }
+    guard rows.indices.contains(index) else { return }
     let forumName = TiebaSimpleRowParser.string(rows[index]["forumName"]) ?? ""
-    switch TiebaSimpleRowParser.string(payload["action"]) {
+    switch action {
     case "save-image":
-      TiebaFeedImageActions.save(url: url, forumName: forumName, presenter: self)
+      TiebaFeedImageActions.save(url: source, forumName: forumName, presenter: self)
     case "share-image":
       TiebaFeedImageActions.share(
-        url: url, forumName: forumName, presenter: self,
+        url: source, forumName: forumName, presenter: self,
         sourceRect: CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
       )
     default:

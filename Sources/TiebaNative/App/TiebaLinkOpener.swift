@@ -108,8 +108,8 @@ enum TiebaLinkOpener {
         _ = try await TiebaInAppBrowser.open(
           urlString: urlString,
           controlsColor: controlsColor,
-          dismissButtonStyle: "done",
-          presentationStyle: "automatic",
+          dismissButtonStyle: .done,
+          presentationStyle: .automatic,
           enableBarCollapsing: true,
           readerMode: false
         )

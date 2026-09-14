@@ -2,11 +2,10 @@ import Nuke
 import NukeExtensions
 import UIKit
 
-// 导航协调器：把「JS 说要去 /thread/123」翻译成 UIKit 的压栈/切 tab/上推，
-// 并把路由变化回报给 JS。原 expo-router 的 router.push/back/replace 语义在这里。
+// 导航协调器：把「要去 /thread/123」的指令翻译成 UIKit 的压栈/切 tab/上推，
+// 原 expo-router 的 router.push/back/replace 语义在这里。
 //
 // 状态只有一份：rootNav 的 viewControllers 就是当前导航栈，tabBar 就是底栏。
-// JS 侧不再维护自己的栈——它只发指令、收事件。
 
 /// 底栏重复点击的**原生**受理面：tab 根屏已是原生 VC 时（不再有 JS 侧
 /// TAB_RESELECT 订阅），由壳直接回调，语义与 JS 的 tabReselect 分发一致。
@@ -27,9 +26,6 @@ protocol TiebaTabRouteParamReceiving: UIViewController {
 /// NSObjectProtocol，Swift 里不能给纯 Swift 类声明这个 conformance。
 public final class TiebaNavigator: NSObject, @unchecked Sendable {
   public static let shared = TiebaNavigator()
-
-  /// 事件出口（宿主不需要时保持 nil）。
-  public var onEvent: ((TiebaNavEvent) -> Void)?
 
   private weak var window: UIWindow?
   private var rootNav: TiebaRootNavigationController?
@@ -74,10 +70,6 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
           screen.tabReselected()
         }
       }
-      self?.onEvent?(TiebaNavEvent(kind: .tabReselect, hostId: -1, route: nil, tabIndex: idx))
-    }
-    tab.onSelect = { [weak self] idx in
-      self?.onEvent?(TiebaNavEvent(kind: .tabSelect, hostId: -1, route: nil, tabIndex: idx))
     }
     tabBar = tab
 
@@ -311,28 +303,6 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     return rootNav.viewControllers.count > 1
   }
 
-  /// 某屏的 JS 树挂载完成时调用：如果这一屏此刻确实可见，补发一次 focus。
-  /// 必要性：viewDidAppear 可能早于该 surface 的 JS 树挂载（首个 surface 的
-  /// JS 还在加载 bundle），那时发出的事件会被 EventEmitter 丢掉，于是
-  /// useFocusEffect 的首跑永远不会发生——表现为"进页面不加载数据"。
-  func markHostReady(hostId: Int) {
-    guard let host = host(hostId), isVisible(host) else { return }
-    onEvent?(TiebaNavEvent(kind: .focus, hostId: hostId, route: host.route, tabIndex: -1))
-  }
-
-  /// 该宿主屏此刻是否真的在屏幕最前。
-  private func isVisible(_ host: TiebaRouteHostViewController) -> Bool {
-    guard let rootNav else { return false }
-    if let presented = rootNav.presentedViewController {
-      return presented === host || (presented as? UINavigationController)?.topViewController === host
-    }
-    if rootNav.topViewController === host { return true }
-    // tab 根屏：rootNav 栈里只剩底栏那屏，且当前选中的就是它
-    guard let tabBar, rootNav.viewControllers.count == 1 else { return false }
-    let idx = tabBar.viewControllers?.firstIndex(where: { $0 === host }) ?? -1
-    return idx >= 0 && idx == tabBar.selectedIndex
-  }
-
   public func selectTab(_ index: Int) {
     guard let tabBar, let vcs = tabBar.viewControllers, index >= 0, index < vcs.count else { return }
     // 切 tab 前先收敛栈：从"动态"里进过帖子页再点"关注"，应该回到根屏而不是
@@ -344,8 +314,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
         self.pruneHosts()
       }
     }
-    // tabSelect 事件由 UITabBarControllerDelegate.didSelect 统一发（程序化改
-    // selectedIndex 同样会触发它），这里不再重复发一次。
+    // 改 selectedIndex 就是切 tab 的全部动作；didSelect 那边已无事件要分发。
     tabBar.selectedIndex = index
   }
 
@@ -372,11 +341,8 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
 
   // MARK: - 屏级配置
 
-  public func setTitle(hostId: Int, title: String) {
-    host(hostId)?.setTitle(title)
-  }
 
-  /// 全局状态栏默认字色（JS 按工具栏主色调/状态栏字色偏好算出后下发）。
+  /// 全局状态栏默认字色（由工具栏主色调/状态栏字色偏好算出后下发）。
   /// 逐屏覆盖优先于它。
   private(set) var defaultStatusBarStyle: UIStatusBarStyle = .default
 
@@ -386,81 +352,6 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     for host in liveHosts() { host.refreshStatusBarStyle() }
   }
 
-  public func setStatusBarStyle(hostId: Int, style: UIStatusBarStyle) {
-    host(hostId)?.statusBarStyleOverride = style
-  }
-
-  /// 导航栏左右按钮（替 headerLeft/headerRight 的 React 节点）。
-  /// 描述符：{ kind: "symbol"|"avatar", value: SF Symbol 名或图片 URL,
-  ///          action: 回传 JS 的动作名, label: 无障碍标签,
-  ///          tint: "primary"|"text"|"textSecondary" 或 #RRGGBB }
-  public func setBarItems(hostId: Int, left: [[String: Any]]?, right: [[String: Any]]?) {
-    guard let host = host(hostId) else { return }
-    // ⚠️ 必须是 `left?.map` 而不是 `left.map`：left 是可选数组，
-    // `left.map` 会解析成 Optional.map（闭包参数是**整个数组** [[String:Any]]），
-    // 于是报"UIBarButtonItem 不能转成 [UIBarButtonItem]"这种看不懂的错。
-    host.navigationItem.leftBarButtonItems = left?.map { makeBarButton($0, hostId: hostId, slot: "left") }
-    host.navigationItem.rightBarButtonItems = right?.map { makeBarButton($0, hostId: hostId, slot: "right") }
-  }
-
-  private func makeBarButton(_ desc: [String: Any], hostId: Int, slot: String) -> UIBarButtonItem {
-    let action = desc["action"] as? String ?? ""
-    let label = desc["label"] as? String ?? ""
-    let kind = desc["kind"] as? String ?? "symbol"
-    let value = desc["value"] as? String ?? ""
-    let tint = Self.color(from: desc["tint"] as? String) ?? theme.tint
-
-    if kind == "avatar", let url = URL(string: value), !value.isEmpty {
-      let button = TiebaBarAvatarButton(frame: CGRect(x: 0, y: 0, width: 30, height: 30))
-      button.accessibilityLabel = label
-      button.load(url: url)
-      button.onTap = { [weak self] in self?.fireBarAction(action, hostId: hostId, slot: slot) }
-      return UIBarButtonItem(customView: button)
-    }
-
-    let img = UIImage(systemName: value)
-    let item = UIBarButtonItem(image: img, style: .plain, target: nil, action: nil)
-    item.accessibilityLabel = label
-    item.tintColor = tint
-    item.primaryAction = UIAction { [weak self] _ in
-      self?.fireBarAction(action, hostId: hostId, slot: slot)
-    }
-    return item
-  }
-
-  private func fireBarAction(_ action: String, hostId: Int, slot: String) {
-    guard !action.isEmpty else { return }
-    onEvent?(
-      TiebaNavEvent(
-        kind: .barAction,
-        hostId: hostId,
-        route: TiebaRoute(name: "__barAction__", params: ["action": action, "slot": slot]),
-        tabIndex: -1
-      )
-    )
-  }
-
-  private static func color(from token: String?) -> UIColor? {
-    guard let token, !token.isEmpty else { return nil }
-    if token.hasPrefix("#") {
-      var hex = String(token.dropFirst())
-      if hex.count == 3 { hex = hex.map { "\($0)\($0)" }.joined() }
-      guard hex.count == 6, let v = UInt32(hex, radix: 16) else { return nil }
-      return UIColor(
-        red: CGFloat((v >> 16) & 0xFF) / 255,
-        green: CGFloat((v >> 8) & 0xFF) / 255,
-        blue: CGFloat(v & 0xFF) / 255,
-        alpha: 1
-      )
-    }
-    // 语义 token：具体色值由 JS 在主题变化时重新下发，这里只兜底。
-    switch token {
-    case "primary": return nil
-    case "text": return .label
-    case "textSecondary": return .secondaryLabel
-    default: return nil
-    }
-  }
 
   // MARK: - 宿主
 
@@ -477,7 +368,6 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       return TiebaRouteHostViewController(route: route, hostId: hostId, nativeChild: native)
     }
     hostsById.setObject(host, forKey: NSNumber(value: hostId))
-    host.onEvent = { [weak self] event in self?.onEvent?(event) }
     if eager {
       // 压栈的屏：先让内容视图建好再起转场，否则转场期间是一张空白页。
       host.loadViewIfNeeded()
@@ -709,7 +599,7 @@ final class TiebaBarAvatarButton: UIControl {
   override var intrinsicContentSize: CGSize { CGSize(width: 30, height: 30) }
 
   /// 头像（30pt @2x/3x → 60px 目标）：走共享管线，取消/换图由 NukeExtensions 负责。
-  /// 每次 makeBarButton 都是新按钮，不存在同视图重复换图的闪烁问题。
+  /// 按钮随栏一次性建好，不存在同视图重复换图的闪烁问题。
   func load(url: URL) {
     var options = ImageLoadingOptions()
     options.pipeline = TiebaNuke.pipeline

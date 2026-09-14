@@ -55,7 +55,7 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
     view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
     applyPalette()
     buildTopBar()
-    list.onEvent = { [weak self] name, payload in self?.handleEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     list.swipeActions = Self.swipeActions
     stateView.isHidden = true
     skeletonView.isHidden = true
@@ -381,41 +381,35 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
 
   // MARK: - 事件
 
-  private func handleEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "refreshRequested":
+  private func handleEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .refreshRequested:
       TiebaSceneHaptics.fire("toggle")
       reload()
-    case "rowTap":
-      handleRowTap(payload)
-    case "swipeAction":
-      guard TiebaSimpleRowParser.string(payload["action"]) == "delete",
-        let index = payload["index"] as? Int,
+    case .rowTap(let index, let region, _):
+      handleRowTap(index: index, region: region)
+    case .swipeAction(let index, let action):
+      guard action == "delete",
         pageRows.indices.contains(index), let entry = pageRows[index].entry
       else { return }
       TiebaSceneHaptics.fire("destructive")
       delete(entry)
-    case "menuAction":
-      handleMenuAction(payload)
-    case "visibleRangeChange":
-      backfillVisible(
-        start: payload["start"] as? Int ?? 0,
-        end: payload["end"] as? Int ?? 0
-      )
+    case .mediaAction(let index, _, let action, let url, let originURL):
+      handleMediaAction(index: index, action: action, url: url, originURL: originURL)
+    case .visibleRangeChange(let start, let end, _):
+      backfillVisible(start: start, end: end)
     default:
       break
     }
   }
 
-  private func handleRowTap(_ payload: [String: Any]) {
-    guard let index = payload["index"] as? Int, pageRows.indices.contains(index),
-      let entry = pageRows[index].entry
-    else { return }
+  private func handleRowTap(index: Int, region: String) {
+    guard pageRows.indices.contains(index), let entry = pageRows[index].entry else { return }
     if entry.type == "forum" {
       openForum(entry.forumName)
       return
     }
-    switch TiebaSimpleRowParser.string(payload["region"]) ?? "card" {
+    switch region {
     case "chip":
       openForum(entry.forumName)
     case "showMore":
@@ -429,18 +423,20 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
     }
   }
 
-  private func handleMenuAction(_ payload: [String: Any]) {
-    let url = TiebaSimpleRowParser.string(payload["originUrl"])
-      ?? TiebaSimpleRowParser.string(payload["url"]) ?? ""
-    guard !url.isEmpty else { return }
-    guard let index = payload["index"] as? Int, pageRows.indices.contains(index) else { return }
+  /// 行内图片长按菜单（保存照片 / 分享照片）：url 优先 originURL（空串按缺省，
+  /// 与旧 payload 判读同）。
+  private func handleMediaAction(index: Int, action: String, url: String?, originURL: String?) {
+    let source = TiebaSimpleRowParser.string(originURL)
+      ?? TiebaSimpleRowParser.string(url) ?? ""
+    guard !source.isEmpty else { return }
+    guard pageRows.indices.contains(index) else { return }
     let forumName = pageRows[index].entry?.forumName ?? ""
-    switch TiebaSimpleRowParser.string(payload["action"]) {
+    switch action {
     case "save-image":
-      TiebaFeedImageActions.save(url: url, forumName: forumName, presenter: self)
+      TiebaFeedImageActions.save(url: source, forumName: forumName, presenter: self)
     case "share-image":
       TiebaFeedImageActions.share(
-        url: url, forumName: forumName, presenter: self,
+        url: source, forumName: forumName, presenter: self,
         sourceRect: CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
       )
     default:

@@ -51,7 +51,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
     super.viewDidLoad()
     view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
     applyPalette()
-    list.onEvent = { [weak self] name, payload in self?.handleEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     list.isHidden = true
     stateView.isHidden = true
     skeletonView.isHidden = true
@@ -373,15 +373,15 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
 
   // MARK: - 事件
 
-  private func handleEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "headerAction":
-      handleHeaderAction(payload)
-    case "rowTap":
-      handleRowTap(payload)
-    case "reachEnd", "footerTap":
+  private func handleEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .headerAction(let action, let payload):
+      handleHeaderAction(action: action, payload: payload)
+    case .rowTap(let index, let region, let actionIndex):
+      handleRowTap(index: index, region: region, actionIndex: actionIndex)
+    case .reachEnd, .footerTap:
       loadMore()
-    case "refreshRequested":
+    case .refreshRequested:
       isUserRefresh = true
       reload()
     default:
@@ -389,8 +389,8 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
     }
   }
 
-  private func handleHeaderAction(_ payload: [String: Any]) {
-    switch TiebaSimpleRowParser.string(payload["action"]) ?? "" {
+  private func handleHeaderAction(action: String, payload: [String: Any]) {
+    switch action {
     case "avatar":
       openAvatarPreview(payload)
     case "follow":
@@ -453,15 +453,15 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
     }
   }
 
-  private func handleRowTap(_ payload: [String: Any]) {
-    guard let index = payload["index"] as? Int, rows.indices.contains(index) else { return }
+  private func handleRowTap(index: Int, region: String, actionIndex: Int?) {
+    guard rows.indices.contains(index) else { return }
     let row = rows[index]
     if activeTab == "forums" {
       guard let forum = rowItems[safe: index] as? TiebaProfileForum else { return }
       openForum(forum.forumName)
       return
     }
-    switch TiebaSimpleRowParser.string(payload["region"]) ?? "card" {
+    switch region {
     case "chip":
       openForum(TiebaSimpleRowParser.string(row["forumName"]) ?? "")
     case "avatar":
@@ -474,7 +474,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
       rows[index]["expanded"] = true
       publish(fresh: false)
     case "action":
-      switch payload["actionIndex"] as? Int {
+      switch actionIndex {
       case 1: shareThread(row)
       case 2: toggleLike(index)
       default: openThread(row)

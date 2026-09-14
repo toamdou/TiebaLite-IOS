@@ -33,20 +33,41 @@ struct TiebaBrowserError: LocalizedError {
 
 @MainActor
 enum TiebaInAppBrowser {
+  /// 工具栏关闭按钮样式（旧包 DismissButtonStyle 三值）。字符串换成枚举后
+  /// 非法值在类型层就不存在——原实现对未知串静默回落 .done。
+  enum DismissButtonStyle {
+    case done
+    case close
+    case cancel
+  }
+
+  /// 呈现样式（旧包 PresentationStyle 的 iOS 子集）。原实现对未知串回落
+  /// overFullScreen；现在 overFullScreen 是显式取值，映射表不再有兜底分支。
+  enum PresentationStyle {
+    case automatic
+    case fullScreen
+    case pageSheet
+    case formSheet
+    case currentContext
+    case overCurrentContext
+    case overFullScreen
+    case popover
+    case none
+  }
+
   /// 在途会话（同一时刻至多一个；旧包 currentWebBrowserSession 同语义）。
   private static var session: Session?
 
   /// 打开内置浏览器，返回关闭类型（cancel / dismiss / locked）。
   /// 参数与旧包 WebBrowserOptions 的 iOS 子集一一对应。
-  /// - Parameter controlsColor: '#RRGGBB'（调用点传的是 colors.ts 的主题主色，
-  ///   该字段由 normalizeHex/主题表保证恒为 hex 形态）。收字符串而不是 UIColor：
-  ///   @JS 边界的参数类型必须 JavaScriptDecodable，UIColor 只实现 1.0 的
-  ///   AnyArgument（Prop 用），走不了 2.0 宏的解码路径。
+  /// - Parameter controlsColor: '#RRGGBB'（调用点传的是主题主色，该字段由
+  ///   normalizeHex/主题表保证恒为 hex 形态）。收字符串而不是 UIColor：这条
+  ///   边界只在 present 时解析一次 hex（TiebaFormColor.hex），非法/空串即 nil。
   static func open(
     urlString: String,
     controlsColor: String?,
-    dismissButtonStyle: String,
-    presentationStyle: String,
+    dismissButtonStyle: DismissButtonStyle,
+    presentationStyle: PresentationStyle,
     enableBarCollapsing: Bool,
     readerMode: Bool
   ) async throws -> String {
@@ -67,8 +88,8 @@ enum TiebaInAppBrowser {
     configuration.barCollapsingEnabled = enableBarCollapsing
     configuration.entersReaderIfAvailable = readerMode
     let safari = SFSafariViewController(url: url, configuration: configuration)
-    safari.modalPresentationStyle = modalStyle(from: presentationStyle)
-    safari.dismissButtonStyle = dismissStyle(from: dismissButtonStyle)
+    safari.modalPresentationStyle = modalStyle(presentationStyle)
+    safari.dismissButtonStyle = dismissStyle(dismissButtonStyle)
     // 空串/非法串 → nil = 系统默认 tint（主色恒为 hex，正常路径不会走到这里）。
     safari.preferredControlTintColor = controlsColor.flatMap { hex in
       TiebaFormColor.hex(hex)
@@ -142,29 +163,27 @@ enum TiebaInAppBrowser {
     }
   }
 
-  /// 值串 → UIModalPresentationStyle（与旧包 PresentationStyle.toPresentationStyle 同表）。
-  /// 未知值按旧包缺省 overFullScreen（不静默换成别的形态）。
-  private static func modalStyle(from value: String) -> UIModalPresentationStyle {
-    switch value {
-    case "fullScreen": return .fullScreen
-    case "pageSheet": return .pageSheet
-    case "formSheet": return .formSheet
-    case "currentContext": return .currentContext
-    case "overCurrentContext": return .overCurrentContext
-    case "popover": return .popover
-    case "none": return .none
-    case "automatic": return .automatic
-    default: return .overFullScreen
+  /// 枚举 → UIModalPresentationStyle（与旧包 PresentationStyle.toPresentationStyle 同表）。
+  private static func modalStyle(_ style: PresentationStyle) -> UIModalPresentationStyle {
+    switch style {
+    case .fullScreen: return .fullScreen
+    case .pageSheet: return .pageSheet
+    case .formSheet: return .formSheet
+    case .currentContext: return .currentContext
+    case .overCurrentContext: return .overCurrentContext
+    case .popover: return .popover
+    case .none: return .none
+    case .overFullScreen: return .overFullScreen
+    case .automatic: return .automatic
     }
   }
 
-  /// 值串 → SFSafariViewController.DismissButtonStyle（旧包 DismissButtonStyle 同表，
-  /// 缺省 done）。
-  private static func dismissStyle(from value: String) -> SFSafariViewController.DismissButtonStyle {
-    switch value {
-    case "close": return .close
-    case "cancel": return .cancel
-    default: return .done
+  /// 枚举 → SFSafariViewController.DismissButtonStyle（旧包 DismissButtonStyle 同表）。
+  private static func dismissStyle(_ style: DismissButtonStyle) -> SFSafariViewController.DismissButtonStyle {
+    switch style {
+    case .done: return .done
+    case .close: return .close
+    case .cancel: return .cancel
     }
   }
 }

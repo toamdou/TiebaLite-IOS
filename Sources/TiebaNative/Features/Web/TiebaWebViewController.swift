@@ -402,8 +402,8 @@ final class TiebaWebViewController: UIViewController {
       _ = try? await TiebaInAppBrowser.open(
         urlString: urlString,
         controlsColor: nil,
-        dismissButtonStyle: "done",
-        presentationStyle: "overFullScreen",
+        dismissButtonStyle: .done,
+        presentationStyle: .overFullScreen,
         enableBarCollapsing: false,
         readerMode: false
       )

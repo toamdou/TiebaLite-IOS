@@ -164,16 +164,6 @@ enum TiebaHaptics {
     }
   }
 
-  /// 停掉所有在播 pattern（导航 blur/路由移除时兜底，防跨页余震）。
-  /// 连续播放器不停——点赞蓄力由手势自己 stop（旧包 stopAllHapticPlayers 同样
-  /// 只遍历 pattern 播放器）。
-  static func stopAll() {
-    onMain {
-      for player in TiebaHapticState.patternPlayers.values {
-        try? player.stop(atTime: CHHapticTimeImmediate)
-      }
-    }
-  }
 
   // MARK: - 引擎生命周期
 

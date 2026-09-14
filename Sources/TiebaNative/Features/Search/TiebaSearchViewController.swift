@@ -101,7 +101,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     // 搜索骨架：贴 tab = thread、吧/人 tab = row（原 SearchResultList.tsx count 6）
     stateView.skeletonVariant = .thread
     stateView.skeletonCount = 6
-    list.onEvent = { [weak self] name, payload in self?.handleEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     segmented.selectedSegmentIndex = Tab.thread.rawValue
     segmented.addTarget(self, action: #selector(handleTabChange), for: .valueChanged)
 
@@ -512,15 +512,17 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
 
   // MARK: - 事件
 
-  private func handleEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "rowTap":
-      handleRowTap(payload)
-    case "menuAction":
-      handleMenuAction(payload)
-    case "reachEnd", "footerTap":
+  private func handleEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .rowTap(let index, let region, let actionIndex):
+      handleRowTap(index: index, region: region, actionIndex: actionIndex)
+    case .menuAction(let index, let action):
+      handleMenuAction(index: index, action: action)
+    case .mediaAction(let index, _, let action, let url, let originURL):
+      handleMediaAction(index: index, action: action, url: url, originURL: originURL)
+    case .reachEnd, .footerTap:
       loadMore()
-    case "refreshRequested":
+    case .refreshRequested:
       isUserRefresh = true
       runSearch(reset: true)
     default:
@@ -528,19 +530,18 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     }
   }
 
-  private func handleRowTap(_ payload: [String: Any]) {
-    guard let index = payload["index"] as? Int else { return }
+  private func handleRowTap(index: Int, region: String, actionIndex: Int?) {
     switch activeTab {
     case .thread:
       guard threadHits.indices.contains(index) else { return }
       let thread = threadHits[index]
-      switch payload["region"] as? String ?? "card" {
+      switch region {
       case "chip":
         let forumName = TiebaSimpleRowParser.string(thread.row["forumName"]) ?? ""
         guard !forumName.isEmpty else { return }
         TiebaNavigator.shared.navigate(path: "/forum/\(TiebaRoutePath.segment(forumName))", params: [:], mode: "push")
       case "action":
-        switch payload["actionIndex"] as? Int {
+        switch actionIndex {
         case 1: shareThread(thread)
         case 2: toggleLike(thread, index: index)
         default: openThread(thread)
@@ -567,13 +568,10 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     }
   }
 
-  private func handleMenuAction(_ payload: [String: Any]) {
-    guard activeTab == .thread,
-      let index = payload["index"] as? Int,
-      threadHits.indices.contains(index)
-    else { return }
+  private func handleMenuAction(index: Int, action: String) {
+    guard activeTab == .thread, threadHits.indices.contains(index) else { return }
     let thread = threadHits[index]
-    switch payload["action"] as? String {
+    switch action {
     case "block":
       blockAuthor(thread)
     case "dislike":
@@ -582,23 +580,27 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
       let title = TiebaSimpleRowParser.string(thread.row["title"]) ?? ""
       guard !title.isEmpty else { return }
       TiebaClipboard.setString(title)
-    case "save-image", "share-image":
-      let url = (payload["originUrl"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-        ?? payload["url"] as? String ?? ""
-      guard !url.isEmpty else { return }
-      let forumName = TiebaSimpleRowParser.string(thread.row["forumName"]) ?? ""
-      if (payload["action"] as? String) == "save-image" {
-        TiebaFeedImageActions.save(url: url, forumName: forumName, presenter: self)
-      } else {
-        TiebaFeedImageActions.share(
-          url: url,
-          forumName: forumName,
-          presenter: self,
-          sourceRect: CGRect(x: view.bounds.midX, y: view.bounds.maxY - 40, width: 1, height: 1)
-        )
-      }
     default:
       break
+    }
+  }
+
+  /// 行内图片长按菜单（保存照片 / 分享照片）：url 优先 originURL（空串按缺省，
+  /// 与旧 payload 判读同）。
+  private func handleMediaAction(index: Int, action: String, url: String?, originURL: String?) {
+    guard activeTab == .thread, threadHits.indices.contains(index) else { return }
+    let source = (originURL.flatMap { $0.isEmpty ? nil : $0 }) ?? url ?? ""
+    guard !source.isEmpty else { return }
+    let forumName = TiebaSimpleRowParser.string(threadHits[index].row["forumName"]) ?? ""
+    if action == "save-image" {
+      TiebaFeedImageActions.save(url: source, forumName: forumName, presenter: self)
+    } else {
+      TiebaFeedImageActions.share(
+        url: source,
+        forumName: forumName,
+        presenter: self,
+        sourceRect: CGRect(x: view.bounds.midX, y: view.bounds.maxY - 40, width: 1, height: 1)
+      )
     }
   }
 

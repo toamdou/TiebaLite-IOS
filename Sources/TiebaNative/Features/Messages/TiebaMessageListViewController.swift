@@ -36,7 +36,7 @@ final class TiebaMessageListViewController: UIViewController {
     view.backgroundColor = .clear
     applyPalette()
     list.isHidden = true
-    list.onEvent = { [weak self] name, payload in self?.handleEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     stateView.isHidden = true
     stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
     // 首屏骨架：通用列表行（原 MessageTabList.tsx variant="row" count={8}）
@@ -274,13 +274,13 @@ final class TiebaMessageListViewController: UIViewController {
 
   // MARK: - 事件
 
-  private func handleEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "rowTap":
-      handleRowTap(payload)
-    case "reachEnd", "footerTap":
+  private func handleEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .rowTap(let index, let region, _):
+      handleRowTap(index: index, region: region)
+    case .reachEnd, .footerTap:
       loadMore()
-    case "refreshRequested":
+    case .refreshRequested:
       isUserRefresh = true
       reload()
     default:
@@ -288,10 +288,10 @@ final class TiebaMessageListViewController: UIViewController {
     }
   }
 
-  private func handleRowTap(_ payload: [String: Any]) {
-    guard let index = payload["index"] as? Int, visibleItems.indices.contains(index) else { return }
+  private func handleRowTap(index: Int, region: String) {
+    guard visibleItems.indices.contains(index) else { return }
     let item = visibleItems[index]
-    if payload["region"] as? String == "avatar" {
+    if region == "avatar" {
       guard !item.fromUserId.isEmpty else { return }
       TiebaSceneHaptics.fire("press")
       TiebaNavigator.shared.navigate(path: "/user/\(item.fromUserId)", params: [:], mode: "push")

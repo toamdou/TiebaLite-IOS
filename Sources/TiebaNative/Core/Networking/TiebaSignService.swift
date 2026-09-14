@@ -341,7 +341,7 @@ final class TiebaSignService {
       await TiebaLiveActivityManager.shared.end(
         activityId: activityId,
         state: LiveActivityKitAttributes.ContentState(raw: state),
-        dismissalPolicy: "default"
+        dismissalPolicy: .default
       )
     }
   }

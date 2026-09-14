@@ -30,7 +30,7 @@ final class TiebaBawuTeamViewController: UIViewController {
     view.backgroundColor = .systemBackground
     list.translatesAutoresizingMaskIntoConstraints = false
     list.palette = .default
-    list.onEvent = { [weak self] name, payload in self?.handleEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     list.isHidden = true
     stateView.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(list)
@@ -246,16 +246,15 @@ final class TiebaBawuTeamViewController: UIViewController {
 
   // MARK: - 事件
 
-  private func handleEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "rowTap":
-      guard let index = payload["index"] as? Int,
-        index >= 0, index < rowItems.count,
+  private func handleEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .rowTap(let index, _, _):
+      guard index >= 0, index < rowItems.count,
         let member = rowItems[index], !member.userId.isEmpty
       else { return }
       TiebaSceneHaptics.fire("press")
       TiebaNavigator.shared.navigate(path: "/user/\(member.userId)", params: [:], mode: "push")
-    case "refreshRequested":
+    case .refreshRequested:
       isUserRefresh = true
       reload()
     default:

@@ -44,7 +44,7 @@ final class TiebaUserSocialViewController: UIViewController {
     close.primaryAction = UIAction { [weak self] _ in self?.dismiss(animated: true) }
     navigationItem.leftBarButtonItem = close
 
-    list.onEvent = { [weak self] name, payload in self?.handleEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     list.horizontalInset = 10
     list.separatorHeight = 8
     list.reachEndThreshold = 0.3
@@ -183,14 +183,14 @@ final class TiebaUserSocialViewController: UIViewController {
 
   // MARK: - 事件
 
-  private func handleEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "rowTap":
-      guard let index = payload["index"] as? Int, users.indices.contains(index) else { return }
+  private func handleEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .rowTap(let index, _, _):
+      guard users.indices.contains(index) else { return }
       openUser(users[index].uid)
-    case "reachEnd", "footerTap":
+    case .reachEnd, .footerTap:
       loadMore()
-    case "refreshRequested":
+    case .refreshRequested:
       reload(reset: true)
     default:
       break

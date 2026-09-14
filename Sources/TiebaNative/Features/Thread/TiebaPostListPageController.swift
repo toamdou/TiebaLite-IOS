@@ -118,7 +118,7 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
 
   /// 列表事件/入场动画等两页同款的装配（子类可再补 onScroll 等）。
   func configureSharedList() {
-    list.onEvent = { [weak self] name, payload in self?.handleListEvent(name, payload) }
+    list.onListEvent = { [weak self] event in self?.handleListEvent(event) }
     list.onPostEvent = { [weak self] index, event in self?.handlePostEvent(index, event) }
     list.entranceAnimationEnabled = TiebaPreferenceSnapshot.bool("entranceAnimation", default: true)
     list.separatorHeight = 1
@@ -153,17 +153,15 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
 
   // MARK: - 列表事件（两页同款）
 
-  func handleListEvent(_ name: String, _ payload: [String: Any]) {
-    switch name {
-    case "reachEnd", "footerTap":
+  func handleListEvent(_ event: TiebaKindListEvent) {
+    switch event {
+    case .reachEnd, .footerTap:
       loadMore()
-    case "refreshRequested":
+    case .refreshRequested:
       isUserRefresh = true
       reload()
-    case "visibleRangeChange":
-      if let start = payload["start"] as? Int, let end = payload["end"] as? Int {
-        visibleRange = (start, end)
-      }
+    case .visibleRangeChange(let start, let end, _):
+      visibleRange = (start, end)
       refreshMediaVisibility()
     default:
       break

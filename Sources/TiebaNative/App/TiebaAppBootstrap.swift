@@ -262,7 +262,7 @@ public final class TiebaAppBootstrap {
       imageName: "xmark.circle.fill",
       tintColorHex: "#3B82F6"
     )
-    await TiebaLiveActivityManager.shared.endAll(state: state, dismissalPolicy: "immediate")
+    await TiebaLiveActivityManager.shared.endAll(state: state, dismissalPolicy: .immediate)
   }
 
   /// 通知权限 + 原生后台同步注册（原 JS setupNotifications）。

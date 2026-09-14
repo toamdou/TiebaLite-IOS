@@ -18,26 +18,7 @@ import UIKit
 // 同一个 UITabBarController 下，压栈统一走根栈——不要给每个 tab 套一层
 // UINavigationController，那会变成"底栏常驻"的另一种交互。
 
-/// 导航事件（原生 → JS）。纯 Swift 结构。
-public struct TiebaNavEvent {
-  public enum Kind: String {
-    case focus
-    case blur
-    /// 底栏重复点击（双击语义由 JS 判定，这里只上报"又一次点了已选中的 tab"）
-    case tabReselect
-    /// tab 选择变化
-    case tabSelect
-    /// 导航栏左右按钮被按下（action 名在 route.params["action"]）
-    case barAction
-  }
-
-  public var kind: Kind
-  public var hostId: Int
-  public var route: TiebaRoute?
-  public var tabIndex: Int
-}
-
-/// 主题与状态栏配置：由 JS 下发（跟随应用内主题，而非系统外观）。
+/// 主题与状态栏配置：跟随应用内主题，而非系统外观。
 /// @unchecked Sendable：UIColor 事实上不可变；这个标记只是让"主线程 hop 里读
 /// 主题"在 Swift 6 下不被拦。
 public struct TiebaChromeTheme: @unchecked Sendable {
@@ -97,14 +78,10 @@ extension TiebaRootNavigationController: UIGestureRecognizerDelegate {
 /// 配色跟随应用内主题（不是系统外观），否则"应用强制深色 + 系统浅色"
 /// 会出现亮色标签配深色内容页的脱节。
 public final class TiebaMainTabBarController: UITabBarController {
-  /// 已选中 tab 被再次点击时回调（双击判定在 JS 侧，这里只上报原始点击）。
+  /// 已选中 tab 被再次点击时回调（原生直接受理 tabReselected）。
   var onReselect: ((Int) -> Void)?
-  var onSelect: ((Int) -> Void)?
 
   private var theme: TiebaChromeTheme = .default
-  /// shouldSelect 时刻的旧选中下标：didSelect 用它区分"真切换"（segment）与
-  /// "重按已选中 tab"（press 已在 shouldSelect 发过，不重复）。
-  private var indexBeforeTap = 0
 
   public override func viewDidLoad() {
     super.viewDidLoad()
@@ -123,7 +100,7 @@ public final class TiebaMainTabBarController: UITabBarController {
     // 旧磨砂（实心色带）。保持 appearance 原生态，由系统渲染真液态玻璃。
     // 只设 tintColor（选中态图标/文字的主色）。
     // 下滑收纳 / 上滑恢复，动画由 UIKit 原生药丸收纳控制。
-    // 开关（设置→使用习惯→浏览）由 JS 下发；关闭时 never = 底栏常驻。
+    // 开关（设置→使用习惯→浏览）由原生设置页下发；关闭时 never = 底栏常驻。
     tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
     // 深色/浅色：UIImage(systemName:) 默认跟随 trait，这里把整个底栏
     // 覆盖成应用主题对应的用户界面风格，避免系统浅色时底栏亮、内容暗。
@@ -145,7 +122,6 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
     shouldSelect viewController: UIViewController
   ) -> Bool {
     let tapped = viewControllers?.firstIndex(of: viewController) ?? -1
-    indexBeforeTap = selectedIndex
     if tapped == selectedIndex, tapped >= 0 {
       // 重按已选中 tab（回顶/刷新由各 tab 根屏的 tabReselected 受理），档位
       // 对齐原 JS handleTabReselect 的 'press'。触觉只在这里发：didSelect 对
@@ -154,19 +130,6 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
       onReselect?(tapped)
     }
     return true
-  }
-
-  public func tabBarController(
-    _ tabBarController: UITabBarController,
-    didSelect viewController: UIViewController
-  ) {
-    let idx = viewControllers?.firstIndex(of: viewController) ?? -1
-    guard idx >= 0 else { return }
-    // 不再在这里发 'segment'：按下那一刻已经由 chrome 按压路径发过（见
-    // TiebaChrome.applyChromePress 的 UITabBar 分支），这里再发就是同一次点击
-    // 亮两下。重按已选中 tab 的 'press' 仍在 shouldSelect 发（那时按下路径发的
-    // 是 segment，二者不同刻、不重复）。
-    onSelect?(idx)
   }
 
   /// 在视图树里找"主滚动视图"，返回面积最大的那个。
@@ -190,9 +153,6 @@ public final class TiebaRouteHostViewController: UIViewController {
   /// viewDidLoad/viewWillAppear 这些正常生命周期。
   private let nativeChild: UIViewController
   private var content: UIView?
-
-  /// 事件回调（focus/blur 上报给 JS，供 useFocusEffect / useIsFocused 使用）。
-  var onEvent: ((TiebaNavEvent) -> Void)?
 
   public init(route: TiebaRoute, hostId: Int, nativeChild: UIViewController) {
     self.route = route
@@ -245,7 +205,7 @@ public final class TiebaRouteHostViewController: UIViewController {
     }
   }
 
-  /// 屏幕标题（JS 可覆盖，如吧页标题要等吧名解析出来）。
+  /// 屏幕标题（可被外部覆盖，如吧页标题要等吧名解析出来）。
   func setTitle(_ title: String) {
     navigationItem.title = title
   }
@@ -267,16 +227,6 @@ public final class TiebaRouteHostViewController: UIViewController {
     navigationItem.rightBarButtonItems = screen.screenRightBarItems
     // nil = 保留系统返回箭头（只替换显式声明左侧按钮的屏，如登录页的 xmark）。
     if let left = screen.screenLeftBarItems { navigationItem.leftBarButtonItems = left }
-  }
-
-  public override func viewDidAppear(_ animated: Bool) {
-    super.viewDidAppear(animated)
-    onEvent?(TiebaNavEvent(kind: .focus, hostId: hostId, route: route, tabIndex: -1))
-  }
-
-  public override func viewDidDisappear(_ animated: Bool) {
-    super.viewDidDisappear(animated)
-    onEvent?(TiebaNavEvent(kind: .blur, hostId: hostId, route: route, tabIndex: -1))
   }
 
   public override var preferredStatusBarStyle: UIStatusBarStyle {

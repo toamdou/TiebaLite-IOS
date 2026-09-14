@@ -16,6 +16,15 @@ struct TiebaLiveActivityPayload: Sendable {
   }
 }
 
+/// Live Activity 结束时的撤除策略。原 JS 侧传 "immediate"/"default" 字符串，
+/// 字符串在类型上无处可查（写错的串静默落成 .default），这里封闭成枚举。
+enum TiebaLiveActivityDismissalPolicy: Sendable {
+  /// 立刻从锁屏与通知中心撤掉（中断残留清理用）。
+  case immediate
+  /// 系统默认（结束后仍短暂留在锁屏，由系统决定撤除时机）。
+  case `default`
+}
+
 /// ActivityKit 句柄的 Sendable 包装。@unchecked 的不变量：Activity 是系统活动的
 /// 只读句柄（attributes/id 是 let，activityState 由系统维护且只有 getter），
 /// 而它自己的 update/end/request 全部声明为 nonisolated async——框架契约就是可
@@ -70,7 +79,11 @@ final class TiebaLiveActivityManager {
     await handle.activity.update(content, alertConfiguration: nil)
   }
 
-  func end(activityId: String, state: LiveActivityKitAttributes.ContentState, dismissalPolicy: String) async {
+  func end(
+    activityId: String,
+    state: LiveActivityKitAttributes.ContentState,
+    dismissalPolicy: TiebaLiveActivityDismissalPolicy
+  ) async {
     guard let handle = cachedOrLiveActivity(activityId) else { return }
     let content = ActivityContent(
       state: state,
@@ -110,11 +123,14 @@ final class TiebaLiveActivityManager {
     ]
     await endAll(
       state: LiveActivityKitAttributes.ContentState(raw: state),
-      dismissalPolicy: "immediate"
+      dismissalPolicy: .immediate
     )
   }
 
-  func endAll(state: LiveActivityKitAttributes.ContentState, dismissalPolicy: String) async {
+  func endAll(
+    state: LiveActivityKitAttributes.ContentState,
+    dismissalPolicy: TiebaLiveActivityDismissalPolicy
+  ) async {
     let content = ActivityContent(
       state: state,
       staleDate: nil,
@@ -129,8 +145,12 @@ final class TiebaLiveActivityManager {
     activities.removeAll()
   }
 
-  private static func endPolicy(_ raw: String) -> ActivityUIDismissalPolicy {
-    raw == "immediate" ? .immediate : .default
+  /// 枚举 → ActivityKit 策略，唯一映射点。
+  private static func endPolicy(_ policy: TiebaLiveActivityDismissalPolicy) -> ActivityUIDismissalPolicy {
+    switch policy {
+    case .immediate: return .immediate
+    case .default: return .default
+    }
   }
 }
 
