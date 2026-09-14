@@ -11,10 +11,11 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
   var screenTitle: String? { "" }
 
   /// 裸 UISearchBar 挂宿主 navigationItem.titleView（占满返回键与尾随项之间的
-  /// 整条；外观/键盘/清空钮由系统承担）。
+  /// 整条；外观/键盘/清空钮由系统承担），外套 TiebaSearchFieldBox 对齐返回键。
   /// ⚠️ 不用 UISearchController：iOS 26 的 .integrated 把搜索栏摆到**尾随边**
   ///（SDK 原文 "on the trailing edge"），顶栏中间空一大片（真机实证）。
-  private let searchBar = UISearchBar()
+  private let searchBarBox = TiebaSearchFieldBox()
+  private var searchBar: UISearchBar { searchBarBox.searchBar }
   private let toolRow = UIStackView()
   private let sortButton = UIButton(type: .system)
   private let filterButton = UIButton(type: .system)
@@ -122,7 +123,7 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
     guard let host = parent as? TiebaRouteHostViewController else {
       preconditionFailure("吧内搜索必须挂在 TiebaRouteHostViewController 下")
     }
-    host.navigationItem.titleView = searchBar
+    host.navigationItem.titleView = searchBarBox
   }
 
   private func setupToolButtons() {
