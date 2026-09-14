@@ -697,6 +697,10 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     layer.add(group, forKey: "tieba.entrance")
   }
 
+  /// 折叠退场时长：列表要在同一窗口后删数据（原 JS 360ms 兜底定时器），
+  /// 所以把 TiebaFeedRowMotion 里的值对外只读暴露，别在两处各写一个 0.28。
+  public static var collapseDuration: CFTimeInterval { TiebaFeedRowMotion.collapseDuration }
+
   /// 不感兴趣折叠（CollapseRow）：280ms、EASE_OUT、opacity + scaleY 同步 1→0；
   /// 动画完成前列表保持不动，数据移除由 JS 在动画窗口后（360ms 兜底定时器，
   /// 与 RN 一致）执行，行随新快照消失。

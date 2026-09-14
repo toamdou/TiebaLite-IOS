@@ -129,6 +129,11 @@ final class TiebaKindListFeedCell: UICollectionViewCell {
     rowView.playEntranceAnimation(index: index)
   }
 
+  /// 不感兴趣折叠退场（280ms opacity + scaleY，见 TiebaFeedRowView）。
+  func playCollapse() {
+    rowView.playCollapseAnimation()
+  }
+
   /// 媒体命中查询（行视图只读几何）：point 为 cell 坐标；命中返回
   /// `(媒体下标, 窗口坐标矩形)`；cell 本身就是 UIView，直接交给查看器。
   func mediaHit(at point: CGPoint) -> (index: Int, windowRect: CGRect)? {
@@ -1060,6 +1065,23 @@ public final class TiebaKindListContentView: UIView {
       "index": indexPath.item,
       "action": action,
     ])
+  }
+
+  /// 不感兴趣退场：先让该行播折叠动画（数据保持在位），动画窗口后再回调删数据
+  /// （原 JS collapsingId + 360ms 兜底定时器同一时序）。行已滚出/被复用 → 直接回调。
+  func collapseRowThen(atIndex index: Int, remove: @escaping () -> Void) {
+    let indexPath = IndexPath(item: index, section: 0)
+    guard !pageKey.isEmpty,
+          let item = dataSource.itemIdentifier(for: indexPath), item.pageKey == pageKey,
+          let cell = collectionView.cellForItem(at: indexPath) as? TiebaKindListFeedCell
+    else {
+      remove()
+      return
+    }
+    cell.playCollapse()
+    DispatchQueue.main.asyncAfter(
+      deadline: .now() + TiebaFeedRowView.collapseDuration + 0.08
+    ) { remove() }
   }
 
   /// 图片长按菜单（保存照片 / 分享照片）事件外传（水印偏好/相册权限/toast 由

@@ -543,13 +543,22 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
         try await TiebaFeedAPI.submitDislike(threadId: threadId, dislikeIds: ids, forumId: forumId)
         TiebaSceneHaptics.fire("action-success")
         pill.showResult(success: true, text: "已减少此类内容推荐")
-        items.removeAll {
+        // 先折叠再删数据（原 JS collapsingId + 360ms 兜底同一时序）：动画期间数据
+        // 保持在位，下面卡片等新快照落地才补位。
+        let index = items.firstIndex {
           TiebaSimpleRowParser.string(($0["threadInfo"] as? [String: Any])?["id"]) == threadId
         }
-        if items.isEmpty {
-          showState(emptyState)
-        } else {
-          publishFresh()
+        guard let index else { return }
+        list.collapseRowThen(atIndex: index) { [weak self] in
+          guard let self else { return }
+          self.items.removeAll {
+            TiebaSimpleRowParser.string(($0["threadInfo"] as? [String: Any])?["id"]) == threadId
+          }
+          if self.items.isEmpty {
+            self.showState(self.emptyState)
+          } else {
+            self.publishFresh()
+          }
         }
       } catch {
         TiebaSceneHaptics.fire("action-fail")

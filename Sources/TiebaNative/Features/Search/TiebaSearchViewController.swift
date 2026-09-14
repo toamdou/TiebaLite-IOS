@@ -17,7 +17,9 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     }
   }
 
-  var screenTitle: String? { keyword.isEmpty ? "搜索" : keyword }
+  /// 不要标题：搜索词在搜索框里，顶栏只留返回键 + 搜索栏（用户反馈）。
+  /// 空串（而非 nil）= 显式清掉路由表的默认标题。
+  var screenTitle: String? { "" }
 
   /// 搜索栏走系统 navigationItem.searchController（宿主挂载，外观/玻璃/取消态
   /// 由系统接管），不再手贴约束。
@@ -26,8 +28,20 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private let segmented = UISegmentedControl(items: Tab.allCases.map(\.title))
   private let sortButton = UIButton(type: .system)
   private let sortRow = UIView()
-  /// 顶栏两行 + 内容区共用的竖向栈（隐藏项整段折叠，见 viewDidLoad）。
-  private let chrome = UIStackView()
+  /// 顶栏两行的链式约束（在 viewDidLoad 里建、在 updateChrome 里折叠）。
+  /// 折叠 = 高度与间距一起归零，见 viewDidLoad 的说明。
+  private lazy var segmentTop = segmented.topAnchor.constraint(
+    equalTo: view.safeAreaLayoutGuide.topAnchor,
+    constant: 2
+  )
+  /// 收起时给分段控件钉一个 0 高度（required 压得过内在高度 750）；展开时停用，
+  /// 回到系统内在高度。不给展开态写死常量，免得跟着系统尺寸变。
+  private lazy var segmentCollapsed = segmented.heightAnchor.constraint(equalToConstant: 0)
+  private lazy var sortTop = sortRow.topAnchor.constraint(
+    equalTo: segmented.bottomAnchor,
+    constant: 2
+  )
+  private lazy var sortHeight = sortRow.heightAnchor.constraint(equalToConstant: 34)
   private let historyView = TiebaSearchHistoryView()
   private let list = TiebaKindListContentView()
   private let stateView = TiebaStateContentView()
@@ -89,42 +103,38 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     segmented.selectedSegmentIndex = Tab.thread.rawValue
     segmented.addTarget(self, action: #selector(handleTabChange), for: .valueChanged)
 
-    // ⚠️ 顶栏那两行必须收进竖向栈：裸 isHidden 不撤销自身约束，搜索前
-    // segmented/排序行仍占着约 70pt，顶栏与历史之间就空出一大段（原页搜索前
-    // 也确实没有这两行）。栈会把隐藏的 arrangedSubview 连高度一起折掉。
-    let segmentRow = UIView()
-    chrome.axis = .vertical
-    chrome.alignment = .fill
-    chrome.distribution = .fill
-    for subview in [segmentRow, sortRow, historyView, list, stateView] as [UIView] {
-      chrome.addArrangedSubview(subview)
-    }
-    chrome.setCustomSpacing(2, after: segmentRow)
-    // 内容区吸收剩余高度：栈 .fill 下由最低的抱紧/抗压缩优先级决定谁被拉伸。
-    for content in [historyView, list, stateView] as [UIView] {
-      content.setContentHuggingPriority(.init(1), for: .vertical)
-      content.setContentCompressionResistancePriority(.init(1), for: .vertical)
-    }
-    segmentRow.addSubview(segmented)
+    // ⚠️ 顶栏两行的折叠必须靠「高度 + 前后间距一起归零」，不能用竖向栈：裸 isHidden
+    // 不撤销约束会白占约 70pt，而栈在「三个内容区同时隐藏」的那一帧（切 tab 时
+    // stateView 先藏、列表还没 reveal）会把剩余高度全分给分段行，UISegmentedControl
+    // 被拉成整屏椭圆、内容区被挤成 0 高（真机截图实证）。扁平绝对约束没有这个歧义。
     sortRow.addSubview(sortButton)
-    for subview in [chrome, pill] as [UIView] {
+    for subview in [segmented, sortRow, historyView, list, stateView, pill] as [UIView] {
       subview.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(subview)
     }
-    segmented.translatesAutoresizingMaskIntoConstraints = false
     sortButton.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
-      chrome.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      chrome.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      chrome.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-      chrome.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-      segmented.leadingAnchor.constraint(equalTo: segmentRow.leadingAnchor, constant: 16),
-      segmented.trailingAnchor.constraint(equalTo: segmentRow.trailingAnchor, constant: -16),
-      segmented.topAnchor.constraint(equalTo: segmentRow.topAnchor, constant: 2),
-      segmented.bottomAnchor.constraint(equalTo: segmentRow.bottomAnchor),
-      sortRow.heightAnchor.constraint(equalToConstant: 34),
+      segmented.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+      segmented.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+      segmentTop,
+      sortRow.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      sortRow.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      sortTop,
+      sortHeight,
       sortButton.leadingAnchor.constraint(equalTo: sortRow.leadingAnchor, constant: 16),
       sortButton.centerYAnchor.constraint(equalTo: sortRow.centerYAnchor),
+      historyView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      historyView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      historyView.topAnchor.constraint(equalTo: sortRow.bottomAnchor),
+      historyView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      list.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      list.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      list.topAnchor.constraint(equalTo: sortRow.bottomAnchor),
+      list.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      stateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      stateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      stateView.topAnchor.constraint(equalTo: sortRow.bottomAnchor),
+      stateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
       pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
       pill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82),
@@ -234,8 +244,15 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     // suggestions 成死代码。
     let editing = searchBar.isFirstResponder && (searchBar.text ?? "").isEmpty
     let showHistory = !hasSearched || editing
-    sortRow.isHidden = activeTab != .thread || !hasSearched
-    segmented.isHidden = !hasSearched
+    let showSegment = hasSearched
+    let showSort = hasSearched && activeTab == .thread
+    segmented.isHidden = !showSegment
+    sortRow.isHidden = !showSort
+    // 高度与间距一起归零才算真收起（内容区是绝对约束，跟着 sortRow 底边走）。
+    segmentTop.constant = showSegment ? 2 : 0
+    segmentCollapsed.isActive = !showSegment
+    sortTop.constant = showSort ? 2 : 0
+    sortHeight.constant = showSort ? 34 : 0
     historyView.isHidden = !showHistory
     if showHistory {
       list.isHidden = true
@@ -328,12 +345,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     searchedTabs = [activeTab]
     expandedIds = []
     updateChrome()
-    refreshTitle()
     runSearch(reset: true)
-  }
-
-  private func refreshTitle() {
-    (parent as? TiebaRouteHostViewController)?.syncNativeScreenChrome()
   }
 
   /// 结果区当前在显示什么（nil = 列表）：退出编辑态时按它还原（见 updateChrome）。
@@ -575,6 +587,8 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     switch payload["action"] as? String {
     case "block":
       blockAuthor(thread)
+    case "dislike":
+      presentDislikeSheet(thread, index: index)
     case "copy-title":
       let title = TiebaSimpleRowParser.string(thread.row["title"]) ?? ""
       guard !title.isEmpty else { return }
@@ -596,6 +610,43 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
       }
     default:
       break
+    }
+  }
+
+  /// 不感兴趣：原因面板 → 上报 → 折叠退场（与动态流同一面板类/上报接口）。
+  private func presentDislikeSheet(_ hit: TiebaSearchAPI.ThreadHit, index: Int) {
+    TiebaSceneHaptics.fire("sheet-present")
+    let sheet = TiebaDislikeSheetViewController { [weak self] ids in
+      self?.submitDislike(hit, index: index, ids: ids)
+    }
+    present(sheet, animated: true)
+  }
+
+  private func submitDislike(_ hit: TiebaSearchAPI.ThreadHit, index: Int, ids: String) {
+    guard !hit.id.isEmpty else { return }
+    let forumId = TiebaSimpleRowParser.string(hit.row["forumId"]) ?? ""
+    Task { @MainActor in
+      do {
+        try await TiebaFeedAPI.submitDislike(
+          threadId: hit.id,
+          dislikeIds: ids,
+          forumId: forumId
+        )
+        TiebaSceneHaptics.fire("action-success")
+        // 先折叠再删（原 JS collapsingId + 360ms 兜底）：下面卡片等新快照补位。
+        list.collapseRowThen(atIndex: index) { [weak self] in
+          guard let self else { return }
+          threadHits.removeAll { $0.id == hit.id }
+          if threadHits.isEmpty {
+            showState(.empty(image: "doc.text.magnifyingglass", text: emptyText, retryTitle: "重试"))
+          } else {
+            publish(fresh: true)
+          }
+        }
+      } catch {
+        TiebaSceneHaptics.fire("action-fail")
+        pill.showResult(success: false, text: "提交失败，请稍后重试")
+      }
     }
   }
 

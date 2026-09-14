@@ -413,8 +413,9 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     row["hideMedia"] = hideMedia
     row["showIpLocation"] = showIp
     row["fontScale"] = fontScale
-    // 原 TweetCard 未传 closeMenuOptions → 默认只有「屏蔽作者」。
-    row["closeMenuOptions"] = ["block"]
+    // 原 TweetCard 未传 closeMenuOptions → 默认只有「屏蔽作者」；不感兴趣按用户要求
+    // 与动态流对齐（同一原因面板 + submitDislike + 折叠退场）。
+    row["closeMenuOptions"] = ["dislike", "block"]
     return row
   }
 
@@ -581,6 +582,8 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     switch payload["action"] as? String {
     case "block":
       blockAuthor(row)
+    case "dislike":
+      presentDislikeSheet(row, index: index)
     case "copy-title":
       let title = TiebaSimpleRowParser.string(row["title"]) ?? ""
       guard !title.isEmpty else { return }
@@ -606,6 +609,42 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   }
 
   // MARK: - 行动作
+
+  /// 不感兴趣：原因面板 → 上报 → 折叠退场（与动态流同一面板类/上报接口）。
+  private func presentDislikeSheet(_ row: [String: Any], index: Int) {
+    TiebaSceneHaptics.fire("sheet-present")
+    let sheet = TiebaDislikeSheetViewController { [weak self] ids in
+      self?.submitDislike(row, index: index, ids: ids)
+    }
+    present(sheet, animated: true)
+  }
+
+  private func submitDislike(_ row: [String: Any], index: Int, ids: String) {
+    let threadId = TiebaSimpleRowParser.string(row["id"]) ?? ""
+    guard !threadId.isEmpty else { return }
+    Task { @MainActor in
+      do {
+        try await TiebaFeedAPI.submitDislike(
+          threadId: threadId,
+          dislikeIds: ids,
+          forumId: card?.forumId ?? ""
+        )
+        TiebaSceneHaptics.fire("action-success")
+        // 先折叠再删（原 JS collapsingId + 360ms 兜底）：三个桶一起摘，下面卡片补位。
+        list.collapseRowThen(atIndex: index) { [weak self] in
+          guard let self else { return }
+          for tab in 0..<3 {
+            buckets[tab].removeAll { TiebaSimpleRowParser.string($0["id"]) == threadId }
+          }
+          publish(fresh: true)
+          if makeRows().isEmpty { showState(.empty) }
+        }
+      } catch {
+        TiebaSceneHaptics.fire("action-fail")
+        pill.showResult(success: false, text: "提交失败，请稍后重试")
+      }
+    }
+  }
 
   private func openThread(_ row: [String: Any]) {
     let id = TiebaSimpleRowParser.string(row["id"]) ?? ""

@@ -216,6 +216,9 @@ enum TiebaSearchAPI {
     }
     var options = TiebaFeedRowBuilder.Options.current()
     options.imageContextMenu = true
+    // 搜索结果也走「不感兴趣」三件套（面板 + 上报 + 折叠退场），与动态流同一套菜单项；
+    // 原 JS 搜索卡没渲染 × 按钮，属用户新增要求。
+    options.closeMenuOptions = ["dislike", "block", "copy-title"]
     return TiebaFeedRowBuilder.make(thread: thread, options: options)
   }
 

@@ -6,7 +6,9 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
   private let forumName: String
   private let forumId: String
 
-  var screenTitle: String? { keyword.isEmpty ? "吧内搜索" : keyword }
+  /// 不要标题：搜索词在搜索框里，顶栏只留返回键 + 搜索栏（用户反馈）。
+  /// 空串（而非 nil）= 显式清掉路由表的默认标题。
+  var screenTitle: String? { "" }
 
   /// 搜索栏走系统 navigationItem.searchController（宿主挂载，外观/玻璃/取消态
   /// 由系统接管），不再手贴约束。
