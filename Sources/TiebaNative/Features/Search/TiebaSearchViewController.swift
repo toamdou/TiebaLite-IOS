@@ -26,6 +26,8 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private let segmented = UISegmentedControl(items: Tab.allCases.map(\.title))
   private let sortButton = UIButton(type: .system)
   private let sortRow = UIView()
+  /// 顶栏两行 + 内容区共用的竖向栈（隐藏项整段折叠，见 viewDidLoad）。
+  private let chrome = UIStackView()
   private let historyView = TiebaSearchHistoryView()
   private let list = TiebaKindListContentView()
   private let stateView = TiebaStateContentView()
@@ -87,34 +89,42 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     segmented.selectedSegmentIndex = Tab.thread.rawValue
     segmented.addTarget(self, action: #selector(handleTabChange), for: .valueChanged)
 
-    for subview in [segmented, sortRow, historyView, list, stateView, pill] as [UIView] {
+    // ⚠️ 顶栏那两行必须收进竖向栈：裸 isHidden 不撤销自身约束，搜索前
+    // segmented/排序行仍占着约 70pt，顶栏与历史之间就空出一大段（原页搜索前
+    // 也确实没有这两行）。栈会把隐藏的 arrangedSubview 连高度一起折掉。
+    let segmentRow = UIView()
+    chrome.axis = .vertical
+    chrome.alignment = .fill
+    chrome.distribution = .fill
+    for subview in [segmentRow, sortRow, historyView, list, stateView] as [UIView] {
+      chrome.addArrangedSubview(subview)
+    }
+    chrome.setCustomSpacing(2, after: segmentRow)
+    // 内容区吸收剩余高度：栈 .fill 下由最低的抱紧/抗压缩优先级决定谁被拉伸。
+    for content in [historyView, list, stateView] as [UIView] {
+      content.setContentHuggingPriority(.init(1), for: .vertical)
+      content.setContentCompressionResistancePriority(.init(1), for: .vertical)
+    }
+    segmentRow.addSubview(segmented)
+    sortRow.addSubview(sortButton)
+    for subview in [chrome, pill] as [UIView] {
       subview.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(subview)
     }
-    sortRow.addSubview(sortButton)
+    segmented.translatesAutoresizingMaskIntoConstraints = false
     sortButton.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
-      segmented.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-      segmented.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-      segmented.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 2),
-      sortRow.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      sortRow.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      sortRow.topAnchor.constraint(equalTo: segmented.bottomAnchor, constant: 2),
+      chrome.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      chrome.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      chrome.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      chrome.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      segmented.leadingAnchor.constraint(equalTo: segmentRow.leadingAnchor, constant: 16),
+      segmented.trailingAnchor.constraint(equalTo: segmentRow.trailingAnchor, constant: -16),
+      segmented.topAnchor.constraint(equalTo: segmentRow.topAnchor, constant: 2),
+      segmented.bottomAnchor.constraint(equalTo: segmentRow.bottomAnchor),
       sortRow.heightAnchor.constraint(equalToConstant: 34),
       sortButton.leadingAnchor.constraint(equalTo: sortRow.leadingAnchor, constant: 16),
       sortButton.centerYAnchor.constraint(equalTo: sortRow.centerYAnchor),
-      historyView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      historyView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      historyView.topAnchor.constraint(equalTo: sortRow.bottomAnchor),
-      historyView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-      list.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      list.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      list.topAnchor.constraint(equalTo: sortRow.bottomAnchor),
-      list.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-      stateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      stateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      stateView.topAnchor.constraint(equalTo: sortRow.bottomAnchor),
-      stateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
       pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
       pill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82),
@@ -230,6 +240,12 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     if showHistory {
       list.isHidden = true
       stateView.isHidden = true
+    } else if let currentState {
+      // 退出编辑态要把结果区按原状态放回来：只藏不还原（清空后又输入）会剩下
+      // 整块空白——historyView 藏了、列表还被关着。
+      showState(currentState)
+    } else {
+      showList()
     }
   }
 
@@ -320,17 +336,22 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     (parent as? TiebaRouteHostViewController)?.syncNativeScreenChrome()
   }
 
+  /// 结果区当前在显示什么（nil = 列表）：退出编辑态时按它还原（见 updateChrome）。
+  private var currentState: TiebaState?
+
   private func showState(_ state: TiebaState) {
     if case .loading = state {
       // 贴 tab 的真实行是 TweetCard → thread 同形；吧/人 = 通用行
       stateView.skeletonVariant = activeTab == .thread ? .thread : .row
     }
+    currentState = state
     stateView.state = state
     stateView.isHidden = false
     list.isHidden = true
   }
 
   private func showList() {
+    currentState = nil
     stateView.isHidden = true
     list.isHidden = false
   }
