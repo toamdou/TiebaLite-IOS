@@ -214,7 +214,10 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     if replacing {
       thread = page.thread ?? thread
       posts = page.posts
-      mainPostId = postId == nil ? posts.first(where: { $0.floor == 1 })?.id ?? posts.first?.id : nil
+      // 楼主行恒按 floor == 1 定位：带 postId 跳楼时（通知/查看原帖进来）第 0 行是
+      // 那条回复而不是主贴，原来这里直接给 nil → 没有一行 isMain，主贴标题与回复
+      // 工具栏整块消失（用户实证）。服务端每页都回吐楼主楼层，所以找不到才退回第 0 行。
+      mainPostId = (posts.first(where: { $0.floor == 1 }) ?? posts.first)?.id
     } else {
       thread = page.thread ?? thread
       // 服务端每页都会回吐楼主楼层：按 id 去重，避免主贴/重复楼层出现两次。
@@ -266,9 +269,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     let titleText = thread?.title ?? ""
     let forumName = thread?.forumName ?? ""
     let mainId = mainPostId
-    // 无 postId 定位时服务端保证第 0 行 = 楼主帖（原 JS hasPinnedOp 语义）：主贴卡
-    // （标题 + 回复工具栏）按行位置钉，只按 id 匹配一旦对不上就整块消失。
-    let hasPostId = postId != nil
+    // 主贴卡（标题 + 回复工具栏）钉在楼主行上（按 floor == 1 定出来的 id）；
+    // 只按 id 匹配一旦对不上就整块消失，所以兜底留在第 0 行（见 apply）。
     let toolbar = toolbarModel()
     let preferences = TiebaPostPreferences.load()
     let blockFilter = TiebaPostBlockFilter.load()
@@ -281,7 +283,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
         var models: [TiebaPostRowModel] = []
         var kept: [TiebaThreadPost] = []
         for (index, post) in source.enumerated() {
-          let isMain = (!hasPostId && index == 0) || (mainId.map { $0 == post.id } ?? false)
+          let isMain = mainId.map { $0 == post.id } ?? (index == 0)
           if hideBlocked, !isMain {
             if blockFilter.isUserBlocked(uid: post.authorId, name: post.authorName) { continue }
             if blockFilter.isContentBlocked(post.plainText) { continue }
