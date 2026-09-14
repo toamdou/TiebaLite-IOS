@@ -336,15 +336,10 @@ private final class TiebaKindFooterView: UICollectionReusableView {
     }
   }
 
-  /// 「加载更多」按钮：UIButton.Configuration；iOS 26 起对齐系统液态玻璃
-  /// （bordered → .glass()），更早系统保持原来的无底色主色文字 + 胶囊形。
+  /// 「加载更多」按钮：系统液态玻璃配置（UIButtonConfiguration.glassButtonConfiguration，
+  /// iOS 26 起可用；部署目标 26 = 恒走此支）。
   private static func moreConfiguration(palette: TiebaSimpleRowPalette) -> UIButton.Configuration {
-    var config: UIButton.Configuration
-    if #available(iOS 26.0, *) {
-      config = .glass()
-    } else {
-      config = .plain()
-    }
+    var config = UIButton.Configuration.glass()
     config.cornerStyle = .capsule
     config.baseForegroundColor = palette.base.primary
     config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
@@ -696,6 +691,15 @@ public final class TiebaKindListContentView: UIView {
     collectionView.delegate = self
     collectionView.dataSource = dataSource
     collectionView.prefetchDataSource = self
+
+    // ⚠️ 三个 cell 注册必须在这里就建好，不能等 cellProvider 首次访问 lazy 属性再建：
+    // UIKit 会断言"registration 是在 cell provider 里创建的"并抛
+    // NSInternalInconsistencyException（真机崩溃原文：Attempted to dequeue a cell
+    // using a registration that was created inside … a UICollectionViewDiffableDataSource
+    // cell provider）。三条具名访问就是"提前创建"本身——三者泛型不同，别写成数组。
+    _ = simpleCellRegistration
+    _ = feedCellRegistration
+    _ = postCellRegistration
 
     refreshControl.addTarget(self, action: #selector(handleRefreshControl), for: .valueChanged)
     refreshControl.tintColor = palette.base.primary
@@ -1323,7 +1327,8 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
   /// 裸 URL 预取既不命中展示缓存，还会把全尺寸位图写进内存缓存。
   private func prefetchRequests(for indexPaths: [IndexPath]) -> [ImageRequest] {
     guard !pageKey.isEmpty else { return [] }
-    let scale = UIScreen.main.scale
+    // UIScreen.main 自 iOS 26 起废弃：像素口径取本视图 trait 的 displayScale。
+    let scale = max(traitCollection.displayScale, 1)
     var seen = Set<String>()
     var requests: [ImageRequest] = []
     // 目标像素口径与展示侧逐一对齐（feed=fitProcessor，simple/post=resizeProcessor）。
