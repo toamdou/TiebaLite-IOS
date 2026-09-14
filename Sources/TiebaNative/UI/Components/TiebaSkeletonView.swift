@@ -466,6 +466,11 @@ final class TiebaSkeletonList: UIView {
   var isSuspended: Bool = false { didSet { updatePulse() } }
   /// 列表内边距（原各页 SkeletonList style 的 padding，如 16/8/24）。
   var contentInsets: UIEdgeInsets = .zero { didSet { applyInsets() } }
+  /// 骨架之上的一整块前置视图（帖子页的「已知主贴区」占位；换值即重建）。
+  /// 宿主只负责给视图，摆位顺序（前置块在最上）由骨架保证。
+  var headerView: UIView? {
+    didSet { if headerView !== oldValue { rebuild() } }
+  }
 
   private let stack = UIStackView()
   /// 每格一个呼吸宿主（8 格 = 8 个动画，不是每格上百个占位块各一个）。
@@ -543,6 +548,10 @@ final class TiebaSkeletonList: UIView {
       view.removeFromSuperview()
     }
     pulseHosts.removeAll()
+    // 前置块恒在最上：真正撑高的那一块由它自己定（内容自然高度）。
+    if let headerView {
+      stack.addArrangedSubview(headerView)
+    }
     stack.spacing = variant.isNaturalHeight ? 0 : TiebaSkeletonMetrics.listGap
     let height = itemHeight ?? variant.defaultItemHeight
     for index in 0..<max(count, 0) {

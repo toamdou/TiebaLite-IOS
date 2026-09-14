@@ -108,6 +108,36 @@ func tiebaPostLoadImage(
   )
 }
 
+/// 显示档取图（aspectFill 视图专用）：位图 = 视图尺寸下的裁切结果，圆角也烘焙在
+/// 像素里，所以视图侧不需要 clipsToBounds（省掉每帧一次离屏合成），也不会把长图
+/// 解成远超显示尺寸的位图。视图必须已经摆好最终 frame（尺寸即入参来源）。
+@MainActor
+func tiebaPostLoadDisplayImage(
+  _ url: URL?,
+  targetSize: CGSize,
+  cornerRadius: CGFloat,
+  scale: CGFloat,
+  into imageView: UIImageView,
+  transition: Bool = false
+) {
+  guard let url, targetSize.width > 1, targetSize.height > 1 else {
+    imageView.image = nil
+    return
+  }
+  loadImage(
+    with: TiebaNuke.secureURL(url),
+    options: TiebaNuke.options(
+      processor: TiebaNuke.displayProcessor(
+        targetSize: targetSize,
+        cornerRadius: cornerRadius,
+        scale: scale
+      ),
+      transition: transition
+    ),
+    into: imageView
+  )
+}
+
 // MARK: - 头像
 //
 // 行视图不自己实现头像：直接复用 TiebaForumViews 的 TiebaForumAvatarView
@@ -663,7 +693,6 @@ final class TiebaPostRowView: UIView {
   var onEvent: ((TiebaPostRowEvent) -> Void)?
 
   private let cardView = UIView()
-  private let titleLabel = UILabel()
   private var avatarView: TiebaForumAvatarView?
   private let nameLabel = UILabel()
   private let metaLabel = UILabel()
@@ -733,17 +762,6 @@ final class TiebaPostRowView: UIView {
     cardView.backgroundColor = model.palette.card
     cardView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     cardView.layer.borderColor = model.palette.borderCard.cgColor
-
-    titleLabel.isHidden = plan.titleFrame == nil
-    if let frame = plan.titleFrame {
-      titleLabel.frame = frame
-      titleLabel.attributedText = TiebaSimpleText.makeAttributed(
-        text: model.title,
-        font: TiebaPostRowLayout.titleFont,
-        lineHeight: TiebaSimpleText.lineHeight(nil, font: TiebaPostRowLayout.titleFont)
-      )
-    }
-    titleLabel.textColor = model.palette.text
 
     avatarControl.frame = plan.avatarFrame
     configureAvatar(model: model, frame: plan.avatarFrame)
@@ -848,7 +866,10 @@ final class TiebaPostRowView: UIView {
       view.linkTextAttributes = [.foregroundColor: palette.primary]
     }
     subPostsMoreLabel.textColor = palette.primary
-    toolbarView.backgroundColor = .systemFill
+    // 底色 = 主题 surfaceSecondary（原 JS replyToolbar 的 colors.surfaceSecondary，
+    // 浅色下与页面底色同值）：只靠 hairline 描边成卡，不用 .systemFill —— 那块灰
+    // 在浅色下是一整条"脏底"（用户实证）。
+    toolbarView.backgroundColor = TiebaSimpleRowPalette.default.surfaceSecondary
     toolbarView.layer.borderColor = palette.borderCard.cgColor
     toolbarReplyLabel.textColor = palette.text
     seeLzButton.tintColor = palette.primary
@@ -862,7 +883,6 @@ final class TiebaPostRowView: UIView {
     model = nil
     imageScrollView.contentOffset = .zero
     textView.attributedText = nil
-    titleLabel.attributedText = nil
     for view in imageViews {
       view.image = nil
       view.alpha = 1
@@ -901,8 +921,6 @@ final class TiebaPostRowView: UIView {
 
   private func buildSubviews() {
     addSubview(cardView)
-    addSubview(titleLabel)
-    titleLabel.numberOfLines = 0
     addSubview(avatarControl)
     avatarControl.addTarget(self, action: #selector(handleAvatar), for: .touchUpInside)
     nameLabel.numberOfLines = 1
@@ -996,7 +1014,10 @@ final class TiebaPostRowView: UIView {
     addSubview(toolbarView)
     toolbarView.isHidden = true
     toolbarReplyLabel.font = TiebaPostRowLayout.replyCountFont
-    toolbarView.addSubview(toolbarReplyLabel)
+    // 标签与药丸挂在**行视图**上：plan 的 toolbarTextFrame/toolbarSeeLzFrame/
+    // toolbarSortFrame 都是行坐标，挂进 toolbarView 会再叠一次 toolbarFrame 的
+    // 偏移（整条只剩空底，用户实证"只看楼主那一行显示不出来"）。
+    addSubview(toolbarReplyLabel)
     seeLzButton.titleLabel?.font = TiebaPostRowLayout.pillFont
     seeLzButton.layer.cornerRadius = 15
     seeLzButton.layer.cornerCurve = .continuous
@@ -1005,8 +1026,8 @@ final class TiebaPostRowView: UIView {
     sortButton.layer.cornerRadius = 15
     sortButton.layer.cornerCurve = .continuous
     sortButton.addTarget(self, action: #selector(handleToggleSort), for: .touchUpInside)
-    toolbarView.addSubview(seeLzButton)
-    toolbarView.addSubview(sortButton)
+    addSubview(seeLzButton)
+    addSubview(sortButton)
   }
 
   /// 头像尺寸随行角色变化（主贴 40 / 回复 36）：TiebaForumAvatarView 的边长在
@@ -1035,7 +1056,8 @@ final class TiebaPostRowView: UIView {
     while imageViews.count < shownCount {
       let view = UIImageView()
       view.contentMode = .scaleAspectFill
-      view.clipsToBounds = true
+      // 圆角由图片管线烘焙进位图（见 tiebaPostLoadDisplayImage）：这里只留
+      // cornerRadius 给占位底色，不再 clipsToBounds（否则每帧一次离屏合成）。
       view.layer.cornerRadius = TiebaPostRowLayout.imageRadius
       view.layer.cornerCurve = .continuous
       view.isUserInteractionEnabled = true
@@ -1044,6 +1066,7 @@ final class TiebaPostRowView: UIView {
       imageScrollView.addSubview(view)
       imageViews.append(view)
     }
+    let scale = max(traitCollection.displayScale, 1)
     let single = model.images.count == 1
     for (index, view) in imageViews.enumerated() {
       guard index < shownCount else {
@@ -1061,10 +1084,11 @@ final class TiebaPostRowView: UIView {
       if model.preferences.imageLoadType == "all_no" {
         view.image = nil
       } else {
-        tiebaPostLoadImage(
+        tiebaPostLoadDisplayImage(
           TiebaPostRowText.displayURL(image, preferences: model.preferences),
-          maxPixel: max(view.bounds.width, view.bounds.height)
-            * max(traitCollection.displayScale, 1),
+          targetSize: view.bounds.size,
+          cornerRadius: TiebaPostRowLayout.imageRadius,
+          scale: scale,
           into: view,
           transition: true
         )
@@ -1194,10 +1218,18 @@ final class TiebaPostRowView: UIView {
 
   private func layoutToolbar(model: TiebaPostRowModel, plan: TiebaPostRowPlan) {
     guard let frame = plan.toolbarFrame, let toolbar = model.toolbar else {
+      // 三件内容已不在 toolbarView 里（见 buildSubviews），必须逐个收起：否则
+      // 回收成回复行后，它们会留在上一次主贴行时的位置上。
       toolbarView.isHidden = true
+      toolbarReplyLabel.isHidden = true
+      seeLzButton.isHidden = true
+      sortButton.isHidden = true
       return
     }
     toolbarView.isHidden = false
+    toolbarReplyLabel.isHidden = false
+    seeLzButton.isHidden = false
+    sortButton.isHidden = false
     toolbarView.frame = frame
     toolbarView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
     toolbarView.layer.cornerCurve = .continuous

@@ -1041,6 +1041,10 @@ public final class TiebaKindListContentView: UIView {
         emit("rowTap", ["pageKey": pageKey, "index": index, "region": "card"])
         return
       }
+      // 列表→详情已知数据快照（原 TweetCard 的 setThreadSnapshot）：帖子页首帧
+      // 就能画出已加载过的标题/作者/摘要/首图，不必等首包。点任何一块都写，
+      // 一次性消费 + 同 id 才命中，写多无害。
+      TiebaThreadSnapshots.set(TiebaThreadSnapshot(row: row))
       let hit = TiebaFeedRowInteraction.tapRegion(for: point, row: row)
       if hit.region == "media", !row.media.isEmpty,
          let cell = collectionView.cellForItem(at: indexPath) as? TiebaKindListFeedCell,
@@ -1379,6 +1383,22 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
         )
       )
     }
+    /// 显示档预取：与展示侧（tiebaPostLoadDisplayImage）传入同一组参数 ⇒ 同一
+    /// 处理器 ⇒ 同一缓存键；尺寸/圆角不同就是另一次解码，不能只按 URL 去重。
+    func appendDisplay(_ url: URL?, size: CGSize, radius: CGFloat) {
+      guard let url, size.width > 1, size.height > 1 else { return }
+      let secure = TiebaNuke.secureURL(url)
+      let key = "\(secure.absoluteString)#display#\(Int(size.width))x\(Int(size.height))#\(radius)"
+      guard seen.insert(key).inserted else { return }
+      requests.append(
+        ImageRequest(
+          url: secure,
+          processors: [
+            TiebaNuke.displayProcessor(targetSize: size, cornerRadius: radius, scale: scale),
+          ]
+        )
+      )
+    }
     for path in indexPaths {
       switch TiebaKindRowPages.shared.kind(pageKey: pageKey, index: path.item) {
       case .feed:
@@ -1386,14 +1406,10 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
         append(row.avatarURL, maxPixel: TiebaFeedRowLayout.avatarSize * scale, mode: .fit)
         if row.showsMedia {
           if row.mediaIsStrip {
-            // 带的显示目标 = max(行高, 行高×宽高比)（MultiImageStrip itemWidths）。
-            let stripHeight = row.stripHeight ?? 0
-            for media in row.media.prefix(TiebaFeedRowLayout.maxImagesPerRow) {
-              append(
-                media.url,
-                maxPixel: max(stripHeight, stripHeight * media.aspectRatio) * scale,
-                mode: .fit
-              )
+            // 带的显示目标 = 帧计划里那一格的真实尺寸（与展示侧 loadDisplay 同口径）。
+            for (index, media) in row.media.prefix(TiebaFeedRowLayout.maxImagesPerRow).enumerated() {
+              guard row.plan.mediaItemFrames.indices.contains(index) else { break }
+              appendDisplay(media.url, size: row.plan.mediaItemFrames[index].size, radius: 0)
             }
           } else {
             let columnWidth = TiebaFeedRowLayout.textColumnWidth(containerWidth: row.containerWidth)
@@ -1425,7 +1441,7 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
           let frame = single || !row.plan.imageItemFrames.indices.contains(index)
             ? imagesFrame
             : row.plan.imageItemFrames[index]
-          append(url, maxPixel: max(frame.width, frame.height) * scale, mode: .fill)
+          appendDisplay(url, size: frame.size, radius: TiebaPostRowLayout.imageRadius)
         }
       case .simple, .none:
         guard let row = simpleModel(at: path.item) else { continue }

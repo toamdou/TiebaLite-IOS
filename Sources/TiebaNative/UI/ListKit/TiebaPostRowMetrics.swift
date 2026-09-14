@@ -381,7 +381,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
   let pageKey: String
   let index: Int
   let post: TiebaThreadPost
-  let title: String
   let isMain: Bool
   let isLz: Bool
   let canDelete: Bool
@@ -478,7 +477,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
     pageKey: String,
     index: Int,
     post: TiebaThreadPost,
-    title: String,
     isMain: Bool,
     canDelete: Bool,
     threadAuthorId: String,
@@ -492,7 +490,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
     self.pageKey = pageKey
     self.index = index
     self.post = post
-    self.title = title
     self.isMain = isMain
     self.isLz = !post.authorId.isEmpty && post.authorId == threadAuthorId
     self.canDelete = canDelete
@@ -545,7 +542,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
     let plan = TiebaPostRowPlan(TiebaPostRowPlanInputs(
       containerWidth: self.containerWidth,
       isMain: isMain,
-      title: title,
       post: post,
       nameText: self.nameText,
       levelText: self.levelText,
@@ -575,7 +571,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
       pageKey: model.pageKey,
       index: model.index,
       post: post,
-      title: model.title,
       isMain: model.isMain,
       canDelete: model.canDelete,
       threadAuthorId: model.threadAuthorId,
@@ -688,7 +683,6 @@ enum TiebaPostRowLayout {
   static var pillFont: UIFont { TiebaSimpleText.font(size: 13, weight: .semibold) }
   static var subPostNameFont: UIFont { TiebaSimpleText.font(size: 14, weight: .semibold) }
   static var replyCountFont: UIFont { TiebaSimpleText.font(size: 15, weight: .semibold) }
-  static var titleFont: UIFont { TiebaSimpleText.font(size: 20, weight: .semibold) }
 
   /// 楼中楼预览的行盒高度（与 buildContent(isSubPost:) 的 20×scale 同值）。
   static func subPostLineHeight(_ scale: Double) -> CGFloat { ceil(20 * scale) }
@@ -816,7 +810,6 @@ enum TiebaPostTimeText {
 struct TiebaPostRowPlanInputs {
   var containerWidth: CGFloat
   var isMain: Bool
-  var title: String
   var post: TiebaThreadPost
   var nameText: String
   var levelText: String?
@@ -839,7 +832,6 @@ struct TiebaPostRowPlanInputs {
 struct TiebaPostRowPlan {
   var rowHeight: CGFloat = 0
   var cardFrame: CGRect = .zero
-  var titleFrame: CGRect?
   var avatarFrame: CGRect = .zero
   var nameFrame: CGRect = .zero
   var levelFrame: CGRect?
@@ -876,21 +868,6 @@ struct TiebaPostRowPlan {
     var y = TiebaPostRowLayout.cardMarginV
     let cardTop = y
     y += TiebaPostRowLayout.cardPadding
-
-    // ── 标题（主贴卡首元素）──
-    if inputs.isMain, !inputs.title.isEmpty {
-      let height = TiebaSimpleText.measureHeight(
-        TiebaSimpleText.makeAttributed(
-          text: inputs.title,
-          font: TiebaPostRowLayout.titleFont,
-          lineHeight: TiebaSimpleText.lineHeight(nil, font: TiebaPostRowLayout.titleFont)
-        ),
-        width: contentW,
-        maxLines: 0
-      )
-      titleFrame = CGRect(x: contentX, y: y, width: contentW, height: height)
-      y += height + 8
-    }
 
     // ── 作者行 ──
     // 右侧操作组（⋮18 + gap12 + 点赞）按内容实测宽度占位，不能写死：固定占位会把

@@ -173,7 +173,6 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     let width = lastWidth
     let source = sourcePosts
     let parentId = floorPost?.id
-    let titleText = threadTitle
     let authorId = threadAuthorId
     let forum = forumName
     let preferences = TiebaPostPreferences.load()
@@ -205,7 +204,6 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
             pageKey: key,
             index: models.count,
             post: post,
-            title: isParent ? titleText : "",
             isMain: isParent,
             // 旧页父卡无删除入口；回复的删除仅在本人时提供。
             canDelete: !isParent && !accountUid.isEmpty && post.authorId == accountUid,

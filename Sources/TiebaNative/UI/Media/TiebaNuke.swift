@@ -190,6 +190,38 @@ public enum TiebaNuke {
   /// 会被解成远超方框的位图。
   public enum Mode { case fill, fit }
 
+  /// 显示档处理器（aspectFill 视图专用）：按视图**精确显示尺寸**下采样（cover
+  /// 裁切）并把圆角烘焙进位图。两件事各自都是一次修正：
+  ///   1. 旧口径是"正方形上界 + crop:false"，横图/长图会被解成远超显示尺寸的
+  ///      位图（长图可达 4 倍像素），滚动时新图的解码与纹理上传成倍放大；
+  ///   2. 圆角烘焙后显示层不必再 masksToBounds，每帧一次离屏合成随之消失。
+  /// 视图侧因此只需 contentMode = .scaleAspectFill（与裁切后的位图逐像素等价），
+  /// contentMode = .scaleAspectFit 的视图不要用这个处理器（会被裁掉留白）。
+  public static func displayProcessor(
+    targetSize: CGSize,
+    cornerRadius: CGFloat,
+    scale: CGFloat
+  ) -> any ImageProcessing {
+    let pixel = CGSize(
+      width: max((targetSize.width * scale).rounded(), 1),
+      height: max((targetSize.height * scale).rounded(), 1)
+    )
+    let resize = ImageProcessors.Resize(
+      size: pixel,
+      unit: .pixels,
+      contentMode: .aspectFill,
+      crop: true,
+      // 允许放大：位图必须与显示框**逐像素同尺寸**，否则烘焙的圆角会随视图的
+      // 二次缩放被放大（小图尤其明显）。小图本来就要被视图放大，这里只是提前做。
+      upscale: true
+    )
+    guard cornerRadius > 0.5 else { return resize }
+    return ImageProcessors.Composition([
+      resize,
+      ImageProcessors.RoundedCorners(radius: cornerRadius * scale, unit: .pixels),
+    ])
+  }
+
   /// 视图加载的 options 组装：全 App 只有这一处知道「哪条管线 + 哪个降采样处理器
   /// + 要不要淡入」。调用点直接交给 NukeExtensions.loadImage(with:options:into:)。
   /// maxPixel ≤ 0 = 不下采样（大图档）。
@@ -198,15 +230,24 @@ public enum TiebaNuke {
     mode: Mode = .fill,
     transition: Bool = false
   ) -> ImageLoadingOptions {
+    let size = CGSize(width: maxPixel, height: maxPixel)
+    let processor: (any ImageProcessing)? = maxPixel > 0
+      ? (mode == .fit ? fitProcessor(targetPixelSize: size) : resizeProcessor(targetPixelSize: size))
+      : nil
+    return options(processor: processor, transition: transition)
+  }
+
+  /// 处理器直给版（显示档处理器见 displayProcessor；两处共用同一条管线口径）。
+  public static func options(
+    processor: (any ImageProcessing)?,
+    transition: Bool = false
+  ) -> ImageLoadingOptions {
     var options = ImageLoadingOptions()
     options.pipeline = pipeline
     options.transition = transition ? .fadeIn(duration: 0.2) : nil
     options.isProgressiveRenderingEnabled = false
-    if maxPixel > 0 {
-      let size = CGSize(width: maxPixel, height: maxPixel)
-      options.processors = [
-        mode == .fit ? fitProcessor(targetPixelSize: size) : resizeProcessor(targetPixelSize: size),
-      ]
+    if let processor {
+      options.processors = [processor]
     }
     return options
   }

@@ -8,12 +8,20 @@
 import UIKit
 
 final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeScreen {
-  var screenTitle: String? { thread?.title }
+  var screenTitle: String? {
+    // 列表→详情快照的标题先顶上（原 Stack.Screen options：快照标题 || 帖子标题），
+    // 首包返回后由真实标题接管。
+    if let title = thread?.title, !title.isEmpty { return title }
+    guard let known = knownSnapshot?.title, !known.isEmpty else { return nil }
+    return known
+  }
   var screenRightBarItems: [UIBarButtonItem]? { forumBarItems() }
 
   private let threadId: String
   private let postId: String?
   private let fromFavorites: Bool
+  private let knownSnapshot: TiebaThreadSnapshot?
+  private var knownPostView: TiebaThreadKnownPostView?
   private var seeLz: Bool
   private var reverse: Bool
   private var isCollected: Bool
@@ -21,8 +29,11 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private let floatingBar = TiebaThreadFloatingBar()
 
   private var thread: TiebaThreadInfo?
+  /// 回复（不含主贴）。
   private var posts: [TiebaThreadPost] = []
-  private var mainPostId: String?
+  /// 钉住的主贴（原 JS 的 pinnedMainPost）：正序/倒序、只看楼主、翻页都不动它，
+  /// 只有整页跳转/首包才更新；否则"切排序"会把主贴卡一起换掉甚至换没。
+  private var mainPost: TiebaThreadPost?
   private var totalPages = 0
   private var recordedVisit = false
   private var moreSignalToken: UUID?
@@ -39,7 +50,10 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   override var emptySecondaryText: String { "还没有人回复这个帖子" }
 
   init(route: TiebaRoute) {
-    self.threadId = route.params["id"] ?? ""
+    let id = route.params["id"] ?? ""
+    self.threadId = id
+    // 快照只在首帧消费一次（原 useMemo 语义）：未命中/过期/深链进来都返回 nil。
+    self.knownSnapshot = TiebaThreadSnapshots.consume(id: id)
     self.postId = route.params["postId"].flatMap { $0.isEmpty ? nil : $0 }
     self.fromFavorites = route.params["fromFavorites"] == "1"
     let collectSeeLz = TiebaPreferenceSnapshot.bool("collectSeeLz", default: true)
@@ -65,6 +79,14 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     super.viewDidLoad()
     applyPalette()
     installSharedSubviews()
+    // 主贴预加载占位（原 KnownPostHeader）：只挂在骨架里，首包落地后随骨架一起
+    // 被真实主贴卡替换。
+    if let knownSnapshot {
+      let known = TiebaThreadKnownPostView(snapshot: knownSnapshot)
+      known.applyPalette(list.palette.base)
+      skeletonView.headerView = known
+      knownPostView = known
+    }
     configureSharedList()
     list.onScroll = { [weak self] scrollView in self?.handleScroll(scrollView) }
     floatingBar.translatesAutoresizingMaskIntoConstraints = false
@@ -91,6 +113,21 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   /// 偏好/主题可能在本屏离开期间被改（设置页）：每次出现现读。
   override func refreshPreferences() {
     showShortcut = TiebaPreferenceSnapshot.bool("showShortcutInThread", default: true)
+  }
+
+  /// 主题色板（基类实现）+ 已知主贴占位同色（骨架期可见，必须一起换色）。
+  override func applyPalette() {
+    super.applyPalette()
+    knownPostView?.applyPalette(list.palette.base)
+  }
+
+  /// 已知主贴卡的落位与真实主贴卡对齐：真实卡 = 内容顶 + 行内 cardMarginV(4)，
+  /// 骨架的默认内白是 +12 —— 不对齐的话首包落地时整块会往上跳一次（用户实证
+  /// "刚开始位置在正确位置靠下，加载完突然往上顺移"）。
+  override func applyBaseInsets() {
+    super.applyBaseInsets()
+    guard knownPostView != nil else { return }
+    skeletonView.contentInsets.top = view.safeAreaInsets.top + TiebaPostRowLayout.cardMarginV
   }
 
   /// 列表自带 refreshControl 且 contentInsetAdjustmentBehavior = .never：顶部内白自补。
@@ -213,19 +250,19 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     guard generation == loadGeneration else { return }
     if replacing {
       thread = page.thread ?? thread
-      posts = page.posts
-      // 楼主行恒按 floor == 1 定位：带 postId 跳楼时（通知/查看原帖进来）第 0 行是
-      // 那条回复而不是主贴，原来这里直接给 nil → 没有一行 isMain，主贴标题与回复
-      // 工具栏整块消失（用户实证）。服务端每页都回吐楼主楼层，所以找不到才退回第 0 行。
-      mainPostId = (posts.first(where: { $0.floor == 1 }) ?? posts.first)?.id
+      // 楼主楼恒按 floor == 1 定位；倒序/只看楼主时服务端可能整页都不回吐楼主楼，
+      // 那就保留上一份钉住的主贴（换掉 = 主贴卡整块消失，用户实证"切排序主贴没了"）。
+      if let op = page.posts.first(where: { $0.floor == 1 }) ?? (postId == nil ? page.posts.first : nil) {
+        mainPost = op
+      }
+      posts = page.posts.filter { $0.id != mainPost?.id }
     } else {
       thread = page.thread ?? thread
-      // 服务端每页都会回吐楼主楼层：按 id 去重，避免主贴/重复楼层出现两次。
+      // 服务端每页都会回吐楼主楼层：按 id 去重（主贴单独钉着，不进回复数组）。
       let existing = Set(posts.map(\.id))
-      posts.append(contentsOf: page.posts.filter { !existing.contains($0.id) })
+      posts.append(contentsOf: page.posts.filter { !existing.contains($0.id) && $0.id != mainPost?.id })
       if posts.count > Self.maxPosts {
-        // 头楼（index 0）保留，其余只留最近 399 条（原 MAX_POSTS 同语义）。
-        posts = Array(posts.prefix(1)) + posts.dropFirst().suffix(Self.maxPosts - 1)
+        posts = Array(posts.suffix(Self.maxPosts))
       }
     }
     currentPage = page.current
@@ -264,13 +301,11 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     }
     let key = pageKey
     let width = lastWidth
-    let source = posts
+    // 行来源 = 钉住的主贴（第 0 行）+ 回复；主贴卡与回复工具栏只挂在第 0 行上。
+    let source = (mainPost.map { [$0] } ?? []) + posts
     let threadAuthorId = thread?.authorId ?? ""
-    let titleText = thread?.title ?? ""
     let forumName = thread?.forumName ?? ""
-    let mainId = mainPostId
-    // 主贴卡（标题 + 回复工具栏）钉在楼主行上（按 floor == 1 定出来的 id）；
-    // 只按 id 匹配一旦对不上就整块消失，所以兜底留在第 0 行（见 apply）。
+    let mainId = mainPost?.id
     let toolbar = toolbarModel()
     let preferences = TiebaPostPreferences.load()
     let blockFilter = TiebaPostBlockFilter.load()
@@ -292,7 +327,6 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
             pageKey: key,
             index: models.count,
             post: post,
-            title: isMain ? titleText : "",
             isMain: isMain,
             canDelete: !accountUid.isEmpty && post.authorId == accountUid,
             threadAuthorId: threadAuthorId,
@@ -424,7 +458,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private func toggleCollect() {
     guard requireLogin(), runOnce("collect") else { return }
     let wasCollected = isCollected
-    let firstPostId = thread?.firstPostId ?? mainPostId ?? threadId
+    let firstPostId = thread?.firstPostId ?? mainPost?.id ?? threadId
     Task { @MainActor in
       defer { finishOnce("collect") }
       do {
@@ -585,7 +619,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   }
 
   private func confirmDelete(post: TiebaThreadPost?) {
-    let deletingThread = post == nil || post?.id == threadId || post?.id == mainPostId
+    let deletingThread = post == nil || post?.id == threadId || post?.id == mainPost?.id
     let alert = UIAlertController(
       title: deletingThread ? "删除帖子" : "删除回复",
       message: deletingThread ? "确定要删除这条帖子吗？" : "确定要删除这条回复吗？",
@@ -643,7 +677,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   }
 
   private func openImageBrowser(post: TiebaThreadPost, index: Int, rect: CGRect) {
-    let contextTitle = post.id == mainPostId
+    let contextTitle = post.id == mainPost?.id
       ? (thread?.title ?? "")
       : Self.floorSummary(post)
     presentImageBrowser(post: post, index: index, rect: rect, contextTitle: contextTitle)
@@ -754,7 +788,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private static let favoriteImagesKey = "@tiebalite:favorite_images_v1"
 
   private func saveFavoriteImages(threadId: String) {
-    let images = (posts.first(where: { $0.id == mainPostId })?.images ?? [])
+    let images = (mainPost?.images ?? [])
       .map { $0.src.isEmpty ? $0.originSrc : $0.src }
       .filter { !$0.isEmpty }
       .prefix(6)

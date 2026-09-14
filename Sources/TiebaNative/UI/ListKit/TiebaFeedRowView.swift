@@ -433,6 +433,17 @@ private final class TiebaFeedRowMediaItemView: UIView {
     tiebaLoadRowImage(url: url, maxPixel: maxPixel, into: imageView)
   }
 
+  /// 显示档取图：位图按视图尺寸裁切（cover）+ 圆角烘焙，尺寸与清晰度都对齐显示框。
+  func loadDisplay(url: URL?, targetSize: CGSize, cornerRadius: CGFloat, scale: CGFloat) {
+    tiebaPostLoadDisplayImage(
+      url,
+      targetSize: targetSize,
+      cornerRadius: cornerRadius,
+      scale: scale,
+      into: imageView
+    )
+  }
+
   override func layoutSubviews() {
     super.layoutSubviews()
     imageView.frame = bounds
@@ -1210,7 +1221,6 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
         width: countSize.width + 14,
         height: max(countSize.height, 16)
       )
-      let stripHeight = model.stripHeight ?? 0
       for (index, item) in stripItems.enumerated() {
         guard index < shown else {
           item.isHidden = true
@@ -1229,9 +1239,16 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
           contextMenuIndex: index,
           onMenuAction: mediaMenuHandler
         )
-        if !isSameRow {
-          let itemWidth = stripHeight * media.aspectRatio
-          item.load(url: media.url, maxPixel: max(stripHeight, itemWidth) * scale)
+        if !isSameRow, model.plan.mediaItemFrames.indices.contains(index) {
+          // 显示尺寸取帧计划里这一格的真实尺寸：宽图会被 plan 钳到 300pt，按未钳
+          // 的 stripHeight×aspect 取图会多解一倍像素，且 fit 档在 aspectFill 视图里
+          // 还会被放大（糊）。
+          item.loadDisplay(
+            url: media.url,
+            targetSize: model.plan.mediaItemFrames[index].size,
+            cornerRadius: 0,
+            scale: scale
+          )
         }
       }
     } else {
