@@ -235,6 +235,7 @@ enum TiebaThreadAPI {
     var result = TiebaThreadPage()
     let users = userMap(data.userList)
 
+
     var posts = data.postList.map { post($0, threadId: threadId, users: users) }
     // firstFloorPost 恒并入头部（倒序时楼主楼可能只在这里下发）；按 id 去重。
     if data.hasFirstFloorPost, data.firstFloorPost.id != 0 || !data.firstFloorPost.content.isEmpty {
@@ -246,6 +247,18 @@ enum TiebaThreadAPI {
     result.posts = posts
     if data.hasThread {
       result.thread = thread(data.thread, forum: data.hasForum ? data.forum : nil)
+      // 主贴图片兜底（"只有标题+图片"的帖子）：首楼正文里没有图片/视频段时，图片
+      // 取线程级字段——信息流卡片读的就是 thread.media，列表看得见图、点进来必然
+      // 也看得见（2026-09-15 用户报"外面有图、点进去没有"）。两个线程级字段服务端
+      // 不保证都下发，故按 media → firstPostContent（首楼全文）顺序取第一个有图的。
+      // 只补第一页的主贴（floor == 1，与详情页钉主贴同一判据）。
+      if page == 1, let index = result.posts.firstIndex(where: { $0.floor == 1 }) {
+        appendMainPostImages(
+          to: &result.posts[index],
+          media: data.thread.media,
+          firstPostContent: data.thread.firstPostContent
+        )
+      }
     }
 
     let current = data.page.currentPage > 0 ? Int(data.page.currentPage) : page
@@ -254,6 +267,50 @@ enum TiebaThreadAPI {
     result.total = total
     result.hasMore = total > 0 ? current < total : data.page.hasMore_p == 1
     return result
+  }
+
+  /// 首楼正文无图片/视频段时补图片段：先按线程级 media（含宽高，与信息流同源），
+  /// 空则退 firstPostContent 里的图片段。正文里已有图片或视频就不补——视频贴的
+  /// media 是同一支视频的封面，补上去会多出一张静止图。
+  private static func appendMainPostImages(
+    to post: inout TiebaThreadPost,
+    media: [Tieba_Media],
+    firstPostContent: [Tieba_PbContent]
+  ) {
+    let hasVisual = post.content.contains {
+      switch $0 {
+      case .image, .video: return true
+      default: return false
+      }
+    }
+    guard !hasVisual else { return }
+    // media 优先（带宽高、与信息流卡片同一份数据）；它没图才退 firstPostContent。
+    var images = media.compactMap(image)
+    if images.isEmpty {
+      images = content(firstPostContent).compactMap {
+        if case .image(let image) = $0 { return image }
+        return nil
+      }
+    }
+    guard !images.isEmpty else { return }
+    post.content.append(contentsOf: images.map { .image($0) })
+  }
+
+  /// 线程级 media → 图片段。字段语义与正文图片段同一套：src = 显示档、originSrc =
+  /// 「查看原图」档（media 的 bigPic/srcPic/originPic 对应图床的大/小/原图三档）。
+  private static func image(_ media: Tieba_Media) -> TiebaThreadImage? {
+    let display = firstNonEmpty(media.bigPic, media.srcPic, media.originPic)
+    guard !display.isEmpty else { return nil }
+    var image = TiebaThreadImage()
+    image.src = display
+    image.originSrc = firstNonEmpty(media.originPic, media.bigPic, media.srcPic)
+    image.isGif = [media.dynamicPic, media.originPic, media.bigPic, media.srcPic]
+      .contains { TiebaViewModelMapper.hasGifSuffix($0) }
+    image.width = media.width == 0 ? 300 : Double(media.width)
+    image.height = media.height == 0 ? 300 : Double(media.height)
+    image.isLongPic = media.isLongPic != 0
+    image.showOriginalBtn = media.showOriginalBtn != 0
+    return image
   }
 
   private static func makeFloorPage(
