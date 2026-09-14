@@ -187,6 +187,35 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     }
   }
 
+  /// 只看楼主 / 正序倒序：只重取回复（主贴卡与工具栏整块不动，也不出现骨架）。
+  /// 与 reload() 的区别只有两点：keepMain（不覆盖钉住的主贴）与不换页键。
+  private func reloadReplies() {
+    guard !isLoading else { return }
+    isLoading = true
+    loadGeneration += 1
+    let generation = loadGeneration
+    Task { @MainActor in
+      defer {
+        self.isLoading = false
+        self.isUserRefresh = false
+        self.list.endRefreshing()
+      }
+      do {
+        let page = try await TiebaThreadAPI.page(
+          threadId: self.threadId,
+          page: 1,
+          postId: nil,
+          seeLz: self.seeLz,
+          reverse: self.reverse
+        )
+        self.apply(page, replacing: true, generation: generation, keepMain: true)
+      } catch {
+        guard generation == self.loadGeneration else { return }
+        self.pill.showResult(success: false, text: "加载失败")
+      }
+    }
+  }
+
   override func loadMore() {
     guard hasMore, !isLoading, !isLoadingMore, currentPage > 0 else { return }
     isLoadingMore = true
@@ -246,13 +275,22 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     }
   }
 
-  private func apply(_ page: TiebaThreadPage, replacing: Bool, generation: Int) {
+  /// keepMain = 只看楼主/正序倒序的"只换回复"：主贴引用与页键都不动（换页键会让
+  /// 列表走整页 reload，观感像整页重新加载了一遍——用户实证）。
+  private func apply(
+    _ page: TiebaThreadPage,
+    replacing: Bool,
+    generation: Int,
+    keepMain: Bool = false
+  ) {
     guard generation == loadGeneration else { return }
     if replacing {
       thread = page.thread ?? thread
       // 楼主楼恒按 floor == 1 定位；倒序/只看楼主时服务端可能整页都不回吐楼主楼，
       // 那就保留上一份钉住的主贴（换掉 = 主贴卡整块消失，用户实证"切排序主贴没了"）。
-      if let op = page.posts.first(where: { $0.floor == 1 }) ?? (postId == nil ? page.posts.first : nil) {
+      if !keepMain,
+        let op = page.posts.first(where: { $0.floor == 1 }) ?? (postId == nil ? page.posts.first : nil)
+      {
         mainPost = op
       }
       posts = page.posts.filter { $0.id != mainPost?.id }
@@ -278,7 +316,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     } else {
       showList()
       list.footerState = posts.isEmpty ? .empty : (hasMore ? .more : .none)
-      publish(fresh: true)
+      publish(fresh: !keepMain)
     }
     floatingBar.configure(
       hasAgree: thread?.hasAgree ?? false,
@@ -398,10 +436,10 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       TiebaNavigator.shared.navigate(path: "/user/\(uid)", params: [:], mode: "push")
     case .toggleSeeLz:
       seeLz.toggle()
-      reload()
+      reloadReplies()
     case .toggleSort:
       reverse.toggle()
-      reload()
+      reloadReplies()
     }
   }
 
@@ -440,11 +478,11 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     case .seeLz:
       seeLz.toggle()
       TiebaSceneHaptics.fire("toggle")
-      reload()
+      reloadReplies()
     case .sort:
       reverse.toggle()
       TiebaSceneHaptics.fire("toggle")
-      reload()
+      reloadReplies()
     case .jump:
       presentJumpDialog()
     case .share:

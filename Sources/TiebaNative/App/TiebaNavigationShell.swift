@@ -162,12 +162,10 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
   ) {
     let idx = viewControllers?.firstIndex(of: viewController) ?? -1
     guard idx >= 0 else { return }
-    // 只有选中真的变化才播 'segment'（原 JS 仅 tab→tab 的 pathname 变化才播：
-    // 首挂载、深链直达、重按已选中 tab 都不震）。程序化切换（深链/启动默认页）
-    // 不触发 didSelect，天然与 JS 的"首挂载不震"一致。
-    if idx != indexBeforeTap {
-      TiebaSceneHaptics.fire("segment")
-    }
+    // 不再在这里发 'segment'：按下那一刻已经由 chrome 按压路径发过（见
+    // TiebaChrome.applyChromePress 的 UITabBar 分支），这里再发就是同一次点击
+    // 亮两下。重按已选中 tab 的 'press' 仍在 shouldSelect 发（那时按下路径发的
+    // 是 segment，二者不同刻、不重复）。
     onSelect?(idx)
   }
 

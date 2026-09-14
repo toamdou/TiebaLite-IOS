@@ -72,14 +72,19 @@ extension TiebaChrome {
     if target === HapticsState.lastChromeControl, now - HapticsState.lastChromeAt < 0.8 { return }
     HapticsState.lastChromeControl = target
     HapticsState.lastChromeAt = now
-    // 底栏项：临时关闸只放行 HdrChromeFlash 的光效（内嵌触觉读的就是引擎层闸门，
-    // 同步读、同步发，关闸窗口内没有第二条触觉路径）。底栏触觉归
-    // TiebaMainTabBarController 的场景表（segment / 重按 press），否则同一次
-    // 点击亮两下且绕过设置的力度/静音。
-    let gate = TiebaHaptics.isEnabled
-    if bar is UITabBar { TiebaHaptics.setEnabled(false) }
-    HdrChromeFlash.play(on: target)
-    TiebaHaptics.setEnabled(gate)
+    // 底栏项：光效之外还要**按下即有的场景触觉**（原 JS 的 tab 按钮就在 press
+    // 时机发 hapticForScene('segment')）。之前只让 HdrChromeFlash 发光、触觉留给
+    // 选中回调，结果底栏在"按下的那一刻"完全没反馈（用户实证"底栏没有振动"）。
+    // 场景档位仍走 TiebaSceneHaptics：用户设置的力度/波形覆盖照样生效。
+    if bar is UITabBar {
+      let gate = TiebaHaptics.isEnabled
+      TiebaHaptics.setEnabled(false) // 只放行光效，避免同一次点击亮两下
+      HdrChromeFlash.play(on: target)
+      TiebaHaptics.setEnabled(gate)
+      TiebaSceneHaptics.fire("segment")
+    } else {
+      HdrChromeFlash.play(on: target)
+    }
   }
 
   /// 非按钮类控件（自带系统按压态，不叠 chrome 高光）。只列公开类型，不用类名。

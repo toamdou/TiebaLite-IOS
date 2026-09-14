@@ -201,7 +201,12 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
       isDark: dark
     )
     TiebaSettingsForm.applyTheme(dark: dark, accentHex: accent)
-    TiebaChrome.setChromeDarkMode(dark)
+    // 跟随模式必须下发 nil：具体值会锁死窗口 trait，之后系统深浅切换应用不再跟
+    // （用户实证"开了跟随系统外观，系统切了应用不变"）。判据与 TiebaAppBootstrap
+    // 的启动路径逐字一致。
+    TiebaChrome.setChromeDarkMode(
+      TiebaPreferences.bool("followSystemDarkMode", default: true) ? nil : dark
+    )
     // 整树重扫（栏/滚动件遍历 + 材质写入）是这条链路里最贵的一步，放在开关自己
     // 那 0.25s 动画的同一帧里就会把动画卡住（真机反馈"开关动画很不流畅"）。
     // 配色与栏外观上面已经改完，这里只把重扫挪到动画之后。

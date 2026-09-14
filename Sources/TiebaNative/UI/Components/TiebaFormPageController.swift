@@ -72,6 +72,11 @@ class TiebaFormPageController: UIViewController {
   func write(_ key: String, bool value: Bool, row rowID: String? = nil) -> Bool {
     guard TiebaPreferences.set(key, bool: value) else {
       reportWriteFailure()
+      // 写失败要把开关拨回真实档位（开关不再"先拨回等回推"，失败路径得自己拨正）。
+      form.setValue(
+        id: rowID ?? key,
+        value: TiebaPreferences.bool(rowID ?? key, default: false) ? "1" : "0"
+      )
       return false
     }
     form.setValue(id: rowID ?? key, value: value ? "1" : "0")

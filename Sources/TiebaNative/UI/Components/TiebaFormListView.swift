@@ -1113,13 +1113,11 @@ final class TiebaFormRowCell: UITableViewCell {
 
   @objc private func toggleChanged() {
     TiebaSceneHaptics.fire("toggle")
-    // 受控语义：先把开关拨回模型值，等调用方写库成功后 setValue 回推（授权失败/
-    // 写库失败就不回推，开关停在原值；与 @expo/ui 受控 Toggle 的观感一致）。
-    let requested = toggle.isOn
-    if requested != modelToggleValue {
-      toggle.setOn(modelToggleValue, animated: true)
-    }
-    onToggle?(requested)
+    // 不做"先拨回模型值、等回推"：那会让一次点击连播两段动画（弹回 → 再弹过去），
+    // 用户实证"开关动画非常差、完全不顺滑"。新值直接交给调用方，写库成功由
+    // setValue 就地确认（值相同不重播动画）；写失败由写库侧拨回真实档位
+    //（TiebaFormPageController 的失败分支）——那时的一次回弹才是语义本身。
+    onToggle?(toggle.isOn)
   }
 
   /// 供 didSelectRow 使用：点行内任意处 = 拨一次开关（SwiftUI 开关行的行为）。
