@@ -15,6 +15,8 @@ final class TiebaHotListViewController: UIViewController, TiebaTabReselectable {
   private var isReloading = false
   /// 请求代号：加载中点第二个分类时旧响应必须丢弃（否则列表停在旧 tab）。
   private var requestSeq = 0
+  /// 回顶重拉在途（回顶动画结束才消费）。
+  private var pendingTopRefresh = false
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -112,16 +114,17 @@ final class TiebaHotListViewController: UIViewController, TiebaTabReselectable {
 
   // MARK: - 外部驱动（tab 根屏）
 
-  /// 热榜只在底栏重复点击时重拉（与旧页 TAB_RESELECT 判据一致）。
+  /// 热榜只在底栏重复点击时重拉（与旧页 TAB_RESELECT 判据一致）；回顶动画结束
+  /// （scrollViewDidEndScrollingAnimation）才重拉，不再用 260ms 定时器近似。
+  /// 已在顶部 = 没有滚动动画可等，直接重拉。
   func tabReselected() {
-    collectionView.setContentOffset(
-      CGPoint(x: 0, y: -collectionView.adjustedContentInset.top),
-      animated: true
-    )
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { [weak self] in
-      guard let self, self.view.window != nil else { return }
-      self.reload()
+    let top = -collectionView.adjustedContentInset.top
+    guard collectionView.contentOffset.y > top + 0.5 else {
+      reload()
+      return
     }
+    pendingTopRefresh = true
+    collectionView.setContentOffset(CGPoint(x: 0, y: top), animated: true)
   }
 
   // MARK: - 状态
@@ -282,6 +285,13 @@ extension TiebaHotListViewController: UICollectionViewDataSource, UICollectionVi
   func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
     collectionView.deselectItem(at: indexPath, animated: false)
     openThread(indexPath.item)
+  }
+
+  /// 回顶（setContentOffset(animated:)）落位：消费在途的重拉（见 tabReselected）。
+  func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+    guard pendingTopRefresh else { return }
+    pendingTopRefresh = false
+    reload()
   }
 
   func collectionView(

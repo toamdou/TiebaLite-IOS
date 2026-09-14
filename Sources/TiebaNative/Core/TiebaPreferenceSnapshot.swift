@@ -60,6 +60,8 @@ enum TiebaPreferenceSnapshot {
   /// 设置群原生化后原生成为写入方，键布局与 JS persist 逐字节一致。
   static func write(_ key: String, jsonLiteral: String) throws {
     try TiebaKvStore.shared.set(key: keyPrefix + key, value: jsonLiteral)
+    // 唯一写入点即广播点：在屏页面订阅后立刻刷新（不再等"下次出现时现读"）。
+    TiebaPreferenceChange.post(key)
   }
 
   // MARK: - 旧整份 JSON（{preferences:{…}} 或裸对象）

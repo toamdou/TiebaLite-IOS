@@ -38,6 +38,15 @@ final class TiebaAboutViewController: UIViewController {
   private let service = TiebaUpdateService.shared
   private let form = TiebaFormListView(frame: .zero)
   private var observerToken: UUID?
+  /// 主题类键：外观（染色/深浅）就地重算；本页行结构不随主题变，不整表重建。
+  private static let appearanceKeys = ["lightTheme", "darkTheme", "customPrimaryColor"]
+  /// 观察者/外观登记都是 non-Sendable，deinit 非隔离：与 TiebaHomeViewController 同款声明。
+  private nonisolated(unsafe) var prefToken: NSObjectProtocol?
+  private var styleRegistration: UITraitChangeRegistration?
+
+  deinit {
+    if let prefToken { NotificationCenter.default.removeObserver(prefToken) }
+  }
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -52,11 +61,22 @@ final class TiebaAboutViewController: UIViewController {
       form.bottomAnchor.constraint(equalTo: view.bottomAnchor),
     ])
     reloadSections()
+    // 在屏时主题/主色被别处改写就地重染表单（原来只有出现时现读）。
+    prefToken = TiebaPreferenceChange.observe(keys: Self.appearanceKeys) { [weak self] in
+      self?.refreshAppearance()
+    }
+    // 跟随系统时深浅由本页显式下发（form.isDark 会锁死表单自身 trait），
+    // 系统切档后不重算会停在上一档（导航壳只重刷自己）。
+    styleRegistration = registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
+      (controller: TiebaAboutViewController, _) in
+      controller.refreshAppearance()
+    }
   }
 
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
-    // 偏好与主题每次出现现读（迁移期规则：原生只读不写共享偏好）。
+    // 这句不是"现读偏好"：更新结果的文本行随服务状态增删（结构性），且服务观察者
+    // 在离开时会被移除，回到本页必须重挂 + 用最新状态重建一次；外观重算见 refreshAppearance。
     reloadSections()
     observerToken = service.addObserver { [weak self] in self?.reloadSections() }
   }
@@ -75,6 +95,14 @@ final class TiebaAboutViewController: UIViewController {
     form.tintHex = Self.formTintHex()
     form.isDark = TiebaNavigator.shared.chromeTheme.dark
     form.sections = buildSections()
+  }
+
+  /// 外观就地重算（行结构不随主题变，不重刷 sections）：深浅/主色从偏好 + 当前
+  /// trait 现算 —— 导航壳的 themeTint 要等 applyTheme 重下发，广播回调里读可能读到旧值。
+  private func refreshAppearance() {
+    let dark = TiebaSettingsForm.isDark(in: self)
+    form.tintHex = TiebaSettingsForm.tintHex(dark: dark)
+    form.isDark = dark
   }
 
   /// useFormTintHex() 的原生同义实现：「默认」主题不染色（nil）；其余主题下发

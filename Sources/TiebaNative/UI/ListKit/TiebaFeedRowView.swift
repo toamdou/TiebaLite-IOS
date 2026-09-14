@@ -711,17 +711,18 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     layer.add(group, forKey: "tieba.entrance")
   }
 
-  /// 折叠退场时长：列表要在同一窗口后删数据（原 JS 360ms 兜底定时器），
-  /// 所以把 TiebaFeedRowMotion 里的值对外只读暴露，别在两处各写一个 0.28。
+  /// 折叠退场时长（只读暴露，别在两处各写一个 0.28）。删数据现在由
+  /// playCollapseAnimation 的 completion 驱动，不再需要外部约这时长。
   public static var collapseDuration: CFTimeInterval { TiebaFeedRowMotion.collapseDuration }
 
   /// 不感兴趣折叠（CollapseRow）：280ms、EASE_OUT、opacity + scaleY 同步 1→0；
-  /// 动画完成前列表保持不动，数据移除由 JS 在动画窗口后（360ms 兜底定时器，
-  /// 与 RN 一致）执行，行随新快照消失。
-  public func playCollapseAnimation() {
+  /// 数据移除改由 completion 驱动（原 JS 的动画窗口后 360ms 兜底定时器）。
+  /// Reduce Motion 无动画可等，必须同步回调一次，否则列表永远不删数据。
+  public func playCollapseAnimation(completion: (() -> Void)? = nil) {
     if UIAccessibility.isReduceMotionEnabled {
       layer.opacity = 0
       layer.transform = CATransform3DMakeScale(1, 0, 1)
+      completion?()
       return
     }
     let group = CAAnimationGroup()
@@ -738,7 +739,16 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     group.isRemovedOnCompletion = false
     layer.opacity = 0
     layer.transform = CATransform3DMakeScale(1, 0, 1)
-    layer.add(group, forKey: "tieba.collapse")
+    if let completion {
+      // 完成块挂 CATransaction（同 tiebaPlaySpring）：动画被复用复位移除时
+      // 也会回调一次，删数据不会卡死在等不到的动画上。
+      CATransaction.begin()
+      CATransaction.setCompletionBlock(completion)
+      layer.add(group, forKey: "tieba.collapse")
+      CATransaction.commit()
+    } else {
+      layer.add(group, forKey: "tieba.collapse")
+    }
   }
 
   /// 复位行级动画（复用/换行）：动画 key 移除 + 终态归位，防止 transform/alpha

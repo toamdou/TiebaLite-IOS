@@ -25,6 +25,42 @@ final class TiebaMoreSettingsViewController: TiebaFormPageController {
     "tiebalite.active.tbs", "tiebalite.active.zid",
   ]
 
+  /// 本页展示的三个偏好键（行 id 与键逐字同名；在屏时被别处改写要即时回推）。
+  private static let preferenceKeys = [
+    "notificationPollMinutes", "cacheAutoCleanDays", "cacheMaxSizeMb",
+  ]
+
+  /// 观察者是 non-Sendable，deinit 非隔离：与 TiebaHomeViewController 同款声明。
+  private nonisolated(unsafe) var prefToken: NSObjectProtocol?
+
+  deinit {
+    if let prefToken { NotificationCenter.default.removeObserver(prefToken) }
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    // 在屏时被别处改写就就地回推行值（本页三个选择器数值都过白名单/数字字面量）。
+    prefToken = TiebaPreferenceChange.observe(keys: Self.preferenceKeys) { [weak self] in
+      self?.refreshDisplayedValues()
+    }
+  }
+
+  /// 行 id 与偏好键同名，就地回推即可；本页行结构固定（confirm 行不随偏好增删）。
+  private func refreshDisplayedValues() {
+    form.setValue(
+      id: "notificationPollMinutes",
+      value: TiebaPreferences.string(
+        "notificationPollMinutes", allowed: Self.pollOptions.map(\.value), default: "30"))
+    form.setValue(
+      id: "cacheAutoCleanDays",
+      value: TiebaPreferences.numberLiteral(
+        TiebaPreferences.number("cacheAutoCleanDays", default: 0)))
+    form.setValue(
+      id: "cacheMaxSizeMb",
+      value: TiebaPreferences.numberLiteral(
+        TiebaPreferences.number("cacheMaxSizeMb", default: 400)))
+  }
+
   override func makeSections(dark: Bool) -> [[String: Any]] {
     let poll = TiebaPreferences.string(
       "notificationPollMinutes", allowed: Self.pollOptions.map(\.value), default: "30")

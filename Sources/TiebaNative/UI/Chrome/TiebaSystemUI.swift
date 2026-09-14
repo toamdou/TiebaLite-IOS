@@ -24,19 +24,18 @@ import UIKit
 /// UIKit 对象）。入口自带线程守卫，不标 @MainActor——调用点 onMain 的闭包是
 /// nonisolated，标了反而编译不过；这里的"主线程纪律"由守卫兜底。
 enum TiebaSystemUI {
-  static func setBackgroundColor(argb: Double?) {
+  static func setBackgroundColor(_ color: UIColor?) {
     guard Thread.isMainThread else {
-      DispatchQueue.main.async { setBackgroundColor(argb: argb) }
+      DispatchQueue.main.async { setBackgroundColor(color) }
       return
     }
     guard let window = keyWindow() else { return }
-    guard let argb else {
+    guard let color else {
       window.backgroundColor = nil
       let isDark = window.traitCollection.userInterfaceStyle == .dark
       window.rootViewController?.view.backgroundColor = isDark ? .black : .white
       return
     }
-    let color = color(fromARGB: UInt32(truncatingIfNeeded: Int64(argb.rounded())))
     window.backgroundColor = color
     window.rootViewController?.view.backgroundColor = color
   }
@@ -51,14 +50,6 @@ enum TiebaSystemUI {
     return scene.windows.first { $0.isKeyWindow } ?? scene.windows.first
   }
 
-  /// RN processColor 的 32 位 ARGB（A 在高 8 位）→ UIColor。
-  private static func color(fromARGB value: UInt32) -> UIColor {
-    let alpha = CGFloat((value >> 24) & 0xFF) / 255
-    let red = CGFloat((value >> 16) & 0xFF) / 255
-    let green = CGFloat((value >> 8) & 0xFF) / 255
-    let blue = CGFloat(value & 0xFF) / 255
-    return UIColor(red: red, green: green, blue: blue, alpha: alpha)
-  }
 }
 
 /// 应用版本（替代 expo-constants 的 Constants.expoConfig.version）。

@@ -39,6 +39,43 @@ final class TiebaHapticsSettingsViewController: TiebaFormPageController {
     ("imageLiftPop", "长按弹出大图"), ("likeCharge", "点赞蓄力"),
   ]
 
+  /// 本页三张覆盖表的键（在屏时被别处改写要即时回推各选择器的选中档）。
+  private static let preferenceKeys = [
+    "hapticsSceneStyles", "hapticsWaveforms", "hapticsRealtimeStyles",
+  ]
+
+  /// 观察者是 non-Sendable，deinit 非隔离：与 TiebaHomeViewController 同款声明。
+  private nonisolated(unsafe) var prefToken: NSObjectProtocol?
+
+  deinit {
+    if let prefToken { NotificationCenter.default.removeObserver(prefToken) }
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    // 「恢复默认」的三表连写也经广播回环：这里重算再回推，与 makeSections 同规则。
+    prefToken = TiebaPreferenceChange.observe(keys: Self.preferenceKeys) { [weak self] in
+      self?.refreshDisplayedValues()
+    }
+  }
+
+  /// 覆盖表变更后就地回推全部选择器的选中档（清洗规则与 makeSections 共用
+  /// overrides/safe，不维护第二份读法）；本页行结构固定，不整表重建。
+  private func refreshDisplayedValues() {
+    let styles = overrides("hapticsSceneStyles")
+    let waveforms = overrides("hapticsWaveforms")
+    let realtime = overrides("hapticsRealtimeStyles")
+    for meta in Self.scenes {
+      form.setValue(id: "strength:\(meta.scene)", value: safe(styles[meta.scene], Self.sceneStyles))
+      form.setValue(id: "waveform:\(meta.scene)", value: safe(waveforms[meta.scene], Self.waveforms))
+    }
+    for effect in Self.realtimeEffects {
+      form.setValue(
+        id: "realtime:\(effect.id)",
+        value: safe(realtime[effect.id], Self.realtimeLevels, fallback: "medium"))
+    }
+  }
+
   // MARK: - 数据
 
   /// 覆盖表解析：坏 JSON/非对象 → 空表（与消费侧同一宽容度）。

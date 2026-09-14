@@ -4,6 +4,34 @@
 import UIKit
 
 final class TiebaSettingsViewController: TiebaFormPageController {
+  /// 本页两行开关的偏好键（行 id 是 /pref/… 路径，回推要显式给行 id）。
+  private static let preferenceKeys = ["hapticFeedback", "autoCheckUpdate"]
+
+  /// 观察者是 non-Sendable，deinit 非隔离：与 TiebaHomeViewController 同款声明。
+  private nonisolated(unsafe) var prefToken: NSObjectProtocol?
+
+  deinit {
+    if let prefToken { NotificationCenter.default.removeObserver(prefToken) }
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    // 在屏时被别处改写就地回推开关（行 id 与键不同名，见 handleToggle）。
+    prefToken = TiebaPreferenceChange.observe(keys: Self.preferenceKeys) { [weak self] in
+      self?.refreshDisplayedToggles()
+    }
+  }
+
+  /// 行 id 与偏好键逐字不同的仅这两行，回推必须显式给 row（同 handleToggle）。
+  private func refreshDisplayedToggles() {
+    form.setValue(
+      id: "/pref/hapticFeedback",
+      value: TiebaPreferences.bool("hapticFeedback", default: true) ? "1" : "0")
+    form.setValue(
+      id: "/pref/autoCheckUpdate",
+      value: TiebaPreferences.bool("autoCheckUpdate", default: true) ? "1" : "0")
+  }
+
   private func isDefaultTheme(dark: Bool) -> Bool {
     TiebaThemePalette.themeName(dark: dark) == "default"
   }

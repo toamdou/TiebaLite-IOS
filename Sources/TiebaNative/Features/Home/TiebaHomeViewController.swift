@@ -47,6 +47,8 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
   private var hasLoadedOnce = false
   private var entranceDone = false
   private var entrancePending = false
+  /// 首个布局趟的清标志已排程（入场批次边界，见 willDisplay）。
+  private var entranceClearScheduled = false
   private var dataSource: UICollectionViewDiffableDataSource<String, String>?
 
   private struct RecentForum {
@@ -58,9 +60,12 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
   private var isLoggedIn: Bool { TiebaUserAPI.isLoggedIn }
   /// 观察者是 non-Sendable，deinit 非隔离：与 TiebaPostRowView 同款声明。
   private nonisolated(unsafe) var sessionObserver: NSObjectProtocol?
+  /// 偏好广播订阅（设置页改在屏键即时生效，见 viewDidLoad）。
+  private nonisolated(unsafe) var prefToken: NSObjectProtocol?
 
   deinit {
     if let sessionObserver { NotificationCenter.default.removeObserver(sessionObserver) }
+    if let prefToken { NotificationCenter.default.removeObserver(prefToken) }
   }
 
   override func viewDidLoad() {
@@ -91,6 +96,18 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       loadFollowedForums(force: true)
       loadRecentForums()
       applySignButton()
+    }
+    // 设置页改这两个键时本页可能就在屏/在栈里：订阅广播即时生效（列表列数、
+    // 历史吧行不等到下次 viewWillAppear）。
+    prefToken = TiebaPreferenceChange.observe(
+      keys: ["forumListSingle", "homePageShowHistoryForum"]
+    ) { [weak self] in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        self.isSingleColumn = TiebaPreferenceSnapshot.bool("forumListSingle", default: true)
+        self.updateLayoutMetrics()
+        self.loadRecentForums()
+      }
     }
     pill.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(pill)
@@ -510,13 +527,12 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     dataSource?.apply(snapshot, animatingDifferences: false)
   }
 
+  /// 首屏入场：只由首批 cell 界定（原 0.6s 时间窗口已删）——批次边界 =
+  /// 首个布局趟的 willDisplay 全部走完（下个 runloop 清标志）。
   private func startEntrance() {
     guard !entranceDone else { return }
     entranceDone = true
     entrancePending = true
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-      self?.entrancePending = false
-    }
   }
 
   // MARK: - 状态
@@ -645,6 +661,20 @@ extension TiebaHomeViewController: UICollectionViewDelegate {
     guard displayedForums.indices.contains(indexPath.item) else { return }
     TiebaSceneHaptics.fire("press")
     openForum(displayedForums[indexPath.item].forumName)
+  }
+
+  /// 首屏入场批次边界：首个布局趟里所有 willDisplay 走完（下个 runloop 清标志），
+  /// 之后滚动回填的 cell 不再播入场。
+  func collectionView(
+    _ collectionView: UICollectionView,
+    willDisplay cell: UICollectionViewCell,
+    forItemAt indexPath: IndexPath
+  ) {
+    guard entrancePending, !entranceClearScheduled else { return }
+    entranceClearScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      self?.entrancePending = false
+    }
   }
 }
 

@@ -17,6 +17,52 @@ final class TiebaImageSettingsViewController: TiebaFormPageController {
     ("none", "不添加"), ("username", "用户名"), ("forum_name", "吧名"),
   ]
 
+  /// 本页展示的全部偏好键（行 id 与键逐字同名；在屏时被别处改写要即时回推）。
+  private static let preferenceKeys = [
+    "imageLoadType", "dataSaverMode", "imageWatermark", "imageWatermarkEnabled",
+    "imageDarkenWhenNight", "videoAutoplay",
+  ]
+
+  /// 观察者是 non-Sendable，deinit 非隔离：与 TiebaHomeViewController 同款声明。
+  private nonisolated(unsafe) var prefToken: NSObjectProtocol?
+
+  deinit {
+    if let prefToken { NotificationCenter.default.removeObserver(prefToken) }
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    // 在屏时被别处改写就就地回推行值（选择器仍过白名单，与 makeSections 同规则）。
+    prefToken = TiebaPreferenceChange.observe(keys: Self.preferenceKeys) { [weak self] in
+      self?.refreshDisplayedValues()
+    }
+  }
+
+  /// 行 id 与偏好键同名，就地回推即可；本页行结构固定，不整表重建。
+  private func refreshDisplayedValues() {
+    form.setValue(
+      id: "imageLoadType",
+      value: TiebaPreferences.string(
+        "imageLoadType", allowed: Self.loadTypes.map(\.value), default: "smart_origin"))
+    form.setValue(
+      id: "dataSaverMode",
+      value: TiebaPreferences.string(
+        "dataSaverMode", allowed: Self.dataSaver.map(\.value), default: "high"))
+    form.setValue(
+      id: "imageWatermark",
+      value: TiebaPreferences.string(
+        "imageWatermark", allowed: Self.watermarks.map(\.value), default: "none"))
+    form.setValue(
+      id: "imageWatermarkEnabled",
+      value: TiebaPreferences.bool("imageWatermarkEnabled", default: false) ? "1" : "0")
+    form.setValue(
+      id: "imageDarkenWhenNight",
+      value: TiebaPreferences.bool("imageDarkenWhenNight", default: true) ? "1" : "0")
+    form.setValue(
+      id: "videoAutoplay",
+      value: TiebaPreferences.bool("videoAutoplay", default: false) ? "1" : "0")
+  }
+
   override func makeSections(dark: Bool) -> [[String: Any]] {
     func picker(_ id: String, _ title: String, _ table: [(value: String, label: String)], fallback: String) -> [String: Any] {
       [

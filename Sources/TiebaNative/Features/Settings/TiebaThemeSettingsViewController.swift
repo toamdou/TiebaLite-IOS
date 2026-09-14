@@ -18,6 +18,38 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     ("0.9", "小"), ("1", "标准"), ("1.15", "大"), ("1.3", "特大"),
   ]
 
+  /// 本页展示的全部偏好键（在屏时被别处改写要即时回推行值，不再只靠出现重读）。
+  private static let preferenceKeys = [
+    "lightTheme", "darkTheme", "customPrimaryColor", "followSystemDarkMode", "darkMode",
+    "toolbarPrimaryColor", "statusBarFontDark", "fontScale", "entranceAnimation",
+  ]
+
+  /// 行结构缓存：这两行按偏好增删，「有无」变化是唯一需要整表重建的情形。
+  private var showsCustomPrimaryRow = false
+  private var showsStatusBarFontRow = false
+
+  /// 观察者是 non-Sendable，deinit 非隔离：与 TiebaHomeViewController 同款声明。
+  private nonisolated(unsafe) var prefToken: NSObjectProtocol?
+  /// 外观档变化登记（registerForTraitChanges；traitCollectionDidChange 已废弃）。
+  private var styleRegistration: UITraitChangeRegistration?
+
+  deinit {
+    if let prefToken { NotificationCenter.default.removeObserver(prefToken) }
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    // 页面在屏时偏好改了（本页写入也经广播回环）就地回推，不整表重建。
+    prefToken = TiebaPreferenceChange.observe(keys: Self.preferenceKeys) { [weak self] in
+      self?.refreshDisplayedValues()
+    }
+    // 「深色模式」行在跟随系统时 = 当前外观档：系统深浅切换要重算行值。
+    styleRegistration = registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
+      (controller: TiebaThemeSettingsViewController, _) in
+      controller.refreshDisplayedValues()
+    }
+  }
+
   override func makeSections(dark: Bool) -> [[String: Any]] {
     let lightTheme = TiebaPreferences.string(
       "lightTheme", allowed: Self.lightThemes.map(\.value), default: "default")
@@ -48,6 +80,9 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
         "id": "customPrimaryColor", "kind": "color", "title": "自定义主色",
         "value": customPrimary,
       ])
+      showsCustomPrimaryRow = true
+    } else {
+      showsCustomPrimaryRow = false
     }
 
     var toolbarRows: [[String: Any]] = [
@@ -57,6 +92,7 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
         "icon": "paintpalette.fill", "value": toolbarPrimary ? "1" : "0",
       ]
     ]
+    showsStatusBarFontRow = toolbarPrimary
     if toolbarPrimary {
       toolbarRows.append([
         "id": "statusBarFontDark", "kind": "toggle", "title": "状态栏深色字体",
@@ -112,6 +148,52 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
         "rows": toolbarRows,
       ],
     ]
+  }
+
+  // MARK: - 偏好回推
+
+  /// 偏好变更（含系统外观变化）后就地重算本页行值：只有增删行（自定义主色 /
+  /// 状态栏字体）才整表重建，其余一律 setValue —— 写入回环也走这里，幂等。
+  private func refreshDisplayedValues() {
+    let lightTheme = TiebaPreferences.string(
+      "lightTheme", allowed: Self.lightThemes.map(\.value), default: "default")
+    let darkTheme = TiebaPreferences.string(
+      "darkTheme", allowed: Self.darkThemes.map(\.value), default: "default")
+    let followSystem = TiebaPreferences.bool("followSystemDarkMode", default: true)
+    let toolbarPrimary = TiebaPreferences.bool("toolbarPrimaryColor", default: false)
+    guard (lightTheme == "custom" || darkTheme == "custom") == showsCustomPrimaryRow,
+      toolbarPrimary == showsStatusBarFontRow
+    else {
+      reload()
+      return
+    }
+    // 主题/主色/深浅都会影响表单染色：不重建行，但染色与深浅要跟着重算。
+    form.tintHex = formTintHex
+    form.isDark = formIsDark
+    form.setValue(id: "lightTheme", value: lightTheme)
+    form.setValue(id: "darkTheme", value: darkTheme)
+    if showsCustomPrimaryRow {
+      form.setValue(
+        id: "customPrimaryColor",
+        value: TiebaPreferences.string(
+          "customPrimaryColor", default: TiebaThemePalette.defaultCustomPrimary))
+    }
+    form.setValue(id: "followSystemDarkMode", value: followSystem ? "1" : "0")
+    // 跟随系统时「深色模式」行的显示值是当前外观档（跟随语义），不是落库的 darkMode。
+    let darkMode = followSystem ? formIsDark : TiebaPreferences.bool("darkMode", default: false)
+    form.setValue(id: "darkMode", value: darkMode ? "1" : "0")
+    form.setValue(id: "toolbarPrimaryColor", value: toolbarPrimary ? "1" : "0")
+    if showsStatusBarFontRow {
+      form.setValue(
+        id: "statusBarFontDark",
+        value: TiebaPreferences.bool("statusBarFontDark", default: false) ? "1" : "0")
+    }
+    form.setValue(
+      id: "fontScale",
+      value: TiebaPreferences.numberLiteral(TiebaPreferences.number("fontScale", default: 1)))
+    form.setValue(
+      id: "entranceAnimation",
+      value: TiebaPreferences.bool("entranceAnimation", default: true) ? "1" : "0")
   }
 
   // MARK: - 动作

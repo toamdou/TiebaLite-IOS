@@ -72,6 +72,13 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
   private var loginProcessed = false
   private var didPerformInitialLoad = false
   private var timeoutTask: Task<Void, Never>?
+  /// 提取阶段任务（等 Cookie + 激活）：页面关闭时取消，避免挂起等待泄漏。
+  private var loginTask: Task<Void, Never>?
+  /// CookieStore 变更观察者（提取阶段挂上，收尾/取消时摘除）。
+  private var cookieObserver: TiebaLoginCookieObserver?
+  /// 挂起等 cookiesDidChange 的等待者：正常唤醒与取消放行都经
+  /// resumeCookieWaiters（continuation 不能悬着，否则任务与页面互相持有）。
+  private var cookieWaiters: [CheckedContinuation<Void, Never>] = []
 
   init() {
     let configuration = WKWebViewConfiguration()
@@ -134,6 +141,15 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     Self.syncSharedCookiesToWebKit(webView: webView)
   }
 
+  /// 页面被关闭（收起转场结束）：提取任务与超时安全网一起停——否则等待/失败提示
+  /// 与触觉会落到已关闭的页面上。
+  override func viewDidDisappear(_ animated: Bool) {
+    super.viewDidDisappear(animated)
+    guard isBeingDismissed || presentingViewController == nil else { return }
+    cancelLoginTask()
+    timeoutTask?.cancel()
+  }
+
   // MARK: - 底部安全说明
 
   private func buildNotice() {
@@ -169,8 +185,14 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
   // MARK: - 状态遮罩
 
   private func applyPhase() {
-    // 离开「等待登录」（loading/idle）即停表：失败/成功/提取中都不该再被超时覆盖。
-    if phase != .loading && phase != .idle { timeoutTask?.cancel() }
+    // 只有终态（成功/失败）才停表：提取阶段也要留着 60s 安全网——Cookie 永不到
+    // 时不能一直停在"正在获取用户信息"。
+    switch phase {
+    case .success, .error:
+      timeoutTask?.cancel()
+    default:
+      break
+    }
     let tint = TiebaNavigator.shared.chromeTheme.tint
     overlay.spinnerColor = tint
     overlay.showsSpinner = false
@@ -225,9 +247,16 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     timeoutTask?.cancel()
     timeoutTask = Task { @MainActor [weak self] in
       try? await Task.sleep(nanoseconds: UInt64(Self.timeoutSeconds * 1_000_000_000))
-      guard !Task.isCancelled, let self, !self.loginProcessed else { return }
+      guard !Task.isCancelled, let self else { return }
+      // 终态不覆盖；提取阶段（loginProcessed 已置位）同样要有安全网。
+      switch self.phase {
+      case .success, .error: return
+      default: break
+      }
       self.phase = .error("登录超时，请在页面中完成百度账号登录后重试")
       TiebaSceneHaptics.fire("action-fail")
+      // 超时是终态：把还在等 Cookie 的提取任务一并停掉（先放行等待者再取消）。
+      self.cancelLoginTask()
     }
   }
 
@@ -242,10 +271,12 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     let url = rawURL
     if !loginProcessed, isLoginRedirect(url) {
       loginProcessed = true
-      timeoutTask?.cancel()
+      // 提取阶段重启 60s 安全网（不再在进入提取时取消：等 Cookie 必须可被兜住）。
+      startTimeout()
       phase = .extracting
       TiebaSceneHaptics.fire("press")
-      Task { @MainActor in await processLogin() }
+      cancelLoginTask()
+      loginTask = Task { @MainActor in await processLogin() }
     } else if phase == .loading,
       url.contains("passport.baidu.com") || url.contains("wappass.baidu.com") {
       phase = .idle
@@ -253,15 +284,30 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     }
   }
 
-  /// 轮询等待 BDUSS+STOKEN 齐备（两者异步下发，缺一即半成品）。
+  /// 用 WKHTTPCookieStoreObserver（cookiesDidChange）驱动"BDUSS+STOKEN 齐备"
+  /// 判定：两者异步下发，每来一次变更就重读一遍；60s 超时是安全网。
   private func processLogin() async {
-    var cookies = await Self.nativeCookies()
-    var tries = 0
-    while tries < 40, cookies["BDUSS"] == nil || cookies["STOKEN"] == nil {
-      try? await Task.sleep(nanoseconds: 150_000_000)
-      cookies = await Self.nativeCookies()
-      tries += 1
+    let store = webView.configuration.websiteDataStore.httpCookieStore
+    let observer = TiebaLoginCookieObserver { [weak self] in
+      self?.resumeCookieWaiters()
     }
+    cookieObserver = observer
+    store.add(observer)
+    defer {
+      store.remove(observer)
+      // 只清自己那一个：重试时新任务可能已挂上新观察者，不能误清（观察者不被
+      // store 持有，被误清即被释放 → 后续变更再也唤不醒等待）。
+      if cookieObserver === observer { cookieObserver = nil }
+      resumeCookieWaiters()
+    }
+
+    var cookies = await Self.nativeCookies()
+    while !Task.isCancelled, cookies["BDUSS"] == nil || cookies["STOKEN"] == nil {
+      // 检查与挂起同在主 actor 同步段：变更落在两者之间也会被下一次重读看到。
+      await waitForCookieChange()
+      cookies = await Self.nativeCookies()
+    }
+    guard !Task.isCancelled else { return }
     let bduss = cookies["BDUSS"] ?? ""
     let stoken = cookies["STOKEN"] ?? ""
     guard !bduss.isEmpty else {
@@ -281,15 +327,35 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
       let activated = try await TiebaSession.activate(account)
       TiebaSceneHaptics.fire("action-success")
       phase = .success
-      // 登录后补一次资料（nameShow/头像），失败不阻断。
-      Task { await TiebaSession.refreshProfile(uid: activated.uid) }
-      Task { @MainActor [weak self] in
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        self?.handleClose()
-      }
+      // 资料刷新（nameShow/头像）落地即收尾：成功覆盖层保持到真回调返回，
+      // 返回上一屏时账号资料已就绪（原"成功后 1.5s 定时器"的语义等价）。
+      // 刷新失败不阻断关闭（与旧行为一致）。
+      _ = await TiebaSession.refreshProfile(uid: activated.uid)
+      guard !Task.isCancelled else { return }
+      handleClose()
     } catch {
       fail("登录信息提取失败：\(error.localizedDescription)")
     }
+  }
+
+  /// 等下一次 CookieStore 变更（唤醒只来自 cookiesDidChange 或 cancelLoginTask）。
+  private func waitForCookieChange() async {
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      cookieWaiters.append(continuation)
+    }
+  }
+
+  private func resumeCookieWaiters() {
+    let waiters = cookieWaiters
+    cookieWaiters.removeAll()
+    for waiter in waiters { waiter.resume() }
+  }
+
+  /// 取消提取任务前必须先放行等待者：continuation 悬着则任务与页面互相持有，
+  /// 页面关闭后也永远不释放（所有取消点都走这里，不依赖 Task 自身的取消传播）。
+  private func cancelLoginTask() {
+    loginTask?.cancel()
+    resumeCookieWaiters()
   }
 
   private func fail(_ message: String) {
@@ -457,5 +523,23 @@ extension TiebaLoginViewController: WKUIDelegate {
     let alert = UIAlertController(title: "", message: message, preferredStyle: .alert)
     actions(alert)
     (TiebaTopViewController.find() ?? self).present(alert, animated: true)
+  }
+}
+
+// MARK: - WKHTTPCookieStore 变更观察者
+
+/// CookieStore 变更驱动（协议本身是 WK_SWIFT_UI_ACTOR，回调恒在主 actor）：
+/// ⚠️ 协议文档明确"观察者不被 store 持有"，宿主必须强持有（见 cookieObserver）。
+@MainActor
+private final class TiebaLoginCookieObserver: NSObject, WKHTTPCookieStoreObserver {
+  private let onChange: @MainActor @Sendable () -> Void
+
+  init(onChange: @escaping @MainActor @Sendable () -> Void) {
+    self.onChange = onChange
+    super.init()
+  }
+
+  func cookiesDidChange(in cookieStore: WKHTTPCookieStore) {
+    onChange()
   }
 }

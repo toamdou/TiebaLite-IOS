@@ -100,6 +100,9 @@ public enum TiebaPhotoBrowser {
   ///     的载体；没传才退回窗口扫描找源图视图。
   ///   - sourceFrameProvider: 初始页以外的退出重算（多图行必须传，否则翻页后
   ///     退出退化为 Fade）；返回该页源图当前窗口矩形，拿不到返回 nil。
+  ///   - onPresented: 转场展示完成（viewDidAppear，Zoom 动画结束/Reduce Motion
+  ///     直显）后的主线程回调，只回调一次；宿主用它做展示后才该发生的收尾
+  ///     （如列表揭示移位），不要用固定时长近似。
   /// - Returns: 是否受理。items 为空 / 已有会话 / 找不到宿主 VC → false。
   /// - Note: 非主线程调用时返回值语义为"请求已入队"，会话创建结果不回落。
   @discardableResult
@@ -108,7 +111,8 @@ public enum TiebaPhotoBrowser {
     initialIndex: Int,
     transition: [String: Any]?,
     sourceImage: UIImage? = nil,
-    sourceFrameProvider: SourceFrameProvider? = nil
+    sourceFrameProvider: SourceFrameProvider? = nil,
+    onPresented: (@MainActor @Sendable () -> Void)? = nil
   ) -> Bool {
     let parsed = items.compactMap { TiebaPhotoItem(dict: $0) }
     guard !parsed.isEmpty else { return false }
@@ -122,7 +126,8 @@ public enum TiebaPhotoBrowser {
         initialIndex: index,
         transition: parsedTransition,
         sourceImage: sourceImage,
-        sourceFrameProvider: sourceFrameProvider
+        sourceFrameProvider: sourceFrameProvider,
+        onPresented: onPresented
       )
     }
     DispatchQueue.main.async {
@@ -131,7 +136,8 @@ public enum TiebaPhotoBrowser {
         initialIndex: index,
         transition: parsedTransition,
         sourceImage: sourceImage,
-        sourceFrameProvider: sourceFrameProvider
+        sourceFrameProvider: sourceFrameProvider,
+        onPresented: onPresented
       )
     }
     return true
@@ -160,7 +166,8 @@ public enum TiebaPhotoBrowser {
     initialIndex: Int,
     transition: TiebaPhotoTransition,
     sourceImage: UIImage?,
-    sourceFrameProvider: SourceFrameProvider?
+    sourceFrameProvider: SourceFrameProvider?,
+    onPresented: (@MainActor @Sendable () -> Void)?
   ) -> Bool {
     guard activeSession == nil else { return false }
     // 会话是 @MainActor（见类注释）：present 允许任意线程调用，这里用
@@ -175,6 +182,7 @@ public enum TiebaPhotoBrowser {
         transition: transition,
         sourceImage: sourceImage,
         sourceFrameProvider: sourceFrameProvider,
+        onPresented: onPresented,
         host: host
       )
       guard session.start() else { return false }
@@ -425,6 +433,8 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   private let sourceFrameProvider: TiebaPhotoBrowser.SourceFrameProvider?
   /// 被点那一格已加载的压缩图（权威转场源）；nil = 退回窗口扫描找源图视图。
   private let sourceImage: UIImage?
+  /// 展示完成回调（见 TiebaPhotoBrowser.present）；触发一次后即清空。
+  private var onPresented: (@MainActor @Sendable () -> Void)?
   private var sourceThumbnailView: TiebaPhotoSourceThumbnailView?
   /// 安装时的替身几何：翻回初始页且宿主算不出当前矩形时恢复。
   private var sourceThumbnailInitialFrame: CGRect?
@@ -457,6 +467,7 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     transition: TiebaPhotoTransition,
     sourceImage: UIImage?,
     sourceFrameProvider: TiebaPhotoBrowser.SourceFrameProvider?,
+    onPresented: (@MainActor @Sendable () -> Void)?,
     host: UIViewController
   ) {
     self.items = items
@@ -466,6 +477,7 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     self.contextTitle = transition.contextTitle
     self.transitionFrame = transition.frame
     self.sourceFrameProvider = sourceFrameProvider
+    self.onPresented = onPresented
     super.init()
   }
 
@@ -496,6 +508,10 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
       guard let self else { return }
       self.removePresentBackdrop()
       self.prefetchNeighbors(of: self.browser?.pageIndex ?? self.initialIndex)
+      // 展示完成回调只发一次（viewDidAppear 在转场动画结束后才到）。
+      let presented = self.onPresented
+      self.onPresented = nil
+      presented?()
     }
     self.browser = browser
 

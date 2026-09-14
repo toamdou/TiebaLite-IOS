@@ -72,11 +72,7 @@ class TiebaFormPageController: UIViewController {
   func write(_ key: String, bool value: Bool, row rowID: String? = nil) -> Bool {
     guard TiebaPreferences.set(key, bool: value) else {
       reportWriteFailure()
-      // 写失败要把开关拨回真实档位（开关不再"先拨回等回推"，失败路径得自己拨正）。
-      form.setValue(
-        id: rowID ?? key,
-        value: TiebaPreferences.bool(rowID ?? key, default: false) ? "1" : "0"
-      )
+      form.setValue(id: rowID ?? key, value: TiebaPreferences.bool(key, default: false) ? "1" : "0")
       return false
     }
     form.setValue(id: rowID ?? key, value: value ? "1" : "0")
@@ -88,6 +84,10 @@ class TiebaFormPageController: UIViewController {
   func write(_ key: String, string value: String, row rowID: String? = nil) -> Bool {
     guard TiebaPreferences.set(key, string: value) else {
       reportWriteFailure()
+      // 写失败要把控件拨回真实档位：开关/分段/取色是即时改状态的，不回推就等于
+      // 控件显示新值、偏好还是旧值（控件与模型分裂）。回滚读的是**存储键**、
+      // 写回的是**行 id**（设置首页两者不同名，按行 id 回读会读成不存在的键）。
+      form.setValue(id: rowID ?? key, value: TiebaPreferences.string(key, default: ""))
       return false
     }
     form.setValue(id: rowID ?? key, value: value)
@@ -99,6 +99,10 @@ class TiebaFormPageController: UIViewController {
   func write(_ key: String, number value: Double, row rowID: String? = nil) -> Bool {
     guard TiebaPreferences.set(key, number: value) else {
       reportWriteFailure()
+      form.setValue(
+        id: rowID ?? key,
+        value: TiebaPreferences.numberLiteral(TiebaPreferences.number(key, default: 0))
+      )
       return false
     }
     form.setValue(id: rowID ?? key, value: TiebaPreferences.numberLiteral(value))

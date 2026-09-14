@@ -100,10 +100,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     floatingBar.onAction = { [weak self] action in self?.handleBarAction(action) }
     moreSignalToken = TiebaThreadMoreSignal.shared.observe { [weak self] threadId, action in
       guard let self, threadId.isEmpty || threadId == self.threadId else { return }
-      // 等 sheet 收起动画结束：dismiss 过程中 present 新窗口会被静默拒绝。
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
-        self?.handleMoreAction(action)
-      }
+      // sheet 在自身 viewDidDisappear（收起转场结束）后才会发动作，这里直接执行。
+      self.handleMoreAction(action)
     }
     showShortcut = TiebaPreferenceSnapshot.bool("showShortcutInThread", default: true)
     floatingBar.isHidden = !showShortcut

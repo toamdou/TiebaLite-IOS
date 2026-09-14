@@ -21,6 +21,74 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
     ("relative", "相对时间（刚刚、x分钟前）"), ("absolute", "绝对时间（年-月-日 时:分）"),
   ]
 
+  /// 本页展示的全部偏好键（行 id 与键逐字同名；在屏时被别处改写要即时回推）。
+  private static let preferenceKeys = [
+    "homePageShowHistoryForum", "forumListSingle", "startTab", "incognitoMode",
+    "useBuiltInBrowser", "exploreAutoRefresh", "clipboardLinkDetection",
+    "navBarDoubleTapToTop", "tabBarMinimizeEnabled", "defaultSortType", "hideMedia",
+    "showBothUsername", "showShortcutInThread", "forumFabFunction", "timestampStyle",
+    "showIpLocation", "showLevelBadge", "hideBlockedContent", "blockVideo",
+    "filterAdThreads", "collectSeeLz", "collectDescSort",
+  ]
+
+  /// 观察者是 non-Sendable，deinit 非隔离：与 TiebaHomeViewController 同款声明。
+  private nonisolated(unsafe) var prefToken: NSObjectProtocol?
+
+  deinit {
+    if let prefToken { NotificationCenter.default.removeObserver(prefToken) }
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    // 在屏时被别处改写就就地回推行值（枚举仍过白名单，脏值不进选择器）。
+    prefToken = TiebaPreferenceChange.observe(keys: Self.preferenceKeys) { [weak self] in
+      self?.refreshDisplayedValues()
+    }
+  }
+
+  /// 行 id 与偏好键同名，就地回推即可；本页没有增删行，不整表重建。
+  /// 默认档与 makeSections 逐行同值（键缺失时界面显示的就是默认档）。
+  private func refreshDisplayedValues() {
+    setFlag("homePageShowHistoryForum", default: true)
+    setFlag("forumListSingle", default: true)
+    setFlag("incognitoMode", default: false)
+    setFlag("useBuiltInBrowser", default: true)
+    setFlag("exploreAutoRefresh", default: true)
+    setFlag("clipboardLinkDetection", default: true)
+    setFlag("navBarDoubleTapToTop", default: true)
+    setFlag("tabBarMinimizeEnabled", default: true)
+    setFlag("hideMedia", default: false)
+    setFlag("showBothUsername", default: false)
+    setFlag("showShortcutInThread", default: true)
+    setFlag("showIpLocation", default: true)
+    setFlag("showLevelBadge", default: true)
+    setFlag("hideBlockedContent", default: false)
+    setFlag("blockVideo", default: false)
+    setFlag("filterAdThreads", default: true)
+    setFlag("collectSeeLz", default: true)
+    setFlag("collectDescSort", default: false)
+    form.setValue(
+      id: "startTab",
+      value: TiebaPreferences.string(
+        "startTab", allowed: Self.startTabs.map(\.value), default: "index"))
+    form.setValue(
+      id: "defaultSortType",
+      value: TiebaPreferences.string(
+        "defaultSortType", allowed: Self.sortTypes.map(\.value), default: "0"))
+    form.setValue(
+      id: "forumFabFunction",
+      value: TiebaPreferences.string(
+        "forumFabFunction", allowed: Self.fabFunctions.map(\.value), default: "refresh"))
+    form.setValue(
+      id: "timestampStyle",
+      value: TiebaPreferences.string(
+        "timestampStyle", allowed: Self.timestampStyles.map(\.value), default: "relative"))
+  }
+
+  private func setFlag(_ id: String, default fallback: Bool) {
+    form.setValue(id: id, value: TiebaPreferences.bool(id, default: fallback) ? "1" : "0")
+  }
+
   /// 默认值必须与 constants/preferences.ts 的 DEFAULT_PREFERENCES 一致：
   /// 键缺失（用户从未改过）时界面显示的就是默认档。
   private func toggle(

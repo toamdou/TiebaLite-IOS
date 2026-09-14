@@ -32,6 +32,13 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   private var isUserRefresh = false
   private var lastLoadedAt = Date.distantPast
   private var lastRowSignature = ""
+  /// 回顶刷新在途（回顶动画结束才消费，避免无回顶的程序化滚动触发刷新）。
+  private var pendingTopRefresh = false
+  private nonisolated(unsafe) var prefToken: NSObjectProtocol?
+
+  deinit {
+    if let prefToken { NotificationCenter.default.removeObserver(prefToken) }
+  }
 
   private var isLoggedIn: Bool { !TiebaBackgroundSnapshot.shared.bduss.isEmpty }
 
@@ -50,7 +57,18 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     view.backgroundColor = .clear
     applyPalette()
     list.isHidden = true
-    list.entranceAnimationEnabled = TiebaPreferenceSnapshot.bool("entranceAnimation", default: true)
+    applyEntrancePreference()
+    // 本页实例常驻（explore 三个子页）：设置页改了值不会重走 viewDidLoad，
+    // 订阅偏好广播即时生效（token 随 deinit 释放）。
+    prefToken = TiebaPreferenceChange.observe(key: "entranceAnimation") { [weak self] in
+      MainActor.assumeIsolated { self?.applyEntrancePreference() }
+    }
+    list.onScrollAnimationEnd = { [weak self] in
+      guard let self, self.pendingTopRefresh else { return }
+      self.pendingTopRefresh = false
+      self.isUserRefresh = true
+      self.reload()
+    }
     stateView.isHidden = true
     stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
     // 信息流骨架：thread 卡片、半数带图（原 FeedContent.tsx variant="thread" count={8}）
@@ -108,6 +126,11 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     list.palette = palette
   }
 
+  /// 入场动画开关（现读偏好；批次判定在列表内，见 endEntranceBatch）。
+  private func applyEntrancePreference() {
+    list.entranceAnimationEnabled = TiebaPreferenceSnapshot.bool("entranceAnimation", default: true)
+  }
+
   // MARK: - 外部驱动（tab 根屏）
 
   /// 聚焦（tab 选中）：stale-while-revalidate，遵循 exploreAutoRefresh 偏好。
@@ -131,14 +154,16 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     }
   }
 
-  /// 底栏重复点击：先回顶，再走刷新（与旧页 260ms 时序一致）。
+  /// 底栏重复点击：先回顶，回顶动画结束（scrollViewDidEndScrollingAnimation）再
+  /// 刷新——不再用 260ms 定时器近似；已在顶部则没有滚动动画可等，直接刷新。
   func tabReselected() {
-    list.scrollToTop(animated: true)
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { [weak self] in
-      guard let self, self.view.window != nil else { return }
-      self.isUserRefresh = true
-      self.reload()
+    guard !list.isAtTop else {
+      isUserRefresh = true
+      reload()
+      return
     }
+    pendingTopRefresh = true
+    list.scrollToTop(animated: true)
   }
 
   // MARK: - 状态

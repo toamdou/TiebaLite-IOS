@@ -205,15 +205,9 @@ enum TiebaSettingsForm {
       ? (dark ? true : !statusBarFontDark)
       : dark
     TiebaNavigator.shared.setDefaultStatusBarStyle(lightStatusBar ? .lightContent : .darkContent)
-    TiebaSystemUI.setBackgroundColor(argb: argb(from: background))
+    TiebaSystemUI.setBackgroundColor(background)
   }
 
-  private static func argb(from color: UIColor) -> Double {
-    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-    guard color.getRed(&r, green: &g, blue: &b, alpha: &a) else { return 0 }
-    func part(_ value: CGFloat) -> UInt32 { UInt32((min(max(value, 0), 1) * 255).rounded()) }
-    return Double((part(a) << 24) | (part(r) << 16) | (part(g) << 8) | part(b))
-  }
 }
 
 /// 轻量 Toast（原 RN Toast 的 pill 形态；TiebaPhotoBrowserPillView 是既有的原生实现）。

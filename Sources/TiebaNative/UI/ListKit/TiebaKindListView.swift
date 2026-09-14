@@ -130,8 +130,9 @@ final class TiebaKindListFeedCell: UICollectionViewCell {
   }
 
   /// 不感兴趣折叠退场（280ms opacity + scaleY，见 TiebaFeedRowView）。
-  func playCollapse() {
-    rowView.playCollapseAnimation()
+  /// completion 在动画结束（或动画被复位移除）时回调，列表据此删数据。
+  func playCollapse(completion: (() -> Void)? = nil) {
+    rowView.playCollapseAnimation(completion: completion)
   }
 
   /// 媒体命中查询（行视图只读几何）：point 为 cell 坐标；命中返回
@@ -421,7 +422,8 @@ public final class TiebaKindListContentView: UIView {
     }
   }
 
-  /// 首屏入场动画开关（EntranceRow 的等价：首批页面窗口内新建 cell 播级联动画）。
+  /// 首屏入场动画开关（EntranceRow 的等价：首批页面里新建 cell 播级联动画，
+  /// 批次边界 = 首个布局趟的 willDisplay 走完，见 endEntranceBatch）。
   public var entranceAnimationEnabled: Bool = true
 
   /// 行左右内缩（= RN contentContainerStyle.paddingHorizontal）。
@@ -517,9 +519,6 @@ public final class TiebaKindListContentView: UIView {
       entrancePlayed = true
       if entranceAnimationEnabled {
         entrancePending = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-          self?.entrancePending = false
-        }
       }
     }
     var snapshot = NSDiffableDataSourceSnapshot<Int, TiebaKindItem>()
@@ -543,6 +542,15 @@ public final class TiebaKindListContentView: UIView {
     )
   }
 
+  /// 程序化滚动（scrollToTop / setContentOffset(animated:)）落位回调：
+  /// 宿主用它做"回顶后刷新/收尾"，替代等待固定时长（动画结束才回）。
+  var onScrollAnimationEnd: (() -> Void)?
+
+  /// 是否已在顶部：回顶刷新据此判定"没有滚动动画可等"（否则刷新永不发生）。
+  var isAtTop: Bool {
+    collectionView.contentOffset.y <= -collectionView.adjustedContentInset.top + 0.5
+  }
+
   public func endRefreshing() {
     if refreshControl.isRefreshing {
       refreshControl.endRefreshing()
@@ -557,6 +565,8 @@ public final class TiebaKindListContentView: UIView {
   private var lastLaidOutSize: CGSize = .zero
   private var entrancePending = false
   private var entrancePlayed = false
+  /// 首个布局趟的清标志已排程（entrancePending 的边界判定，见 endEntranceBatch）。
+  private var entranceClearScheduled = false
   /// 整页帧高缓存：key =（pageKey, itemWidth, 行数）。布局输入不变时（页脚/主题/
   /// contentInset 变化都会 invalidateLayout）复用，不再逐行查度量（每行 2 次锁）。
   private var frameHeightCache: (pageKey: String, width: CGFloat, heights: [CGFloat])?
@@ -1089,8 +1099,8 @@ public final class TiebaKindListContentView: UIView {
     ])
   }
 
-  /// 不感兴趣退场：先让该行播折叠动画（数据保持在位），动画窗口后再回调删数据
-  /// （原 JS collapsingId + 360ms 兜底定时器同一时序）。行已滚出/被复用 → 直接回调。
+  /// 不感兴趣退场：先让该行播折叠动画（数据保持在位），动画结束（真 completion，
+  /// Reduce Motion 同步回调）后删数据。行已滚出/被复用 → 直接回调。
   func collapseRowThen(atIndex index: Int, remove: @escaping () -> Void) {
     let indexPath = IndexPath(item: index, section: 0)
     guard !pageKey.isEmpty,
@@ -1100,10 +1110,7 @@ public final class TiebaKindListContentView: UIView {
       remove()
       return
     }
-    cell.playCollapse()
-    DispatchQueue.main.asyncAfter(
-      deadline: .now() + TiebaFeedRowView.collapseDuration + 0.08
-    ) { remove() }
+    cell.playCollapse(completion: remove)
   }
 
   /// 图片长按菜单（保存照片 / 分享照片）事件外传（水印偏好/相册权限/toast 由
@@ -1147,8 +1154,8 @@ public final class TiebaKindListContentView: UIView {
 
   /// 图片点击 → 原生查看器（TiebaPhotoBrowser）直开：items/transition 全原生
   /// 构建，不发 rowTap。
-  /// 揭示移位（useViewerSourceReveal 的原生等价）在展示动画后滚动列表，transition
-  /// 用移位后矩形；打开期间暂停 Nuke 预取，关闭事件恢复。
+  /// 揭示移位（useViewerSourceReveal 的原生等价）在展示转场完成回调里滚动列表，
+  /// transition 用移位后矩形；打开期间暂停 Nuke 预取，关闭事件恢复。
   private func presentPhotoBrowser(
     row: TiebaFeedRowModel,
     media: (index: Int, windowRect: CGRect),
@@ -1174,9 +1181,19 @@ public final class TiebaKindListContentView: UIView {
       self?.isBrowserPresented = false
       self?.updatePrefetcherPause()
     }
-    // 闭包只带 Sendable 值（Int 数组/下标），不把非 Sendable 的 plan 带进主机回调。
+    // 闭包只带 Sendable 值（Int 数组/下标/位移），不把非 Sendable 的 plan 带进主机回调。
     let mediaIndexes = plan.mediaIndexes
     let rowIndex = indexPath.item
+    let scrollDelta = plan.scrollDelta
+    // 揭示移位：等查看器展示转场真正完成（onPresented；Reduce Motion 直显也会回）
+    // 再滚动——此刻 Modal 已盖住列表，滚动不可见，也不会干扰 Zoom 转场。
+    let onPresented: @MainActor @Sendable () -> Void = { [weak self] in
+      guard let self, self.isBrowserPresented, let scrollDelta else { return }
+      self.collectionView.setContentOffset(
+        CGPoint(x: 0, y: self.collectionView.contentOffset.y + scrollDelta),
+        animated: true
+      )
+    }
     let presented = TiebaPhotoBrowser.present(
       items: plan.items,
       initialIndex: plan.initialIndex,
@@ -1191,22 +1208,12 @@ public final class TiebaKindListContentView: UIView {
           rowIndex: rowIndex,
           mediaIndex: mediaIndexes[pageIndex]
         )
-      }
+      },
+      onPresented: onPresented
     )
     if presented {
       isBrowserPresented = true
       updatePrefetcherPause()
-      if let scrollDelta = plan.scrollDelta {
-        // 展示动画约 0.35s：之后 Modal 已完全盖住列表，滚动不可见，也不会
-        // 干扰 Zoom 转场。
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-          guard let self, self.isBrowserPresented else { return }
-          self.collectionView.setContentOffset(
-            CGPoint(x: 0, y: self.collectionView.contentOffset.y + scrollDelta),
-            animated: true
-          )
-        }
-      }
     } else {
       TiebaPhotoBrowser.onEvent = previousHandler
     }
@@ -1274,6 +1281,16 @@ public final class TiebaKindListContentView: UIView {
     reachEndArmed = false
     emit("reachEnd", ["pageKey": pageKey, "count": itemCount])
   }
+
+  /// 首屏入场批次边界：首个布局趟里所有 willDisplay 已走完（下个 runloop 才清
+  /// 标志），后续滚动回填的 cell 不再播入场——替代原来的 0.5s 时间窗口。
+  private func endEntranceBatch() {
+    guard entrancePending, !entranceClearScheduled else { return }
+    entranceClearScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      self?.entrancePending = false
+    }
+  }
 }
 
 // MARK: - UICollectionViewDelegate
@@ -1286,6 +1303,7 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
   ) {
     updateVisibleRange()
     updateReachEnd()
+    endEntranceBatch()
   }
 
   public func collectionView(
@@ -1300,6 +1318,11 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
     updateVisibleRange()
     updateReachEnd()
     onScroll?(scrollView)
+  }
+
+  /// 程序化滚动落位（setContentOffset(animated:)/scrollToTop 的完成回调）。
+  public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+    onScrollAnimationEnd?()
   }
 
   /// 拖尾侧滑（**系统自带**，替代手写 TiebaSwipeActionView）：手势/物理/揭示
