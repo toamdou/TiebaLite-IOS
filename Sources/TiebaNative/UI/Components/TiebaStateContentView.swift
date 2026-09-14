@@ -249,7 +249,10 @@ final class TiebaStateContentView: UIView {
       let button = UIButton(type: .system)
       button.configuration = Self.configuration(for: item)
       button.isEnabled = !item.disabled
-      button.addAction(UIAction { [weak self] _ in self?.onButtonPress?(item.id) }, for: .touchUpInside)
+      button.addAction(UIAction { [weak self] _ in
+        TiebaSceneHaptics.fire("press")
+        self?.onButtonPress?(item.id)
+      }, for: .touchUpInside)
       buttonViews[item.id] = button
       buttonsStack.addArrangedSubview(button)
       if item.fullWidth {

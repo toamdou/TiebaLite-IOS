@@ -144,11 +144,12 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     }
     currentPage = page.current
     hasMore = page.hasMore
-    if subPosts.isEmpty {
+    // 父楼是钉住的：没有楼中楼时只在页脚说明，不能整页空态（否则父卡也不见）。
+    if subPosts.isEmpty, floorPost == nil {
       showState(.empty)
     } else {
       showList()
-      list.footerState = hasMore ? .more : .none
+      list.footerState = subPosts.isEmpty ? .empty : (hasMore ? .more : .none)
       publish(fresh: true)
     }
   }

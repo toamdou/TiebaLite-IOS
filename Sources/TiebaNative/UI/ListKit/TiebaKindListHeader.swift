@@ -242,6 +242,7 @@ public final class TiebaTopicHeaderView: UIView, TiebaKindListHeaderView {
   }
 
   @objc private func handleChipTap(_ chip: TiebaTopicForumChipView) {
+    TiebaSceneHaptics.fire("press")
     guard !chip.forumName.isEmpty else { return }
     onAction?("forum", ["name": chip.forumName])
   }

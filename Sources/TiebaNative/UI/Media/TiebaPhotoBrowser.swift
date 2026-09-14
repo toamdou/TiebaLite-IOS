@@ -1783,14 +1783,17 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
   }
 
   @objc private func handleClose() {
+    TiebaSceneHaptics.fire("press")
     onClose?()
   }
 
   @objc private func handleSave() {
+    TiebaSceneHaptics.fire("press")
     onAction?("save")
   }
 
   @objc private func handleShare() {
+    TiebaSceneHaptics.fire("press")
     onAction?("share")
   }
 }

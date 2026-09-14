@@ -515,12 +515,14 @@ final class TiebaFormListView: UIView {
     // ConfirmationDialog 在 iPhone 上就是 UIAlertController.actionSheet
     // （标题/正文/破坏性确认/取消），文案由 JS 给，确认后才回 JS。
     guard let presenter = TiebaTopViewController.find() else { return }
+    TiebaSceneHaptics.fire("sheet-present")
     let sheet = UIAlertController(
       title: row.confirmTitle ?? row.title,
       message: row.confirmMessage,
       preferredStyle: .actionSheet
     )
     sheet.addAction(UIAlertAction(title: row.confirmLabel ?? "确定", style: .destructive, handler: { [weak self] _ in
+      TiebaSceneHaptics.fire("destructive")
       self?.onConfirm?(row.id)
     }))
     sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
@@ -605,6 +607,7 @@ extension TiebaFormListView: UITableViewDataSource, UITableViewDelegate {
   public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
     tableView.deselectRow(at: indexPath, animated: true)
     guard let row = row(at: indexPath), !row.disabled else { return }
+    TiebaSceneHaptics.fire("press")
     switch row.kind {
     case .toggle:
       // SwiftUI 的 Toggle 行点行内任意处都可切换（不是只能点开关）；
@@ -862,6 +865,11 @@ final class TiebaFormRowCell: UITableViewCell {
     pickerMenuButton.configuration = pickerConfig
     pickerMenuButton.contentHorizontalAlignment = .trailing
     pickerMenuButton.showsMenuAsPrimaryAction = true
+    // 浮层展开触觉（iOS 14+ 的 menuActionTriggered：只在菜单真的弹出时发）。
+    pickerMenuButton.addAction(
+      UIAction { _ in TiebaSceneHaptics.fire("sheet-present") },
+      for: .menuActionTriggered
+    )
 
     pickerMenuButton.isHidden = true
     pickerMenuButton.isEnabled = true
@@ -1076,6 +1084,10 @@ final class TiebaFormRowCell: UITableViewCell {
     if button.isEnabled {
       button.showsMenuAsPrimaryAction = true
       button.menu = buildMenuItemMenu(row: row)
+      button.addAction(
+        UIAction { _ in TiebaSceneHaptics.fire("sheet-present") },
+        for: .menuActionTriggered
+      )
     }
     // 纯图标按钮的命中区：图标本身约 17pt，给到 44 的行高（不改变布局宽度）。
     button.widthAnchor.constraint(greaterThanOrEqualToConstant: 30).isActive = true
@@ -1100,6 +1112,7 @@ final class TiebaFormRowCell: UITableViewCell {
   }
 
   @objc private func toggleChanged() {
+    TiebaSceneHaptics.fire("toggle")
     // 受控语义：先把开关拨回模型值，等调用方写库成功后 setValue 回推（授权失败/
     // 写库失败就不回推，开关停在原值；与 @expo/ui 受控 Toggle 的观感一致）。
     let requested = toggle.isOn
@@ -1126,6 +1139,7 @@ final class TiebaFormRowCell: UITableViewCell {
 
   @objc private func colorWellChanged() {
     guard let color = colorWell.selectedColor else { return }
+    TiebaSceneHaptics.fire("toggle")
     onColorChange?(TiebaFormListView.hexString(from: color))
   }
 }
@@ -1477,6 +1491,7 @@ final class TiebaFormSegmentedCell: TiebaFormBaseCell {
   }
 
   @objc private func segmentChanged() {
+    TiebaSceneHaptics.fire("segment")
     let index = control.selectedSegmentIndex
     guard index >= 0, index < values.count else { return }
     onPick?(values[index])
@@ -1652,6 +1667,7 @@ final class TiebaFormAvatarCell: TiebaFormBaseCell {
   }
 
   @objc private func trailingPressed() {
+    TiebaSceneHaptics.fire("press")
     onPress?()
   }
 }
@@ -1711,6 +1727,7 @@ final class TiebaFormActionCell: TiebaFormBaseCell {
   }
 
   @objc private func buttonPressed() {
+    TiebaSceneHaptics.fire("press")
     onPress?()
   }
 }
@@ -1937,6 +1954,7 @@ final class TiebaFormDateCell: TiebaFormBaseCell {
   }
 
   @objc private func dateChanged() {
+    TiebaSceneHaptics.fire("toggle")
     let formatter = Self.formatter
     let next = formatter.string(from: picker.date)
     reported = next

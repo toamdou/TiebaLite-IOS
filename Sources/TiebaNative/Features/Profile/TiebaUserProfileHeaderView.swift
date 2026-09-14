@@ -169,7 +169,10 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
 
       nameLine.widthAnchor.constraint(equalTo: titleColumn.widthAnchor),
       nameLabel.leadingAnchor.constraint(equalTo: nameLine.leadingAnchor),
-      nameLabel.centerYAnchor.constraint(equalTo: nameLine.centerYAnchor),
+      // 行高必须由名字与徽章**共同**决定：原来只挂 centerY，徽章（比 22pt 名字矮）
+      // 单独定行高 → 名字上下溢出，底端压到下一行的 @handle（用户实证重合）。
+      nameLabel.topAnchor.constraint(equalTo: nameLine.topAnchor),
+      nameLabel.bottomAnchor.constraint(equalTo: nameLine.bottomAnchor),
       badgeRow.leadingAnchor.constraint(equalTo: nameLabel.trailingAnchor, constant: 8),
       badgeRow.trailingAnchor.constraint(lessThanOrEqualTo: nameLine.trailingAnchor),
       badgeRow.topAnchor.constraint(equalTo: nameLine.topAnchor),
@@ -362,6 +365,7 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
   // MARK: - 事件
 
   @objc private func handleAvatarTap() {
+    TiebaSceneHaptics.fire("press")
     onAction?("avatar", avatarPayload())
   }
 
@@ -375,13 +379,29 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
     ]
   }
 
-  @objc private func handleFollow() { onAction?("follow", [:]) }
-  @objc private func handleBlock() { onAction?("block", [:]) }
-  @objc private func handleCopyUid() { onAction?("copyUid", [:]) }
-  @objc private func handleOpenFollows() { onAction?("social", ["mode": "follows"]) }
-  @objc private func handleOpenFans() { onAction?("social", ["mode": "fans"]) }
+  @objc private func handleFollow() {
+    TiebaSceneHaptics.fire("press")
+    onAction?("follow", [:])
+  }
+  @objc private func handleBlock() {
+    TiebaSceneHaptics.fire("destructive")
+    onAction?("block", [:])
+  }
+  @objc private func handleCopyUid() {
+    TiebaSceneHaptics.fire("press")
+    onAction?("copyUid", [:])
+  }
+  @objc private func handleOpenFollows() {
+    TiebaSceneHaptics.fire("press")
+    onAction?("social", ["mode": "follows"])
+  }
+  @objc private func handleOpenFans() {
+    TiebaSceneHaptics.fire("press")
+    onAction?("social", ["mode": "fans"])
+  }
 
   @objc private func handleSegmentChange() {
+    TiebaSceneHaptics.fire("segment")
     let index = segment.selectedSegmentIndex
     guard index >= 0, index < tabs.count else { return }
     onAction?("tab", ["value": tabs[index]])

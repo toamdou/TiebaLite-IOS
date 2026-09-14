@@ -246,6 +246,8 @@ public enum TiebaKindFooterState: String {
   case more
   case loading
   case none
+  /// 一条回复都没有（主贴仍钉在首行的页面用：不能走整页空态，否则主贴也不见）。
+  case empty
   case hidden
 }
 
@@ -266,7 +268,7 @@ private final class TiebaKindFooterView: UICollectionReusableView {
     switch state {
     case .loading:
       return base + max(20, UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18))
-    case .none:
+    case .none, .empty:
       return base + UIFontMetrics(forTextStyle: .caption1).scaledValue(for: 16)
     case .more:
       return base + UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18) + 8
@@ -320,6 +322,17 @@ private final class TiebaKindFooterView: UICollectionReusableView {
         attributes: [
           .font: UIFontMetrics(forTextStyle: .footnote).scaledFont(
             for: .systemFont(ofSize: 13, weight: .semibold)
+          ),
+          .foregroundColor: textColor,
+        ]
+      )
+    case .empty:
+      spinner.stopAnimating()
+      label.attributedText = NSAttributedString(
+        string: "还没有人回复这个帖子",
+        attributes: [
+          .font: UIFontMetrics(forTextStyle: .caption1).scaledFont(
+            for: .systemFont(ofSize: 12, weight: .medium)
           ),
           .foregroundColor: textColor,
         ]
@@ -1201,6 +1214,7 @@ public final class TiebaKindListContentView: UIView {
   }
 
   private func handleFooterTap() {
+    TiebaSceneHaptics.fire("press")
     emit("footerTap", ["pageKey": pageKey])
   }
 

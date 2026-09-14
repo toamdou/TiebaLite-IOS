@@ -271,11 +271,13 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     if posts.isEmpty, page.hasMore {
       hasMore = true
     }
-    if posts.isEmpty {
+    // 主贴是钉住的：没有回复时不能走整页空态（那会把主贴卡一起藏起来——用户
+    // 实证"点只看楼主后整页变暂无回复、连主贴都没了"），只在页脚说明。
+    if posts.isEmpty, mainPost == nil {
       showState(.empty)
     } else {
       showList()
-      list.footerState = hasMore ? .more : .none
+      list.footerState = posts.isEmpty ? .empty : (hasMore ? .more : .none)
       publish(fresh: true)
     }
     floatingBar.configure(
