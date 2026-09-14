@@ -186,7 +186,7 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
     history = TiebaSearchHistory.load(forumId: forumId, limit: Self.maxHistory)
     historyView.configure(
       suggestions: [],
-      history: history.map(\.keyword),
+      history: history,
       expanded: historyExpanded
     )
   }

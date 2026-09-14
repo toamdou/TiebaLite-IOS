@@ -256,7 +256,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     suggestions = currentSuggestions()
     historyView.configure(
       suggestions: suggestions,
-      history: history.map(\.keyword),
+      history: history,
       expanded: historyViewExpanded
     )
   }
@@ -693,7 +693,7 @@ extension TiebaSearchViewController: UISearchBarDelegate {
     suggestions = currentSuggestions()
     historyView.configure(
       suggestions: suggestions,
-      history: history.map(\.keyword),
+      history: history,
       expanded: historyViewExpanded
     )
   }
@@ -711,141 +711,5 @@ extension TiebaSearchViewController: UISearchBarDelegate {
     }
     searchBar.text = ""
     refreshHistory()
-  }
-}
-
-// MARK: - 历史 / 建议区（全站搜索与吧内搜索共用）
-
-final class TiebaSearchHistoryView: UIView {
-  var onSelect: ((String) -> Void)?
-  var onDelete: ((String) -> Void)?
-  var onClear: (() -> Void)?
-  var onToggleExpand: (() -> Void)?
-
-  private let stack = UIStackView()
-  private let scroll = UIScrollView()
-  private let headerRow = UIStackView()
-  private let titleLabel = UILabel()
-  private var expanded = false
-  private var longPressedText: [ObjectIdentifier: String] = [:]
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    scroll.alwaysBounceVertical = true
-    scroll.keyboardDismissMode = .onDrag
-    scroll.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(scroll)
-    stack.axis = .vertical
-    stack.spacing = 4
-    stack.translatesAutoresizingMaskIntoConstraints = false
-    scroll.addSubview(stack)
-    NSLayoutConstraint.activate([
-      scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
-      scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
-      scroll.topAnchor.constraint(equalTo: topAnchor),
-      scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
-      stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 16),
-      stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -16),
-      stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 12),
-      stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
-      stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -32),
-    ])
-    titleLabel.text = "搜索历史"
-    titleLabel.font = .preferredFont(forTextStyle: .headline)
-    headerRow.axis = .horizontal
-    headerRow.alignment = .center
-    headerRow.spacing = 8
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-  func configure(suggestions: [String], history: [String], expanded: Bool) {
-    self.expanded = expanded
-    for view in stack.arrangedSubviews {
-      stack.removeArrangedSubview(view)
-      view.removeFromSuperview()
-    }
-    for suggestion in suggestions {
-      stack.addArrangedSubview(makeRow(text: suggestion, icon: "magnifyingglass", deletable: false))
-    }
-    guard !history.isEmpty else { return }
-    headerRow.arrangedSubviews.forEach {
-      headerRow.removeArrangedSubview($0)
-      $0.removeFromSuperview()
-    }
-    headerRow.addArrangedSubview(titleLabel)
-    let spacer = UIView()
-    headerRow.addArrangedSubview(spacer)
-    if history.count > 8 {
-      headerRow.addArrangedSubview(makeTextButton(
-        title: expanded ? "收起" : "展开",
-        action: { [weak self] in self?.onToggleExpand?() }
-      ))
-    }
-    headerRow.addArrangedSubview(makeTextButton(title: "清空", action: { [weak self] in self?.onClear?() }))
-    stack.addArrangedSubview(headerRow)
-    let visible = expanded ? history : Array(history.prefix(8))
-    for keyword in visible {
-      stack.addArrangedSubview(makeRow(text: keyword, icon: "clock.arrow.circlepath", deletable: true))
-    }
-  }
-
-  private func makeTextButton(title: String, action: @escaping () -> Void) -> UIButton {
-    var config = UIButton.Configuration.plain()
-    config.title = title
-    config.buttonSize = .small
-    config.baseForegroundColor = .secondaryLabel
-    let button = UIButton(configuration: config, primaryAction: UIAction { _ in action() })
-    return button
-  }
-
-  /// 历史/建议行：点按选中，长按删除（旧页长按删历史同交互）。
-  private func makeRow(text: String, icon: String, deletable: Bool) -> UIView {
-    let row = UIControl()
-    row.backgroundColor = .secondarySystemBackground
-    row.layer.cornerRadius = 10
-    row.layer.cornerCurve = .continuous
-    let image = UIImageView(image: UIImage(systemName: icon))
-    image.tintColor = .tertiaryLabel
-    image.contentMode = .scaleAspectFit
-    let label = UILabel()
-    label.text = text
-    label.font = .preferredFont(forTextStyle: .subheadline)
-    label.numberOfLines = 1
-    let stack = UIStackView(arrangedSubviews: [image, label])
-    stack.axis = .horizontal
-    stack.spacing = 10
-    stack.alignment = .center
-    stack.isUserInteractionEnabled = false
-    stack.translatesAutoresizingMaskIntoConstraints = false
-    row.addSubview(stack)
-    NSLayoutConstraint.activate([
-      stack.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 12),
-      stack.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -12),
-      stack.topAnchor.constraint(equalTo: row.topAnchor, constant: 10),
-      stack.bottomAnchor.constraint(equalTo: row.bottomAnchor, constant: -10),
-      image.widthAnchor.constraint(equalToConstant: 16),
-      image.heightAnchor.constraint(equalToConstant: 16),
-      row.heightAnchor.constraint(greaterThanOrEqualToConstant: 40),
-    ])
-    row.addAction(UIAction { [weak self] _ in self?.onSelect?(text) }, for: .touchUpInside)
-    if deletable {
-      let longPress = UILongPressGestureRecognizer(
-        target: self,
-        action: #selector(handleLongPress(_:))
-      )
-      longPress.minimumPressDuration = 0.4
-      row.addGestureRecognizer(longPress)
-      longPressedText[ObjectIdentifier(row)] = text
-    }
-    return row
-  }
-
-  @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-    guard gesture.state == .began, let row = gesture.view else { return }
-    guard let text = longPressedText[ObjectIdentifier(row)] else { return }
-    TiebaSceneHaptics.fire("press")
-    onDelete?(text)
   }
 }
