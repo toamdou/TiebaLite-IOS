@@ -1656,7 +1656,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   ///   单 prop 契约（无新增 prop）。
   public func mediaHit(atRowPoint point: CGPoint) -> (index: Int, rect: CGRect)? {
     guard let model, !model.isTopBanner, model.showsMedia, !model.media.isEmpty else { return nil }
-    guard let mediaFrame = cardRect(model.plan.mediaFrame),
+    // ⚠️ 帧计划本身就是行坐标（cardRect 只给 cardView 的子视图用）：入点是行坐标、
+    // 返回矩形也按行坐标给；套 cardRect 会让命中区与转场矩形整体偏一个卡片原点。
+    guard let mediaFrame = model.plan.mediaFrame,
           mediaFrame.width > 1, mediaFrame.height > 1,
           mediaFrame.contains(point) else { return nil }
     guard model.mediaIsStrip else { return (0, mediaFrame) }
@@ -1677,7 +1679,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   public func mediaVisibleRect(atMediaIndex index: Int) -> CGRect? {
     guard let model, !model.isTopBanner, model.showsMedia,
           model.media.indices.contains(index) else { return nil }
-    guard let mediaFrame = cardRect(model.plan.mediaFrame),
+    guard let mediaFrame = model.plan.mediaFrame,
           mediaFrame.width > 1, mediaFrame.height > 1 else { return nil }
     // 单图：整格即目标（与 mediaHit 的 (0, mediaFrame) 同源）。
     guard model.mediaIsStrip else { return index == 0 ? mediaFrame : nil }

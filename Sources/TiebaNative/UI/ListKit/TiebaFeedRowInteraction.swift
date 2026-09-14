@@ -127,9 +127,6 @@ enum TiebaFeedRowInteraction {
       "frameW": reveal.frame.width,
       "frameH": reveal.frame.height,
     ]
-    if let tapped = row.media[tappedMediaIndex].url {
-      transition["thumbUrl"] = tapped.absoluteString
-    }
     if let title = browserContextTitle(for: row) {
       transition["contextTitle"] = title
     }

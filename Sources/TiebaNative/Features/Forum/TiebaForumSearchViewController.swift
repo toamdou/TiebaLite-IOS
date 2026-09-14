@@ -10,10 +10,11 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
   /// 空串（而非 nil）= 显式清掉路由表的默认标题。
   var screenTitle: String? { "" }
 
-  /// 搜索栏走系统 navigationItem.searchController（宿主挂载，外观/玻璃/取消态
-  /// 由系统接管），不再手贴约束。
-  private let searchController = UISearchController(searchResultsController: nil)
-  private var searchBar: UISearchBar { searchController.searchBar }
+  /// 裸 UISearchBar 挂宿主 navigationItem.titleView（占满返回键与尾随项之间的
+  /// 整条；外观/键盘/清空钮由系统承担）。
+  /// ⚠️ 不用 UISearchController：iOS 26 的 .integrated 把搜索栏摆到**尾随边**
+  ///（SDK 原文 "on the trailing edge"），顶栏中间空一大片（真机实证）。
+  private let searchBar = UISearchBar()
   private let toolRow = UIStackView()
   private let sortButton = UIButton(type: .system)
   private let filterButton = UIButton(type: .system)
@@ -51,7 +52,7 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
-    setupSearchController()
+    setupSearchBar()
     setupToolButtons()
     historyView.onSelect = { [weak self] text in self?.commit(text) }
     historyView.onDelete = { [weak self] text in self?.confirmDeleteHistory(text) }
@@ -112,29 +113,16 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
 
   // MARK: - 顶部控件
 
-  /// 搜索栏挂宿主 navigationItem（本屏 chrome = .standard，宿主即栈里那屏）。
-  private func setupSearchController() {
+  /// 搜索栏挂宿主 navigationItem.titleView（本屏 chrome = .standard，宿主即栈里那屏）。
+  private func setupSearchBar() {
     searchBar.delegate = self
     searchBar.placeholder = "搜索吧内帖子..."
     searchBar.returnKeyType = .search
     searchBar.autocorrectionType = .no
-    // 结果是本页自己的列表：激活时不让系统压暗/遮挡内容。
-    searchController.obscuresBackgroundDuringPresentation = false
     guard let host = parent as? TiebaRouteHostViewController else {
       preconditionFailure("吧内搜索必须挂在 TiebaRouteHostViewController 下")
     }
-    // ⚠️ iOS 26 默认会把搜索栏"整合进底部工具栏"（UINavigationItemSearchBarPlacement
-    // Integrated 的注释原文）——页面顶部于是空成一片。点名 .integrated 让搜索栏
-    // 留在顶栏内联（原生 Mail/信息 的形态），并把工具栏整合关掉，否则 iPhone 上
-    // 仍会被系统挪到底部；也不用 .stacked：那会撑出大标题那一圈高度，页面顶部留白。
-    // iOS 26 默认会把搜索栏整合进底部工具栏（UINavigationItemSearchBarPlacement
-    // Integrated 的注释原文），页面顶部于是空成一片：点名 .integrated 让它留在
-    // 顶栏内联（原生 Mail/信息 形态），并关掉工具栏整合，否则仍会被挪到底部。
-    // .stacked 也不要用——那会撑出大标题那一圈高度，顶栏下方空一大段。
-    host.navigationItem.preferredSearchBarPlacement = .integrated
-    host.navigationItem.searchBarPlacementAllowsToolbarIntegration = false
-    host.navigationItem.searchController = searchController
-    host.navigationItem.hidesSearchBarWhenScrolling = false
+    host.navigationItem.titleView = searchBar
   }
 
   private func setupToolButtons() {

@@ -964,11 +964,14 @@ public final class TiebaSimpleRowView: UIView {
     isAccessibilityElement = true
 
     cardView.isUserInteractionEnabled = false
+    // cardView 只当卡片底（底色/圆角/描边）：内容一律挂行视图、按行坐标摆放
+    //（四个 layout* 的算式都是行坐标）。挂进 cardView 会再叠一层卡片原点，
+    // marginH/marginV ≠ 0 的行（搜索吧卡 10/6、分组标题 28/0）就卡片内留白、不居中。
     addSubview(cardView)
 
     avatarView.clipsToBounds = true
     avatarView.contentMode = .scaleAspectFill
-    cardView.addSubview(avatarView)
+    addSubview(avatarView)
     avatarInitialLabel.textAlignment = .center
     avatarInitialLabel.numberOfLines = 1
     avatarInitialLabel.isHidden = true
@@ -980,39 +983,39 @@ public final class TiebaSimpleRowView: UIView {
       label.isHidden = true
       label.lineBreakMode = .byTruncatingTail
     }
-    cardView.addSubview(titleLabel)
-    cardView.addSubview(subtitleLabel)
-    cardView.addSubview(threadLabel)
-    cardView.addSubview(timeLabel)
+    addSubview(titleLabel)
+    addSubview(subtitleLabel)
+    addSubview(threadLabel)
+    addSubview(timeLabel)
 
     badgeView.isHidden = true
     badgeView.clipsToBounds = true
-    cardView.addSubview(badgeView)
+    addSubview(badgeView)
     badgeView.addSubview(badgeLabel)
 
     chevronView.contentMode = .scaleAspectFit
     chevronView.isHidden = true
-    cardView.addSubview(chevronView)
+    addSubview(chevronView)
 
     unreadDotView.isHidden = true
-    cardView.addSubview(unreadDotView)
+    addSubview(unreadDotView)
 
     typeIconView.contentMode = .scaleAspectFit
     typeIconView.isHidden = true
-    cardView.addSubview(typeIconView)
+    addSubview(typeIconView)
 
     sectionDotView.isHidden = true
-    cardView.addSubview(sectionDotView)
+    addSubview(sectionDotView)
 
     countChipView.isHidden = true
     countChipView.clipsToBounds = true
-    cardView.addSubview(countChipView)
+    addSubview(countChipView)
     countChipLabel.isHidden = true
     countChipView.addSubview(countChipLabel)
 
     iconBoxView.isHidden = true
     iconBoxView.clipsToBounds = true
-    cardView.addSubview(iconBoxView)
+    addSubview(iconBoxView)
     iconView.contentMode = .scaleAspectFit
     iconBoxView.addSubview(iconView)
   }

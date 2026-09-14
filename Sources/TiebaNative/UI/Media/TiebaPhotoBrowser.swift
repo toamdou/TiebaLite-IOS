@@ -94,7 +94,7 @@ public enum TiebaPhotoBrowser {
   ///   - items: [{url, thumbUrl?, isGif?, isLong?, width?, height?}] —— 由原生
   ///     列表从 TiebaRowMetrics 行模型构建（不再有 JS 编组）。
   ///   - initialIndex: 初始页（越界自动 clamp）
-  ///   - transition: {frameX, frameY, frameW, frameH, thumbUrl?, contextTitle?}
+  ///   - transition: {frameX, frameY, frameW, frameH, contextTitle?}
   ///     frame 是源图片视图的窗口坐标（cell.convert(to: nil)）。
   ///   - sourceImage: 被点那一格已加载的压缩图（权威转场源）。传了就用它做缩放动画
   ///     的载体；没传才退回窗口扫描找源图视图。
@@ -272,12 +272,10 @@ struct TiebaPhotoItem {
 /// 都不跨隔离域。
 struct TiebaPhotoTransition: Sendable {
   let frame: CGRect?
-  let thumbURL: URL?
   let contextTitle: String?
 
   init(_ raw: [String: Any]?) {
     self.frame = Self.parseFrame(raw)
-    self.thumbURL = (raw?["thumbUrl"] as? String).flatMap(TiebaPhotoItem.normalizedURL)
     self.contextTitle = raw?["contextTitle"] as? String
   }
 
@@ -423,15 +421,13 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   private let actions = TiebaPhotoBrowserActionController()
 
   private let transitionFrame: CGRect?
-  private let transitionThumbURL: URL?
   /// 初始页以外的退出重算查询（见 SourceFrameProvider）；nil = 只认初始页几何。
   private let sourceFrameProvider: TiebaPhotoBrowser.SourceFrameProvider?
   /// 被点那一格已加载的压缩图（权威转场源）；nil = 退回窗口扫描找源图视图。
   private let sourceImage: UIImage?
   private var sourceThumbnailView: TiebaPhotoSourceThumbnailView?
-  /// 安装时的替身几何：翻回初始页时恢复，保证初始页零回归。
+  /// 安装时的替身几何：翻回初始页且宿主算不出当前矩形时恢复。
   private var sourceThumbnailInitialFrame: CGRect?
-  private var sourceThumbnailTask: Task<Void, Never>?
   /// 进场黑底（撤除见 removePresentBackdrop）。
   private var presentBackdrop: UIView?
 
@@ -469,7 +465,6 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     self.host = host
     self.contextTitle = transition.contextTitle
     self.transitionFrame = transition.frame
-    self.transitionThumbURL = transition.thumbURL ?? items[initialIndex].thumbUrl
     self.sourceFrameProvider = sourceFrameProvider
     super.init()
   }
@@ -563,8 +558,6 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   private func finish() {
     guard !didFinish else { return }
     didFinish = true
-    sourceThumbnailTask?.cancel()
-    sourceThumbnailTask = nil
     sourceThumbnailView?.removeFromSuperview()
     sourceThumbnailView = nil
     removePresentBackdrop()
@@ -669,16 +662,6 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     return best?.view
   }
 
-  /// 截取窗口内指定矩形（窗口坐标）。afterScreenUpdates=false：取屏上现有帧，
-  /// 与 TiebaPhotoContextMenuView.snapshotTrigger 同一手法。
-  private static func snapshot(rect: CGRect, in window: UIWindow) -> UIImage? {
-    guard rect.width > 0, rect.height > 0, rect.width.isFinite, rect.height.isFinite else { return nil }
-    let renderer = UIGraphicsImageRenderer(bounds: rect)
-    return renderer.image { _ in
-      window.drawHierarchy(in: rect, afterScreenUpdates: false)
-    }
-  }
-
   static func displayScale(for view: UIView) -> CGFloat {
     if let scale = view.window?.screen.scale, scale > 0 { return scale }
     let traitScale = view.traitCollection.displayScale
@@ -779,21 +762,24 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     (cell as? TiebaPhotoBrowserImageCell)?.cancelLoading()
   }
 
-  /// Zoom 转场源视图：初始页用安装时几何（揭示移位后的目标位，零回归）；其他页在
-  /// 转场当下向宿主重算当前图的窗口矩形（多图翻页后退出仍飞回正确的缩略图）。
-  /// 重算不到 → nil，框架降级 Fade（绝不能退回被点图的矩形：那会飞回错误的图）。
+  /// Zoom 转场源视图：**转场当下**向宿主现算当前图的窗口矩形（翻页后 / 列表揭示
+  /// 移位后都认最新几何）；算不到、且是初始页才退回安装时快照。
+  ///
+  /// ⚠️ 初始页原来恒用安装时矩形：揭示移位（展示后 0.35s 滚列表）没落定、或期间
+  /// 列表又动过，大图就会飞回"原位置隔壁"再闪回真缩略图（真机实证）。
+  /// 其余页算不到 → nil，框架降级 Fade（绝不能退回被点图的矩形：那会飞回错误的图）。
   func photoBrowser(_ browser: JXPhotoBrowserViewController, thumbnailViewAt index: Int) -> UIView? {
     guard let thumbnail = sourceThumbnailView else { return nil }
-    if index == initialIndex {
-      if let frame = sourceThumbnailInitialFrame { thumbnail.frame = frame }
+    if let container = thumbnail.superview,
+       let rect = sourceFrameProvider?(index),
+       rect.origin.x.isFinite, rect.origin.y.isFinite,
+       rect.width.isFinite, rect.height.isFinite,
+       rect.width >= 2, rect.height >= 2 {
+      thumbnail.frame = container.convert(rect, from: nil)
       return thumbnail
     }
-    guard let container = thumbnail.superview,
-          let rect = sourceFrameProvider?(index),
-          rect.origin.x.isFinite, rect.origin.y.isFinite,
-          rect.width.isFinite, rect.height.isFinite,
-          rect.width >= 2, rect.height >= 2 else { return nil }
-    thumbnail.frame = container.convert(rect, from: nil)
+    guard index == initialIndex, let frame = sourceThumbnailInitialFrame else { return nil }
+    thumbnail.frame = frame
     return thumbnail
   }
 
