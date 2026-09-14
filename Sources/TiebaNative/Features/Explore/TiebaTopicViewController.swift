@@ -104,8 +104,6 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
     var palette = TiebaSimpleRowPalette.default
     let tint = TiebaNavigator.shared.chromeTheme.tint
     palette.base.primary = tint
-    palette.base.chip = tint.withAlphaComponent(0.12)
-    palette.base.onChip = tint
     list.palette = palette
   }
 

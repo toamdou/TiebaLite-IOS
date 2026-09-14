@@ -750,7 +750,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   private var stripFrames: [CGRect] = []
   private var stripActiveIndex = 0
   private var stripTotalCount = 0
-  private var lastResolvedStyle: UIUserInterfaceStyle = .unspecified
+  /// 外观档变化登记（registerForTraitChanges，iOS 17 起；traitCollectionDidChange 已废弃）。
+  private var styleRegistration: UITraitChangeRegistration?
   /// 已配置的 (pageKey#index)：主题重刷走 configure 但不能重置图片带滚动位置。
   private var configuredIdentity: String?
   /// 上次绘制的点赞数/帖子 id：同一帖计数变化时播跳动（RN numPop 的判据）。
@@ -811,7 +812,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     cardView.backgroundColor = palette.card
     cardView.layer.cornerRadius = 20 // Radius.card
     cardView.layer.cornerCurve = .continuous
-    cardView.layer.borderWidth = 1 / UIScreen.main.scale
+    cardView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     cardView.layer.borderColor = palette.borderCard.cgColor
     cardView.clipsToBounds = true // TweetCard card.overflow:'hidden'：横滑带/圆角裁切
     cardView.isHidden = true
@@ -878,7 +879,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     quoteCard.isHidden = true
     quoteCard.layer.cornerRadius = 12 // Radius.input
     quoteCard.layer.cornerCurve = .continuous
-    quoteCard.layer.borderWidth = 1 / UIScreen.main.scale
+    quoteCard.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     quoteCard.layer.borderColor = palette.separator.cgColor
     configureStaticLabel(quoteForumLabel)
     configureMultilineLabel(quoteTitleLabel)
@@ -898,7 +899,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     chipAvatarView.clipsToBounds = true
     chipInitialLabel.textAlignment = .center
     chipInitialLabel.font = .systemFont(ofSize: 20 * 0.38, weight: .semibold)
-    chipInitialLabel.textColor = .white
+    chipInitialLabel.textColor = palette.onChip
     chipView.addSubview(chipInitialLabel)
     chipView.addSubview(chipAvatarView)
     configureStaticLabel(chipLabel)
@@ -948,6 +949,13 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     bannerTextLabel.numberOfLines = 1
     bannerView.addSubview(bannerTextLabel)
     addSubview(bannerView)
+
+    // 动态色转 CGColor 后不随外观走：系统级 trait 登记只在外观档真变时回调，
+    // 不再每次 layoutSubviews 比对（traitCollectionDidChange 自 iOS 17 废弃）。
+    styleRegistration = registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
+      (view: TiebaFeedRowView, _) in
+      view.refreshDynamicLayerColors()
+    }
   }
 
   public required init?(coder: NSCoder) {
@@ -1076,8 +1084,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
       item.palette = palette
     }
     singleMediaView.palette = palette
-    // 强制 CGColor 解析路径重走一次（动态色的 layer 值不会自己跟随）。
-    lastResolvedStyle = .unspecified
+    // 动态色转 CGColor 的两处（卡片/引用卡描边）立即按当前外观重解析一次。
+    refreshDynamicLayerColors()
     if let model {
       configure(with: model)
     }
@@ -1120,7 +1128,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     if !isSameRowReconfigure {
       tiebaLoadRowImage(
         url: model.avatarURL,
-        maxPixel: 44 * UIScreen.main.scale,
+        maxPixel: 44 * max(traitCollection.displayScale, 1),
         into: avatarView
       )
     }
@@ -1170,7 +1178,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   private func configureMedia(with model: TiebaFeedRowModel) {
     guard model.showsMedia else { return }
-    let scale = UIScreen.main.scale
+    let scale = max(traitCollection.displayScale, 1)
     let isSameRow = isSameRowReconfigure
     let mediaMenuHandler: (Int, String) -> Void = { [weak self] index, action in
       self?.onMediaMenuAction?(index, action)
@@ -1274,10 +1282,11 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     chipLabel.textColor = palette.onChip
     chipLabel.isHidden = false
     chipInitialLabel.text = String(model.forumChipInitial.prefix(2)).uppercased()
+    chipInitialLabel.textColor = palette.onChip
     if !isSameRowReconfigure {
       tiebaLoadRowImage(
         url: model.forumAvatarURL,
-        maxPixel: 20 * UIScreen.main.scale,
+        maxPixel: 20 * max(traitCollection.displayScale, 1),
         into: chipAvatarView
       )
     }
@@ -1518,7 +1527,6 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   public override func layoutSubviews() {
     super.layoutSubviews()
-    refreshDynamicLayerColorsIfNeeded()
     guard let model else { return }
     // 帧计划在测量期已算好（模型不可变），布局期只摆 frame。
     let plan = model.plan
@@ -1529,7 +1537,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
         x: 0,
         y: 0,
         width: plan.cardFrame.width,
-        height: 1 / UIScreen.main.scale
+        height: 1 / max(traitCollection.displayScale, 1)
       )
       placeBanner(bannerIconView, plan.bannerIconFrame, in: plan.cardFrame)
       placeBanner(bannerBadgeLabel, plan.bannerBadgeFrame, in: plan.cardFrame)
@@ -1579,10 +1587,22 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     place(quoteTitleLabel, plan.quoteTitleFrame)
     place(quoteContentLabel, plan.quoteContentFrame)
     place(chipView, plan.chipFrame)
-    place(chipAvatarView, plan.chipAvatarFrame)
+    // ⚠️ 吧头像/首字/吧名都是 chipView 的子视图，而 plan 里这三个矩形与 chipFrame
+    // 同在**卡片坐标系**：直接 place 会把整组内容右移一个 chipFrame.minX，chipView
+    // 又 clipsToBounds，于是吧名被整段裁掉（用户报的"左下角吧名吧头像显示不出来"，
+    // 只剩一个白首字）。与下面操作栏 item.layout 同款：减父视图原点换算成局部坐标。
+    if let chipFrame = plan.chipFrame, let avatar = plan.chipAvatarFrame,
+      let text = plan.chipTextFrame
+    {
+      chipAvatarView.frame = avatar.offsetBy(dx: -chipFrame.minX, dy: -chipFrame.minY)
+      chipInitialLabel.frame = chipAvatarView.bounds
+      chipLabel.frame = text.offsetBy(dx: -chipFrame.minX, dy: -chipFrame.minY)
+    } else {
+      chipAvatarView.frame = .zero
+      chipInitialLabel.frame = .zero
+      chipLabel.frame = .zero
+    }
     chipAvatarView.layer.cornerRadius = chipAvatarView.bounds.width / 2
-    chipInitialLabel.frame = chipAvatarView.bounds
-    place(chipLabel, plan.chipTextFrame)
 
     for (index, item) in actionItems.enumerated() {
       guard index < plan.actionButtonFrames.count,
@@ -1698,12 +1718,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   // MARK: - 外观切换（layer 的 CGColor 不会自动跟随动态色）
 
-  /// iOS 16/17 通用的无弃用 API 方案：布局时对比一次外观档（枚举比较，零分配），
-  /// 变化才重新解析 CGColor（traitCollectionDidChange 在 iOS 17 已弃用）。
-  private func refreshDynamicLayerColorsIfNeeded() {
-    let style = traitCollection.userInterfaceStyle
-    guard style != lastResolvedStyle else { return }
-    lastResolvedStyle = style
+  /// 外观档变化时重解析 CGColor（由 styleRegistration 触发；换色板时也直接调）。
+  private func refreshDynamicLayerColors() {
     cardView.layer.borderColor = palette.borderCard
       .resolvedColor(with: traitCollection).cgColor
     quoteCard.layer.borderColor = palette.separator

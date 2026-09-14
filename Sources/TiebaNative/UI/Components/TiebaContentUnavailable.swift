@@ -166,8 +166,6 @@ enum TiebaChromePalette {
     var palette = TiebaSimpleRowPalette.default
     let tint = TiebaNavigator.shared.chromeTheme.tint
     palette.base.primary = tint
-    palette.base.chip = tint.withAlphaComponent(0.12)
-    palette.base.onChip = tint
     return palette
   }
 }
@@ -296,7 +294,7 @@ final class TiebaStatColumnsRow: UIView {
       var constraints = [
         divider.centerXAnchor.constraint(equalTo: columns[index].leadingAnchor),
         divider.centerYAnchor.constraint(equalTo: centerYAnchor),
-        divider.widthAnchor.constraint(equalToConstant: 1 / max(UIScreen.main.scale, 1)),
+        divider.widthAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)),
       ]
       switch separatorStyle {
       case .fill(let inset):

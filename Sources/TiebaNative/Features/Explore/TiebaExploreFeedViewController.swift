@@ -105,8 +105,6 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     var palette = TiebaSimpleRowPalette.default
     let tint = TiebaNavigator.shared.chromeTheme.tint
     palette.base.primary = tint
-    palette.base.chip = tint.withAlphaComponent(0.12)
-    palette.base.onChip = tint
     list.palette = palette
   }
 
@@ -607,12 +605,7 @@ final class TiebaDislikeSheetViewController: UIViewController {
     table.delegate = self
     table.backgroundColor = .clear
     table.register(UITableViewCell.self, forCellReuseIdentifier: "reason")
-    var config: UIButton.Configuration
-    if #available(iOS 26.0, *) {
-      config = .prominentGlass()
-    } else {
-      config = .filled()
-    }
+    var config: UIButton.Configuration = .prominentGlass()
     config.title = "提交"
     config.image = UIImage(systemName: "hand.thumbsdown.fill")
     config.imagePadding = 8

@@ -1175,8 +1175,10 @@ public nonisolated struct TiebaFeedRowPalette: @unchecked Sendable, Equatable {
     textSecondary: .secondaryLabel,
     textTertiary: .tertiaryLabel,
     primary: Self.adaptive(light: 0x2563EB, dark: 0x60A5FA),
-    chip: Self.adaptive(light: 0x2563EB, dark: 0x60A5FA).withAlphaComponent(0.12),
-    onChip: Self.adaptive(light: 0x2563EB, dark: 0x60A5FA),
+    // 吧名徽章走 UIKit 原生语义填充：强调色留给可点控件，徽章用
+    // secondarySystemFill + secondaryLabel（浅深色自适应，不与主色抢眼）。
+    chip: .secondarySystemFill,
+    onChip: .secondaryLabel,
     separator: .separator,
     liked: Self.adaptive(light: 0xFF2D55, dark: 0xFF375F),
     warning: .systemOrange,
