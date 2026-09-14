@@ -57,6 +57,8 @@ final class TiebaBackgroundSync: @unchecked Sendable {
     request.earliestBeginDate = Date(timeIntervalSinceNow: minutes * 60)
     // 如实上抛 + 日志化：系统只允许 ~10 个挂起 BGTask，超出时 submit 抛错，
     // 旧实现 try? 吞掉后 JS 侧无声无息（后台提醒悄悄失效）。
+    // ⚠️ 保留 submit(_:)：async 替代 submitTaskRequest(_:) 是 iOS 27+（BGTaskScheduler.h:142-146），
+    // 部署底线 26.0 必须走 26 可用的同步形；换 async 要连调用方一起 async，未做。
     do {
       try BGTaskScheduler.shared.submit(request)
     } catch {
@@ -74,6 +76,7 @@ final class TiebaBackgroundSync: @unchecked Sendable {
     let request = BGProcessingTaskRequest(identifier: Self.autoSignTaskIdentifier)
     request.requiresNetworkConnectivity = true
     request.earliestBeginDate = nextAutoSignDate(hour: hour, minute: minute)
+    // submit(_:) 同上：async 形 iOS 27+，26.0 部署底线只能用同步形（见 registerNotificationPoll）。
     do {
       try BGTaskScheduler.shared.submit(request)
     } catch {

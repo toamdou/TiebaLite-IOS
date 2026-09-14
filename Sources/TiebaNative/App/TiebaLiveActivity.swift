@@ -26,7 +26,6 @@ private struct TiebaLiveActivityHandle: @unchecked Sendable {
   let activity: Activity<LiveActivityKitAttributes>
 }
 
-@available(iOS 16.2, *)
 @MainActor
 final class TiebaLiveActivityManager {
   static let shared = TiebaLiveActivityManager()

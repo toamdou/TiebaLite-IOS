@@ -348,7 +348,8 @@ final class TiebaHotListCell: UICollectionViewCell {
     cardView.backgroundColor = palette.card
     cardView.layer.cornerRadius = TiebaHotMetrics.cardRadius // Radius.card
     cardView.layer.cornerCurve = .continuous
-    cardView.layer.borderWidth = 1 / UIScreen.main.scale
+    // 1px 卡边框：displayScale 取视图 trait（UIScreen.main 自 iOS 26 废弃）。
+    cardView.layer.borderWidth = 1 / traitCollection.displayScale
     cardView.layer.borderColor = palette.borderCard.cgColor
 
     rankBadge.layer.cornerRadius = 10

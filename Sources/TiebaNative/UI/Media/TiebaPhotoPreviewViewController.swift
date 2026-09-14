@@ -2,6 +2,11 @@
 // 背景由系统压暗）。首帧用屏上缩略图，原图后台加载后就地淡入替换。
 import UIKit
 import Nuke
+import os
+
+/// 模块日志（全库统一 os.Logger；NSLog 同步无缓冲、口径不一）。
+private let photoPreviewLog = Logger(subsystem: "com.tiebalite.app", category: "photo-preview")
+
 final class TiebaPhotoPreviewViewController: UIViewController {
   private let imageView = UIImageView()
   private let fullUrl: String?
@@ -93,7 +98,7 @@ final class TiebaPhotoPreviewViewController: UIViewController {
         // 弱网 / 加载失败：保持缩略图首帧，不打断菜单交互（有意的产品行为）。
         // 仍留一条 debug 日志：否则"菜单里一直是缩略图"永远查不到原因。
         #if DEBUG
-        NSLog("[tieba-photo-menu] full image load failed: %@", error.localizedDescription)
+        photoPreviewLog.debug("full image load failed: \(error.localizedDescription, privacy: .public)")
         #endif
       }
     }

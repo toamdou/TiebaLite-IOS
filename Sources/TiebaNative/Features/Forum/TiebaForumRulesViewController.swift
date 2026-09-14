@@ -159,10 +159,13 @@ final class TiebaForumRulesViewController: UIViewController, TiebaNativeScreen {
   }
 
   /// 图片显示宽度 = 屏宽 − 页面左右 16×2 − 卡片内左右 16×2（原 RULE_IMAGE_INSET
-  /// 同一算式）；下采样交给共享 Nuke options。
+  /// 同一算式）；下采样交给共享 Nuke options。屏宽/scale 从窗口场景取
+  ///（UIScreen.main 自 iOS 26 废弃，多场景/外接屏下语义错误）。
   private func imageMaxPixel() -> CGFloat {
-    let screen = view.bounds.width > 0 ? view.bounds.width : UIScreen.main.bounds.width
-    return max(screen - 64, 1) * UIScreen.main.scale
+    let screen = view.window?.windowScene?.screen
+    let screenWidth = screen?.bounds.width ?? view.bounds.width
+    let width = view.bounds.width > 0 ? view.bounds.width : screenWidth
+    return max(width - 64, 1) * traitCollection.displayScale
   }
 
   // MARK: - 状态

@@ -527,6 +527,19 @@ enum TiebaHaptics {
 
   // MARK: - 系统预设实现（无门控/无线程跳转，调用方已完成）
 
+  /// 反馈生成器的宿主 view：无 view 的 init 已标待废弃
+  ///（UIFeedbackGenerator.h:21 / UIImpactFeedbackGenerator.h:38），替代形要求绑定
+  /// 一个 view。取前台活跃场景的 keyWindow；无窗口（后台/启动中）没有可归属的 UI
+  /// 上下文，直接不发。assumeIsolated 依据：入口全经 onMain 收束，恒在主线程。
+  private static var feedbackHostView: UIView? {
+    MainActor.assumeIsolated {
+      UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .first { $0.activationState == .foregroundActive }?
+        .keyWindow
+    }
+  }
+
   private static func performImpact(style: String) {
     let feedbackStyle: UIImpactFeedbackGenerator.FeedbackStyle
     switch style {
@@ -536,7 +549,8 @@ enum TiebaHaptics {
     case "soft": feedbackStyle = .soft
     default: feedbackStyle = .light
     }
-    let generator = UIImpactFeedbackGenerator(style: feedbackStyle)
+    guard let host = feedbackHostView else { return }
+    let generator = UIImpactFeedbackGenerator(style: feedbackStyle, view: host)
     generator.prepare()
     generator.impactOccurred()
   }
@@ -549,13 +563,15 @@ enum TiebaHaptics {
     case "error": feedbackType = .error
     default: return // 未知通知类型不反馈（TS 枚举约束内不会发生）
     }
-    let generator = UINotificationFeedbackGenerator()
+    guard let host = feedbackHostView else { return }
+    let generator = UINotificationFeedbackGenerator(view: host)
     generator.prepare()
     generator.notificationOccurred(feedbackType)
   }
 
   private static func performSelection() {
-    let generator = UISelectionFeedbackGenerator()
+    guard let host = feedbackHostView else { return }
+    let generator = UISelectionFeedbackGenerator(view: host)
     generator.prepare()
     generator.selectionChanged()
   }

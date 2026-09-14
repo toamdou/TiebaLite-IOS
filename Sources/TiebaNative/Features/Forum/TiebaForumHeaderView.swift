@@ -100,7 +100,8 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     // ── 吧名片 ──
     card.layer.cornerRadius = 20
     card.layer.cornerCurve = .continuous
-    card.layer.borderWidth = 1 / max(UIScreen.main.scale, 1)
+    // 1px 卡边框：displayScale 取视图 trait（UIScreen.main 自 iOS 26 废弃）。
+    card.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     let cardStack = UIStackView()
     cardStack.axis = .vertical
     cardStack.spacing = 0

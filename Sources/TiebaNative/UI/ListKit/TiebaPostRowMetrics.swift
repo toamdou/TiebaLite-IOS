@@ -21,7 +21,8 @@ struct TiebaPostPreferences: Sendable {
   var isNight = false
   var timestampStyle = "relative"
   var videoAutoplay = false
-  /// 1px hairline（UIScreen.main 是主 actor 隔离，测量在后台队列 → 值随偏好一起取好）。
+  /// 1px hairline：trait 的 displayScale 只在 UIKit 上下文非 0（测量在后台队列），
+  /// 所以由主线程的 load() 取好、随偏好一起传入（UIScreen.main 自 iOS 26 废弃）。
   var hairline: CGFloat = 1.0 / 3.0
 
   @MainActor
@@ -38,7 +39,7 @@ struct TiebaPostPreferences: Sendable {
     prefs.dataSaverMode = TiebaPreferenceSnapshot.string("dataSaverMode") ?? "high"
     prefs.timestampStyle = TiebaPreferenceSnapshot.string("timestampStyle") ?? "relative"
     prefs.videoAutoplay = TiebaPreferenceSnapshot.bool("videoAutoplay", default: false)
-    prefs.hairline = 1 / max(UIScreen.main.scale, 1)
+    prefs.hairline = 1 / max(UITraitCollection.current.displayScale, 1)
     prefs.isNight = TiebaNavigator.shared.chromeTheme.dark
     return prefs
   }

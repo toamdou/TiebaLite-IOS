@@ -158,7 +158,8 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
       noticeDivider.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       noticeDivider.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       noticeDivider.bottomAnchor.constraint(equalTo: noticeRow.topAnchor, constant: -12),
-      noticeDivider.heightAnchor.constraint(equalToConstant: 1 / max(UIScreen.main.scale, 1)),
+      // 1px 分隔线：displayScale 取本 VC 的 trait（UIScreen.main 自 iOS 26 废弃）。
+      noticeDivider.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)),
       icon.widthAnchor.constraint(equalToConstant: 14),
       icon.heightAnchor.constraint(equalToConstant: 14),
     ])

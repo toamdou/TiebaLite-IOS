@@ -948,15 +948,9 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   // MARK: - FAB
 
   private func setupFab() {
-    // 原 GlassView（clear 玻璃）的 UIKit 对位：iOS 26 起系统液态玻璃圆钮；
-    // 更早系统无 glass API，回落实心圆钮（底 = surfaceSecondary，同全库写法）。
-    var config: UIButton.Configuration
-    if #available(iOS 26.0, *) {
-      config = .glass()
-    } else {
-      config = .filled()
-      config.baseBackgroundColor = TiebaSimpleRowPalette.default.surfaceSecondary
-    }
+    // 原 GlassView（clear 玻璃）的 UIKit 对位：系统液态玻璃圆钮
+    // （部署底线 iOS 26，.glass() 恒可用）。
+    var config: UIButton.Configuration = .glass()
     config.cornerStyle = .capsule
     config.image = UIImage(
       systemName: fabFunction == "back_to_top" ? "arrow.up" : "arrow.clockwise",

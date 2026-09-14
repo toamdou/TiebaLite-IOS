@@ -15,10 +15,11 @@ final class HdrChromeFlash: UIView {
     if let existing = control.viewWithTag(markerTag) {
       existing.removeFromSuperview()
     }
-    // 触觉与光效同源同刻：chrome 按钮（返回/导航右钮/底栏项）按压的轻震动。
-    // 受全局"震动反馈"开关约束（JS 侧经 setHapticFeedbackEnabled 同步）。
+    // 触觉与光效同源同刻（受全局"震动反馈"开关约束，JS 侧经 setHapticFeedbackEnabled 同步）。
+    // init(style:) 已被 SDK 标记待废弃（UIImpactFeedbackGenerator.h:38）：改用其指定
+    // 替代 init(style:view:)，生成器挂到被按控件上——同一轻震，语义不变。
     if TiebaChrome.hapticChromeHapticsEnabled {
-      UIImpactFeedbackGenerator(style: .light).impactOccurred()
+      UIImpactFeedbackGenerator(style: .light, view: control).impactOccurred()
     }
     let flash = HdrChromeFlash(frame: control.bounds)
     flash.tag = markerTag

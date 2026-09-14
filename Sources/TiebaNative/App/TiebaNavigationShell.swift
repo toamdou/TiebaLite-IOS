@@ -122,11 +122,9 @@ public final class TiebaMainTabBarController: UITabBarController {
     // appearance 写入都会让 UIKit 退出自动 Liquid Glass 渲染管线，底栏退化成
     // 旧磨砂（实心色带）。保持 appearance 原生态，由系统渲染真液态玻璃。
     // 只设 tintColor（选中态图标/文字的主色）。
-    if #available(iOS 26.0, *) {
-      // 下滑收纳 / 上滑恢复，动画由 UIKit 原生药丸收纳控制。
-      // 开关（设置→使用习惯→浏览）由 JS 下发；关闭时 never = 底栏常驻。
-      tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
-    }
+    // 下滑收纳 / 上滑恢复，动画由 UIKit 原生药丸收纳控制。
+    // 开关（设置→使用习惯→浏览）由 JS 下发；关闭时 never = 底栏常驻。
+    tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
     // 深色/浅色：UIImage(systemName:) 默认跟随 trait，这里把整个底栏
     // 覆盖成应用主题对应的用户界面风格，避免系统浅色时底栏亮、内容暗。
     overrideUserInterfaceStyle = theme.dark ? .dark : .light
@@ -136,9 +134,7 @@ public final class TiebaMainTabBarController: UITabBarController {
   var tabBarMinimizeEnabled: Bool = true {
     didSet {
       guard oldValue != tabBarMinimizeEnabled else { return }
-      if #available(iOS 26.0, *) {
-        tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
-      }
+      tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
     }
   }
 }

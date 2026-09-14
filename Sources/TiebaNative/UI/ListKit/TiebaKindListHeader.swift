@@ -280,7 +280,11 @@ public final class TiebaTopicHeaderView: UIView, TiebaKindListHeaderView {
   /// 尺寸计划（测量与绘制共用；纯算术 + 文本测量，不写任何视图 frame）。
   private func makePlan(width: CGFloat) -> TiebaTopicHeaderPlan {
     if let cache = planCache, cache.width == width { return cache.plan }
-    let plan = TiebaTopicHeaderLayout.plan(width: width, spec: spec)
+    let plan = TiebaTopicHeaderLayout.plan(
+      width: width,
+      spec: spec,
+      scale: max(traitCollection.displayScale, 1)
+    )
     planCache = (width, plan)
     return plan
   }
@@ -413,12 +417,13 @@ enum TiebaTopicHeaderLayout {
   static let chipAvatar: CGFloat = 20
   static let chipMaxWidth: CGFloat = 180
 
-  static func plan(width: CGFloat, spec: [String: Any]) -> TiebaTopicHeaderPlan {
+  /// scale = 调用视图 trait 的 displayScale（hairline 用；UIScreen.main 自 iOS 26 废弃）。
+  static func plan(width: CGFloat, spec: [String: Any], scale: CGFloat) -> TiebaTopicHeaderPlan {
     var plan = TiebaTopicHeaderPlan()
     let centered = TiebaSimpleRowParser.string(spec["kind"]) == "topicCentered"
     let title = TiebaSimpleRowParser.nonEmpty(spec["title"]) ?? ""
     let contentWidth = max(width - padding * 2, 0)
-    let hairline = 1 / max(UIScreen.main.scale, 1)
+    let hairline = 1 / max(scale, 1)
 
     if centered {
       // 精简页头：padding + 居中标题（20/700）+ padding（原 simpleHeader 分支）。

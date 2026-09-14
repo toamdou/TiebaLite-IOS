@@ -62,9 +62,11 @@ private enum TiebaSkeletonMetrics {
   static let postHeaderBottom: CGFloat = 10
   static let postBodyGap: CGFloat = 8
   static let postActionTop: CGFloat = 12
-  /// 卡片细描边 = hairline（StyleSheet.hairlineWidth）。UIScreen 是主线程隔离的，
-  /// 只能在主线程读；本枚举的消费者全是视图代码。
-  @MainActor static var hairline: CGFloat { 1 / max(UIScreen.main.scale, 1) }
+  /// 卡片细描边 = hairline（StyleSheet.hairlineWidth）：取调用视图 trait 的
+  /// displayScale（UIScreen.main 自 iOS 26 起废弃）。
+  static func hairline(for traits: UITraitCollection) -> CGFloat {
+    1 / max(traits.displayScale, 1)
+  }
 }
 
 // MARK: - 单个骨架单元
@@ -82,7 +84,8 @@ final class TiebaSkeletonCellView: UIView {
   private var borderSurfaces: [UIView] = []
   private var mediaBlock: UIView?
   private var mediaHeightConstraint: NSLayoutConstraint?
-  private var lastResolvedStyle: UIUserInterfaceStyle?
+  /// 外观档变化登记（registerForTraitChanges；traitCollectionDidChange 已废弃）。
+  private var styleRegistration: UITraitChangeRegistration?
 
   init(
     variant: TiebaSkeletonVariant,
@@ -104,6 +107,12 @@ final class TiebaSkeletonCellView: UIView {
     case .card: buildCard()
     case .row: buildRow()
     }
+    // 动态色转 CGColor 后不随外观走：首帧解析 + trait 真变时重解析。
+    styleRegistration = registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
+      (view: TiebaSkeletonCellView, _) in
+      view.refreshBorderColors()
+    }
+    refreshBorderColors()
   }
 
   @available(*, unavailable)
@@ -111,7 +120,6 @@ final class TiebaSkeletonCellView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    refreshBorderColorsIfNeeded()
     // thread 媒体块高 = round(内容列宽 × 0.75)（真实单图 4:3 钳制呈现）
     if let mediaBlock, let mediaHeightConstraint, let container = mediaBlock.superview {
       let height = (max(container.bounds.width, 0) * 0.75).rounded()
@@ -141,23 +149,20 @@ final class TiebaSkeletonCellView: UIView {
     return view
   }
 
-  /// 卡片面（背景 card + hairline 描边；layer 色随外观在 layout 时刷新）。
+  /// 卡片面（背景 card + hairline 描边；layer 色随外观在 trait 变化时刷新）。
   private func makeSurface(radius: CGFloat) -> UIView {
     let view = UIView()
     view.backgroundColor = cardColor
     view.layer.cornerRadius = radius
     view.layer.cornerCurve = .continuous
-    view.layer.borderWidth = TiebaSkeletonMetrics.hairline
+    view.layer.borderWidth = TiebaSkeletonMetrics.hairline(for: traitCollection)
     view.translatesAutoresizingMaskIntoConstraints = false
     borderSurfaces.append(view)
     return view
   }
 
-  /// layer 的 CGColor 不跟随动态色：外观档变化时才重新解析。
-  private func refreshBorderColorsIfNeeded() {
-    let style = traitCollection.userInterfaceStyle
-    guard style != lastResolvedStyle else { return }
-    lastResolvedStyle = style
+  /// layer 的 CGColor 不跟随动态色：外观档变化（styleRegistration）时重解析。
+  private func refreshBorderColors() {
     let color = borderColor.resolvedColor(with: traitCollection).cgColor
     for surface in borderSurfaces {
       surface.layer.borderColor = color

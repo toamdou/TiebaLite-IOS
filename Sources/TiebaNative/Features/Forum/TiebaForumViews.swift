@@ -48,10 +48,11 @@ final class TiebaForumAvatarView: UIView {
       imageView.image = nil
       return
     }
-    // 下采样目标 = 固定边长（不读 bounds：configure 常早于首次布局）。
+    // 下采样目标 = 固定边长 × 视图 displayScale（不读 bounds：configure 常早于
+    // 首次布局；UIScreen.main 自 iOS 26 废弃）。
     loadImage(
       with: TiebaNuke.secureURL(target),
-      options: TiebaNuke.options(maxPixel: side * UIScreen.main.scale),
+      options: TiebaNuke.options(maxPixel: side * traitCollection.displayScale),
       into: imageView
     ) { [weak self] result in
       guard let self, case .success = result else { return }

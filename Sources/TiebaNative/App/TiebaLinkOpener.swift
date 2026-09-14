@@ -12,8 +12,8 @@
 //   - 内置浏览器 = SFSafariViewController（TiebaInAppBrowser），controlsColor 用
 //     应用内主题主色——JS 那边是 getThemeColors(...).primary，与导航壳收到的
 //     themeTint 同源同值；
-//   - 系统浏览器 = UIApplication.openURL；打不开时弹 Alert（标题「无法打开链接」，
-//     正文是 URL 本身）——与 JS 的 `Alert.alert('无法打开链接', url)` 同形；
+//   - 系统浏览器 = UIApplication.open(_:options:)（现代面）；打不开时弹 Alert（标题
+//     「无法打开链接」，正文是 URL 本身）——与 JS 的 `Alert.alert('无法打开链接', url)` 同形；
 //   - 内置浏览器 present 失败时回落系统浏览器（JS 的 catch → Linking.openURL）。
 // ============================================================
 import UIKit
@@ -85,8 +85,10 @@ enum TiebaLinkOpener {
   }
 
   /// openLink(url, false)：强制系统浏览器（Release 页面 / 弹窗里的「在浏览器中打开」）。
+  /// 不预检 canOpenURL：SDK 已标记它废弃（UIApplication.h:98，"Prefer attempting to
+  /// open URLs and handling any failures"），open 的 completion(false) 就是同一失败信号。
   static func openExternal(_ urlString: String) {
-    guard let url = URL(string: urlString), UIApplication.shared.canOpenURL(url) else {
+    guard let url = URL(string: urlString) else {
       showCannotOpen(urlString)
       return
     }

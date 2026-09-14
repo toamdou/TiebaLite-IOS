@@ -11,9 +11,7 @@
 //   Button(borderedProminent/bordered/glassProminent) → UIButton.Configuration
 //                            （iOS 26 起 SwiftUI 的 borderedProminent/bordered 本身
 //                             就是液态玻璃按钮，UIKit 对位是 prominentGlass()/glass()，
-//                             更早系统 SwiftUI 退成实心/描边，与 borderedProminent()/
-//                             bordered()/filled() 逐版一致 —— 判据同
-//                             TiebaNotFoundViewController 与 TiebaFormActionCell）
+//                             判据同 TiebaNotFoundViewController 与 TiebaFormActionCell）
 //
 // 布局（与迁移前的 VStack 结构逐条对应）：
 //   [转圈]  ← spacing 12（loading 态的 ProgressView + Text 间距）
@@ -315,18 +313,19 @@ final class TiebaStateContentView: UIView {
     TiebaStateButton(raw: ["id": "retry", "title": title, "style": "borderedProminent", "capsule": true])
   }
 
-  /// 按钮配置：SwiftUI buttonStyle 名 → UIButton.Configuration（含 iOS 26 玻璃分支）。
+  /// 按钮配置：SwiftUI buttonStyle 名 → UIButton.Configuration（玻璃配置 = 系统
+  /// glassButtonConfiguration/prominentGlassButtonConfiguration，部署目标 26 恒可用）。
   static func configuration(for item: TiebaStateButton) -> UIButton.Configuration {
     var config: UIButton.Configuration
     switch item.style {
     case "bordered":
-      if #available(iOS 26.0, *) { config = .glass() } else { config = .bordered() }
+      config = .glass()
     case "glassProminent":
-      if #available(iOS 26.0, *) { config = .prominentGlass() } else { config = .filled() }
+      config = .prominentGlass()
     case "plain":
       config = .plain()
     default:
-      if #available(iOS 26.0, *) { config = .prominentGlass() } else { config = .borderedProminent() }
+      config = .prominentGlass()
     }
     config.title = item.title
     config.image = item.icon.flatMap {

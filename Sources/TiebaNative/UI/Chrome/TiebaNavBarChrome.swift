@@ -382,7 +382,6 @@ enum TiebaChrome {
   /// 可压，显式关掉。顶/底同一套判据，不引入第二套几何条件。
   @discardableResult
   private static func applyScrollEdgeEffects(glass: Bool) -> Bool {
-    guard #available(iOS 26.0, *) else { return false }
     guard let screen = topScreenView(), screen.bounds.height > 0 else { return false }
     var changed = false
     func configure(_ scroll: UIScrollView) {
@@ -395,10 +394,15 @@ enum TiebaChrome {
       let isList = vertical && !scroll.isPagingEnabled && onScreenX
         && frameInScreen.height > screen.bounds.height * 0.4
       let reachesBottom = frameInScreen.maxY >= screen.bounds.height - 1
-      let qualifies = frameInScreen.minY <= 1 && frameInScreen.height > 80
-        && !scroll.isHidden && scroll.alpha > 0.01
+      // 顶/底解耦（2026-09-14）：原来顶底共用 `minY <= 1` 一个判据，于是"从屏幕中部
+      // 开始的列表"（搜索结果、消息列表）连**底**边软边也拿不到——内容滑到底栏下面
+      // 是硬的。现在各自判各自的：贴顶才给顶边，压到屏底才给底边，另一侧显式关掉
+      // （effect 的 hidden 默认 false = 系统 automatic，iOS 27 上解析成 hard 硬边）。
+      let visible = !scroll.isHidden && scroll.alpha > 0.01
+      let touchesTop = frameInScreen.minY <= 1
+      let qualifies = visible && frameInScreen.height > 80 && (touchesTop || reachesBottom)
       guard qualifies else { return }
-      if setEdgeEffect(scroll.topEdgeEffect, soft: glass && isList) { changed = true }
+      if setEdgeEffect(scroll.topEdgeEffect, soft: glass && isList && touchesTop) { changed = true }
       if setEdgeEffect(scroll.bottomEdgeEffect, soft: isList && reachesBottom) { changed = true }
     }
     screen.forEachSubviewRecursively { view in
@@ -408,7 +412,6 @@ enum TiebaChrome {
   }
 
   /// 幂等写一个边缘效果：soft = soft 样式且显示；否则隐藏。
-  @available(iOS 26.0, *)
   @discardableResult
   private static func setEdgeEffect(_ effect: UIScrollEdgeEffect, soft: Bool) -> Bool {
     if soft {

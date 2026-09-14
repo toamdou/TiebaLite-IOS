@@ -986,8 +986,9 @@ final class TiebaPhotoBrowserActionController {
             self.releaseWhenIdle()
             switch result {
             case .success:
-              // 旧查看器 hapticForScene('action-success')。
-              UINotificationFeedbackGenerator().notificationOccurred(.success)
+              // 旧查看器 hapticForScene('action-success')。无 view 初始化已标待废弃
+              // （UIFeedbackGenerator.h:21）：改挂 pill（控制器持有、必在窗口内），档位/时序不变。
+              UINotificationFeedbackGenerator(view: self.pill).notificationOccurred(.success)
               self.pill.showResult(success: true, text: "保存成功")
             case .failure(let error):
               self.pill.hide()
@@ -1029,8 +1030,9 @@ final class TiebaPhotoBrowserActionController {
     guard !isSharing else { return }
     isSharing = true
     retainWhileBusy()
-    // 旧查看器 hapticForScene('press')。
-    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    // 旧查看器 hapticForScene('press')。init(style:) 已标待废弃
+    // （UIImpactFeedbackGenerator.h:38）：改挂 pill，档位/时序不变。
+    UIImpactFeedbackGenerator(style: .light, view: pill).impactOccurred()
     pill.show(text: "正在准备分享…", progress: 0)
     TiebaPhotoBrowserImageLoader.data(
       item.url,
@@ -1120,8 +1122,8 @@ final class TiebaPhotoBrowserActionController {
 
 /// 旧查看器底部"保存成功"药丸：rgba(28,28,30,.88) / 圆角 18 / 白 14pt medium /
 /// 阴影 / 2.2s 自动消失。这里加一个 3pt 确定进度条（保存/下载进度），
-/// 并进行中文案（"正在保存…"/"正在准备分享…"）。iOS 26 起底改系统液态玻璃，
-/// 低版本保留旧实色（与 TiebaThreadViewController.makeEffect 同一分档口径）。
+/// 并进行中文案（"正在保存…"/"正在准备分享…"）；底走系统液态玻璃
+/// （部署底线 iOS 26，UIGlassEffect 恒可用，不再有低版本分档）。
 final class TiebaPhotoBrowserPillView: UIView {
   private static let horizontalPadding: CGFloat = 16
   private static let verticalPadding: CGFloat = 9
@@ -1130,9 +1132,8 @@ final class TiebaPhotoBrowserPillView: UIView {
   private static let progressHeight: CGFloat = 3
   private static let cornerRadius: CGFloat = 18
 
-  /// iOS 26 玻璃底；低版本 nil（走旧的实色背景）。
-  private let glassBackground: UIVisualEffectView? = {
-    guard #available(iOS 26.0, *) else { return nil }
+  /// 玻璃底（部署底线 iOS 26，恒可用）。
+  private let glassBackground: UIVisualEffectView = {
     let effect = UIGlassEffect(style: .regular)
     effect.tintColor = UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.55)
     return UIVisualEffectView(effect: effect)
@@ -1148,15 +1149,11 @@ final class TiebaPhotoBrowserPillView: UIView {
 
   init() {
     super.init(frame: .zero)
-    if let glassBackground {
-      glassBackground.isUserInteractionEnabled = false
-      glassBackground.layer.cornerRadius = Self.cornerRadius
-      glassBackground.layer.cornerCurve = .continuous
-      glassBackground.clipsToBounds = true
-      addSubview(glassBackground)
-    } else {
-      backgroundColor = UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.88)
-    }
+    glassBackground.isUserInteractionEnabled = false
+    glassBackground.layer.cornerRadius = Self.cornerRadius
+    glassBackground.layer.cornerCurve = .continuous
+    glassBackground.clipsToBounds = true
+    addSubview(glassBackground)
     layer.cornerRadius = Self.cornerRadius
     layer.cornerCurve = .continuous
     layer.shadowColor = UIColor.black.cgColor
@@ -1213,7 +1210,7 @@ final class TiebaPhotoBrowserPillView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    glassBackground?.frame = bounds
+    glassBackground.frame = bounds
     let progressExtra = progressFraction != nil ? Self.progressHeight + 2 : 0
     var x = Self.horizontalPadding
     let contentHeight = max(bounds.height - Self.verticalPadding * 2 - progressExtra, 0)
@@ -1613,8 +1610,7 @@ final class TiebaPhotoSourceThumbnailView: UIImageView {}
 /// 左侧 40pt 圆形关闭钮（xmark 22 bold、白 10% 底、按压 0.55 透明度）+
 /// 中间 "n/N" 16pt semibold 与 13pt 上下文标题 + 右侧保存/分享 40pt 圆钮。
 /// 动作（save/share）由 session 转给原生 ActionController 执行。
-/// iOS 26 起顶栏底/圆钮改系统液态玻璃（同 TiebaThreadViewController 分档），
-/// 低版本保留 systemChromeMaterialDark + 0.45 黑 scrim + 白 10% 实心圆钮。
+/// 顶栏底/圆钮走系统液态玻璃（部署底线 iOS 26，UIGlassEffect 恒可用）。
 final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
   var onClose: (() -> Void)?
   var onAction: ((String) -> Void)?
@@ -1624,24 +1620,15 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
   private static let bottomPadding: CGFloat = 8
   private static let minimumTopPadding: CGFloat = 30
 
-  /// 顶栏底材质（iOS 26 分档：玻璃自带材质，旧版是深色材质 + scrim 压暗）。
+  /// 顶栏底材质：系统液态玻璃（部署底线 iOS 26，恒可用）。
   private static func makeBarEffect() -> UIVisualEffect {
-    if #available(iOS 26.0, *) {
-      let effect = UIGlassEffect(style: .regular)
-      // 顶栏恒深色（查看器黑底），玻璃带深色调保证白字/白图标可读。
-      effect.tintColor = UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.4)
-      return effect
-    }
-    return UIBlurEffect(style: .systemChromeMaterialDark)
-  }
-
-  private static var usesGlass: Bool {
-    if #available(iOS 26.0, *) { return true }
-    return false
+    let effect = UIGlassEffect(style: .regular)
+    // 顶栏恒深色（查看器黑底），玻璃带深色调保证白字/白图标可读。
+    effect.tintColor = UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.4)
+    return effect
   }
 
   private let blur = UIVisualEffectView(effect: TiebaPhotoBrowserChromeOverlay.makeBarEffect())
-  private let scrim = UIView()
   private let closeButton = TiebaPhotoBrowserCircleButton(type: .custom)
   private let saveButton = TiebaPhotoBrowserCircleButton(type: .custom)
   private let shareButton = TiebaPhotoBrowserCircleButton(type: .custom)
@@ -1668,12 +1655,6 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
     blur.isUserInteractionEnabled = false
     blur.translatesAutoresizingMaskIntoConstraints = false
     addSubview(blur)
-    // 玻璃自带材质，scrim 只在旧材质下压暗（26+ 仍叠黑罩会把玻璃盖掉）。
-    scrim.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-    scrim.isUserInteractionEnabled = false
-    scrim.isHidden = Self.usesGlass
-    scrim.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(scrim)
 
     configureButton(closeButton, symbol: "xmark", weight: .bold, label: "关闭图片查看器")
     closeButton.addTarget(self, action: #selector(handleClose), for: .touchUpInside)
@@ -1707,10 +1688,6 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
       blur.leadingAnchor.constraint(equalTo: leadingAnchor),
       blur.trailingAnchor.constraint(equalTo: trailingAnchor),
       blur.bottomAnchor.constraint(equalTo: bottomAnchor),
-      scrim.topAnchor.constraint(equalTo: topAnchor),
-      scrim.leadingAnchor.constraint(equalTo: leadingAnchor),
-      scrim.trailingAnchor.constraint(equalTo: trailingAnchor),
-      scrim.bottomAnchor.constraint(equalTo: bottomAnchor),
       centerStack.centerXAnchor.constraint(equalTo: centerXAnchor),
       centerStack.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
       centerStack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 96),
@@ -1730,19 +1707,12 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
       systemName: symbol,
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: weight)
     )
-    if #available(iOS 26.0, *) {
-      // 系统液态玻璃圆钮；低版本保持旧的白 10% 实心圆 + 手动圆角。
-      var config = UIButton.Configuration.glass()
-      config.image = image
-      config.baseForegroundColor = .white
-      config.cornerStyle = .capsule
-      button.configuration = config
-    } else {
-      button.backgroundColor = UIColor.white.withAlphaComponent(0.1)
-      button.layer.cornerRadius = Self.buttonSize / 2
-      button.layer.cornerCurve = .continuous
-      button.setImage(image, for: .normal)
-    }
+    // 系统液态玻璃圆钮（部署底线 iOS 26，恒可用）。
+    var config = UIButton.Configuration.glass()
+    config.image = image
+    config.baseForegroundColor = .white
+    config.cornerStyle = .capsule
+    button.configuration = config
     button.accessibilityLabel = label
     addSubview(button)
     NSLayoutConstraint.activate([

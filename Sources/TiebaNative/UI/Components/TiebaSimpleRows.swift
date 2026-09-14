@@ -19,7 +19,7 @@
 // 700 行几何，行形状完全绑定 TweetCard；本文件是它的**同类并列实现**，
 // 共享 TiebaFeedRowPalette（主题色板）与 TiebaRowText 的 TextKit 测量，但
 // attributed 串**不写前景色**——换主题时只重贴色，不重测（TiebaFeedRowModel
-// 把 .label 色写进了串，靠 refreshDynamicLayerColorsIfNeeded 补救）。
+// 把 .label 色写进了串，靠 refreshDynamicLayerColors 补救）。
 //
 // ⚠️ 宽度不做全局闸门：同屏多个列表各自的宽度不同（消息列表 16pt 横内缩、
 // 吧务 0），全局闸门会互相清页。这里页键 =（pageKey, 宽度），查询显式传宽度，
@@ -1155,7 +1155,7 @@ public final class TiebaSimpleRowView: UIView {
 
   private func configureAvatar(_ model: TiebaSimpleRowModel) {
     if let url = model.avatarURL {
-      let pixel = model.avatarSize * UIScreen.main.scale
+      let pixel = model.avatarSize * max(traitCollection.displayScale, 1)
       loadImage(
         with: TiebaNuke.secureURL(url),
         options: TiebaNuke.options(maxPixel: pixel, mode: .fill),

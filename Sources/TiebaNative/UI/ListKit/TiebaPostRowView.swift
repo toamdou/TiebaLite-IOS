@@ -177,7 +177,7 @@ final class TiebaInlineVideoView: UIView {
     badgeView.isHidden = false
     tiebaPostLoadImage(
       TiebaPhotoItem.normalizedURL(video.poster),
-      maxPixel: max(bounds.width, 320) * UIScreen.main.scale,
+      maxPixel: max(bounds.width, 320) * max(traitCollection.displayScale, 1),
       into: posterView
     )
     TiebaThreadMediaCoordinator.shared.register(
@@ -632,7 +632,7 @@ final class TiebaPostPlaceholderView: UIView {
 
   func configure(icon: String, text: String, palette: TiebaFeedRowPalette) {
     backgroundColor = palette.chip
-    layer.borderWidth = 1 / max(UIScreen.main.scale, 1)
+    layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     layer.borderColor = palette.separator.cgColor
     iconView.image = UIImage(
       systemName: icon,
@@ -731,7 +731,7 @@ final class TiebaPostRowView: UIView {
     cardView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
     cardView.layer.cornerCurve = .continuous
     cardView.backgroundColor = model.palette.card
-    cardView.layer.borderWidth = 1 / max(UIScreen.main.scale, 1)
+    cardView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     cardView.layer.borderColor = model.palette.borderCard.cgColor
 
     titleLabel.isHidden = plan.titleFrame == nil
@@ -1063,7 +1063,8 @@ final class TiebaPostRowView: UIView {
       } else {
         tiebaPostLoadImage(
           TiebaPostRowText.displayURL(image, preferences: model.preferences),
-          maxPixel: max(view.bounds.width, view.bounds.height) * UIScreen.main.scale,
+          maxPixel: max(view.bounds.width, view.bounds.height)
+            * max(traitCollection.displayScale, 1),
           into: view,
           transition: true
         )
@@ -1143,7 +1144,7 @@ final class TiebaPostRowView: UIView {
     }
     let contentX = frame.minX + TiebaPostRowLayout.cardPadding
     subPostsHairline.isHidden = false
-    subPostsHairline.frame = CGRect(x: contentX, y: frame.minY, width: frame.width - TiebaPostRowLayout.cardPadding * 2, height: 1 / max(UIScreen.main.scale, 1))
+    subPostsHairline.frame = CGRect(x: contentX, y: frame.minY, width: frame.width - TiebaPostRowLayout.cardPadding * 2, height: 1 / max(traitCollection.displayScale, 1))
     subPostsControl.frame = frame
     let cardFrame = plan.cardFrame
     let textWidth = max(cardFrame.width - TiebaPostRowLayout.cardPadding * 2, 0)
@@ -1201,7 +1202,7 @@ final class TiebaPostRowView: UIView {
     toolbarView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
     toolbarView.layer.cornerCurve = .continuous
     // glassCard 的 hairline 描边：浅色下工具栏底色贴近页面底色，没有描边整条看不出来。
-    toolbarView.layer.borderWidth = 1 / max(UIScreen.main.scale, 1)
+    toolbarView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     toolbarView.layer.borderColor = model.palette.borderCard.cgColor
     if let textFrame = plan.toolbarTextFrame {
       toolbarReplyLabel.frame = textFrame

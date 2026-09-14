@@ -3,7 +3,7 @@
 //（原 src/components/settings/UpdateDialog.tsx，随关于页一起原生化）
 //
 // 形态：`.overFullScreen` + `.crossDissolve` + 半透明遮罩（rgba(0,0,0,0.35)），
-// 卡片 = iOS 26 液态玻璃（UIGlassEffect；更早系统系统厚材质）+ 圆角 20（连续
+// 卡片 = iOS 26 液态玻璃（UIGlassEffect）+ 圆角 20（连续
 // 曲率）+ 最大宽 420 / 最大高 78%——不再手绘不透明底与阴影。
 //
 // 内容与旧组件逐条同源（读数来自 TiebaUpdateService，即原 updateStore 的页面侧）：
@@ -24,7 +24,7 @@ import UIKit
 final class TiebaUpdateDialogViewController: UIViewController {
   private let service = TiebaUpdateService.shared
 
-  private let card = UIVisualEffectView(effect: TiebaUpdateDialogViewController.cardEffect())
+  private let card = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
   private let stack = UIStackView()
   private let titleLabel = UILabel()
   private let metaLabel = UILabel()
@@ -81,7 +81,7 @@ final class TiebaUpdateDialogViewController: UIViewController {
   // MARK: - 布局
 
   private func setUpCard() {
-    // 卡片材质：iOS 26 液态玻璃；更早系统用系统厚材质（不手写不透明底/阴影）。
+    // 卡片材质：iOS 26 液态玻璃（部署目标即 26，恒可用；不手写不透明底/阴影）。
     card.layer.cornerRadius = 20
     card.layer.cornerCurve = .continuous
     card.clipsToBounds = true
@@ -157,14 +157,6 @@ final class TiebaUpdateDialogViewController: UIViewController {
     ])
     notesHeightConstraint?.isActive = true
     cardWidthConstraint?.isActive = true
-  }
-
-  /// 卡片材质：iOS 26 液态玻璃；更早系统用系统厚材质（同样是系统 API）。
-  private static func cardEffect() -> UIVisualEffect {
-    if #available(iOS 26.0, *) {
-      return UIGlassEffect(style: .regular)
-    }
-    return UIBlurEffect(style: .systemThickMaterial)
   }
 
   /// 按钮形态：padding 16/9 + 胶囊圆角 + 14pt semibold（原 button/buttonText 样式）。

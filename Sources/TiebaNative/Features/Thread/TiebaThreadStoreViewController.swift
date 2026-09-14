@@ -371,20 +371,16 @@ private final class TiebaThreadStoreUndoBar: UIView {
     layer.cornerRadius = 20
     layer.cornerCurve = .continuous
     clipsToBounds = true
-    // iOS 26 走液态玻璃（与同批 FAB 的 .glass() 同材质）；更早系统保留纯色底。
-    if #available(iOS 26.0, *) {
-      let glass = UIVisualEffectView(effect: UIGlassEffect())
-      glass.translatesAutoresizingMaskIntoConstraints = false
-      addSubview(glass)
-      NSLayoutConstraint.activate([
-        glass.leadingAnchor.constraint(equalTo: leadingAnchor),
-        glass.trailingAnchor.constraint(equalTo: trailingAnchor),
-        glass.topAnchor.constraint(equalTo: topAnchor),
-        glass.bottomAnchor.constraint(equalTo: bottomAnchor),
-      ])
-    } else {
-      backgroundColor = .secondarySystemBackground
-    }
+    // 液态玻璃底（与同批 FAB 的 .glass() 同材质；部署底线 iOS 26，恒可用）。
+    let glass = UIVisualEffectView(effect: UIGlassEffect())
+    glass.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(glass)
+    NSLayoutConstraint.activate([
+      glass.leadingAnchor.constraint(equalTo: leadingAnchor),
+      glass.trailingAnchor.constraint(equalTo: trailingAnchor),
+      glass.topAnchor.constraint(equalTo: topAnchor),
+      glass.bottomAnchor.constraint(equalTo: bottomAnchor),
+    ])
     label.text = "已取消收藏"
     label.font = .preferredFont(forTextStyle: .footnote)
     label.textColor = .label

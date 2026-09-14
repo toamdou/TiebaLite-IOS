@@ -17,16 +17,10 @@ public final class TiebaNotFoundViewController: UIViewController, TiebaNativeScr
     config.text = "页面不存在"
     config.secondaryText = "你访问的链接可能已失效或不存在"
 
-    // 旧页面是 SwiftUI `.glassProminent` + `.capsule`：玻璃按钮是 iOS 26 起的
-    // API（UIKit 对应 prominentGlass）。更早的系统上 SwiftUI 自己也会退成实心
-    // 强调色按钮，所以 filled() 与之逐版一致——不是"我们的第二套方案"。
-    // 刻意不设 tintColor：资源目录里没有 AccentColor，旧页面的 SwiftUI accent
-    // 就是系统默认蓝，设成应用主色反而会变。
-    let style: UIButton.Configuration = {
-      if #available(iOS 26.0, *) { return .prominentGlass() }
-      return .filled()
-    }()
-    var button = style
+    // 旧页面是 SwiftUI `.glassProminent` + `.capsule`，UIKit 对应 iOS 26 的
+    // Configuration.prominentGlass()（部署目标 26，无旧系统分支）。刻意不设 tintColor：
+    // 资源目录无 AccentColor，旧页面 accent 就是系统默认蓝，设成应用主色反而会变。
+    var button = UIButton.Configuration.prominentGlass()
     button.title = "返回首页"
     button.image = UIImage(systemName: "house")
     button.imagePadding = 6
