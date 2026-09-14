@@ -370,6 +370,9 @@ private final class TiebaFeedRowMediaItemView: UIView {
     pixelHeight = 0
   }
 
+  /// 转场源图 = 自身 imageView 里那张已加载的图（无图返回 nil）。
+  var transitionSourceImage: UIImage? { imageView.image }
+
   /// 长按菜单开关：只在启用时挂 UIContextMenuInteraction（关闭态零手势开销）。
   private func syncContextMenuInteraction() {
     if contextMenuEnabled {
@@ -1695,6 +1698,15 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
       result.append((index, visible, rowFrame.midX))
     }
     return result
+  }
+
+  /// 转场源图：行内第 index 张图已加载的那张压缩图（imageView 铺满该格，
+  /// 所以 mediaHit/mediaVisibleRect 给的矩形就是它的窗口矩形）。交给查看器当
+  /// 权威源，省掉"窗口扫描找 imageView、找不到就按矩形截屏"那条会截到整张卡片的兜底。
+  public func mediaImage(at index: Int) -> UIImage? {
+    guard let model, !model.isTopBanner, model.showsMedia,
+          stripItems.indices.contains(index) else { return nil }
+    return stripItems[index].transitionSourceImage
   }
 
   /// 行坐标点是否落在行内自管交互控件（右上角菜单钮）上：cell 的整卡点击

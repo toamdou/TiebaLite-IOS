@@ -148,6 +148,11 @@ final class TiebaKindListFeedCell: UICollectionViewCell {
     return rowView.convert(rect, to: nil)
   }
 
+  /// 转场源图：该格已加载的压缩图（权威源，见 TiebaPhotoBrowser.present）。
+  func mediaImage(atMediaIndex index: Int) -> UIImage? {
+    rowView.mediaImage(at: index)
+  }
+
   override func layoutSubviews() {
     super.layoutSubviews()
     if rowView.frame != contentView.bounds {
@@ -1159,6 +1164,9 @@ public final class TiebaKindListContentView: UIView {
       items: plan.items,
       initialIndex: plan.initialIndex,
       transition: plan.transition,
+      // 被点那一格已加载的图：权威转场源（plan 给的矩形本来就是这一格的窗口矩形）。
+      sourceImage: (collectionView.cellForItem(at: indexPath) as? TiebaKindListFeedCell)?
+        .mediaImage(atMediaIndex: media.index),
       sourceFrameProvider: { [weak self] pageIndex in
         // 页号 → 行内 media 下标（url 为 nil 被过滤时会错位）→ 当前可见矩形。
         guard let self, mediaIndexes.indices.contains(pageIndex) else { return nil }

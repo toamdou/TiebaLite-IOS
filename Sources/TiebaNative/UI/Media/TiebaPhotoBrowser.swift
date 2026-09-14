@@ -96,6 +96,8 @@ public enum TiebaPhotoBrowser {
   ///   - initialIndex: 初始页（越界自动 clamp）
   ///   - transition: {frameX, frameY, frameW, frameH, thumbUrl?, contextTitle?}
   ///     frame 是源图片视图的窗口坐标（cell.convert(to: nil)）。
+  ///   - sourceImage: 被点那一格已加载的压缩图（权威转场源）。传了就用它做缩放动画
+  ///     的载体；没传才退回窗口扫描找源图视图。
   ///   - sourceFrameProvider: 初始页以外的退出重算（多图行必须传，否则翻页后
   ///     退出退化为 Fade）；返回该页源图当前窗口矩形，拿不到返回 nil。
   /// - Returns: 是否受理。items 为空 / 已有会话 / 找不到宿主 VC → false。
@@ -105,6 +107,7 @@ public enum TiebaPhotoBrowser {
     items: [[String: Any]],
     initialIndex: Int,
     transition: [String: Any]?,
+    sourceImage: UIImage? = nil,
     sourceFrameProvider: SourceFrameProvider? = nil
   ) -> Bool {
     let parsed = items.compactMap { TiebaPhotoItem(dict: $0) }
@@ -118,6 +121,7 @@ public enum TiebaPhotoBrowser {
         items: parsed,
         initialIndex: index,
         transition: parsedTransition,
+        sourceImage: sourceImage,
         sourceFrameProvider: sourceFrameProvider
       )
     }
@@ -126,6 +130,7 @@ public enum TiebaPhotoBrowser {
         items: parsed,
         initialIndex: index,
         transition: parsedTransition,
+        sourceImage: sourceImage,
         sourceFrameProvider: sourceFrameProvider
       )
     }
@@ -154,6 +159,7 @@ public enum TiebaPhotoBrowser {
     items: [TiebaPhotoItem],
     initialIndex: Int,
     transition: TiebaPhotoTransition,
+    sourceImage: UIImage?,
     sourceFrameProvider: SourceFrameProvider?
   ) -> Bool {
     guard activeSession == nil else { return false }
@@ -167,6 +173,7 @@ public enum TiebaPhotoBrowser {
         items: items,
         initialIndex: initialIndex,
         transition: transition,
+        sourceImage: sourceImage,
         sourceFrameProvider: sourceFrameProvider,
         host: host
       )
@@ -419,6 +426,8 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   private let transitionThumbURL: URL?
   /// 初始页以外的退出重算查询（见 SourceFrameProvider）；nil = 只认初始页几何。
   private let sourceFrameProvider: TiebaPhotoBrowser.SourceFrameProvider?
+  /// 被点那一格已加载的压缩图（权威转场源）；nil = 退回窗口扫描找源图视图。
+  private let sourceImage: UIImage?
   private var sourceThumbnailView: TiebaPhotoSourceThumbnailView?
   /// 安装时的替身几何：翻回初始页时恢复，保证初始页零回归。
   private var sourceThumbnailInitialFrame: CGRect?
@@ -450,10 +459,12 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     items: [TiebaPhotoItem],
     initialIndex: Int,
     transition: TiebaPhotoTransition,
+    sourceImage: UIImage?,
     sourceFrameProvider: TiebaPhotoBrowser.SourceFrameProvider?,
     host: UIViewController
   ) {
     self.items = items
+    self.sourceImage = sourceImage
     self.initialIndex = initialIndex
     self.host = host
     self.contextTitle = transition.contextTitle
@@ -568,14 +579,25 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
 
   // MARK: 源缩略图桥
 
-  /// 建临时源缩略图：几何 + 垫图优先取**被点图片自身 image view**（窗口 frame +
-  /// 已解码图；横滑带格 / 单图 / 九宫格同一条解析路径），它恒隐藏，只承担转场
-  /// 起止几何。源图未解析到时回落调用方矩形 + 窗口截屏（几何仍合法，不崩）。
+  /// 建临时源缩略图：几何 + 垫图取自**被点那一格已加载的压缩图**（调用方点名，
+  /// 权威源；横滑带格 / 单图 / 九宫格同一条路径）。它恒隐藏，只承担转场起止几何，
+  /// 由 JXZoomPresentAnimator 拿它的 image 做"缩略图放大到全屏"的缩放动画。
+  ///
+  /// ⚠️ 源图拿不到时**不装缩略图**（框架降级 Fade）。绝不按矩形截屏：那截到的是
+  /// "那个矩形位置上的屏幕内容"，源图未解析时会露出整张卡片（真机实证）。
   private func installSourceThumbnail(hostView: UIView) {
-    guard let window = hostView.window, let source = transitionSource(in: window) else { return }
+    guard let window = hostView.window else { return }
+    let resolved: (frame: CGRect, image: UIImage)
+    if let sourceImage, let frame = transitionFrame, frame.width >= 2, frame.height >= 2 {
+      resolved = (frame, sourceImage)
+    } else if let scanned = transitionSource(in: window), let image = scanned.image {
+      resolved = (scanned.frame, image)
+    } else {
+      return
+    }
 
-    let thumbView = TiebaPhotoSourceThumbnailView(frame: hostView.convert(source.frame, from: nil))
-    thumbView.image = source.image ?? TiebaPhotoBrowserSession.snapshot(rect: source.frame, in: window)
+    let thumbView = TiebaPhotoSourceThumbnailView(frame: hostView.convert(resolved.frame, from: nil))
+    thumbView.image = resolved.image
     thumbView.contentMode = .scaleAspectFill
     thumbView.clipsToBounds = true
     thumbView.backgroundColor = .clear
@@ -585,22 +607,6 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     sourceThumbnailView = thumbView
     // 初始页几何快照：翻回第一页/重算失败时恢复（不退回被点图的矩形）。
     sourceThumbnailInitialFrame = thumbView.frame
-
-    // 源图已解码 → 无需再下载；GIF 也不做高清替换（resize 处理器会把动图压成单帧）。
-    guard source.image == nil else { return }
-    if items.indices.contains(initialIndex), items[initialIndex].isGif { return }
-    guard let url = transitionThumbURL else { return }
-    let scale = TiebaPhotoBrowserSession.displayScale(for: hostView)
-    let pixelSize = CGSize(width: source.frame.width * scale, height: source.frame.height * scale)
-    sourceThumbnailTask = Task { [weak thumbView] in
-      guard let image = try? await TiebaPhotoBrowserImageLoader.load(url, pixelSize: pixelSize, isGif: false)
-      else {
-        return
-      }
-      DispatchQueue.main.async {
-        thumbView?.image = image
-      }
-    }
   }
 
   /// 转场源 = 被点图片视图的窗口 frame + 已解码图（免截屏、免下载）。
