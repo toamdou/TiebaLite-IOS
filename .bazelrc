@@ -1,9 +1,21 @@
 # 纯 Swift 工程的 Bazel 构建（CocoaPods / xcodebuild 路径已退役）。
+#
+# 常用组合（编译模式由 --config 选，不再写 -c）：
+#   模拟器调试           bazel build //:App --config=sim
+#   真机调试安装         bazel build //:App --config=device --config=sign
+#   真机正式包（推荐）   bazel build //:App --config=device --config=sign --config=release
+#   CI / 无签名正式包    bazel build //:App --config=ci --config=release
+# --config=debug / --config=release 与其他 config 自由叠加；不写则默认 Debug。
 
 build --apple_platform_type=ios
-build --ios_minimum_os=17.0
-build --compilation_mode=dbg
+build --ios_minimum_os=26.0
 build --verbose_failures
+
+# 编译模式：默认 Debug（模拟器与日常调试用），--config=release 切 opt。
+# 注意二者输出目录不同（-c 进输出路径），来回切会各走一次全量编译。
+build --compilation_mode=dbg
+build:debug --compilation_mode=dbg
+build:release --compilation_mode=opt
 
 # 缓存路径含本机用户名，不入库：复制下面两行到 .bazelrc.user（已 gitignore）并改成自己的
 # 绝对路径即可（.bazelrc 不展开 ~）。不配也能跑，只是每次全量重编。

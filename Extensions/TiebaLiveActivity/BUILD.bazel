@@ -42,7 +42,7 @@ ios_extension(
         "//TiebaLite:device_signing": "//Signing:profile_ext",
         "//conditions:default": None,
     }),
-    minimum_os_version = "17.0",
+    minimum_os_version = "26.0",
     resources = ["AppIcon.png"],
     deps = [":live_activity_lib"],
 )

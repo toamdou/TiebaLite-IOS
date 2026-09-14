@@ -82,8 +82,8 @@ jobs:
           brew install bazelisk
           bazel --version
           ./Tools/make-unsigned-profile.sh
-          MODE=$([ "$CONFIGURATION" = "Release" ] && echo opt || echo dbg)
-          bazel build //:App --config=ci -c "$MODE"
+          MODE=$([ "$CONFIGURATION" = "Release" ] && echo release || echo debug)
+          bazel build //:App --config=ci --config="$MODE"
 
       - name: Package IPA
         run: |

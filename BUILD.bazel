@@ -21,7 +21,7 @@ ios_application(
         "ipad",
     ],
     infoplists = ["//TiebaLite:app_info_plist"],
-    minimum_os_version = "17.0",
+    minimum_os_version = "26.0",
     # Unset unless --config=device (or --define=apple.device_signing=1) is passed.
     provisioning_profile = select({
         "//TiebaLite:device_signing": "//Signing:profile_app",
