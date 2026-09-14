@@ -493,20 +493,21 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     }
   }
 
-  private func handleHeaderAction(_ action: String, _ payload: [String: Any]) {
-    switch action {
-    case "avatar":
+  /// 页头动作（本页页头 = TiebaForumHeaderAction；payload 只带 avatar 的测量矩形）。
+  private func handleHeaderAction(_ action: TiebaKindListHeaderAction, _ payload: [String: Any]) {
+    guard case .forum(let headerAction) = action else { return }
+    switch headerAction {
+    case .avatar:
       openAvatarViewer(payload)
-    case "card":
+    case .card:
       openForumDetail()
-    case "follow":
+    case .follow:
       handleFollow()
-    case "sign":
+    case .sign:
       handleSign()
-    case "segment":
-      switchTab(payload["index"] as? Int ?? 0)
-    case "sort":
-      let value = payload["sortType"] as? Int ?? 0
+    case .segment(let index):
+      switchTab(index)
+    case .sort(let value):
       guard value != sortType else { return }
       sortType = value
       buckets[1] = []
@@ -514,12 +515,10 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       hasMores[1] = true
       list.headerSpec = headerSpec()
       load(tab: 1, page: 1)
-    case "clearClassify":
+    case .clearClassify:
       setClassify(nil)
-    case "classifyPicker":
+    case .classifyPicker:
       openClassifyPicker()
-    default:
-      break
     }
   }
 
@@ -868,23 +867,23 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       return
     }
     TiebaSceneHaptics.fire("press")
-    var transition: [String: Any] = ["thumbUrl": url.absoluteString, "contextTitle": "\(forumName)吧"]
-    if let x = payload["frameX"] as? Double, let y = payload["frameY"] as? Double,
-      let w = payload["frameW"] as? Double, let h = payload["frameH"] as? Double {
-      transition["frameX"] = x
-      transition["frameY"] = y
-      transition["frameW"] = w
-      transition["frameH"] = h
-    }
+    // payload 只带页头测量的头像矩形（协议约定的唯一字典通路）→ 转场取测量值。
     TiebaPhotoBrowser.present(
       items: [
-        [
-          "url": url.absoluteString, "thumbUrl": url.absoluteString,
-          "isGif": false, "isLong": false,
-        ]
+        TiebaPhotoItem(
+          url: url,
+          thumbUrl: url,
+          isGif: false,
+          isLong: false,
+          width: 0,
+          height: 0
+        )
       ],
       initialIndex: 0,
-      transition: transition
+      transition: TiebaPhotoTransition(
+        frame: TiebaPhotoTransition.measuredFrame(in: payload),
+        contextTitle: "\(forumName)吧"
+      )
     )
   }
 
@@ -957,8 +956,8 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   private func installStateHeader() {
     if stateHeader == nil {
       let header = TiebaForumHeaderView(spec: headerSpec())
-      header.onAction = { [weak self] name, payload in
-        self?.handleHeaderAction(name, payload)
+      header.onAction = { [weak self] action, payload in
+        self?.handleHeaderAction(action, payload)
       }
       header.translatesAutoresizingMaskIntoConstraints = false
       stateHeaderHost.addSubview(header)

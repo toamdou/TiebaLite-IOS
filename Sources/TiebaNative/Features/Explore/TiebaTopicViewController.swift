@@ -239,8 +239,8 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
   private func installStateHeader() {
     guard let detail else { return }
     if stateHeader == nil, let header = TiebaKindListHeaderFactory.make(spec: headerSpec(for: detail)) {
-      header.onAction = { [weak self] name, payload in
-        self?.handleHeaderAction(name, payload["name"] as? String ?? "")
+      header.onAction = { [weak self] action, _ in
+        self?.handleHeaderAction(action)
       }
       header.translatesAutoresizingMaskIntoConstraints = false
       stateHeaderHost.addSubview(header)
@@ -272,8 +272,8 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
       handleRowTap(index: index, region: region, actionIndex: actionIndex)
     case .menuAction(let index, let action):
       handleMenuAction(index: index, action: action)
-    case .headerAction(let action, let payload):
-      handleHeaderAction(action, payload["name"] as? String ?? "")
+    case .headerAction(let action, _):
+      handleHeaderAction(action)
     case .reachEnd, .footerTap:
       loadMore()
     case .refreshRequested:
@@ -284,10 +284,11 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
     }
   }
 
-  private func handleHeaderAction(_ name: String, _ forumName: String) {
-    guard name == "forum", !forumName.isEmpty else { return }
+  /// 页头动作（本页页头 = TiebaTopicHeaderAction）。
+  private func handleHeaderAction(_ action: TiebaKindListHeaderAction) {
+    guard case .topic(.forum(let name)) = action, !name.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(path: "/forum/\(TiebaRoutePath.segment(forumName))", params: [:], mode: "push")
+    TiebaNavigator.shared.navigate(path: "/forum/\(TiebaRoutePath.segment(name))", params: [:], mode: "push")
   }
 
   private func handleRowTap(index: Int, region: String, actionIndex: Int?) {

@@ -20,14 +20,14 @@ struct TiebaKindItem: Hashable {
 // MARK: - 列表事件（原生语义出口）
 
 /// 列表外传事件（替代旧的 (name, payload) 字符串事件；页面用 switch 模式匹配消费）。
-/// headerAction 例外：payload 仍是 [String: Any]——含吧页头像转场矩形（frameX/Y/W/H）
-/// 等结构，尚未类型化；页头 onAction 的契约见 TiebaKindListHeaderView。
+/// headerAction 的 action 是各页头自己的类型化 enum（TiebaKindListHeaderAction）；
+/// payload 只承载视图测量几何（avatar 的 frameX/Y/W/H），见 TiebaKindListHeaderView。
 enum TiebaKindListEvent {
   case rowTap(index: Int, region: String, actionIndex: Int?)
   case swipeAction(index: Int, action: String)
   case menuAction(index: Int, action: String)
   case mediaAction(index: Int, mediaIndex: Int, action: String, url: String?, originURL: String?)
-  case headerAction(action: String, payload: [String: Any])
+  case headerAction(action: TiebaKindListHeaderAction, payload: [String: Any])
   case footerTap
   case refreshRequested
   case reachEnd(count: Int)
@@ -927,8 +927,8 @@ public final class TiebaKindListContentView: UIView {
   private func rebuildHeader() {
     headerContentView?.removeFromSuperview()
     headerContentView = headerSpec.flatMap { TiebaKindListHeaderFactory.make(spec: $0) }
-    headerContentView?.onAction = { [weak self] name, payload in
-      self?.handleHeaderAction(name, payload)
+    headerContentView?.onAction = { [weak self] action, payload in
+      self?.handleHeaderAction(action, payload)
     }
     headerContentView?.applyPalette(palette)
     headerHeightCache = nil
@@ -945,9 +945,9 @@ public final class TiebaKindListContentView: UIView {
     )
   }
 
-  /// 页头动作转事件（payload 原样透传，未类型化；页头 onAction 只报 name + 字典）。
-  private func handleHeaderAction(_ name: String, _ payload: [String: Any]) {
-    onListEvent?(.headerAction(action: name, payload: payload))
+  /// 页头动作转事件（动作已类型化，payload 原样透传：只承载视图测量几何）。
+  private func handleHeaderAction(_ action: TiebaKindListHeaderAction, _ payload: [String: Any]) {
+    onListEvent?(.headerAction(action: action, payload: payload))
   }
 
   /// spec 等值比较（Fabric 每次 commit 都可能给新字典；引用比较会重建视图）。
@@ -1173,15 +1173,8 @@ public final class TiebaKindListContentView: UIView {
     ) else {
       return false
     }
-    // TiebaPhotoBrowser.onEvent 只剩 dismiss（浏览器自己的出口，非列表事件）；会话
-    // 同一时刻只有一个，present 未受理时把原 handler 放回（防御性，不吞掉别人的订阅）。
-    let previousHandler = TiebaPhotoBrowser.onEvent
-    TiebaPhotoBrowser.onEvent = { [weak self] name, _ in
-      guard name == "dismiss" else { return }
-      TiebaPhotoBrowser.onEvent = nil
-      self?.isBrowserPresented = false
-      self?.updatePrefetcherPause()
-    }
+    // 关闭出口是本次 present 的私有 onClose（会话同一时刻只有一个；未受理即永不
+    // 回调，无全局订阅可放回）：关闭后恢复"查看器打开期间暂停预取"的状态。
     // 闭包只带 Sendable 值（Int 数组/下标/位移），不把非 Sendable 的 plan 带进主机回调。
     let mediaIndexes = plan.mediaIndexes
     let rowIndex = indexPath.item
@@ -1210,13 +1203,15 @@ public final class TiebaKindListContentView: UIView {
           mediaIndex: mediaIndexes[pageIndex]
         )
       },
+      onClose: { [weak self] in
+        self?.isBrowserPresented = false
+        self?.updatePrefetcherPause()
+      },
       onPresented: onPresented
     )
     if presented {
       isBrowserPresented = true
       updatePrefetcherPause()
-    } else {
-      TiebaPhotoBrowser.onEvent = previousHandler
     }
     return presented
   }

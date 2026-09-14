@@ -1,7 +1,8 @@
 // 原生顶栏 chrome（v34/v37 定稿实现）。
 //
 // 职责：栏外观透明化 + 外部写入规范化（setter swizzle）+ 路由门控的滚动边缘
-// 模糊（UIScrollEdgeEffect.Style.soft）+ 窗口/导航容器底色同步 + 幂等重挂入口。
+// 模糊（UIScrollEdgeEffect.Style.soft）+ 窗口/导航容器底色与**窗口级深浅**
+// （应用主题 ≠ 系统外观的唯一决策落点，setChromeDarkMode）+ 幂等重挂入口。
 import Foundation
 import ObjectiveC
 import UIKit
@@ -128,16 +129,40 @@ enum TiebaChrome {
     init(_ signature: BarLayoutSignature) { self.signature = signature }
   }
 
-  static func setChromeDarkMode(_ dark: Bool?) { ChromeState.darkMode = dark }
+  /// 应用主题 → 窗口 trait（窗口级是**唯一决策点**的落点）：nil = 跟随系统
+  /// （.unspecified，不锁窗口），非 nil = 应用手动深浅。窗口 override 覆盖整棵
+  /// VC/视图树与该窗口内的所有 presented（UIView.h：set on UIWindow "affects the
+  /// rootViewController and thus the entire view controller and view hierarchy. It
+  /// also affects presentations that happen inside the window."）——因此栏/底栏/
+  /// 宿主/表单不再各自写 override。必须同步写：等重扫（节流 0.1–2s）会让主题
+  /// 切换瞬间的界面停在旧档（逐处 override 已删，没有第二层兜底）。
+  static func setChromeDarkMode(_ dark: Bool?) {
+    ChromeState.darkMode = dark
+    onMain { TiebaChrome.applyWindowUserInterfaceStyle() }
+  }
+
+  /// 把当前决定写进主窗口（.normal 级窗口，未 key 也算：启动期主题在
+  /// makeKeyAndVisible 之前落地，只有 isKeyWindow 的旧写点会漏掉首帧）。
+  /// 只写 style：窗口/容器底色仍归重扫（那里同时管非 key 窗口的兜底与背景色）。
+  private static func applyWindowUserInterfaceStyle() {
+    let style = chromeUserInterfaceStyle
+    for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+      for window in scene.windows where window.windowLevel == .normal {
+        if window.overrideUserInterfaceStyle != style {
+          window.overrideUserInterfaceStyle = style
+        }
+      }
+    }
+  }
 
   static func installNavBarChromeHooks() {
     _ = navChromeHooks
     _ = navChromeScrollHooks
   }
 
-  // 顶栏 chrome 的幂等重挂入口（v3 起，2026-08-22；v34 起职责收窄）：窗口/
-  // 导航容器底色、栏 trait、栏外观（透明）、双击回顶手势、滚动边缘模糊按
-  // 路由幂等重挂。**全事件驱动、无周期任务**（2026-09-12 起）：入口=启动首扫
+  // 顶栏 chrome 的幂等重挂入口（v3 起，2026-08-22；v34 起职责收窄）：窗口
+  // 底色/窗口 trait、导航容器底色、栏外观（透明）、双击回顶手势、滚动边缘模糊
+  // 按路由幂等重挂。**全事件驱动、无周期任务**（2026-09-12 起）：入口=启动首扫
   // + 回前台（didBecomeActive）+ 转场完成（didShow）+ bar/滚动视图的
   // didMoveToWindow/layoutSubviews + JS 侧主题与路由门控 setter。
   //
@@ -174,9 +199,10 @@ enum TiebaChrome {
     ChromeState.scrollHooked = true
     // 新 bar 挂载即应用：页面 push 瞬间新 UINavigationBar 首次进 window，
     // 若等下一次事件才处理，深色模式下会先渲染系统浅色（真机实测"先白后黑"）。
-    // didMoveToWindow 必在主线程；这里同步直写 override（不必等 force 扫描
-    // ——bar 未入 window 时 collectChromeBars 扫不到、force 会早退，
-    // trait 一旦写入，UIKit 自带的初始渲染就是深色），其余交给标脏 + 合并 tick。
+    // didMoveToWindow 必在主线程；外观/双击回顶/按压判定在这里同步直写
+    // （bar 未入 window 时 collectChromeBars 扫不到、force 会早退），其余交给
+    // 标脏 + 合并 tick。**栏的深浅不在这里写**：窗口级 override 已覆盖整棵树
+    // （setChromeDarkMode），bar 入窗即继承应用深浅、首帧就是深色。
     let moveSelector = #selector(UIView.didMoveToWindow)
     if let moveMethod = class_getInstanceMethod(UINavigationBar.self, moveSelector) {
       let moveOriginal = method_getImplementation(moveMethod)
@@ -185,15 +211,13 @@ enum TiebaChrome {
       let moveBlock: @convention(block) (AnyObject) -> Void = { bar in
         moveOriginalFn(bar, moveSelector)
         guard let navBar = bar as? UINavigationBar else { return }
-        let wantedStyle: UIUserInterfaceStyle = TiebaChrome.chromeUserInterfaceStyle
-        // overrideUserInterfaceStyle 是 @MainActor 属性，而这里是非隔离的
+        // 下面的 appearance / 手势安装写的都是 @MainActor 状态，而这里是非隔离的
         // ObjC block：必须 assumeIsolated 才能通过 Swift 6.4 的检查。契约成立
         // 的原因：didMoveToWindow 由 UIKit 在主线程调用（本块是该方法的
-        // swizzle 实现）。用 assumeIsolated 而不是派主队列——trait 必须在
-        // 返回前同步写入，否则"首帧即深色"失效（先白后黑回归）；若哪天真被
-        // 后台触达，会立刻 trap 而不是带病写栏状态（响亮失败优于隐性竞争）。
+        // swizzle 实现）。用 assumeIsolated 而不是派主队列——外观必须在返回前
+        // 同步写入，否则"首帧即深色"失效（先白后黑回归）；若哪天真被后台触达，
+        // 会立刻 trap 而不是带病写栏状态（响亮失败优于隐性竞争）。
         MainActor.assumeIsolated {
-          navBar.overrideUserInterfaceStyle = wantedStyle
           // 2026-09-13：栏外观 + 双击回顶手势在挂载点一次性写好，不再依赖
           // 这次 force 扫描（钩子内全量遍历 + 可能的 CATransaction.flush 是在
           // 层级变更中途做重活）。外观只写这一次：全仓再无第二个写这三个
@@ -472,16 +496,13 @@ enum TiebaChrome {
         if window.backgroundColor != TiebaChrome.chromeWindowColor {
           window.backgroundColor = TiebaChrome.chromeWindowColor
         }
-        // 2026-09-02 修复"右滑退出漏白"：pop/push 转场容器（UITransitionView）
-        // 背景跟随 window 的 trait 而非 backgroundColor——手动深色 + 系统浅色时
-        // 容器按系统渲染成白，页面移开露出白底（真机实测）。窗口 trait 同步
-        // 应用主题，转场容器随之深色；nil 跟随系统时不锁（自动切换）。
-        let windowStyle = TiebaChrome.chromeUserInterfaceStyle
-        if window.overrideUserInterfaceStyle != windowStyle {
-          window.overrideUserInterfaceStyle = windowStyle
-        }
       }
     }
+    // 窗口 trait 幂等重申（决策结果是 setChromeDarkMode 时同步写的）：2026-09-02
+    // 修复"右滑退出漏白"——pop/push 转场容器（UITransitionView）背景跟随 window
+    // 的 trait 而非 backgroundColor，手动深色 + 系统浅色时容器按系统渲染成白，
+    // 页面移开露出白底（真机实测）。跟随系统时是 .unspecified，不锁窗口。
+    applyWindowUserInterfaceStyle()
     // 2026-09-02 修复"用力回弹漏白"：UIScrollView 回弹露出的是导航栈容器
     // （UINavigationController.view）——iOS 27 其默认背景跟随系统 trait，
     // 手动深色 + 系统浅色/居中系统时按浅色 systemBackground 渲染成白。
@@ -503,22 +524,15 @@ enum TiebaChrome {
       // （钩子安装晚于某根栏挂载时的漏网，判重零成本）。
       installNavDoubleTapToTop(on: navBar)
       installChromePressHaptics(on: navBar)
-      // 回弹/转场漏白（2026-09-02 二轮）：页面实际所在的是导航容器
-      // （UINavigationController.view，可能嵌套非 window.rootViewController），
-      // iOS 27 其背景默认跟随系统 trait——手动深色+系统浅色时按浅色
-      // systemBackground 渲染成白，用力甩列表（bounce）即漏出。每个 bar
-      // 所在的导航容器同步应用主题底色（幂等）。
-      // 应用主题→栏 trait：深色常驻+系统浅色时原生栏材质（含 UISearchBar）
-      // 会跟系统渲染成浅色（真机实测一片白），override 拉回应用主题。
-      let wantedStyle: UIUserInterfaceStyle = TiebaChrome.chromeUserInterfaceStyle
-      if navBar.overrideUserInterfaceStyle != wantedStyle {
-        navBar.overrideUserInterfaceStyle = wantedStyle
-        applied = true
-      }
+      // 栏 trait 不再逐栏写：深色常驻+系统浅色时原生栏材质（含 UISearchBar）
+      // 曾按系统渲染成浅色，现在由窗口级 override 一次覆盖整棵树
+      //（setChromeDarkMode，含 presented 里的栏）；导航容器的漏白底色已在上面的
+      // collectNavigationContainerViews 循环同步。
+
       // bar 自带底保持系统默认（透明）：不透明底垫在 _UIBarBackground 材质
       // 之下被一并模糊，整条 bar 变成纯色带而非玻璃——"返回按钮栏有背景色"
-      // 根因（2026-08-27 真机实测）。材质落地前的白闪由挂载钩子同步写
-      // trait + 外观 + 主窗口底色兜底覆盖。
+      // 根因（2026-08-27 真机实测）。材质落地前的白闪由挂载钩子的外观 +
+      // 主窗口 trait/底色兜底覆盖。
       // v34（2026-09-11）：栏外观整体交还 UIKit——不再清材质、不再隐藏发丝
       // 线，只写透明外观（applyNativeBarAppearance），其余（材质、分隔、滚动
       // 行为）全部按 iOS 26 规范由系统自渲染。
@@ -611,7 +625,8 @@ enum TiebaChrome {
     return dark ? UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1) : .white
   }
 
-  /// 应用主题 → 顶栏 chrome trait（wantedStyle）：nil 还原 unspecified（跟随系统）。
+  /// 应用主题 → 窗口/chrome trait：nil 还原 .unspecified（跟随系统，不锁窗口）。
+  /// 唯一消费者是窗口级 override（见 applyWindowUserInterfaceStyle）。
   static var chromeUserInterfaceStyle: UIUserInterfaceStyle {
     guard let dark = ChromeState.darkMode else { return .unspecified }
     return dark ? .dark : .light

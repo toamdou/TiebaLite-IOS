@@ -4,13 +4,30 @@
 // 页头 = 原生 UIView，挂在 section 的 top boundary supplementary item 上（与页脚
 // 同一机制）。契约：headerHeight(forWidth:) 是"测多少画多少"的唯一来源（宽度 =
 // 列表全宽；不含 contentInsetTop，由列表另加在 host 里）；spec.colors 覆盖色板默认，
-// 页头内点击经 onAction 外传（name + 未类型化 payload），列表统一升格为
-// TiebaKindListEvent.headerAction（payload 含转场矩形等结构，本次不类型化）。
+// 页头内点击经 onAction 外传（动作 = 各页头自己的类型化 enum，见
+// TiebaKindListHeaderAction），列表统一升格为 TiebaKindListEvent.headerAction。
 // ============================================================
 
 import UIKit
 import Nuke
 import NukeExtensions
+
+// MARK: - 页头动作（各实现者自己的类型化 enum）
+
+/// 页头动作联合：三个页头各自的 enum 包一层，列表（与事件出口）只透传、不解释。
+/// 动作名与领域数据（吧名 / 分段号 / 排序值 / 模式串）全在关联值里，不再有字符串
+/// 动作名与未类型化取值。
+public enum TiebaKindListHeaderAction {
+  case topic(TiebaTopicHeaderAction)
+  case forum(TiebaForumHeaderAction)
+  case userProfile(TiebaUserProfileHeaderAction)
+}
+
+/// 话题页头动作（TiebaTopicHeaderView）。
+public enum TiebaTopicHeaderAction {
+  /// 相关吧胶囊（name = 吧名，领域数据）。
+  case forum(name: String)
+}
 
 // MARK: - 页头协议（列表只依赖这三个面）
 
@@ -18,10 +35,10 @@ import NukeExtensions
 /// "能自适应高度 + 能应用主题 + 能把点击外传"这三件事。
 @MainActor
 public protocol TiebaKindListHeaderView: UIView {
-  /// 页头内交互外传（name + payload；具体键由各页头自定，如 "forum" 的 name、
-  /// 吧页 avatar 的 frameX/Y/W/H）。payload 未类型化：列表只把它包进
-  /// TiebaKindListEvent.headerAction，不解释键。
-  var onAction: ((String, [String: Any]) -> Void)? { get set }
+  /// 页头内交互外传。动作 = 各页头自己的类型化 enum；payload 只承载 **视图测量几何**
+  /// （avatar 动作的 frameX/Y/W/H 窗口坐标转场矩形）——它随布局现算、不是领域数据，
+  /// 故保留字典、按约定键取；其余语义一律进 action 关联值，列表只透传。
+  var onAction: ((TiebaKindListHeaderAction, [String: Any]) -> Void)? { get set }
   /// 主题色板（缺省值来源；spec 的 colors 子字典优先）。
   func applyPalette(_ palette: TiebaSimpleRowPalette)
   /// 指定宽度下的内容高度（纯算术 + 缓存测量；不触发布局）。
@@ -110,7 +127,7 @@ final class TiebaKindListHeaderHostView: UICollectionReusableView {
 public final class TiebaTopicHeaderView: UIView, TiebaKindListHeaderView {
   // MARK: 接口
 
-  public var onAction: ((String, [String: Any]) -> Void)?
+  public var onAction: ((TiebaKindListHeaderAction, [String: Any]) -> Void)?
 
   private var spec: [String: Any] = [:]
   private var palette: TiebaSimpleRowPalette = .default
@@ -247,7 +264,7 @@ public final class TiebaTopicHeaderView: UIView, TiebaKindListHeaderView {
   @objc private func handleChipTap(_ chip: TiebaTopicForumChipView) {
     TiebaSceneHaptics.fire("press")
     guard !chip.forumName.isEmpty else { return }
-    onAction?("forum", ["name": chip.forumName])
+    onAction?(.topic(.forum(name: chip.forumName)), [:])
   }
 
   deinit {

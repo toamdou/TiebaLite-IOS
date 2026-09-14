@@ -19,12 +19,14 @@ import UIKit
 // MARK: - 查看器展示计划
 
 /// 图片点击 → 查看器所需的全部入参（items / initialIndex / transition / 揭示移位）。
+/// items/transition 是值类型（TiebaPhotoItem/TiebaPhotoTransition）：查看器 present
+/// 的入参形态，不再有字典编组。
 struct TiebaFeedRowBrowserPlan {
-  let items: [[String: Any]]
+  let items: [TiebaPhotoItem]
   let initialIndex: Int
   /// viewer 页号 → 行内 media 下标（url 为 nil 的条目会被过滤，两者会错位）。
   let mediaIndexes: [Int]
-  let transition: [String: Any]
+  let transition: TiebaPhotoTransition
   /// 非 nil = 查看器展示动画后列表要滚动的量（正 = 内容上移）。
   let scrollDelta: CGFloat?
 }
@@ -75,7 +77,7 @@ enum TiebaFeedRowInteraction {
 
   /// 图片命中 → 查看器展示计划。
   ///
-  /// - items：行模型 media 数组原生构建（url = 卡片显示档 smallSrc||src，
+  /// - items：行模型 media 数组值类型直构（url = 卡片显示档 smallSrc||src，
   ///   thumbUrl 同 URL——TiebaPhotoItem 去重成单级加载；originUrl = 原图档）；
   /// - mediaIndexes：viewer 页号 → 行内 media 下标（退出时重算源图矩形用）；
   /// - transition：被点图片的窗口矩形（mediaHit 已换算）+ 垫图 + 顶栏上下文标题；
@@ -92,25 +94,24 @@ enum TiebaFeedRowInteraction {
   ) -> TiebaFeedRowBrowserPlan? {
     guard tappedMediaIndex >= 0, tappedMediaIndex < row.media.count,
           row.media[tappedMediaIndex].url != nil else { return nil }
-    var items: [[String: Any]] = []
+    var items: [TiebaPhotoItem] = []
     var mediaIndexes: [Int] = []
     var initialIndex = 0
     for (offset, entry) in row.media.enumerated() {
       guard let url = entry.url else { continue }
       if offset == tappedMediaIndex { initialIndex = items.count }
       mediaIndexes.append(offset)
-      var item: [String: Any] = [
-        "url": url.absoluteString,
-        "thumbUrl": url.absoluteString,
-        "isGif": entry.isGif,
-        "isLong": entry.isLong,
-        "width": entry.width,
-        "height": entry.height,
-      ]
-      if let origin = entry.originURL {
-        item["originUrl"] = origin.absoluteString
-      }
-      items.append(item)
+      items.append(
+        TiebaPhotoItem(
+          url: url,
+          thumbUrl: url,
+          originUrl: entry.originURL,
+          isGif: entry.isGif,
+          isLong: entry.isLong,
+          width: entry.width,
+          height: entry.height
+        )
+      )
     }
     guard !items.isEmpty else { return nil }
 
@@ -121,20 +122,14 @@ enum TiebaFeedRowInteraction {
       contentSize: contentSize,
       adjustedContentInset: adjustedContentInset
     )
-    var transition: [String: Any] = [
-      "frameX": reveal.frame.minX,
-      "frameY": reveal.frame.minY,
-      "frameW": reveal.frame.width,
-      "frameH": reveal.frame.height,
-    ]
-    if let title = browserContextTitle(for: row) {
-      transition["contextTitle"] = title
-    }
     return TiebaFeedRowBrowserPlan(
       items: items,
       initialIndex: initialIndex,
       mediaIndexes: mediaIndexes,
-      transition: transition,
+      transition: TiebaPhotoTransition(
+        frame: reveal.frame,
+        contextTitle: browserContextTitle(for: row)
+      ),
       scrollDelta: reveal.scrollDelta
     )
   }

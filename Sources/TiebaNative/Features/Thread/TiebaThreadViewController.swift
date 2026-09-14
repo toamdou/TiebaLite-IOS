@@ -52,7 +52,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   init(route: TiebaRoute) {
     let id = route.params["id"] ?? ""
     self.threadId = id
-    // 快照只在首帧消费一次（原 useMemo 语义）：未命中/过期/深链进来都返回 nil。
+    // 快照只在首帧消费一次（一次性交付）：未命中/深链进来都返回 nil。
     self.knownSnapshot = TiebaThreadSnapshots.consume(id: id)
     self.postId = route.params["postId"].flatMap { $0.isEmpty ? nil : $0 }
     self.fromFavorites = route.params["fromFavorites"] == "1"

@@ -76,7 +76,8 @@ extension TiebaRootNavigationController: UIGestureRecognizerDelegate {
 
 /// 底栏容器。四个 tab 的图标/标签/顺序与 NativeTabs 声明一致；
 /// 配色跟随应用内主题（不是系统外观），否则"应用强制深色 + 系统浅色"
-/// 会出现亮色标签配深色内容页的脱节。
+/// 会出现亮色标签配深色内容页的脱节——机制是窗口级 override（见
+/// TiebaChrome.setChromeDarkMode），本控制器不再自己写。
 public final class TiebaMainTabBarController: UITabBarController {
   /// 已选中 tab 被再次点击时回调（原生直接受理 tabReselected）。
   var onReselect: ((Int) -> Void)?
@@ -102,9 +103,9 @@ public final class TiebaMainTabBarController: UITabBarController {
     // 下滑收纳 / 上滑恢复，动画由 UIKit 原生药丸收纳控制。
     // 开关（设置→使用习惯→浏览）由原生设置页下发；关闭时 never = 底栏常驻。
     tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
-    // 深色/浅色：UIImage(systemName:) 默认跟随 trait，这里把整个底栏
-    // 覆盖成应用主题对应的用户界面风格，避免系统浅色时底栏亮、内容暗。
-    overrideUserInterfaceStyle = theme.dark ? .dark : .light
+    // 深浅不在这里写：底栏控制器是 window 根 VC 的子级，窗口级 override
+    // （TiebaChrome.setChromeDarkMode，应用主题 ≠ 系统外观的唯一决策点）
+    // 覆盖整个窗口的 VC/视图树，bar 材质与 systemName 图标随之深浅。
   }
 
   /// 底栏滚动收纳开关（设置→使用习惯→浏览，默认开）。
@@ -216,8 +217,11 @@ public final class TiebaRouteHostViewController: UIViewController {
   /// 为什么标题要转一手：压进导航栈的是宿主，UINavigationController 只认宿主的
   /// navigationItem，子 VC 的会被忽略。
   ///
-  /// 为什么要强制 trait：原生页面用系统语义色，而应用内主题 ≠ 系统外观（深色
-  /// 主题 + 系统浅色是很常见的组合），得靠 overrideUserInterfaceStyle。
+  /// 为什么子页这处 override **不能**随 window 继承（其余逐处写入已删）：压栈前
+  /// 的 loadViewIfNeeded 会在页面**未入窗口**时把整棵树建好（见 TiebaNavigator
+  /// 的 eager host），此时窗口 trait 不可达，页面里"动态色 → CGColor"的取值
+  /// （骨架描边、已知主贴卡描边等）会按默认档解析成浅色。宿主是这棵离屏树的
+  /// trait 源；值仍取自 navigator 的同一主题决定，不新增判据。
   func syncNativeScreenChrome() {
     let child = nativeChild
     child.overrideUserInterfaceStyle = TiebaNavigator.shared.chromeTheme.dark ? .dark : .light

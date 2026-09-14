@@ -389,22 +389,22 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
     }
   }
 
-  private func handleHeaderAction(action: String, payload: [String: Any]) {
-    switch action {
-    case "avatar":
+  /// 页头动作（本页页头 = TiebaUserProfileHeaderAction；payload 只带 avatar 的测量矩形）。
+  private func handleHeaderAction(action: TiebaKindListHeaderAction, payload: [String: Any]) {
+    guard case .userProfile(let headerAction) = action else { return }
+    switch headerAction {
+    case .avatar:
       openAvatarPreview(payload)
-    case "follow":
+    case .follow:
       toggleFollow()
-    case "block":
+    case .block:
       toggleBlock()
-    case "copyUid":
+    case .copyUid:
       copyUid()
-    case "social":
-      presentSocial(mode: TiebaSimpleRowParser.string(payload["mode"]) ?? "fans")
-    case "tab":
-      switchTab(TiebaSimpleRowParser.string(payload["value"]) ?? "threads")
-    default:
-      break
+    case .social(let mode):
+      presentSocial(mode: mode)
+    case .tab(let value):
+      switchTab(value)
     }
   }
 
@@ -412,21 +412,24 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
     guard let detail, !detail.portrait.isEmpty,
       let url = TiebaSimpleRowParser.avatarURL(detail.portrait)
     else { return }
-    let frame = CGRect(
-      x: TiebaSimpleRowParser.double(payload["frameX"]) ?? 0,
-      y: TiebaSimpleRowParser.double(payload["frameY"]) ?? 0,
-      width: TiebaSimpleRowParser.double(payload["frameW"]) ?? 64,
-      height: TiebaSimpleRowParser.double(payload["frameH"]) ?? 64
-    )
     TiebaSceneHaptics.fire("press")
+    // payload 只带页头测量的头像矩形（协议约定的唯一字典通路）→ 转场取测量值。
     TiebaPhotoBrowser.present(
-      items: [["url": url.absoluteString, "thumbUrl": url.absoluteString]],
+      items: [
+        TiebaPhotoItem(
+          url: url,
+          thumbUrl: url,
+          isGif: false,
+          isLong: false,
+          width: 0,
+          height: 0
+        )
+      ],
       initialIndex: 0,
-      transition: [
-        "frameX": frame.minX, "frameY": frame.minY,
-        "frameW": frame.width, "frameH": frame.height,
-        "thumbUrl": url.absoluteString,
-      ]
+      transition: TiebaPhotoTransition(
+        frame: TiebaPhotoTransition.measuredFrame(in: payload),
+        contextTitle: nil
+      )
     )
   }
 

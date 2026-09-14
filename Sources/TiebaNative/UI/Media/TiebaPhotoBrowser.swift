@@ -7,15 +7,15 @@
 //  Reanimated + 一堆 teardown 崩溃 workaround）。
 //
 //  全原生（2026-09-12 二期，零 TS/RN 面）：
-//  - 展示链路：原生列表（TiebaListView）点击图片 → 本文件 present，items 由
-//    TiebaRowMetrics 行模型 media 数组原生构建，transition 矩形由被点图片
-//    视图 convert(to: nil) 得到。不经 JS、不发事件（旧 TS 门面
+//  - 展示链路：原生列表点击图片 → 本文件 present，items 由行模型 media/图片数组
+//    值类型直构（TiebaPhotoItem），transition 矩形由被点图片视图 convert(to: nil)
+//    得到（TiebaPhotoTransition）。不经 JS、不发事件（旧 TS 门面
 //    TiebaPhotoBrowser.ts 已删除，模块注册同步移除）。
 //  - 业务动作：保存图片 / 保存原图 / 分享全部在原生完成（PHPhotoLibrary 写
 //    相册、UIActivityViewController 分享、Nuke 数据层下载原件字节）。
 //    动作集合与旧查看器 VIEWER_IMAGE_ACTIONS 完全一致，不增不减。
-//  - 事件出口 onEvent 只剩内部原生回调（唯一事件 "dismiss"，payload
-//    index/count）：宿主 TiebaListView 用它恢复 Nuke 预取，不再有 JS 事件。
+//  - 事件出口 = present 的 onClose 回调（查看器完全关闭后回调一次）：宿主用它
+//    恢复打开期间暂停的 Nuke 预取；没有静态事件总线、没有 JS 事件。
 //
 //  设计要点：
 //  - 分页/复用/缩放全交给 JXPhotoBrowser：UICollectionView 分页 + 每页
@@ -77,11 +77,6 @@ import UIKit
 
 /// 原生大图查看器门面。展示入口全部可从任意线程调用（内部自行切主线程）。
 public enum TiebaPhotoBrowser {
-  /// 内部原生事件出口（**不是** JS 事件；模块侧的 JS 接线已随注册移除）。
-  /// 当前唯一事件："dismiss"（payload: index/count），查看器完全关闭后回调，
-  /// 供宿主恢复预取/其它收尾。回调在主线程；注册方负责线程安全。
-  nonisolated(unsafe) public static var onEvent: ((String, [String: Any]) -> Void)?
-
   /// 当前会话（delegate 是 weak，必须由这里强持有到关闭完成）。
   nonisolated(unsafe) private static var activeSession: TiebaPhotoBrowserSession?
 
@@ -91,15 +86,15 @@ public enum TiebaPhotoBrowser {
 
   /// 展示查看器。
   /// - Parameters:
-  ///   - items: [{url, thumbUrl?, isGif?, isLong?, width?, height?}] —— 由原生
-  ///     列表从 TiebaRowMetrics 行模型构建（不再有 JS 编组）。
+  ///   - items: 值类型图片项（TiebaPhotoItem；调用方从行模型直构，不经字典编组）。
   ///   - initialIndex: 初始页（越界自动 clamp）
-  ///   - transition: {frameX, frameY, frameW, frameH, contextTitle?}
-  ///     frame 是源图片视图的窗口坐标（cell.convert(to: nil)）。
+  ///   - transition: 转场起点（源图片视图窗口坐标 + 顶栏上下文标题）
   ///   - sourceImage: 被点那一格已加载的压缩图（权威转场源）。传了就用它做缩放动画
   ///     的载体；没传才退回窗口扫描找源图视图。
   ///   - sourceFrameProvider: 初始页以外的退出重算（多图行必须传，否则翻页后
   ///     退出退化为 Fade）；返回该页源图当前窗口矩形，拿不到返回 nil。
+  ///   - onClose: 查看器完全关闭后的主线程回调（只回调一次），宿主用它恢复打开
+  ///     期间暂停的状态（如列表预取）。
   ///   - onPresented: 转场展示完成（viewDidAppear，Zoom 动画结束/Reduce Motion
   ///     直显）后的主线程回调，只回调一次；宿主用它做展示后才该发生的收尾
   ///     （如列表揭示移位），不要用固定时长近似。
@@ -107,36 +102,37 @@ public enum TiebaPhotoBrowser {
   /// - Note: 非主线程调用时返回值语义为"请求已入队"，会话创建结果不回落。
   @discardableResult
   public static func present(
-    items: [[String: Any]],
+    items: [TiebaPhotoItem],
     initialIndex: Int,
-    transition: [String: Any]?,
+    transition: TiebaPhotoTransition,
     sourceImage: UIImage? = nil,
     sourceFrameProvider: SourceFrameProvider? = nil,
+    onClose: (@MainActor @Sendable () -> Void)? = nil,
     onPresented: (@MainActor @Sendable () -> Void)? = nil
   ) -> Bool {
-    let parsed = items.compactMap { TiebaPhotoItem(dict: $0) }
-    guard !parsed.isEmpty else { return false }
-    let index = max(0, min(initialIndex, parsed.count - 1))
-    // 字典在调用线程就归一成 Sendable 的 TiebaPhotoTransition：主线程闭包只带
-    // 值类型，不再把 [String: Any] 发送进主 actor（present 允许任意线程调用）。
-    let parsedTransition = TiebaPhotoTransition(transition)
+    guard !items.isEmpty else { return false }
+    let index = max(0, min(initialIndex, items.count - 1))
+    // items/transition 都是 Sendable 值类型：present 允许任意线程调用，主线程
+    // 闭包只带值，不再有字典跨隔离域（旧 [String: Any] 入参已删）。
     if Thread.isMainThread {
       return startSession(
-        items: parsed,
+        items: items,
         initialIndex: index,
-        transition: parsedTransition,
+        transition: transition,
         sourceImage: sourceImage,
         sourceFrameProvider: sourceFrameProvider,
+        onClose: onClose,
         onPresented: onPresented
       )
     }
     DispatchQueue.main.async {
       _ = startSession(
-        items: parsed,
+        items: items,
         initialIndex: index,
-        transition: parsedTransition,
+        transition: transition,
         sourceImage: sourceImage,
         sourceFrameProvider: sourceFrameProvider,
+        onClose: onClose,
         onPresented: onPresented
       )
     }
@@ -167,6 +163,7 @@ public enum TiebaPhotoBrowser {
     transition: TiebaPhotoTransition,
     sourceImage: UIImage?,
     sourceFrameProvider: SourceFrameProvider?,
+    onClose: (@MainActor @Sendable () -> Void)?,
     onPresented: (@MainActor @Sendable () -> Void)?
   ) -> Bool {
     guard activeSession == nil else { return false }
@@ -182,6 +179,7 @@ public enum TiebaPhotoBrowser {
         transition: transition,
         sourceImage: sourceImage,
         sourceFrameProvider: sourceFrameProvider,
+        onClose: onClose,
         onPresented: onPresented,
         host: host
       )
@@ -210,20 +208,20 @@ public enum TiebaPhotoBrowser {
 
 // MARK: - 数据模型
 
-/// item 的原生投影；url 缺失直接丢弃（不可显示）。
-struct TiebaPhotoItem {
+/// item 的值类型投影；调用方（列表/帖子页/吧页/资料页）从行模型直构，
+/// url 非法的条目由调用方丢弃（不再有字典编组与解析回值）。
+/// public + Sendable：present（公开入口）的入参，跨主队列派发只带值。
+public struct TiebaPhotoItem: Sendable {
   let url: URL
   let thumbUrl: URL?
-  /// 原图档（行模型 originURL ← TiebaFeedRowInteraction 的 "originUrl"）。
-  /// nil = 该图没有原图档，菜单不展示「保存原图」（对齐旧 JS showOriginalBtn）。
+  /// 原图档（行模型 originURL）：nil = 该图没有原图档，菜单不展示「保存原图」。
   let originUrl: URL?
   let isGif: Bool
   let isLong: Bool
   let width: CGFloat
   let height: CGFloat
 
-  /// 原生调用方可直接用这个 init（present 的入参目前仍是字典形态）。
-  init(
+  public init(
     url: URL,
     thumbUrl: URL?,
     originUrl: URL? = nil,
@@ -241,19 +239,25 @@ struct TiebaPhotoItem {
     self.height = CGFloat(height)
   }
 
-  init?(dict: [String: Any]) {
-    guard let raw = dict["url"] as? String, !raw.isEmpty,
-          let url = TiebaPhotoItem.normalizedURL(raw) else { return nil }
-    let thumb = (dict["thumbUrl"] as? String).flatMap(TiebaPhotoItem.normalizedURL)
-    let origin = (dict["originUrl"] as? String).flatMap(TiebaPhotoItem.normalizedURL)
+  /// 帖子行图片 → 查看器项（档位选择与行内图片展示同源：GIF / 原档模式取原图，
+  /// 其余取显示档、空则回落原图；url 非法 → nil 丢弃）。originUrl 恒 nil：帖子行
+  /// 旧接口不下发原图档（保存原图项不展示），逐字段保持一致。
+  init?(image: TiebaThreadImage, preferences: TiebaPostPreferences) {
+    let origin = image.originSrc.isEmpty ? image.src : image.originSrc
+    let raw = image.isGif || preferences.dataSaverMode == "origin"
+      ? origin
+      : (image.src.isEmpty ? origin : image.src)
+    guard let url = TiebaPhotoItem.normalizedURL(raw) else { return nil }
+    let thumbRaw = TiebaPostRowText.displayURL(image, preferences: preferences)?
+      .absoluteString ?? raw
     self.init(
       url: url,
-      thumbUrl: thumb,
-      originUrl: origin,
-      isGif: dict["isGif"] as? Bool ?? false,
-      isLong: dict["isLong"] as? Bool ?? false,
-      width: (dict["width"] as? NSNumber)?.doubleValue ?? 0,
-      height: (dict["height"] as? NSNumber)?.doubleValue ?? 0
+      thumbUrl: TiebaPhotoItem.normalizedURL(thumbRaw),
+      originUrl: nil,
+      isGif: image.isGif,
+      isLong: image.isTall,
+      width: image.width,
+      height: image.height
     )
   }
 
@@ -274,26 +278,26 @@ struct TiebaPhotoItem {
   }
 }
 
-/// transition 的 Sendable 投影：present 允许从任意线程调用，而 [String: Any]
-/// 不是 Sendable，不能进 DispatchQueue.main.async 闭包。这里在调用线程先解成
-/// 值类型，主线程侧（startSession / session init）只见值类型——字典一个字段
-/// 都不跨隔离域。
-struct TiebaPhotoTransition: Sendable {
+/// 转场起点（值类型；present 允许从任意线程调用，只把 Sendable 值送进主线程）。
+/// frame = 源图片视图的窗口坐标矩形（视图测量），宽/高 < 2 视为无起点（框架 Fade）。
+/// public：present 的入参形态（与 TiebaPhotoItem 同一公开面）。
+public struct TiebaPhotoTransition: Sendable {
   let frame: CGRect?
   let contextTitle: String?
 
-  init(_ raw: [String: Any]?) {
-    self.frame = Self.parseFrame(raw)
-    self.contextTitle = raw?["contextTitle"] as? String
+  public init(frame: CGRect?, contextTitle: String?) {
+    self.frame = frame
+    self.contextTitle = contextTitle
   }
 
-  /// 转场起始矩形：frameX/Y/W/H 都齐且宽高 > 0 才有效（缺一个走框架默认 Fade）。
-  private static func parseFrame(_ raw: [String: Any]?) -> CGRect? {
-    guard let raw,
-          let x = (raw["frameX"] as? NSNumber)?.doubleValue,
-          let y = (raw["frameY"] as? NSNumber)?.doubleValue,
-          let w = (raw["frameW"] as? NSNumber)?.doubleValue,
-          let h = (raw["frameH"] as? NSNumber)?.doubleValue,
+  /// 页头 payload 的测量矩形（frameX/Y/W/H 四键齐且宽高 > 0）→ frame；缺键/非正
+  /// 返回 nil。字典只在这条"视图测量几何"通路上存在（协议 onAction 约定），
+  /// 领域数据一律不进字典。
+  static func measuredFrame(in payload: [String: Any]) -> CGRect? {
+    guard let x = (payload["frameX"] as? NSNumber)?.doubleValue,
+          let y = (payload["frameY"] as? NSNumber)?.doubleValue,
+          let w = (payload["frameW"] as? NSNumber)?.doubleValue,
+          let h = (payload["frameH"] as? NSNumber)?.doubleValue,
           w > 0, h > 0 else { return nil }
     return CGRect(x: x, y: y, width: w, height: h)
   }
@@ -435,6 +439,8 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   private let sourceImage: UIImage?
   /// 展示完成回调（见 TiebaPhotoBrowser.present）；触发一次后即清空。
   private var onPresented: (@MainActor @Sendable () -> Void)?
+  /// 关闭回调（见 TiebaPhotoBrowser.present）；触发一次即丢（会话随即释放）。
+  private var onClose: (@MainActor @Sendable () -> Void)?
   private var sourceThumbnailView: TiebaPhotoSourceThumbnailView?
   /// 安装时的替身几何：翻回初始页且宿主算不出当前矩形时恢复。
   private var sourceThumbnailInitialFrame: CGRect?
@@ -467,6 +473,7 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     transition: TiebaPhotoTransition,
     sourceImage: UIImage?,
     sourceFrameProvider: TiebaPhotoBrowser.SourceFrameProvider?,
+    onClose: (@MainActor @Sendable () -> Void)?,
     onPresented: (@MainActor @Sendable () -> Void)?,
     host: UIViewController
   ) {
@@ -477,6 +484,7 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     self.contextTitle = transition.contextTitle
     self.transitionFrame = transition.frame
     self.sourceFrameProvider = sourceFrameProvider
+    self.onClose = onClose
     self.onPresented = onPresented
     super.init()
   }
@@ -580,9 +588,11 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     prefetcher.stopPrefetching()
     chromeAutoHideWorkItem?.cancel()
     chromeAutoHideWorkItem = nil
-    let index = browser?.pageIndex ?? initialIndex
     browser = nil
-    emitDismiss(index: index)
+    // 关闭回调（宿主恢复打开期间暂停的状态）：与旧 onEvent 同时点、同线程（主）。
+    let close = onClose
+    onClose = nil
+    close?()
     TiebaPhotoBrowser.sessionDidFinish()
   }
 
@@ -804,18 +814,6 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   /// 列表已滚动时会在错误位置露出重复缩略图。
   func photoBrowser(_ browser: JXPhotoBrowserViewController, setThumbnailHidden hidden: Bool, at index: Int) {
     sourceThumbnailView?.isHidden = true
-  }
-
-  // MARK: 事件（内部原生回调；唯一事件 dismiss）
-
-  private func emitDismiss(index: Int) {
-    guard let onEvent = TiebaPhotoBrowser.onEvent else { return }
-    let payload: [String: Any] = ["index": index, "count": items.count]
-    if Thread.isMainThread {
-      onEvent("dismiss", payload)
-    } else {
-      DispatchQueue.main.async { onEvent("dismiss", payload) }
-    }
   }
 
   // MARK: Chrome（顶栏）显隐

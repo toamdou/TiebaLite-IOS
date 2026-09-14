@@ -1,19 +1,17 @@
 // ============================================================
-// TiebaPreferenceSnapshot —— 原生侧**只读**偏好快照（过渡期）
+// TiebaPreferenceSnapshot —— 原生偏好的类型化读/写门面（唯一落盘点）
 //
-// 为什么需要：偏好（preferencesStore → unifiedDb → kv 表）在过渡期仍由 JS 写，
-// 而已经整体原生化的页面（settings/about、webview、……）要在**不新建任何 TS
-// 层**的前提下读到它。原生 KV（TiebaKvStore，统一 SQLite 的 kv 表）本来就是
-// 同一份存储，所以这里只是一个只读视图：按 preferencesStore 的落盘格式取值。
+// 为什么单独一份：偏好存在统一 SQLite 的 kv 表（TiebaKvStore），落盘格式沿用
+// 原 JS preferencesStore 的 preferencesPersistStorage（既有数据不做迁移），
+// 已经整体原生化的页面不新建任何 TS 层，直接按同一格式读写。
 //
-// 纪律（与 docs/native-migration-plan.md「过渡期共享偏好的规则」一致）：
+// 纪律：
 //   - 原生页面**每次出现时现读**（不做订阅/缓存），永远拿到最新值；
-//   - JS 消费者全部删除之前，**原生只读不写**共享偏好（写 = Native 内存副本
-//     与 JS 内存副本打架，JS 下次写回会覆盖）。
+//   - 写只有 store 一条路径（落盘 + 广播 TiebaPreferenceChange），不手拼字面量。
 //
-// 落盘格式（src/stores/preferencesStore.ts 的 preferencesPersistStorage）：
+// 落盘格式（与原 JS 逐字节一致，读写都用 JSONEncoder/JSONDecoder 保证）：
 //   - 现行：每键一条 `tiebalite_preferences:<key>`，值是该键的 JSON 编码
-//     （布尔 `true`/`false`、字符串带引号、数字裸写）；
+//     （布尔裸 `true`/`false`、字符串带引号、数字整型不带 `.0`）；
 //   - 旧版：整份 JSON 存在 `tiebalite_preferences`（{preferences:{…}} 或裸对象），
 //     现行 getItem 首次读取后拆成逐键并删除该键——这里保留同一条兼容读法。
 //
@@ -47,19 +45,52 @@ enum TiebaPreferenceSnapshot {
     return raw
   }
 
-  /// 布尔偏好。非 `true`/`false`（坏值）→ fallback。
-  static func bool(_ key: String, default fallback: Bool) -> Bool {
-    switch rawValue(key) {
-    case "true": return true
-    case "false": return false
-    default: return fallback
-    }
+  /// 布尔偏好。非 `true`/`false` 字面量（历史坏值，含带引号的字符串）→ nil。
+  static func bool(_ key: String) -> Bool? {
+    decoded(Bool.self, key)
   }
 
-  /// 写一个偏好（值为 JS JSON.stringify 的字面量：字符串带引号、布尔/数字裸写）。
-  /// 设置群原生化后原生成为写入方，键布局与 JS persist 逐字节一致。
-  static func write(_ key: String, jsonLiteral: String) throws {
-    try TiebaKvStore.shared.set(key: keyPrefix + key, value: jsonLiteral)
+  /// 布尔偏好 + 默认值（调用面最广的签名）。坏值/缺失 → fallback。
+  static func bool(_ key: String, default fallback: Bool) -> Bool {
+    bool(key) ?? fallback
+  }
+
+  /// 数字偏好（整型/小数同一条解码路径）。非有限值（越界坏值）→ nil。
+  static func number(_ key: String) -> Double? {
+    guard let value = decoded(Double.self, key), value.isFinite else { return nil }
+    return value
+  }
+
+  /// JSON 字面量 → 类型值（不抛：坏值即 nil，默认值由调用方给）。
+  private static func decoded<T: Decodable>(_ type: T.Type, _ key: String) -> T? {
+    guard let raw = rawValue(key), let data = raw.data(using: .utf8) else { return nil }
+    return try? JSONDecoder().decode(type, from: data)
+  }
+
+  // MARK: - 写（类型化：唯一落盘点 + 唯一广播点）
+
+  /// 写布尔：落盘裸 `true`/`false`。
+  static func write(_ key: String, bool value: Bool) throws {
+    try store(key, JSONEncoder().encode(value))
+  }
+
+  /// 写字符串：落盘带引号的 JSON 串。
+  static func write(_ key: String, string value: String) throws {
+    try store(key, JSONEncoder().encode(value))
+  }
+
+  /// 写数字：JSONEncoder 的 Double 形态——整型值输出 `400`（不带 `.0`）、小数
+  /// 输出最短往返表示，与 JS JSON.stringify 逐字节一致（手写 numberLiteral 不再
+  /// 参与写入；它只服务表单显示值）。非有限值 encode 抛错，不落坏字面量。
+  static func write(_ key: String, number value: Double) throws {
+    try store(key, JSONEncoder().encode(value))
+  }
+
+  /// 落盘 + 广播：键布局 `tiebalite_preferences:<key>`，值 = JSON 字面量字节。
+  private static func store(_ key: String, _ encoded: Data) throws {
+    // JSONEncoder 输出恒为 UTF-8：String(decoding:) 不产生第二错误分支。
+    try TiebaKvStore.shared.set(
+      key: keyPrefix + key, value: String(decoding: encoded, as: UTF8.self))
     // 唯一写入点即广播点：在屏页面订阅后立刻刷新（不再等"下次出现时现读"）。
     TiebaPreferenceChange.post(key)
   }

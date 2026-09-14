@@ -25,8 +25,9 @@
 //   - 颜色不抄色板：主色由调用方以 #RRGGBB 下发（tint），「默认」主题下发 nil =
 //     控件保持系统默认色（开关绿、按钮/图标系统蓝）——与 useFormTint() 的语义
 //     逐字对应（含「Picker 选中值」也随 tint 染色）。
-//   - 深浅由调用方显式下发（dark）：宿主 trait 只跟系统，应用内深色必须显式
-//     覆盖（同 TiebaListView.themeColors 的理由）。
+//   - 深浅不锁在本视图：宿主子页 / 窗口级 override（TiebaChrome.setChromeDarkMode）
+//     已把应用主题下发给整棵树，表单与 cell 全用系统语义色，trait 一变自己跟
+//     上——调用方仍会按旧签名下发 isDark，但写入不再需要（见属性注释）。
 //
 // 行种类与可见形态（与迁移前的 @expo/ui 组件一一对应）：
 //   link    ListItem：色块图标 + 标题 + 副标题（**无 chevron** —— ListItem 的
@@ -382,14 +383,11 @@ final class TiebaFormListView: UIView {
     }
   }
 
-  /// 应用内深浅（不是系统外观）。宿主 trait 只跟系统，这里显式覆盖。
-  var isDark: Bool = false {
-    didSet {
-      guard isDark != oldValue else { return }
-      // 只改外观：cell 全用系统语义色/动态字体，trait 一变自己就跟上。
-      overrideUserInterfaceStyle = isDark ? .dark : .light
-    }
-  }
+  /// 应用内深浅（调用方语义输入）。**不再写 overrideUserInterfaceStyle**：深浅
+  /// 由窗口级 override（TiebaChrome.setChromeDarkMode）+ 宿主子页的 trait 下发
+  /// 到整棵树（含 presented 表单），表单全用系统语义色，trait 一变自己就跟上；
+  /// 属性保留是因为页面仍按旧签名下发它（文件外的调用点，写入无副作用）。
+  var isDark: Bool = false
 
   // MARK: - 回调（纯闭包：不依赖 Expo 的 EventDispatcher，原生 VC 也能直接接）
 

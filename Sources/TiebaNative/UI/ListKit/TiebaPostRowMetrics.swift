@@ -450,28 +450,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
     return urls
   }
 
-  /// 查看器图片项（dataSaverMode 选档；GIF 强制原档）。
-  var viewerItems: [[String: Any]] {
-    images.map { image in
-      let origin = image.originSrc.isEmpty ? image.src : image.originSrc
-      let raw: String
-      if image.isGif || preferences.dataSaverMode == "origin" {
-        raw = origin
-      } else if preferences.dataSaverMode == "lite" {
-        raw = image.src.isEmpty ? origin : image.src
-      } else {
-        raw = image.src.isEmpty ? origin : image.src
-      }
-      return [
-        "url": raw,
-        "thumbUrl": TiebaPostRowText.displayURL(image, preferences: preferences)?.absoluteString ?? raw,
-        "isGif": image.isGif,
-        "isLong": image.isTall,
-        "width": image.width,
-        "height": image.height,
-      ]
-    }
-  }
 
   init(
     pageKey: String,

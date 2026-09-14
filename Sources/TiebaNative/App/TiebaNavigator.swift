@@ -247,9 +247,10 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
         sheet.prefersScrollingExpandsWhenScrolledToEdge = true
       }
       let presenter = rootNav.topViewController ?? rootNav
-      // 深色模式下表单也是深色（应用主题 ≠ 系统外观）。presented VC 不继承
-      // presenter 的 overrideUserInterfaceStyle，必须自己带。
-      presentable.overrideUserInterfaceStyle = theme.dark ? .dark : .light
+      // 表单深浅不单独写：presented 不继承 presenter 的 override，但**继承窗口**
+      // ——窗口级 override（TiebaChrome.setChromeDarkMode）明确覆盖该窗口内的
+      // 所有 presentation（UIView.h: set on UIWindow "also affects presentations
+      // that happen inside the window"）。
       presenter.present(presentable, animated: true)
     }
     syncNavBarGlass()

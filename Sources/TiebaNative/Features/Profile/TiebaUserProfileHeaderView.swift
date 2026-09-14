@@ -3,10 +3,22 @@
 // IP/吧龄）、统计行（关注/粉丝可点）、贴子·回复·关注的吧分段。
 //
 // 走 TiebaKindListHeaderView 契约（列表只认识"高度 + 主题 + 点击外传"三件事）；
-// 点击经 onAction 外传（avatar / follow / block / copyUid / social / tab）。
+// 点击经 onAction 外传（动作 = TiebaUserProfileHeaderAction；avatar 的测量矩形
+// 走 payload 字典，见协议约定）。
 // 顶部让位由列表的 contentInsetTop 承担，本视图不含状态栏/导航栏留白。
 import UIKit
 import Nuke
+
+/// 用户主页页头动作（原字符串动作名的类型化）。
+public enum TiebaUserProfileHeaderAction {
+  /// 头像：转场矩形是视图测量值，走 onAction 的 payload 字典（frameX/Y/W/H）。
+  case avatar
+  case follow
+  case block
+  case copyUid
+  case social(mode: String)
+  case tab(value: String)
+}
 
 private enum ProfileHeaderMetrics {
   static let paddingH: CGFloat = 16
@@ -18,7 +30,7 @@ private enum ProfileHeaderMetrics {
 }
 
 public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
-  public var onAction: ((String, [String: Any]) -> Void)?
+  public var onAction: ((TiebaKindListHeaderAction, [String: Any]) -> Void)?
 
   private var spec: [String: Any] = [:]
   private var palette: TiebaSimpleRowPalette = .default
@@ -366,10 +378,10 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
 
   @objc private func handleAvatarTap() {
     TiebaSceneHaptics.fire("press")
-    onAction?("avatar", avatarPayload())
+    onAction?(.userProfile(.avatar), avatarPayload())
   }
 
-  /// 头像窗口矩形（原生查看器转场起点；64pt 方图）。
+  /// 头像窗口矩形（原生查看器转场起点；64pt 方图）：视图测量值 → payload 字典。
   private func avatarPayload() -> [String: Any] {
     let avatar = headerRow.avatarView
     let frame = avatar.convert(avatar.bounds, to: nil)
@@ -381,30 +393,30 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
 
   @objc private func handleFollow() {
     TiebaSceneHaptics.fire("press")
-    onAction?("follow", [:])
+    onAction?(.userProfile(.follow), [:])
   }
   @objc private func handleBlock() {
     TiebaSceneHaptics.fire("destructive")
-    onAction?("block", [:])
+    onAction?(.userProfile(.block), [:])
   }
   @objc private func handleCopyUid() {
     TiebaSceneHaptics.fire("press")
-    onAction?("copyUid", [:])
+    onAction?(.userProfile(.copyUid), [:])
   }
   @objc private func handleOpenFollows() {
     TiebaSceneHaptics.fire("press")
-    onAction?("social", ["mode": "follows"])
+    onAction?(.userProfile(.social(mode: "follows")), [:])
   }
   @objc private func handleOpenFans() {
     TiebaSceneHaptics.fire("press")
-    onAction?("social", ["mode": "fans"])
+    onAction?(.userProfile(.social(mode: "fans")), [:])
   }
 
   @objc private func handleSegmentChange() {
     TiebaSceneHaptics.fire("segment")
     let index = segment.selectedSegmentIndex
     guard index >= 0, index < tabs.count else { return }
-    onAction?("tab", ["value": tabs[index]])
+    onAction?(.userProfile(.tab(value: tabs[index])), [:])
   }
 }
 

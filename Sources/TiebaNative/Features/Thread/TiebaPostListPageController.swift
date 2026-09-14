@@ -215,28 +215,24 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
     return text.count > 30 ? "\(text.prefix(30))…" : text
   }
 
-  /// 图片查看器（行模型取 viewerItems；transition 起点 = 触发图 rect）。
+  /// 图片查看器（行模型图片值类型直构；transition 起点 = 触发图 rect）。
   func presentImageBrowser(post: TiebaThreadPost, index: Int, rect: CGRect, contextTitle: String) {
     guard let rowIndex = rowPosts.firstIndex(where: { $0.id == post.id }),
           let model = TiebaPostRowMetrics.shared.row(pageKey: pageKey, index: rowIndex)
     else { return }
-    let items = model.viewerItems
+    let items = model.images.compactMap {
+      TiebaPhotoItem(image: $0, preferences: model.preferences)
+    }
     guard !items.isEmpty else { return }
-    // viewerItems 由 images.map 直构、不过滤，页号 == 行内图片下标；退出时按当前页
-    // 现算矩形（行不可见/滑出视口 → nil，框架 Fade 收尾）。
+    // 页号 == 行内图片下标（仅 url 非法的条目被丢弃）；退出时按当前页现算矩形
+    // （行不可见/滑出视口 → nil，框架 Fade 收尾）。
     let sourceProvider: TiebaPhotoBrowser.SourceFrameProvider = { [weak self] pageIndex in
       self?.list.postImageWindowRect(rowIndex: rowIndex, imageIndex: pageIndex)
     }
     TiebaPhotoBrowser.present(
       items: items,
       initialIndex: index,
-      transition: [
-        "frameX": rect.origin.x,
-        "frameY": rect.origin.y,
-        "frameW": rect.width,
-        "frameH": rect.height,
-        "contextTitle": contextTitle,
-      ],
+      transition: TiebaPhotoTransition(frame: rect, contextTitle: contextTitle),
       sourceFrameProvider: sourceProvider
     )
   }

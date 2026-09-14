@@ -454,14 +454,11 @@ final class TiebaSkeletonList: UIView {
   var borderColor: UIColor = TiebaFeedRowPalette.default.borderCard {
     didSet { if borderColor != oldValue { rebuild() } }
   }
-  /// 应用内深浅（宿主 trait 只跟系统，深色必须显式下发）。
-  var isDark: Bool = false {
-    didSet {
-      guard isDark != oldValue else { return }
-      overrideUserInterfaceStyle = isDark ? .dark : .light
-      rebuild()
-    }
-  }
+  /// 应用内深浅（调用方语义输入）。**不再写 overrideUserInterfaceStyle**：骨架
+  /// 全是动态色（占位/卡片面 + 描边走 registerForTraitChanges 重解析），trait
+  /// 由窗口级 override 与宿主子页下发，变了自己就跟着变。属性保留是因为页面
+  /// 仍按旧签名下发它（文件外的调用点，写入无副作用）。
+  var isDark: Bool = false
   /// 宿主整块隐藏但不改本视图 isHidden 时的补充挂起（如 Web 覆盖层）。
   var isSuspended: Bool = false { didSet { updatePulse() } }
   /// 列表内边距（原各页 SkeletonList style 的 padding，如 16/8/24）。

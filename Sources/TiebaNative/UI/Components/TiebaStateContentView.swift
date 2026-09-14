@@ -113,14 +113,11 @@ final class TiebaStateContentView: UIView {
     didSet { skeletonView.contentInsets = skeletonInsets }
   }
 
-  /// 应用内深浅（宿主 trait 只跟系统，深色必须显式下发）
-  var isDark: Bool = false {
-    didSet {
-      guard isDark != oldValue else { return }
-      overrideUserInterfaceStyle = isDark ? .dark : .light
-      skeletonView.isDark = isDark
-    }
-  }
+  /// 应用内深浅（调用方语义输入）。**不再写 overrideUserInterfaceStyle、也不再
+  /// 转给骨架**：深浅由窗口级 override（TiebaChrome.setChromeDarkMode）+ 宿主
+  /// 子页的 trait 覆盖整棵树，本视图（含骨架）全用系统语义色/动态字色，trait
+  /// 一变自己就跟上；属性保留是因为页面仍按旧签名下发它（写入无副作用）。
+  var isDark: Bool = false
 
   override var isHidden: Bool {
     didSet { skeletonView.isSuspended = isHidden }

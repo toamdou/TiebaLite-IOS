@@ -124,6 +124,9 @@ public final class TiebaAppBootstrap {
     TiebaSettingsForm.applyTheme(dark: dark, accentHex: accent)
     // 跟随模式必须下发 nil：具体值会锁死窗口 trait，系统切换不再生效
     // （原 ThemeContext 的 Appearance.setColorScheme('unspecified') 同判据）。
+    // ⚠️ 这是**全应用唯一的深浅决策点**（连同设置页 applyChrome 的同一条）：
+    // 落点是窗口级 override（TiebaChrome.setChromeDarkMode 同步写），栏/底栏/
+    // 宿主/表单都不再各自写 override，随窗口继承。
     TiebaChrome.setChromeDarkMode(followSystem ? nil : dark)
   }
 
@@ -162,7 +165,10 @@ public final class TiebaAppBootstrap {
   }
 
   private func observeTraitChanges(on window: UIWindow) {
-    // 跟随系统模式：外观切换要重刷壳（原 JS 由 ThemeContext 重渲染下发）。
+    // 跟随系统模式的实时切换链（这里是唯一入口）：窗口 trait 变 → applyTheme →
+    // 导航壳（tint/navTint/底色/状态栏字色 + 逐宿主子页 trait）+ TiebaSystemUI
+    // 根视图底色 + 窗口级深浅重申；其余页面/栏没有自己的 override，随窗口 trait
+    // 原生一起变（含 presented）。手动模式下窗口有 override，系统切档不触发这里。
     traitRegistration = window.registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
       (_: UIWindow, _) in
       guard TiebaPreferences.bool("followSystemDarkMode", default: true) else { return }

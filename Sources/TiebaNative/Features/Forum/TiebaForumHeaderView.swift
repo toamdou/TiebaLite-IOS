@@ -1,10 +1,24 @@
 // 吧页滚动头（原 src/components/forum/{ForumTabHeader,ForumSortBar}.tsx 的原生等价）：
 // 吧名片卡片 + 热门/最新/精品分段 + 最新排序行 / 精品分类行，整体挂在列表的
-// top boundary 上随列表滚动。交互经 onAction 外传（列表发 headerAction 事件）。
+// top boundary 上随列表滚动。交互经 onAction 外传（动作 = TiebaForumHeaderAction，
+// 列表发 headerAction 事件；avatar 的测量矩形走 payload，见协议约定）。
 import UIKit
 
+/// 吧页头动作（原字符串动作名的类型化）。
+public enum TiebaForumHeaderAction {
+  case card
+  /// 吧头像：转场矩形是视图测量值，走 onAction 的 payload 字典（frameX/Y/W/H）。
+  case avatar
+  case follow
+  case sign
+  case segment(index: Int)
+  case sort(sortType: Int)
+  case clearClassify
+  case classifyPicker
+}
+
 final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
-  var onAction: ((String, [String: Any]) -> Void)?
+  var onAction: ((TiebaKindListHeaderAction, [String: Any]) -> Void)?
 
   private var spec: [String: Any] = [:]
   private var palette: TiebaSimpleRowPalette = .default
@@ -149,8 +163,14 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     configureCapsuleButton(signedChip, filled: false)
     followedChip.isUserInteractionEnabled = false
     signedChip.isUserInteractionEnabled = false
-    followButton.addAction(UIAction { [weak self] _ in self?.onAction?("follow", [:]) }, for: .touchUpInside)
-    signButton.addAction(UIAction { [weak self] _ in self?.onAction?("sign", [:]) }, for: .touchUpInside)
+    followButton.addAction(
+      UIAction { [weak self] _ in self?.onAction?(.forum(.follow), [:]) },
+      for: .touchUpInside
+    )
+    signButton.addAction(
+      UIAction { [weak self] _ in self?.onAction?(.forum(.sign), [:]) },
+      for: .touchUpInside
+    )
     for button in [followButton, followedChip, signButton, signedChip] {
       buttonRow.addArrangedSubview(button)
     }
@@ -226,7 +246,7 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     // ── 分类行（精品 tab）──
     classifyChip.addAction(UIAction { [weak self] _ in
       TiebaSceneHaptics.fire("press")
-      self?.onAction?("clearClassify", [:])
+      self?.onAction?(.forum(.clearClassify), [:])
     }, for: .touchUpInside)
     var classifyConfig = UIButton.Configuration.tinted()
     classifyConfig.image = UIImage(systemName: "line.3.horizontal.decrease.circle")
@@ -241,7 +261,7 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     classifyButton.configuration = classifyConfig
     classifyButton.addAction(UIAction { [weak self] _ in
       TiebaSceneHaptics.fire("sheet-present")
-      self?.onAction?("classifyPicker", [:])
+      self?.onAction?(.forum(.classifyPicker), [:])
     }, for: .touchUpInside)
     classifyRow.axis = .horizontal
     classifyRow.alignment = .center
@@ -406,14 +426,15 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
   private func sortAction(title: String, value: Int, selected: Bool) -> UIAction {
     UIAction(title: title, state: selected ? .on : .off) { [weak self] _ in
       TiebaSceneHaptics.fire("toggle")
-      self?.onAction?("sort", ["sortType": value])
+      self?.onAction?(.forum(.sort(sortType: value)), [:])
     }
   }
 
   @objc private func handleAvatarTap() {
-    // 源图窗口矩形给查看器转场（原 frameFromPressEvent 同用途）。
+    // 源图窗口矩形给查看器转场（原 frameFromPressEvent 同用途）：视图测量值，
+    // 走 payload 字典（协议约定的唯一字典通路）。
     let frame = avatar.convert(avatar.bounds, to: nil)
-    onAction?("avatar", [
+    onAction?(.forum(.avatar), [
       "frameX": Double(frame.minX),
       "frameY": Double(frame.minY),
       "frameW": Double(frame.width),
@@ -422,11 +443,11 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
   }
 
   @objc private func handleCardTap() {
-    onAction?("card", [:])
+    onAction?(.forum(.card), [:])
   }
 
   @objc private func handleSegmentChange() {
     TiebaSceneHaptics.fire("toggle")
-    onAction?("segment", ["index": segment.selectedSegmentIndex])
+    onAction?(.forum(.segment(index: segment.selectedSegmentIndex)), [:])
   }
 }
