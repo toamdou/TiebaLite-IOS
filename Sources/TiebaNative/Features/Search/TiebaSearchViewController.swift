@@ -38,6 +38,16 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private var expandedIds: Set<String> = []
   private var likeMirror: [String: Bool] = [:]
   private var keyword = ""
+  /// 深链带进来的初始关键词（只消费一次，见 viewDidAppear）。
+  private var initialKeyword: String
+
+  init(initialKeyword: String = "") {
+    self.initialKeyword = initialKeyword
+    super.init(nibName: nil, bundle: nil)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
   private var hasSearched = false
   private var activeTab: Tab = .thread
   /// 当前关键词已出结果的 tab（JS useSearchController.searchedTabsRef 同义）：
@@ -117,8 +127,19 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
 
   override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated)
-    if !hasSearched, searchBar.text?.isEmpty != false {
-      searchController.isActive = true
+    // 出现动画落定后才做行测量/设页：转场期间 publish 会在推入动画里做整页测量 +
+    // 快照 apply，直接表现成搜索栏弹出时掉帧（真机反馈）。
+    if needsPublish, lastWidth > 0 {
+      needsPublish = false
+      let reveal = needsReveal
+      needsReveal = false
+      publish(fresh: false, reveal: reveal)
+    }
+    // 深链带关键词（tiebalite://search?q=…）：出现后直接出结果，不再抢焦点。
+    if !initialKeyword.isEmpty, !hasSearched {
+      let keyword = initialKeyword
+      initialKeyword = ""
+      commit(keyword)
     }
   }
 
@@ -127,7 +148,9 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     // 页键发布保留本页实现（reveal 需要 setPage 完成回调，driver 无该钩子）；
     // 宽度量化仍走全仓唯一实现。
     lastWidth = TiebaLayout.quantize(list.bounds.width)
-    if needsPublish, lastWidth > 0 {
+    // 转场未结束时只记账（见 viewDidAppear）：transitionCoordinator 非 nil 期间
+    // 布局每次变化都会走这里，就地 publish 会把测量压进推入动画。
+    if lastWidth > 0, transitionCoordinator == nil, needsPublish {
       needsPublish = false
       let reveal = needsReveal
       needsReveal = false
@@ -150,6 +173,16 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     guard let host = parent as? TiebaRouteHostViewController else {
       preconditionFailure("搜索页必须挂在 TiebaRouteHostViewController 下")
     }
+    // ⚠️ iOS 26 默认会把搜索栏"整合进底部工具栏"（UINavigationItemSearchBarPlacement
+    // Integrated 的注释原文）——页面顶部于是空成一片。点名 .integrated 让搜索栏
+    // 留在顶栏内联（原生 Mail/信息 的形态），并把工具栏整合关掉，否则 iPhone 上
+    // 仍会被系统挪到底部；也不用 .stacked：那会撑出大标题那一圈高度，页面顶部留白。
+    // iOS 26 默认会把搜索栏整合进底部工具栏（UINavigationItemSearchBarPlacement
+    // Integrated 的注释原文），页面顶部于是空成一片：点名 .integrated 让它留在
+    // 顶栏内联（原生 Mail/信息 形态），并关掉工具栏整合，否则仍会被挪到底部。
+    // .stacked 也不要用——那会撑出大标题那一圈高度，顶栏下方空一大段。
+    host.navigationItem.preferredSearchBarPlacement = .integrated
+    host.navigationItem.searchBarPlacementAllowsToolbarIntegration = false
     host.navigationItem.searchController = searchController
     host.navigationItem.hidesSearchBarWhenScrolling = false
   }

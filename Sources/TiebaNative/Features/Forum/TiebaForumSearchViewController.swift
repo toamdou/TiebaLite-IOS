@@ -102,13 +102,6 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
     refreshHistory()
   }
 
-  override func viewDidAppear(_ animated: Bool) {
-    super.viewDidAppear(animated)
-    if !hasSearched, searchBar.text?.isEmpty != false {
-      searchController.isActive = true
-    }
-  }
-
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     driver.updateWidth(list.bounds.width)
@@ -128,6 +121,16 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
     guard let host = parent as? TiebaRouteHostViewController else {
       preconditionFailure("吧内搜索必须挂在 TiebaRouteHostViewController 下")
     }
+    // ⚠️ iOS 26 默认会把搜索栏"整合进底部工具栏"（UINavigationItemSearchBarPlacement
+    // Integrated 的注释原文）——页面顶部于是空成一片。点名 .integrated 让搜索栏
+    // 留在顶栏内联（原生 Mail/信息 的形态），并把工具栏整合关掉，否则 iPhone 上
+    // 仍会被系统挪到底部；也不用 .stacked：那会撑出大标题那一圈高度，页面顶部留白。
+    // iOS 26 默认会把搜索栏整合进底部工具栏（UINavigationItemSearchBarPlacement
+    // Integrated 的注释原文），页面顶部于是空成一片：点名 .integrated 让它留在
+    // 顶栏内联（原生 Mail/信息 形态），并关掉工具栏整合，否则仍会被挪到底部。
+    // .stacked 也不要用——那会撑出大标题那一圈高度，顶栏下方空一大段。
+    host.navigationItem.preferredSearchBarPlacement = .integrated
+    host.navigationItem.searchBarPlacementAllowsToolbarIntegration = false
     host.navigationItem.searchController = searchController
     host.navigationItem.hidesSearchBarWhenScrolling = false
   }

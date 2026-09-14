@@ -145,7 +145,7 @@ public enum TiebaNativeRouteTable {
       return TiebaExploreViewController()
     // 搜索（原 src/app/search/index.tsx）：系统搜索栏 + 贴吧人三桶 + 历史。
     case "search/index":
-      return TiebaSearchViewController()
+      return TiebaSearchViewController(initialKeyword: route.params["q"] ?? "")
     // 吧内搜索（原 src/app/forum/[name]/search.tsx）：排序/筛选 + 吧维度历史。
     case "forum/[name]/search":
       return TiebaForumSearchViewController(

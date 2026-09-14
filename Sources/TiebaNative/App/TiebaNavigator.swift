@@ -551,6 +551,13 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       navigate(path: "thread/\(tid)", params: [:], mode: "push")
       return true
     }
+    // 搜索：tiebalite://search 或 tiebalite://search?q=关键词（q 非空则直接出结果，
+    // 供快捷指令/调试直达；空 q 只开搜索页）。
+    if s.hasPrefix("tiebalite://search") || s.hasPrefix("tblite://search") {
+      let q = URLComponents(string: s)?.queryItems?.first { $0.name == "q" }?.value ?? ""
+      navigate(path: "search/index", params: q.isEmpty ? [:] : ["q": q], mode: "push")
+      return true
+    }
     if let name = Self.extractForumName(s) {
       navigate(path: "forum/\(name)", params: [:], mode: "push")
       return true
