@@ -35,6 +35,8 @@ filegroup(
     ) + [
         "PrivacyInfo.xcprivacy",
         "SplashScreen.storyboard",
+        # 运行时必需：信息流端点（frsPage/feedThreadList/userLike）走 TiebaSwiftProto
+        # 描述符解码（TiebaProtoRegistry.loadBundled），删掉即 preconditionFailure。
         "//Sources/TiebaNative:Proto/proto-descriptors.json",
     ],
 )

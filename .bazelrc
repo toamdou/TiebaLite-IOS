@@ -17,6 +17,12 @@ build --compilation_mode=dbg
 build:debug --compilation_mode=dbg
 build:release --compilation_mode=opt
 
+# release 出包尺寸：-c opt 下的 Swift 编译本身已经是最优组合
+#（-O -whole-module-optimization -internalize-at-link -DNDEBUG），链接期再加去死代码；
+# 全量符号剥离由 //:AppStripped 目标做（Tools/strip-ipa-symbols.sh，原因见该脚本头注）。
+# 实测（2026-09-15，arm64 单架构）：基线 7.84MB → -dead_strip 7.53MB → 再剥离符号 6.64MB。
+build:release --linkopt=-Wl,-dead_strip
+
 # 缓存路径含本机用户名，不入库：复制下面两行到 .bazelrc.user（已 gitignore）并改成自己的
 # 绝对路径即可（.bazelrc 不展开 ~）。不配也能跑，只是每次全量重编。
 #   build --disk_cache=/Users/<you>/.bazel_cache/disk

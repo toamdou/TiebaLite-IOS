@@ -82,13 +82,15 @@ jobs:
           brew install bazelisk
           bazel --version
           ./Tools/make-unsigned-profile.sh
-          MODE=$([ "$CONFIGURATION" = "Release" ] && echo release || echo debug)
-          bazel build //:App --config=ci --config="$MODE"
+          mode=$([ "$CONFIGURATION" = "Release" ] && echo release || echo debug)
+          # //:AppStripped = //:App 的 IPA 再剥一遍符号表（体积约 -12%，见 Tools/strip-ipa-symbols.sh）；
+          # dSYM 由 //:App 生成，剥离不改 UUID，崩溃符号化不受影响。
+          bazel build //:AppStripped --config=ci --config="$mode"
 
       - name: Package IPA
         run: |
           mkdir -p build/Payload
-          unzip -q bazel-bin/App.ipa -d build
+          unzip -q bazel-bin/AppStripped.ipa -d build
           # 隐私消毒：把产物内嵌的构建机绝对路径（含 runner 用户名）做等长替换
           python3 Tools/privacy-scrub.py build/Payload/*.app
           ( cd build && zip -qry "$IPA_NAME" Payload )

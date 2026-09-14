@@ -1,0 +1,6 @@
+# 交付打包用脚本（Bazel 7.4 的 sh_binary 仍是原生规则，无需 rules_shell）。
+sh_binary(
+    name = "strip-ipa-symbols",
+    srcs = ["strip-ipa-symbols.sh"],
+    visibility = ["//visibility:public"],
+)

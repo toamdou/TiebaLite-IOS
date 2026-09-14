@@ -42,3 +42,23 @@ xcodeproj(
     name = "xcodeproj",
     top_level_targets = ["//:App"],
 )
+
+# 交付用正式包：//:App 的产物做一遍符号剥离（体积约 -12%；为什么剥离要在 Bazel 之外，
+# 见 Tools/strip-ipa-symbols.sh 头注）。用法：
+#   bazel build //:AppStripped --config=ci --config=release  → bazel-bin/AppStripped.ipa
+# ⚠️ 剥离会破坏代码签名：这个包是给 SideStore 侧载用的（与 CI 的隐私消毒同一口径）；
+# 要 devicectl 直装真机就建 //:App（签名有效、符号未剥）。
+# //:App 的默认输出不止一个（IPA + dSYM），所以先按扩展名挑出 IPA 再交给脚本。
+genrule(
+    name = "AppStripped",
+    srcs = [":App"],
+    outs = ["AppStripped.ipa"],
+    cmd = """
+ipa=""
+for f in $(locations :App); do
+  case "$$f" in *.ipa) ipa="$$f" ;; esac
+done
+$(location //Tools:strip-ipa-symbols) "$$ipa" $@
+""",
+    tools = ["//Tools:strip-ipa-symbols"],
+)
