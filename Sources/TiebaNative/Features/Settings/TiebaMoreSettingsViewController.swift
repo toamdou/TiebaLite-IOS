@@ -16,7 +16,8 @@ final class TiebaMoreSettingsViewController: TiebaFormPageController {
   private static let maxSizeOptions: [(value: String, label: String)] = [
     ("100", "100 MB"), ("200", "200 MB"), ("400", "400 MB"), ("1000", "1000 MB"),
   ]
-  /// JS clearAllKvSync 点名保留的搬运标记：删了会在下次启动重跑迁移。
+  /// JS clearAllKvSync 点名保留的旧搬运标记；本仓的一次性标记统一由
+  /// TiebaKvStore.internalMarkerKeys 提供（clear 内部已强制保留）。
   private static let migrationKey = "@tiebalite:unified_migration_v1"
   private static let legacyKvDatabase = "ExpoSQLiteStorage"
   private static let activeCredentialKeys = [
@@ -204,7 +205,8 @@ final class TiebaMoreSettingsViewController: TiebaFormPageController {
     TiebaSceneHaptics.fire("destructive")
     do {
       try TiebaPreferences.resetAll()
-      // 全清 KV（账号列表/元数据/历史引用/屏蔽项/缓存），保留一次性搬运标记。
+      // 全清 KV（账号列表/元数据/历史引用/屏蔽项/缓存），保留一次性迁移标记：
+      // 删了标记会让旧 MMKV 在下次启动被重新灌回来、或重跑孤儿登录态清理。
       try TiebaKvStore.shared.clear(prefix: nil, preserveKeys: [Self.migrationKey])
       try TiebaSQLite.shared.exec(
         database: TiebaSQLite.mainDatabase,

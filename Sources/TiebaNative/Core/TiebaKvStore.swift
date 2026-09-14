@@ -101,6 +101,14 @@ final class TiebaKvStore: @unchecked Sendable {
   /// 强制保留——否则清空数据后下次启动会把旧 MMKV 文件重新灌回来（清空复活）。
   static let legacyImportFlagKey = "@tiebalite:mmkv_import_v1"
 
+  /// 孤儿登录态清理标记（Keychain 凭据存活但沙盒被清空的卸载重装场景）：
+  /// 与导入标记同理，属"一次性迁移标记"，清数据时同样必须保留。
+  static let orphanPurgeFlagKey = "@tiebalite:orphan_purge_v1"
+
+  /// 任何"全清/重置"都必须保留的内部标记键：删掉它们会让一次性迁移重新执行
+  /// （旧 MMKV 复活、或重跑孤儿登录态清理）。
+  static let internalMarkerKeys: [String] = [legacyImportFlagKey, orphanPurgeFlagKey]
+
   /// 关键事件日志（导入结果/降级警告；低频，不刷屏）。
   private static let log = Logger(subsystem: "com.tiebalite.app", category: "kv")
 
@@ -217,7 +225,8 @@ final class TiebaKvStore: @unchecked Sendable {
   }
 
   /// 清理。prefix == nil = 全清；否则只删该前缀的键。
-  /// preserveKeys 之外，内部标记键（旧 MMKV 导入标记）**永远**保留：全清后又
+  /// preserveKeys 之外，内部标记键（旧 MMKV 导入标记、孤儿登录态清理标记）
+  /// **永远**保留：全清后又
   /// 从旧文件把数据灌回来是明确的 bug（unifiedDb.ts 的旧注释叫「清空复活」）。
   /// 失败抛错（这是用户显式动作，不能假装成功）。
   func clear(prefix: String?, preserveKeys: [String]) throws {
@@ -228,7 +237,7 @@ final class TiebaKvStore: @unchecked Sendable {
     waitForLegacyImportLocked()
     // 去重 + 过滤空串：key NOT IN 列表里有重复不影响语义，但绑定参数少一点好。
     var preserved = Set(preserveKeys.filter { !$0.isEmpty })
-    preserved.insert(Self.legacyImportFlagKey)
+    preserved.formUnion(Self.internalMarkerKeys)
     // sorted()：占位符编号按这个顺序生成，绑定必须同序（Set 本身无序）。
     let preservedKeys = preserved.sorted()
 

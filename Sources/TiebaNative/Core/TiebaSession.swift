@@ -116,30 +116,74 @@ enum TiebaSession {
   /// 卸载重装时 Keychain 存活、沙盒（KV/账号元数据）被清空 —— 快照里仍有凭据，
   /// 于是以"已登录"启动却没有昵称/头像，且所有请求都带着失效凭据。健康登录一定
   /// 同时写下 KV 账号元数据（persist → saveMetadata），元数据缺失即孤儿凭据。
+  ///
+  /// ⚠️ 这是一次性迁移，**不是每次启动都跑的规则**：只有装标记（orphanPurgeFlagKey）
+  /// 不在时评估一次，评估完就落标记。否则任何"元数据暂时读不到"（旧版升级、
+  /// 写入失败、库损坏）都会把还能用的登录信息删掉——用户无法登录正是这条路径。
   static func purgeOrphanedSession() {
+    let kv = TiebaKvStore.shared
+    // 标记态：读过（.value）= 本安装已评估过；读不到（.unavailable）= 库有问题，
+    // 保持原样下次再说（不写标记，避免"没评估成功也当评估过"）。
+    switch kv.lookup(key: TiebaKvStore.orphanPurgeFlagKey) {
+    case .value:
+      return
+    case .unavailable(let reason):
+      sessionLog.error("跳过孤儿会话清理：标记不可读（\(reason, privacy: .public)）")
+      return
+    case .missing:
+      break
+    }
     let snapshot = TiebaBackgroundSnapshot.shared
-    guard !snapshot.bduss.isEmpty else { return }
+    guard !snapshot.bduss.isEmpty else {
+      // 没凭据 = 不可能有孤儿登录态：记一笔标记收工（本次安装不再评估）。
+      writePurgeFlag()
+      return
+    }
     // 只有**确证** account_list 为空（键不存在 / 解析出空数组）才清理：读失败、
     // 解析失败、旧 MMKV 导入未完成都不动凭据——一次磁盘故障不该把用户永久登出，
     // 误判"没有账号元数据"而删 active 凭据正是这条路径最贵的错误（112）。
-    switch TiebaKvStore.shared.lookup(key: accountListKey) {
+    switch kv.lookup(key: accountListKey) {
     case .unavailable(let reason):
       sessionLog.error("跳过孤儿会话清理：账号列表不可读（\(reason, privacy: .public)）")
       return
     case .value(let raw):
-      guard let list = TiebaJSON.list(from: raw), list.isEmpty else { return }
+      guard let list = TiebaJSON.list(from: raw), list.isEmpty else {
+        writePurgeFlag()
+        return
+      }
     case .missing:
       break
     }
-    sessionLog.info("孤儿登录态已清理（Keychain 有凭据但无账号元数据）")
+    // 沙盒被清空的旁证：除了内部标记，kv 表里没有别的键。表里还有别的数据说明
+    // KV 是健康的（只是账号元数据不在），此时"元数据缺失"更可能是旧版键名差异
+    // 或写入失败——保留凭据，让用户自己登出，绝不代删（用户要求：不许把还能用的
+    // 登录信息删掉）。
+    let userKeys = TiebaKvStore.shared.allKeys()
+      .filter { !TiebaKvStore.internalMarkerKeys.contains($0) }
+    guard userKeys.isEmpty else {
+      writePurgeFlag()
+      return
+    }
+    sessionLog.info("孤儿登录态已清理（Keychain 有凭据但沙盒已清空）")
     snapshot.clear()
     for field in credentialFields {
       TiebaKeychain.delete(key: "tiebalite.active.\(field)")
     }
     do {
-      try TiebaKvStore.shared.remove(key: currentMetaKey)
+      try kv.remove(key: currentMetaKey)
     } catch {
       sessionLog.error("清理 current_meta 失败：\(error.localizedDescription, privacy: .public)")
+    }
+    writePurgeFlag()
+  }
+
+  /// 落一次性标记。写失败只记日志：下次启动会重新评估，而重新评估的判据同样
+  /// 严格（确证读到空），不会因为"多评估一次"删掉有效凭据。
+  private static func writePurgeFlag() {
+    do {
+      try TiebaKvStore.shared.set(key: TiebaKvStore.orphanPurgeFlagKey, value: "1")
+    } catch {
+      sessionLog.error("写孤儿清理标记失败：\(error.localizedDescription, privacy: .public)")
     }
   }
 
