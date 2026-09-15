@@ -18,6 +18,23 @@ final class TiebaThreadKnownPostView: UIView {
     snapshot.imageWidth > 0 && snapshot.imageHeight > 0
       ? CGFloat(snapshot.imageWidth / snapshot.imageHeight) : 0
   }
+
+  /// 竖长图（与 TiebaThreadImage.isTall / MediaPager LONG_IMAGE_RATIO 同值）。
+  private var isTallImage: Bool {
+    snapshot.imageWidth > 0 && snapshot.imageHeight > 0
+      && CGFloat(snapshot.imageHeight / snapshot.imageWidth) > 2.4
+  }
+
+  /// 图片高度与真实主贴卡同一套规则（TiebaPostRowMetrics.swift:953-957）：竖长图
+  /// 固定 300，其余按宽高比、上限 520。两边算不一样时，换卡那一刻图片与它下面的
+  /// 内容会整体跳一次——用户报的"加载完突然往上瞬移"就有这一份。
+  private func imageHeight(forWidth width: CGFloat) -> CGFloat {
+    if isTallImage { return TiebaPostRowLayout.longImageHeight }
+    return min(
+      max(width / max(imageAspect, 0.01), 1),
+      TiebaPostRowLayout.singleImageMaxHeight
+    )
+  }
   private var imageViewWidth: CGFloat = 0
 
   init(snapshot: TiebaThreadSnapshot) {
@@ -80,12 +97,15 @@ final class TiebaThreadKnownPostView: UIView {
 
     if !snapshot.abstract.isEmpty {
       abstractLabel.text = snapshot.abstract
-      abstractLabel.font = TiebaSimpleText.font(size: 14, weight: .regular)
+      // 字号/行高与真实主贴正文同尺（15pt/22pt，见 TiebaPostRowMetrics.buildContent）：
+      // 摘要本来就是正文的预览，行高不一致时换卡会整块上下跳（用户 2026-09-15 报）。
+      // 颜色留次要色——预览的视觉设计不变。
+      abstractLabel.font = TiebaSimpleText.font(size: 15, weight: .regular)
       abstractLabel.numberOfLines = 2
       abstractLabel.attributedText = TiebaSimpleText.makeAttributed(
         text: snapshot.abstract,
-        font: TiebaSimpleText.font(size: 14, weight: .regular),
-        lineHeight: 20
+        font: TiebaSimpleText.font(size: 15, weight: .regular),
+        lineHeight: 22
       )
       stack.addArrangedSubview(abstractLabel)
     }
@@ -103,11 +123,20 @@ final class TiebaThreadKnownPostView: UIView {
         multiplier: 1 / imageAspect
       )
       ratio.priority = .defaultHigh
-      NSLayoutConstraint.activate([
-        ratio,
-        imageView.heightAnchor.constraint(lessThanOrEqualToConstant: 320),
+      var imageConstraints = [
+        imageView.heightAnchor.constraint(lessThanOrEqualToConstant: TiebaPostRowLayout.singleImageMaxHeight),
         imageView.heightAnchor.constraint(greaterThanOrEqualToConstant: 1),
-      ])
+      ]
+      // 竖长图不做比例约束，固定 300（真实卡同规则）；宽度由卡片内容宽决定，
+      // 所以这两个约束在任何宽度下都算得出确定高度。
+      if isTallImage {
+        imageConstraints.append(
+          imageView.heightAnchor.constraint(equalToConstant: TiebaPostRowLayout.longImageHeight)
+        )
+      } else {
+        imageConstraints.append(ratio)
+      }
+      NSLayoutConstraint.activate(imageConstraints)
     }
 
     NSLayoutConstraint.activate([
@@ -132,7 +161,7 @@ final class TiebaThreadKnownPostView: UIView {
     let width = imageView.bounds.width
     guard width > 1, abs(width - imageViewWidth) > 0.5 else { return }
     imageViewWidth = width
-    let height = min(max(width / imageAspect, 1), 320)
+    let height = imageHeight(forWidth: width)
     let scale = max(traitCollection.displayScale, 1)
     loadImage(
       with: TiebaNuke.secureURL(url),

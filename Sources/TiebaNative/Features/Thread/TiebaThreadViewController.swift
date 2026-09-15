@@ -89,6 +89,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       knownPostView = known
     }
     configureSharedList()
+    // 有已知主贴卡时不放入场动画：那张卡就是列表里被点的那一行，首包落地应当是
+    // 「原地换内容」，而不是行从下往上滑 10pt（用户报的"加载完突然往上瞬移"）。
+    if knownSnapshot != nil { list.entranceAnimationEnabled = false }
     list.onScroll = { [weak self] scrollView in self?.handleScroll(scrollView) }
     floatingBar.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(floatingBar)
