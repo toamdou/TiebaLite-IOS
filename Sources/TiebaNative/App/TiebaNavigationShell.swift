@@ -88,6 +88,8 @@ public final class TiebaMainTabBarController: UITabBarController {
     super.viewDidLoad()
     delegate = self
     applyTheme(theme)
+    // 登记给 chrome：收纳态判定要在滚动路径上读这条栏（见 syncTabBarMinimizedState）。
+    TiebaChrome.registerTabBar(tabBar)
     // 底栏不发按压手势：底栏项的视图层级不是公开的 UIControl 保证（栏内 hitTest
     // 找不到 UIControl ⇒ 手势永远不发触觉）。底栏触觉由下面的 delegate 回调发。
   }

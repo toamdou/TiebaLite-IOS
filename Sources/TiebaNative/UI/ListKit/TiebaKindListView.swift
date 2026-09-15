@@ -1330,6 +1330,8 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
   public func scrollViewDidScroll(_ scrollView: UIScrollView) {
     updateVisibleRange()
     updateReachEnd()
+    // 底栏就是这个手势收起来的：收纳态一变，底部那层模糊跟着走（调用本身 O(1)）。
+    TiebaChrome.syncTabBarMinimizedState()
     onScroll?(scrollView)
   }
 
