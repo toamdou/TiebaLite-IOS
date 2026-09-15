@@ -23,6 +23,9 @@ import UIKit
 enum TiebaClipboard {
   static func setString(_ text: String) {
     UIPasteboard.general.string = text
+    // 自己写进去的那一版记账：否则"复制链接"后 changedNotification 立刻把这份
+    // 内容当成"用户在别处复制的贴吧链接"，弹窗当场冒出来（用户 2026-09-15 报）。
+    TiebaClipboardLinkDetector.shared.noteAppWrite()
   }
 
   /// 空剪贴板 / 粘贴被拒 → 空串（旧包 getStringAsync 同语义）。

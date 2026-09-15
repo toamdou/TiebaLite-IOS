@@ -18,6 +18,12 @@ final class TiebaClipboardLinkDetector {
 
   private init() {}
 
+  /// 本 App 自己刚写过剪贴板（TiebaClipboard.setString）：把这一刻的版本号记成
+  /// "已处理"，紧随其后的 changedNotification 就不会把自己的复制当外部内容识别。
+  func noteAppWrite() {
+    lastHandledChangeCount = UIPasteboard.general.changeCount
+  }
+
   func start() {
     guard !started else { return }
     started = true
