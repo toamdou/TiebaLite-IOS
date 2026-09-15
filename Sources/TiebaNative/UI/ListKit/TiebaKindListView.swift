@@ -1085,10 +1085,17 @@ public final class TiebaKindListContentView: UIView {
       // 一次性消费 + 同 id 才命中，写多无害。
       TiebaThreadSnapshots.set(TiebaThreadSnapshot(row: row))
       let hit = TiebaFeedRowInteraction.tapRegion(for: point, row: row)
-      if hit.region == "media", !row.media.isEmpty,
-         let cell = collectionView.cellForItem(at: indexPath) as? TiebaKindListFeedCell,
-         let media = cell.mediaHit(at: point),
-         presentPhotoBrowser(row: row, media: media, at: indexPath) {
+      if hit.region == "media", !row.media.isEmpty {
+        if let cell = collectionView.cellForItem(at: indexPath) as? TiebaKindListFeedCell,
+           let media = cell.mediaHit(at: point),
+           presentPhotoBrowser(row: row, media: media, at: indexPath) {
+          return
+        }
+        // 媒体区里没真点到图（首图左边的空白、末图之后的余量、格间空隙）→ 按整卡
+        // 处理（进帖）。**不能报 region=media**：各页那一支是给视频 poster 用的
+        // 「有图就 return」，报 media 会变成点了没反应（用户报的空白区行为反过来
+        // 也说明这里必须落到卡）。
+        onListEvent?(.rowTap(index: index, region: "card", actionIndex: nil))
         return
       }
       onListEvent?(.rowTap(index: index, region: hit.region, actionIndex: hit.actionIndex))

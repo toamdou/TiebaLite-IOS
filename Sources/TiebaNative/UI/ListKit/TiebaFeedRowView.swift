@@ -1699,14 +1699,18 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   /// 图片带的"按下的是第几张"只能由内部 scroll offset 派生：帧计划
   /// （`mediaItemFrames`）是滚动内容坐标，视口 `contentOffset` 变了它不变。
   /// 这里把每格的 frame 先减去 `contentOffset.x` 换算进行坐标（mediaFrame 就是
-  /// 视口），再与 mediaFrame 求交取"离点最近且可见"的格（格间 4pt 空隙 / 首格
-  /// leadInset 也算命中，不会点空），与 `scrollViewDidScroll` 的计数角标同一几何。
+  /// 视口），再取**真的包含该点**的那一格。
+  ///
+  /// ⚠️ 命中必须落在图上（可见矩形内）：图片带的视口是**整张卡的宽度**（首图左边
+  /// 的 leadInset 与末图之后的余量都在视口里），取"离点最近的一格"会让点这些空白区
+  /// 也进大图浏览（用户 2026-09-15 报"点第一张图左边的空白区直接进大图"）。空白区
+  /// 不命中 → 落回整卡点击（进帖），与旧 JS 每张图各自一个 Pressable 的行为一致。
   ///
   /// - Returns: `(index, rect)`；`index` 是 `model.media` 的下标（查看器
   ///   initialIndex 直接用），`rect` 是**与该图滚动视口相交后的可见部分**
   ///   （行坐标；部分滑出屏的格不会给 Zoom 转场一个屏外矩形）。
   ///   nil = 模型缺失 / 无真实图片（视频 poster 行也走这里 → nil，列表侧
-  ///   不得把 poster 当图片查看器输入）/ 点不在媒体区 / 该格完全滑出视口。
+  ///   不得把 poster 当图片查看器输入）/ 点不在媒体区或不在任何一张图上。
   /// - Note: 纯只读几何查询，不触发交互、不发事件，不破坏 (pageKey, index)
   ///   单 prop 契约（无新增 prop）。
   public func mediaHit(atRowPoint point: CGPoint) -> (index: Int, rect: CGRect)? {
@@ -1718,15 +1722,10 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
           mediaFrame.contains(point) else { return nil }
     guard model.mediaIsStrip else { return (0, mediaFrame) }
 
-    var nearest: (index: Int, rect: CGRect, midX: CGFloat)?
-    for candidate in stripVisibleFrames(mediaFrame: mediaFrame) {
-      let distance = abs(candidate.midX - point.x)
-      if nearest == nil || distance < abs(nearest!.midX - point.x) {
-        nearest = candidate
-      }
+    for candidate in stripVisibleFrames(mediaFrame: mediaFrame) where candidate.rect.contains(point) {
+      return (candidate.index, candidate.rect)
     }
-    guard let nearest else { return nil }
-    return (nearest.index, nearest.rect)
+    return nil
   }
 
   /// 查看器退出重算用：行坐标下第 index 张图的**当前可见矩形**（与 mediaHit 同一份
@@ -1743,16 +1742,16 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   /// 图片带逐格换算：内容坐标 → 行坐标（偏移 -contentOffset.x，视口 = mediaFrame）
   /// 再求交。mediaHit 与 mediaVisibleRect 共用，禁止另写一套换算。
-  private func stripVisibleFrames(mediaFrame: CGRect) -> [(index: Int, rect: CGRect, midX: CGFloat)] {
+  private func stripVisibleFrames(mediaFrame: CGRect) -> [(index: Int, rect: CGRect)] {
     guard let model else { return [] }
     let offsetX = stripScrollView.contentOffset.x
-    var result: [(index: Int, rect: CGRect, midX: CGFloat)] = []
+    var result: [(index: Int, rect: CGRect)] = []
     for (index, frame) in model.plan.mediaItemFrames.enumerated() {
       let rowFrame = frame.offsetBy(dx: mediaFrame.minX - offsetX, dy: mediaFrame.minY)
       let visible = rowFrame.intersection(mediaFrame)
       // 可见宽 < 2pt 视为滑出：按它做转场会得到屏外/退化矩形。
       guard !visible.isNull, visible.width >= 2, visible.height >= 2 else { continue }
-      result.append((index, visible, rowFrame.midX))
+      result.append((index, visible))
     }
     return result
   }
