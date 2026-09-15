@@ -596,9 +596,14 @@ final class TiebaPostRowMetrics: @unchecked Sendable {
       orderSeed &+= 1
       pages[pageKey] = Page(models: models, order: orderSeed)
       guard pages.count > maxPages else { return }
-      let overflow = pages.count - maxPages
-      for victim in pages.sorted(by: { $0.value.order < $1.value.order }).prefix(overflow) {
-        pages.removeValue(forKey: victim.key)
+      // 在显页跳过（同 TiebaRowPagePins：正在显示的页被挤掉 = 行内容静默留白）。
+      let pinned = TiebaRowPagePins.shared.snapshot()
+      var overflow = pages.count - maxPages
+      for entry in pages.sorted(by: { $0.value.order < $1.value.order }) {
+        guard overflow > 0 else { break }
+        guard !pinned.contains(entry.key) else { continue }
+        pages.removeValue(forKey: entry.key)
+        overflow -= 1
       }
     }
   }

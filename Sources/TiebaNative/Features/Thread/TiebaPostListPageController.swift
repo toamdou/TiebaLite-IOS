@@ -26,6 +26,8 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
   var pageSeq = 0
   var lastWidth: CGFloat = 0
   var needsPublish = false
+  /// 上次"缺页自愈重推"的时刻（节流用）。
+  private var lastRepublishAt: TimeInterval = 0
   var inFlight: Set<String> = []
   var mediaVisibleKeys: Set<String> = []
   var visibleRange: (start: Int, end: Int)?
@@ -123,6 +125,19 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
     list.entranceAnimationEnabled = TiebaPreferenceSnapshot.bool("entranceAnimation", default: true)
     list.separatorHeight = 1
     list.reachEndThreshold = reachEndThreshold
+    // 缺页自愈：本页的页记录/度量被别的屏的整页 LRU 挤掉时用同一页键重推一次
+    //（数据仍在 rowPosts 里）。不重推的后果是行取不到模型——TiebaPostRowView
+    // 会直接 isHidden，整行消失，看起来就是"帖子突然空白"。
+    list.onPageDataMissing = { [weak self] in self?.republishCurrentPage() }
+  }
+
+  /// 同页键重推（缺页自愈出口）。列表侧已按 0.5s 节流，这里再兜一道。
+  private func republishCurrentPage() {
+    guard !pageKey.isEmpty, lastWidth > 0 else { return }
+    let now = ProcessInfo.processInfo.systemUptime
+    guard now - lastRepublishAt >= 0.5 else { return }
+    lastRepublishAt = now
+    publish(fresh: false)
   }
 
   /// 列表自带 refreshControl 且 contentInsetAdjustmentBehavior = .never：顶部内白自补。

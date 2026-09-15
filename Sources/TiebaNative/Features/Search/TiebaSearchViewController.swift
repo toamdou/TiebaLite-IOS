@@ -77,6 +77,8 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private var isLoading = false
   private var requestSeq = 0
   private var pageKey = ""
+  /// 上次"缺页自愈重推"的时刻（节流用）。
+  private var lastRepublishAt: TimeInterval = 0
   private var pageSeq = 0
   private var lastWidth: CGFloat = 0
   private var needsPublish = false
@@ -102,6 +104,9 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     stateView.skeletonVariant = .thread
     stateView.skeletonCount = 6
     list.onListEvent = { [weak self] event in self?.handleEvent(event) }
+    // 缺页自愈：页记录/度量被别的屏的整页 LRU 挤掉时用同一页键重推（结果仍在
+    // threadHits/forumHits/… 里）。不重推的后果是行取不到内容 → 列表静默留白。
+    list.onPageDataMissing = { [weak self] in self?.republishCurrentPage() }
     segmented.selectedSegmentIndex = Tab.thread.rawValue
     segmented.addTarget(self, action: #selector(handleTabChange), for: .valueChanged)
 
@@ -486,6 +491,15 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
 
   private struct RowsBox: @unchecked Sendable {
     let rows: [[String: Any]]
+  }
+
+  /// 同页键重推（缺页自愈出口）。列表侧已按 0.5s 节流，这里再兜一道。
+  private func republishCurrentPage() {
+    guard !pageKey.isEmpty, lastWidth > 0 else { return }
+    let now = ProcessInfo.processInfo.systemUptime
+    guard now - lastRepublishAt >= 0.5 else { return }
+    lastRepublishAt = now
+    publish(fresh: false)
   }
 
   private func makeRows() -> [[String: Any]] {

@@ -425,6 +425,15 @@ public final class TiebaKindListContentView: UIView {
 
   public private(set) var pageKey: String = ""
 
+  /// 缺页自愈出口（由 TiebaRowPageDriver 注册）：当前页在共享存储里已不存在
+  ///（被别的屏的整页 LRU 挤掉）时回调一次，宿主用同一页键重推即可恢复。
+  /// 没有它时这条路是**静默留白**——行内容查不到就不配置、cell 保持清空态，
+  /// 用户看到的就是"列表突然一片空白"（机制见 TiebaRowPagePins）。
+  var onPageDataMissing: (() -> Void)?
+
+  /// 自愈通知节流：一屏几十行同时发现缺页只通知一次。
+  private var lastPageMissingNotifyAt: CFTimeInterval = 0
+
   /// 滚动头 spec（TiebaKindListHeaderFactory 的输入；nil = 无页头）。
   /// 内容等值时忽略（Fabric 每次 commit 都可能是新字典，不能按引用重建视图）。
   public var headerSpec: [String: Any]? {
@@ -516,8 +525,14 @@ public final class TiebaKindListContentView: UIView {
   /// 换页键 = 整页更换：reload 快照（identifier 全变，diff 无意义）；同页仅行数
   /// 变化走 diff 保滚动位。
   public func setPage(pageKey: String) {
-    let isSamePage = (self.pageKey == pageKey)
+    let previousKey = self.pageKey
+    let isSamePage = (previousKey == pageKey)
     self.pageKey = pageKey
+    if !isSamePage {
+      // 在显页保活：换页即换绑，旧页立刻交还给 LRU。
+      TiebaRowPagePins.shared.unpin(previousKey)
+      syncPagePin()
+    }
     frameHeightCache = nil
     if !isSamePage {
       // 换页后可见区间即便与旧页数值相同（都 0…7）也必须重发，否则懒回填
@@ -560,6 +575,28 @@ public final class TiebaKindListContentView: UIView {
       CGPoint(x: 0, y: -collectionView.adjustedContentInset.top),
       animated: animated
     )
+  }
+
+  // MARK: 在显页保活 / 缺页自愈
+
+  /// 保活当前页——仅当挂在窗口上（= 确实在显示）。首次布局前 setPage 很常见，
+  /// 那时 window == nil，"还没显示"的页没有保住的理由。
+  private func syncPagePin() {
+    if window != nil {
+      TiebaRowPagePins.shared.pin(pageKey)
+    } else {
+      TiebaRowPagePins.shared.unpin(pageKey)
+    }
+  }
+
+  /// 发现当前页数据缺失（页记录或某行度量被整页 LRU 挤掉）：请宿主用同一页键
+  /// 重推。节流 0.5s——重推是一次后台整页测量，不能被逐行通知打成风暴。
+  private func notifyPageDataMissing() {
+    guard onPageDataMissing != nil else { return }
+    let now = ProcessInfo.processInfo.systemUptime
+    guard now - lastPageMissingNotifyAt >= 0.5 else { return }
+    lastPageMissingNotifyAt = now
+    onPageDataMissing?()
   }
 
   /// 程序化滚动（scrollToTop / setContentOffset(animated:)）落位回调：
@@ -628,6 +665,11 @@ public final class TiebaKindListContentView: UIView {
     let source = UICollectionViewDiffableDataSource<Int, TiebaKindItem>(
       collectionView: collectionView
     ) { [unowned self] collectionView, indexPath, item in
+      // 页记录被整页 LRU 挤掉：往下查不到行种类会退化成 `.simple`、内容也是空的
+      //（看起来就是"一片空白"）。先请宿主重推，再按兜底画这一帧。
+      if TiebaKindRowPages.shared.rowCount(pageKey: item.pageKey) == 0 {
+        self.notifyPageDataMissing()
+      }
       // 行种类分派：页记录说这一行是哪一族（缺省/未知 = simple，与旧页兼容）。
       switch TiebaKindRowPages.shared.kind(pageKey: item.pageKey, index: item.index) {
       case .feed:
@@ -688,7 +730,13 @@ public final class TiebaKindListContentView: UIView {
         self?.handleTap(at: indexPath, point: point)
       }
       cell.applyPalette(self.palette)
-      cell.apply(model: self.simpleModel(at: item.index))
+      let model = self.simpleModel(at: item.index)
+      // 页记录在、度量被挤掉：这一行会画成空白（行视图取不到模型 → 不配置内容）
+      // → 同样请宿主重推，否则它会一直空着（页记录缺失那条在 dataSource 里拦）。
+      if model == nil, !self.pageKey.isEmpty {
+        self.notifyPageDataMissing()
+      }
+      cell.apply(model: model)
       if self.entrancePending {
         cell.playEntrance(index: item.index)
       }
@@ -713,6 +761,13 @@ public final class TiebaKindListContentView: UIView {
       cell.applyPalette(self.palette.base)
       if let sub = TiebaKindRowPages.shared.subIndex(pageKey: item.pageKey, index: item.index) {
         cell.apply(pageKey: item.pageKey, index: sub)
+        // 度量缺了行会画成空白（TiebaFeedRowView.loadModel 取不到就 resetContent）
+        // → 请宿主重推；用与行视图完全相同的查询，保证判据一致。
+        if TiebaRowMetrics.shared.feedRow(pageKey: item.pageKey, index: sub) == nil {
+          self.notifyPageDataMissing()
+        }
+      } else {
+        self.notifyPageDataMissing()
       }
       if self.entrancePending {
         cell.playEntrance(index: item.index)
@@ -728,6 +783,10 @@ public final class TiebaKindListContentView: UIView {
       }
       cell.applyPalette(self.palette)
       cell.apply(pageKey: item.pageKey, index: item.index)
+      // 帖子行取不到模型会直接 isHidden（整行消失，看起来也是"空白"）→ 请宿主重推。
+      if TiebaPostRowMetrics.shared.row(pageKey: item.pageKey, index: item.index) == nil {
+        self.notifyPageDataMissing()
+      }
       if self.entrancePending {
         cell.playEntrance(index: item.index)
       }
@@ -768,6 +827,8 @@ public final class TiebaKindListContentView: UIView {
 
   deinit {
     prefetcher.stopPrefetching()
+    // 销毁即交还保活位（否则 pin 表会留下永不再显示的页键，等于把 LRU 预算漏掉）。
+    TiebaRowPagePins.shared.unpin(pageKey)
   }
 
   public override func layoutSubviews() {
@@ -791,6 +852,9 @@ public final class TiebaKindListContentView: UIView {
   public override func didMoveToWindow() {
     super.didMoveToWindow()
     updatePrefetcherPause()
+    // 挂窗 = 开始显示 → 保活当前页；离窗（被 push 的帖子页盖住、或整页销毁）
+    // = 交还给 LRU。返回这一屏时列表不会重推，靠的正是这层保活 + 缺页自愈。
+    syncPagePin()
   }
 
   private func updatePrefetcherPause() {
@@ -805,6 +869,12 @@ public final class TiebaKindListContentView: UIView {
     guard !pageKey.isEmpty else { return }
     let count = TiebaKindRowPages.shared.rowCount(pageKey: pageKey)
     guard count != itemCount else { return }
+    // 行数变 0 = 页记录已被整页 LRU 挤掉：**别立刻把快照清空**（那正是"整列表
+    // 突然空白"），先请宿主用同一页键重推，重推回来时行数自然对得上。
+    if count == 0, itemCount > 0 {
+      notifyPageDataMissing()
+      return
+    }
     setPage(pageKey: pageKey)
   }
 
@@ -865,6 +935,9 @@ public final class TiebaKindListContentView: UIView {
       if let model = postModel(at: index), model.containerWidth == width {
         height = model.measuredHeight
       } else {
+        // 落到兜底高 = 这一行的度量不在（被整页 LRU 挤掉）：行会画成"有高度没
+        // 内容"的空白条，请宿主重推一次把它补回来。
+        notifyPageDataMissing()
         height = TiebaKindListContentView.fallbackFeedItemHeight
       }
     case .feed:
@@ -875,18 +948,25 @@ public final class TiebaKindListContentView: UIView {
          row.containerWidth == width {
         height = row.measuredHeight
       } else {
+        notifyPageDataMissing()
         height = TiebaKindListContentView.fallbackFeedItemHeight
       }
     case .simple, .none:
       height = TiebaKindListContentView.fallbackItemHeight
       if !pageKey.isEmpty,
-         let sub = TiebaKindRowPages.shared.subIndex(pageKey: pageKey, index: index),
-         let measured = TiebaSimpleRowMetrics.shared.rowHeight(
-           pageKey: pageKey,
-           containerWidth: width,
-           index: sub
-         ), measured > 0 {
-        height = measured
+         let sub = TiebaKindRowPages.shared.subIndex(pageKey: pageKey, index: index) {
+        if let measured = TiebaSimpleRowMetrics.shared.rowHeight(
+          pageKey: pageKey,
+          containerWidth: width,
+          index: sub
+        ), measured > 0 {
+          height = measured
+        } else {
+          // 页记录还在、度量没了：同样请宿主重推（`.none` 无页可推，跳过）。
+          if TiebaKindRowPages.shared.rowCount(pageKey: pageKey) > 0 {
+            notifyPageDataMissing()
+          }
+        }
       }
     }
     // ItemSeparatorComponent 等价：行间距加在非末行（末行后不留空带）。

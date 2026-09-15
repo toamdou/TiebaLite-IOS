@@ -21,9 +21,29 @@ public final class TiebaRowPageDriver {
   /// 当前页键（fresh 发布时 = "\(keyPrefix)-\(pageSeq)"；未发布 = ""）。
   public private(set) var pageKey = ""
 
+  /// 上次"缺页自愈重推"的时刻（节流用）。
+  private var lastRepublishAt: CFTimeInterval = 0
+
   public init(list: TiebaKindListContentView, keyPrefix: String) {
     self.list = list
     self.keyPrefix = keyPrefix
+    // 缺页自愈：列表发现当前页被别的屏的整页 LRU 挤掉时回调这里（列表侧已按
+    // 0.5s 节流）。没有这一步，被挤掉的页就是**静默留白**——行查不到内容就不
+    // 配置、cell 保持清空态，用户看到的正是"列表突然一片空白"。
+    list.onPageDataMissing = { [weak self] in
+      self?.republishCurrentPage()
+    }
+  }
+
+  /// 用同一页键重推当前页：数据仍在宿主手里（`lastMakeRows` 读的就是宿主数据
+  /// 源），代价只有一次后台整页测量。列表侧已节流，这里再兜一道防重推风暴。
+  public func republishCurrentPage() {
+    guard !pageKey.isEmpty, let makeRows = lastMakeRows else { return }
+    // 单调时钟（本文件只 import Foundation，不引 QuartzCore）。
+    let now = ProcessInfo.processInfo.systemUptime
+    guard now - lastRepublishAt >= 0.5 else { return }
+    lastRepublishAt = now
+    publish(fresh: false, makeRows: makeRows)
   }
 
   /// 宿主 viewDidLayoutSubviews 调用。宽度量化后与上次不同才重推（同页键）：

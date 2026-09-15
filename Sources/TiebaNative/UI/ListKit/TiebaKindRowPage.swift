@@ -76,6 +76,44 @@ public nonisolated final class TiebaKindRowPage: @unchecked Sendable {
   }
 }
 
+// MARK: - 在显页保活
+
+/// 在显页保活登记表（页记录 + 三族度量四个整页 LRU 共用）。
+///
+/// 四个存储的淘汰都是"整页 LRU(8) + 纯插入顺序 FIFO"：读不刷新时效，也没有
+/// "这一页正在被显示"的概念。而每个屏（信息流两个分段、消息各分类、主页、吧页
+/// 各分段、帖子页/楼中楼、收藏/历史/搜索）都往同一个预算里插页——于是**插入最早
+/// 的那页必然第一个被别的屏挤掉**，而它往往正是用户从进吧起就在看的那页。
+///
+/// 页记录被挤掉不报错，只**静默留白**：行内容查不到（`subIndex` → nil，cell 干脆
+/// 不配置、保持清空态）、行高查不到（走兜底高）、行数查成 0（快照直接变空）。
+/// 用户报的"点进帖子再退回来只剩那张卡、上下全白"就是这条链。
+///
+/// 所以列表把"当前挂在窗口上、正在显示的页键"登记进来，淘汰时跳过；离窗/换页/
+/// 销毁即解绑（条目数被在显列表数限住，不动 LRU 的内存上限）。全部 pinned 时允许
+/// 暂时超上限——宁可多留几页，也不能把正在显示的页删掉。缺页的兜底见
+/// TiebaKindListContentView.onPageDataMissing（自愈重推）。
+public nonisolated final class TiebaRowPagePins: @unchecked Sendable {
+  public static let shared = TiebaRowPagePins()
+  private let lock = NSLock()
+  private var keys: Set<String> = []
+
+  private init() {}
+
+  public func pin(_ pageKey: String) {
+    guard !pageKey.isEmpty else { return }
+    lock.withLock { keys.insert(pageKey) }
+  }
+
+  public func unpin(_ pageKey: String) {
+    guard !pageKey.isEmpty else { return }
+    lock.withLock { keys.remove(pageKey) }
+  }
+
+  /// 淘汰前取一次快照（一次加锁，不逐页判）。
+  func snapshot() -> Set<String> { lock.withLock { keys } }
+}
+
 // MARK: - 页记录缓存 + 两族测量路由
 
 public nonisolated final class TiebaKindRowPages: @unchecked Sendable {
@@ -191,11 +229,15 @@ public nonisolated final class TiebaKindRowPages: @unchecked Sendable {
       orderSeed &+= 1
       pages[page.pageKey] = Entry(page: page, order: orderSeed)
       guard pages.count > maxPages else { return }
-      // 整页淘汰：最旧 order 先出（与两族度量缓存的淘汰纪律一致）。
-      let overflow = pages.count - maxPages
-      let victims = pages.sorted { $0.value.order < $1.value.order }.prefix(overflow)
-      for victim in victims {
-        pages.removeValue(forKey: victim.key)
+      // 整页淘汰：最旧 order 先出（与两族度量缓存的淘汰纪律一致），**在显页跳过**
+      // ——正在显示的页被挤掉就是行内容静默留白（见 TiebaRowPagePins）。
+      let pinned = TiebaRowPagePins.shared.snapshot()
+      var overflow = pages.count - maxPages
+      for entry in pages.sorted(by: { $0.value.order < $1.value.order }) {
+        guard overflow > 0 else { break }
+        guard !pinned.contains(entry.key) else { continue }
+        pages.removeValue(forKey: entry.key)
+        overflow -= 1
       }
     }
   }

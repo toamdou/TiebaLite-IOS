@@ -1420,11 +1420,16 @@ public nonisolated final class TiebaRowMetrics: @unchecked Sendable {
       pages[PageKey(pageKey: pageKey, width: width)] =
         Page(rows: rows, raws: raws, order: orderSeed)
       guard pages.count > maxPages else { return }
-      // 整页淘汰：最旧 order 先出（不逐行淘汰，避免半个页面的高度缺失）。
-      let overflow = pages.count - maxPages
-      let victims = pages.sorted { $0.value.order < $1.value.order }.prefix(overflow)
-      for victim in victims {
-        pages.removeValue(forKey: victim.key)
+      // 整页淘汰：最旧 order 先出（不逐行淘汰，避免半个页面的高度缺失）；
+      // **在显页跳过**——度量被挤掉的行会画成"有高度没内容"的空白条
+      //（见 TiebaRowPagePins）。
+      let pinned = TiebaRowPagePins.shared.snapshot()
+      var overflow = pages.count - maxPages
+      for entry in pages.sorted(by: { $0.value.order < $1.value.order }) {
+        guard overflow > 0 else { break }
+        guard !pinned.contains(entry.key.pageKey) else { continue }
+        pages.removeValue(forKey: entry.key)
+        overflow -= 1
       }
     }
   }
