@@ -25,15 +25,15 @@
 import UIKit
 
 final class TiebaAboutViewController: UIViewController {
-  // 仓库链：本应用（RN 重构）← Kotlin 版（fork）← Kotlin 原版（真正原创）
-  private static let repoApp = "https://github.com/toamdou/TiebaLite-RN-Swift"
+  // 仓库链：本应用（纯原生）← Kotlin 版（fork）← Kotlin 原版（真正原创）
+  private static let repoApp = "https://github.com/toamdou/TiebaLite-IOS"
   private static let repoKotlinFork = "https://github.com/zcc10086/TiebaLite"
   private static let repoKotlinOriginal = "https://github.com/HuanCheng65/TiebaLite"
   private static let repoAiotieba = "https://github.com/Starry-OvO/aiotieba"
   private static let repoTbclient = "https://github.com/n0099/tbclient.protobuf"
 
   private static let updateFooter = "更新源为 GitHub 仓库（toamdou/TiebaLite-IOS）的 Releases。可在「设置 → 通用 → 自动检测更新」开启启动时自动检查。"
-  private static let reposFooter = "本应用为 React Native 重构版；Kotlin 版（zcc10086/TiebaLite）fork 自 Kotlin 原版（HuanCheng65/TiebaLite），API 协议与交互均以其为参照；协议字段定义参考 aiotieba 项目与 n0099/tbclient.protobuf（贴吧客户端 protobuf 定义合集）。"
+  private static let reposFooter = "本应用为纯原生（Swift / UIKit）实现；Kotlin 版（zcc10086/TiebaLite）fork 自 Kotlin 原版（HuanCheng65/TiebaLite），API 协议与交互均以其为参照；协议字段定义参考 aiotieba 项目与 n0099/tbclient.protobuf（贴吧客户端 protobuf 定义合集）。"
 
   private let service = TiebaUpdateService.shared
   private let form = TiebaFormListView(frame: .zero)
@@ -159,7 +159,7 @@ final class TiebaAboutViewController: UIViewController {
     }
 
     let repoButtons: [(id: String, title: String, icon: String)] = [
-      ("repoApp", "本应用 · toamdou/TiebaLite-RN-Swift", "iphone"),
+      ("repoApp", "本应用 · toamdou/TiebaLite-IOS", "iphone"),
       ("repoKotlinFork", "Kotlin 版 · zcc10086/TiebaLite", "arrow.triangle.branch"),
       ("repoKotlinOriginal", "Kotlin 原版 · HuanCheng65/TiebaLite", "crown.fill"),
       ("repoAiotieba", "aiotieba · Starry-OvO/aiotieba", "network"),
