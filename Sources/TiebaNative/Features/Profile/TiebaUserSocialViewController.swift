@@ -113,6 +113,10 @@ final class TiebaUserSocialViewController: UIViewController {
         guard seq == loadSeq else { return }
         if users.isEmpty {
           showState(.error(error.localizedDescription))
+        } else {
+          // 失败也要复位页脚：加载更多的入口把页脚设成了 .loading，没人复位就会
+          // 永远停在转圈上，"加载更多"再也回不来（用户 2026-09-15 报的那个观感）。
+          list.footerState = hasMore ? .more : .none
         }
       }
     }

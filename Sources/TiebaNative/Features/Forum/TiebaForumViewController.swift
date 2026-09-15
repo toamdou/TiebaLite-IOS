@@ -331,7 +331,11 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     Task { @MainActor in
       defer {
         self.isLoadingMore = false
-        self.list.footerState = self.hasMores[tab] ? .more : .none
+        // 页脚是所有 tab 共享的：请求期间切了 tab 就别拿旧 tab 的 hasMore 覆写它
+        //（会把有更多内容的新 tab 置成"没有更多了"，按钮消失，只剩触底自动加载）。
+        if tab == self.currentTab {
+          self.list.footerState = self.hasMores[tab] ? .more : .none
+        }
       }
       do {
         let semantics = self.semantics(tab)
