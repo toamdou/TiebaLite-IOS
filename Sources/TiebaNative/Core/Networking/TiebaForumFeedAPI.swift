@@ -224,6 +224,10 @@ enum TiebaForumFeedAPI {
     else { return }
     let expiresAt = TiebaSimpleRowParser.double(cache["expiresAt"]) ?? 0
     guard expiresAt > Date().timeIntervalSince1970 * 1000 else { return }
+    // 签到态只信当天：缓存里的 isSign 属于被缓存的那一天，跨天兜底会把吧页头钉在
+    // 「今天已经签到过了」并拦掉签到按钮（用户 2026-09-15 报）。等级/关注兜底照旧。
+    let signFallbackTrusted =
+      (TiebaSimpleRowParser.string(cache["day"]) ?? "") == TiebaFollowedForums.today()
     guard let entry = forums.first(where: {
       TiebaSimpleRowParser.string($0["forumId"]) == card.forumId
     }) else { return }
@@ -238,7 +242,7 @@ enum TiebaForumFeedAPI {
         card.levelName = TiebaSimpleRowParser.string(entry["levelName"]) ?? ""
       }
     }
-    if !card.isSignIn, TiebaSimpleRowParser.bool(entry["isSign"]) == true {
+    if signFallbackTrusted, !card.isSignIn, TiebaSimpleRowParser.bool(entry["isSign"]) == true {
       card.isSignIn = true
       card.contSignNum = Int(TiebaSimpleRowParser.double(entry["signCount"]) ?? 0)
     }

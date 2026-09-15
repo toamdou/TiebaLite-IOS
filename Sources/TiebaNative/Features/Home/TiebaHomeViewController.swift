@@ -45,6 +45,9 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
   private var isLoading = false
   private var isUserRefresh = false
   private var hasLoadedOnce = false
+  /// 上次成功拉列表所属的签到自然日：跨天后即使本页一直活着也要重拉（见
+  /// TiebaFollowedForums.today —— 勾号与"全部已签到"都按天失效）。
+  private var loadedDay = ""
   private var entranceDone = false
   private var entrancePending = false
   /// 首个布局趟的清标志已排程（入场批次边界，见 willDisplay）。
@@ -78,8 +81,18 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     buildList()
     TiebaSignService.shared.onStateChange = { [weak self] in self?.applySignButton() }
     TiebaSignService.shared.onFinished = { [weak self] in
-      TiebaFollowedForums.invalidate()
-      self?.loadFollowedForums(force: true)
+      guard let self else { return }
+      // 签到结果已经写进 store 的内存列表（TiebaSignService 末尾的 markSigned）：
+      // 就地换一份，**别再 invalidate + force 全量重拉** —— 那是一次签到最多 20 个
+      // forumGuide 请求 + 一次整表重编码，而勾号本来就是本地已知的。等级/经验这类
+      // 服务端增量，交给下一次下拉刷新或内存 TTL 到期后的自然刷新。
+      if let list = TiebaFollowedForums.currentSnapshot() {
+        self.forums = list
+        self.loadedDay = TiebaFollowedForums.today()
+        self.applyList()
+      } else {
+        self.loadFollowedForums(force: true)
+      }
     }
     // 登录/登出会清关注吧缓存（TiebaSession.activate/logout → invalidate）：本页必须
     // 跟着重拉。否则登录完成时本页还停在"未登录"的空态，要先去别的 tab 转一圈才出列表
@@ -126,7 +139,8 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     isSingleColumn = TiebaPreferenceSnapshot.bool("forumListSingle", default: true)
     updateLayoutMetrics()
     applyLoginState()
-    loadFollowedForums()
+    // 跨天（昨天挂后台、今天回来）：强制重拉，别让昨天的勾号活到今天。
+    loadFollowedForums(force: TiebaFollowedForums.today() != loadedDay)
     loadRecentForums()
     applySignButton()
   }
@@ -493,6 +507,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       do {
         let list = try await TiebaFollowedForums.fetchAll(force: force)
         forums = list
+        loadedDay = TiebaFollowedForums.today()
         hasLoadedOnce = true
         if forums.isEmpty {
           showState(.empty(image: "tray", text: "暂无关注的贴吧", secondary: "去发现页探索感兴趣的贴吧吧"))

@@ -34,27 +34,69 @@ enum TiebaFollowedForums {
   private struct CacheEntry {
     var expiresAt: Date
     var forums: [TiebaForumInfo]
+    /// 这份数据属于哪个"签到自然日"（见 dayKey）：跨天只作废 isSign 这一位。
+    var day: String
   }
 
   private static let lock = NSLock()
   nonisolated(unsafe) private static var memory: CacheEntry?
   nonisolated(unsafe) private static var inflight: Task<[TiebaForumInfo], Error>?
   /// 本会话内已签到的吧：服务端列表 is_sign 滞后时不让勾号回退（JS 同款合并）。
+  /// **按天作用域**：进程跨天活着（后台挂一夜）时，昨天的集合会让今天的服务端列表
+  /// 全被标成已签到 —— 一键签到于是回"今天所有关注的吧都已签到过了"（用户 2026-09-15 报）。
   nonisolated(unsafe) private static var sessionSigned: Set<String> = []
+  nonisolated(unsafe) private static var sessionSignedDay = ""
+
+  /// 签到状态的自然日（北京时间：服务端按它换日）。列表可以缓存 24h，但**勾号不能
+  /// 跨天**——跨天读取时把 isSign 全部清零，靠服务端/重新签到再亮起来。
+  static func today() -> String { dayKey() }
+
+  private static let dayFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+    formatter.dateFormat = "yyyy-MM-dd"
+    return formatter
+  }()
+
+  private static func dayKey(_ date: Date = Date()) -> String {
+    dayFormatter.string(from: date)
+  }
+
+  /// 跨天读缓存：列表照用，签到位清零。
+  private static func withoutSigns(_ forums: [TiebaForumInfo]) -> [TiebaForumInfo] {
+    forums.map { forum in
+      guard forum.isSign else { return forum }
+      var item = forum
+      item.isSign = false
+      return item
+    }
+  }
 
   /// 有界并发拉全量（同一时间只有一个在途请求）；失败向上抛给页面重试入口。
   /// force = 用户主动刷新/签到后：跳过两层缓存直连服务端。
   static func fetchAll(force: Bool = false) async throws -> [TiebaForumInfo] {
-    if !force, let forums = lock.withLock({ memory.flatMap { $0.expiresAt > Date() ? $0.forums : nil } }) {
-      return forums
+    let today = dayKey()
+    if !force, let entry = lock.withLock({ memory }), entry.expiresAt > Date() {
+      guard entry.day == today else {
+        // 跨天：列表还能用，签到位作废（并就地修正缓存，别每次读都重算）。
+        let cleared = withoutSigns(entry.forums)
+        lock.withLock { memory = CacheEntry(expiresAt: entry.expiresAt, forums: cleared, day: today) }
+        return cleared
+      }
+      return entry.forums
     }
     // 冷启动秒显：内存 miss 时用 24h 磁盘缓存先出列表（内存 TTL 仍是 5min，
     // 过期后下一次聚焦自然走网络）。
     if !force, let disk = readDiskCache(), disk.expiresAt > Date(), !disk.forums.isEmpty {
+      let crossedDay = disk.day != today
+      let forums = crossedDay ? withoutSigns(disk.forums) : disk.forums
       lock.withLock {
-        memory = CacheEntry(expiresAt: Date().addingTimeInterval(memoryTTL), forums: disk.forums)
+        memory = CacheEntry(expiresAt: Date().addingTimeInterval(memoryTTL), forums: forums, day: today)
       }
-      return disk.forums
+      if crossedDay { writeDiskCache(forums, expiresAt: disk.expiresAt) }
+      return forums
     }
     if let existing = lock.withLock({ inflight }) {
       return try await existing.value
@@ -71,7 +113,7 @@ enum TiebaFollowedForums {
     let forums = try await task.value
     let merged = mergeSigned(forums)
     lock.withLock {
-      memory = CacheEntry(expiresAt: Date().addingTimeInterval(memoryTTL), forums: merged)
+      memory = CacheEntry(expiresAt: Date().addingTimeInterval(memoryTTL), forums: merged, day: dayKey())
     }
     writeDiskCache(merged)
     // 后台自动签到按 uid 的 forumIds 工作，列表刷新即同步（原 setBackgroundForums）。
@@ -92,9 +134,19 @@ enum TiebaFollowedForums {
   }
 
   static func markSigned(_ forumIds: [String]) {
+    let today = dayKey()
     lock.withLock {
+      if sessionSignedDay != today {
+        sessionSigned.removeAll()
+        sessionSignedDay = today
+      }
       for id in forumIds where !id.isEmpty { sessionSigned.insert(id) }
       guard var entry = memory else { return }
+      // 内存里可能是昨天的列表：先把旧勾号清掉再打今天这批。
+      if entry.day != today {
+        entry.forums = withoutSigns(entry.forums)
+        entry.day = today
+      }
       let signed = sessionSigned
       entry.forums = entry.forums.map {
         guard signed.contains($0.forumId) else { return $0 }
@@ -104,7 +156,16 @@ enum TiebaFollowedForums {
       }
       entry.expiresAt = Date().addingTimeInterval(memoryTTL)
       memory = entry
+      // 磁盘缓存也跟上：否则同日冷启动后勾号要等网络回来才亮。
+      writeDiskCache(entry.forums, expiresAt: entry.expiresAt)
     }
+  }
+
+  /// 当前内存列表（签到完成后就地刷新用）：没有内存条目 → nil（调用方回落到重拉）。
+  /// 存在的意义是**别为了几个勾号把整份列表重拉一遍**（原来 onFinished 会
+  /// invalidate + force，一次签到最多打出 20 个 forumGuide 请求）。
+  static func currentSnapshot() -> [TiebaForumInfo]? {
+    lock.withLock { memory.map(\.forums) }
   }
 
   /// 取关（原 unfavolike）：写接口，需 tbs。
@@ -128,7 +189,7 @@ enum TiebaFollowedForums {
     let remaining = lock.withLock { () -> [TiebaForumInfo]? in
       guard let current = memory else { return nil }
       let filtered = current.forums.filter { $0.forumId != forumId }
-      memory = CacheEntry(expiresAt: current.expiresAt, forums: filtered)
+      memory = CacheEntry(expiresAt: current.expiresAt, forums: filtered, day: current.day)
       return filtered
     }
     if let remaining { writeDiskCache(remaining) }
@@ -242,7 +303,12 @@ enum TiebaFollowedForums {
   }
 
   private static func mergeSigned(_ forums: [TiebaForumInfo]) -> [TiebaForumInfo] {
+    let today = dayKey()
     lock.lock()
+    if sessionSignedDay != today {
+      sessionSigned.removeAll()
+      sessionSignedDay = today
+    }
     let signed = sessionSigned
     lock.unlock()
     guard !signed.isEmpty else { return forums }
@@ -256,19 +322,24 @@ enum TiebaFollowedForums {
 
   // MARK: - 磁盘缓存（与 JS 同一键、同一形状）
 
-  private static func readDiskCache() -> (expiresAt: Date, forums: [TiebaForumInfo])? {
+  private static func readDiskCache() -> (expiresAt: Date, forums: [TiebaForumInfo], day: String)? {
     guard let raw = TiebaKvStore.shared.get(key: diskKey),
       let data = raw.data(using: .utf8),
       let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
       let list = object["forums"] as? [[String: Any]]
     else { return nil }
     let expiresAt = Date(timeIntervalSince1970: (TiebaJSON.doubleValue(object["expiresAt"]) ?? 0) / 1000)
-    return (expiresAt, list.compactMap(mapForumInfo))
+    // 旧格式（无 day）一律按"跨天"处理：宁可少一个勾号，也不让昨天的签到态活到今天。
+    let day = (object["day"] as? String) ?? ""
+    return (expiresAt, list.compactMap(mapForumInfo), day)
   }
 
-  private static func writeDiskCache(_ forums: [TiebaForumInfo]) {
+  private static func writeDiskCache(_ forums: [TiebaForumInfo], expiresAt: Date? = nil) {
     let payload: [String: Any] = [
-      "expiresAt": Int(Date().addingTimeInterval(diskTTL).timeIntervalSince1970 * 1000),
+      "expiresAt": Int(
+        (expiresAt ?? Date().addingTimeInterval(diskTTL)).timeIntervalSince1970 * 1000
+      ),
+      "day": dayKey(),
       "forums": forums.map { forum -> [String: Any] in
         [
           "forumId": forum.forumId,
