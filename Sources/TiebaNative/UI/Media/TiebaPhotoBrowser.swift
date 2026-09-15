@@ -504,7 +504,11 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     // 减少动态：直接无动画进出（旧查看器 reduceMotion 下也是瞬时开关）。
     browser.transitionType = UIAccessibility.isReduceMotionEnabled ? .none : .zoom
     browser.scrollDirection = .horizontal
-    browser.isLoopingEnabled = true
+    // 循环翻页至少要两张：单张会被循环虚拟数据源复制成 10 个同图页，滑一下只是
+    // 同一张重载一次（长图尤其明显）。回弹拖动一并关掉——单张不该有左右位移。
+    let hasMultipleItems = items.count > 1
+    browser.isLoopingEnabled = hasMultipleItems
+    browser.collectionView.bounces = hasMultipleItems
     browser.isDismissGestureEnabled = true
     browser.register(
       TiebaPhotoBrowserImageCell.self,
