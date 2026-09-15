@@ -91,32 +91,27 @@ struct TiebaBawuTeam: Sendable {
 }
 
 enum TiebaForumAPI {
-  // MARK: - 吧详情（web JSON 为主，proto 只作缺失字段补充）
+  // MARK: - 吧详情（proto 单源）
 
+  /// ⚠️ 2026-09-15：原来主数据源是 web JSON `/mo/q/forumDetail`，服务端现在对这个
+  /// 客户端返回的是 hybrid 的 error_page（HTML），JSONSerialization 必失败 → 页面
+  /// 直接报「响应解析失败」（用户报的 bug）。改成走 `/c/f/forum/getforumdetail`：
+  /// 与本 App 其它接口同一条 proto 通道（frsPage 同款），字段完备（含热度文本）。
   static func detail(forumId: String) async throws -> TiebaForumDetail {
-    // proto 失败不阻塞主数据（原页面 catch → 仅日志）。
-    let extraTask = Task { try? await protoForumInfo(forumId: forumId) }
-    let body = try await webGET(path: "/mo/q/forumDetail", query: ["fid": forumId])
-    let extra = await extraTask.value
-    let data = (body["data"] as? [String: Any]) ?? body
-
+    guard let info = try await protoForumInfo(forumId: forumId) else {
+      throw TiebaForumAPIError.invalidResponse
+    }
     var detail = TiebaForumDetail()
-    detail.forumId = TiebaJSON.string(data, "forum_id", "forumId", "fid") ?? forumId
-    detail.name = TiebaJSON.string(data, "forum_name", "forumName", "name", "kw") ?? ""
-    detail.avatar = TiebaJSON.string(data, "avatar") ?? extra?.avatar ?? ""
-    detail.slogan = TiebaJSON.string(data, "slogan") ?? extra?.slogan ?? ""
-    detail.intro = TiebaJSON.string(data, "intro") ?? ""
-    if detail.intro.isEmpty {
-      detail.intro = plainText(extra?.content ?? []).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    detail.memberCount = TiebaJSON.int(data, "member_count", "memberCount") ?? Int(extra?.memberCount ?? 0)
-    detail.threadCount = TiebaJSON.int(data, "thread_count", "threadCount") ?? Int(extra?.threadCount ?? 0)
-    if let post = TiebaJSON.int(data, "post_num", "postNum", "post_count", "postCount") {
-      detail.postCount = post
-    }
-    detail.isLike = TiebaJSON.bool(data, "is_like", "isLike") ?? ((extra?.isLike ?? 0) != 0)
-    detail.hotText = TiebaJSON.string(data, "hot_text", "hotText") ?? extra?.hotText ?? ""
-    detail.recomReason = TiebaJSON.string(data, "recom_reason", "recomReason") ?? extra?.recomReason ?? ""
+    detail.forumId = info.forumID > 0 ? String(info.forumID) : forumId
+    detail.name = info.forumName
+    detail.avatar = info.avatar
+    detail.slogan = info.slogan
+    detail.intro = plainText(info.content).trimmingCharacters(in: .whitespacesAndNewlines)
+    detail.memberCount = Int(info.memberCount)
+    detail.threadCount = Int(info.threadCount)
+    detail.isLike = info.isLike != 0
+    detail.hotText = info.hotText
+    detail.recomReason = info.recomReason
     return detail
   }
 
@@ -135,15 +130,12 @@ enum TiebaForumAPI {
     return response.data.forumInfo
   }
 
-  // MARK: - 吧规（proto 主，web JSON 降级）
+  // MARK: - 吧规（proto 单源）
 
+  /// `/mo/q/forumRuleDetail` 与吧详情同命运（返回 error_page），web 降级路径已删：
+  /// 留着只会把 proto 的真实错误盖成「响应解析失败」。
   static func rules(forumId: String) async throws -> TiebaForumRules? {
-    do {
-      return try await protoRules(forumId: forumId)
-    } catch {
-      let body = try await webGET(path: "/mo/q/forumRuleDetail", query: ["fid": forumId])
-      return parseWebRules(body)
-    }
+    try await protoRules(forumId: forumId)
   }
 
   private static func protoRules(forumId: String) async throws -> TiebaForumRules? {
@@ -190,104 +182,6 @@ enum TiebaForumAPI {
     default:
       return .text(content.text.isEmpty ? content.c : content.text, bold: false)
     }
-  }
-
-  private static func parseWebRules(_ body: [String: Any]) -> TiebaForumRules? {
-    let data = (body["data"] as? [String: Any]) ?? body
-    var rules = TiebaForumRules()
-    rules.title = TiebaJSON.string(data, "title", "ruleTitle", "rule_title") ?? ""
-    rules.publishTime = TiebaJSON.string(data, "publish_time", "publishTime") ?? ""
-    rules.preface = TiebaJSON.string(data, "preface") ?? ""
-
-    let rawRules = (data["rules"] ?? data["rule_list"] ?? data["ruleList"]) as? [[String: Any]] ?? []
-    rules.sections = rawRules.compactMap { raw in
-      let segments = segments(fromLoose: raw["content"] ?? raw["contentRenders"])
-      let title = TiebaJSON.string(raw, "title") ?? ""
-      guard !title.isEmpty || !segments.isEmpty else { return nil }
-      return TiebaForumRules.Section(title: title, segments: segments)
-    }
-    if rules.sections.isEmpty {
-      let html = TiebaJSON.string(data, "ruleHtml", "rule_html") ?? ""
-      let text = TiebaJSON.string(data, "ruleText", "rule_text") ?? (html.isEmpty ? "" : htmlToText(html))
-      if !text.isEmpty {
-        rules.sections = [TiebaForumRules.Section(
-          title: TiebaJSON.string(data, "ruleTitle", "title") ?? rules.title,
-          segments: [.text(text, bold: false)]
-        )]
-      }
-    }
-    let author = (data["bazhu"] ?? data["author"]) as? [String: Any]
-    rules.authorName = TiebaJSON.string(author, "name_show", "nameShow", "user_name", "userName") ?? ""
-    rules.authorPortrait = TiebaJSON.string(author, "portrait") ?? ""
-
-    guard !rules.title.isEmpty || !rules.preface.isEmpty || !rules.sections.isEmpty else { return nil }
-    return rules
-  }
-
-  private static func segments(fromLoose content: Any?) -> [TiebaRuleSegment] {
-    if let text = content as? String { return text.isEmpty ? [] : [.text(text, bold: false)] }
-    guard let list = content as? [[String: Any]] else { return [] }
-    return list.compactMap { raw in
-      let type = raw["type"]
-      let numericType = Int(TiebaJSON.string(raw, "type") ?? "") ?? (type as? NSNumber)?.intValue
-      let text = TiebaJSON.string(raw, "text", "content") ?? ""
-      let quote = raw["quoteContent"] ?? raw["quote_content"] ?? raw["quote"] ?? raw["quote_text"]
-      if (type as? String) == "quote" || (type as? String) == "blockquote" || quote != nil {
-        let quoteText: String
-        if let value = quote as? String {
-          quoteText = value
-        } else if let value = quote as? [String: Any] {
-          quoteText = TiebaJSON.string(value, "content", "text") ?? text
-        } else {
-          quoteText = text
-        }
-        return .quote(quoteText)
-      }
-      if (type as? String) == "image" || numericType == 3 || numericType == 20 {
-        let src = TiebaJSON.string(raw, "cdnSrc", "bigCdnSrc", "src", "bigSrc") ?? ""
-        return .image(
-          src: src,
-          width: CGFloat(TiebaJSON.int(raw, "width") ?? 0),
-          height: CGFloat(TiebaJSON.int(raw, "height") ?? 0)
-        )
-      }
-      if (type as? String) == "link" || numericType == 1 {
-        let url = TiebaJSON.string(raw, "link", "url") ?? text
-        return .link(url: url, title: text.isEmpty ? url : text)
-      }
-      if (type as? String) == "linebreak" || numericType == 10 { return .lineBreak }
-      let value = text.isEmpty ? (TiebaJSON.string(raw, "c") ?? "") : text
-      let bold = (raw["bold"] as? Bool == true)
-        || (raw["is_bold"] as? Bool == true)
-        || (raw["isBold"] as? Bool == true)
-        || (raw["fontWeight"] as? String) == "bold"
-      return value.isEmpty ? nil : .text(value, bold: bold)
-    }
-  }
-
-  /// ruleHtml 降级：去 script/style 与标签、解常见实体（NSAttributedString 的 HTML
-  /// 只允许主线程，这里跑在后台）。
-  private static func htmlToText(_ html: String) -> String {
-    var text = html
-    let blocks: [(String, String)] = [
-      ("(?is)<(script|style)[^>]*>.*?</\\1>", ""),
-      ("(?i)<br\\s*/?>", "\n"),
-      ("(?i)</(p|div|li|tr|h[1-6])>", "\n"),
-      ("(?s)<[^>]+>", ""),
-    ]
-    for (pattern, replacement) in blocks {
-      text = text.replacingOccurrences(
-        of: pattern,
-        with: replacement,
-        options: [.regularExpression, .caseInsensitive]
-      )
-    }
-    let entities: [(String, String)] = [
-      ("&nbsp;", " "), ("&lt;", "<"), ("&gt;", ">"),
-      ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"), ("&amp;", "&"),
-    ]
-    for (key, value) in entities { text = text.replacingOccurrences(of: key, with: value) }
-    return text.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   // MARK: - 吧务团队（proto）
@@ -539,14 +433,6 @@ enum TiebaForumAPI {
       requestId: "native-forum-\(UUID().uuidString)",
       timeout: 15
     )
-  }
-
-  private static func webGET(path: String, query: [String: String]) async throws -> [String: Any] {
-    let text = try await webGETText(path: path, query: query)
-    guard let data = text.data(using: .utf8),
-      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    else { throw TiebaForumAPIError.invalidResponse }
-    return object
   }
 
   /// 同一通道的纯文本形态（吧成员/排行的响应是 HTML，不是 JSON）。
