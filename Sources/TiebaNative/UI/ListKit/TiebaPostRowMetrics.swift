@@ -995,8 +995,12 @@ struct TiebaPostRowPlan {
       var subY = y + TiebaPostRowLayout.subPostTop
       for (idx, sub) in subPosts.enumerated() {
         if idx > 0 {
+          // 分隔线上下各 subPostDividerGap：原来把 2×gap 全放在线**之下**，线就贴在
+          // 上一条正文的最后一笔上（用户 2026-09-15 报"每条文字离底线太近"）。
+          // 总间距仍是 2×gap，线以下的内容位置一字不动。
+          subY += TiebaPostRowLayout.subPostDividerGap
           subPostDividerFrames.append(CGRect(x: contentX, y: subY, width: contentW, height: inputs.hairline))
-          subY += TiebaPostRowLayout.subPostDividerGap * 2
+          subY += TiebaPostRowLayout.subPostDividerGap
         }
         let nameFont = TiebaPostRowLayout.subPostNameFont
         let name = "\(sub.displayName)："
