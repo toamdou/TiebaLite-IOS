@@ -424,15 +424,48 @@ enum TiebaForumAPI {
       "c3_aid": cuid,
       "client_type": "2",
     ].merging(extraHeaders) { _, new in new }
-    return try await TiebaNativeClient.shared.postProto(
-      urlString: url.absoluteString,
-      headers: headers,
-      formFields: formFields,
-      protoData: try makeRequest(commonRequest()).serializedData(),
-      skipSign: true,
-      requestId: "native-forum-\(UUID().uuidString)",
-      timeout: 15
-    )
+    let protoData = try makeRequest(commonRequest()).serializedData()
+    // 只读通道的有限重试（本文件调用点全是读：frsPage/pbPage/个人主页/信息流/
+    // 吧详情/吧规/吧务/成员/黑名单）：切网瞬间、地铁里的一次抖动不再直接把页面
+    // 打成"加载失败"。写接口走 postForm + 签名，**绝不能**重试（非幂等）。
+    // 只重试"没到服务端"与"服务端 5xx"两类；4xx/业务错误立即上抛。
+    var attempt = 0
+    while true {
+      do {
+        return try await TiebaNativeClient.shared.postProto(
+          urlString: url.absoluteString,
+          headers: headers,
+          formFields: formFields,
+          protoData: protoData,
+          skipSign: true,
+          requestId: "native-forum-\(UUID().uuidString)",
+          timeout: 15
+        )
+      } catch {
+        attempt += 1
+        guard attempt <= 2, shouldRetryRead(error) else { throw error }
+        // 300ms、900ms + 抖动：多页面同时重试不会叠成一个尖峰。
+        let base = attempt == 1 ? 0.3 : 0.9
+        try? await Task.sleep(nanoseconds: UInt64((base + Double.random(in: 0...0.25)) * 1e9))
+      }
+    }
+  }
+
+  /// 只读请求是否值得重试：传输层错误（未连上/超时/连接中断）与服务端 5xx。
+  private static func shouldRetryRead(_ error: Error) -> Bool {
+    if let apiError = error as? TiebaForumAPIError, case .http(let status) = apiError {
+      return status >= 500
+    }
+    if let urlError = error as? URLError {
+      switch urlError.code {
+      case .timedOut, .cannotConnectToHost, .networkConnectionLost, .notConnectedToInternet,
+        .dnsLookupFailed, .cannotFindHost, .secureConnectionFailed:
+        return true
+      default:
+        return false
+      }
+    }
+    return false
   }
 
   /// 同一通道的纯文本形态（吧成员/排行的响应是 HTML，不是 JSON）。
@@ -545,12 +578,18 @@ enum TiebaForumAPI {
 
   private static let identityLock = NSLock()
   nonisolated(unsafe) private static var cachedCuid: String?
+  /// client_id 同样内存缓存：它在每个 proto 请求的 common 里，原来是每请求一次
+  /// KV 点查（与 cachedCuid 同一动机）。
+  nonisolated(unsafe) private static var cachedClientId: String?
 
   static func clientIdValue() -> String {
-    if let stored = TiebaKvStore.shared.get(key: "@tiebalite:client_id"), !stored.isEmpty {
-      return stored
-    }
-    return TiebaBackgroundSnapshot.shared.clientId
+    identityLock.lock()
+    defer { identityLock.unlock() }
+    if let cached = cachedClientId { return cached }
+    var value = TiebaKvStore.shared.get(key: "@tiebalite:client_id") ?? ""
+    if value.isEmpty { value = TiebaBackgroundSnapshot.shared.clientId }
+    cachedClientId = value
+    return value
   }
 
   /// JS 在启动时把 cuid 写进 KV（wappc_<毫秒>_<随机>）；读不到时按同一形态生成

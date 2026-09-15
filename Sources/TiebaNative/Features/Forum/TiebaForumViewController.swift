@@ -38,6 +38,12 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   private var didSeedSort = false
   private var isLoading = false
   private var isLoadingMore = false
+  /// 在途（tab, page）集合：同一份请求不重复发（见 load 的开头守卫）。
+  private struct LoadKey: Hashable {
+    let tab: Int
+    let page: Int
+  }
+  private var inFlightLoads: Set<LoadKey> = []
   private var isUserRefresh = false
   private var loadSeq = 0
   /// 行页发布（页键守卫 + 整页后台测量都收敛在 driver）。
@@ -246,6 +252,14 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       showState(.error("缺少吧名"))
       return
     }
+    // 同 (tab, page) 已有在途请求就别再发：连点刷新/切分段回来时原来会整串重发，
+    // 只有 loadSeq 在事后丢旧响应（网络与解析白做一遍）。旧响应仍由 loadSeq 兜底。
+    let loadKey = LoadKey(tab: tab, page: page)
+    guard !inFlightLoads.contains(loadKey) else {
+      list.endRefreshing()
+      return
+    }
+    inFlightLoads.insert(loadKey)
     loadSeq += 1
     let seq = loadSeq
     let semantics = semantics(tab)
@@ -255,6 +269,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     }
     Task { @MainActor in
       defer {
+        self.inFlightLoads.remove(loadKey)
         if seq == self.loadSeq {
           self.isLoading = false
           self.isUserRefresh = false

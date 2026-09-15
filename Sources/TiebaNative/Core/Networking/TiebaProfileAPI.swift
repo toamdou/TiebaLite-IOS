@@ -469,10 +469,18 @@ final class TiebaForumAvatarCache: @unchecked Sendable {
   private static let perForumDelayMs = 120
   private static let log = Logger(subsystem: "com.tiebalite.app", category: "forum-avatar-cache")
 
+  /// 条目上限：按"见过的吧"增长，见过几千个吧就是几千条；到顶按 ts 淘汰最旧的四分之一。
+  private static let maxEntries = 500
+  /// 写盘合并窗口：头像是一个个到的（每个之间还有 120ms 节流），逐条全表重写是
+  /// O(n) 次编码；改成最多 1s 写一次。
+  private static let persistInterval: TimeInterval = 1
+
   private let lock = NSLock()
   private var memory: [String: String] = [:]
   private var inflight: Set<String> = []
   private var diskLoaded = false
+  private var lastPersistAt: TimeInterval = 0
+  private var persistScheduled = false
 
   private init() {}
 
@@ -487,6 +495,15 @@ final class TiebaForumAvatarCache: @unchecked Sendable {
         defer { cursor += 1 }
         return pending[cursor]
       }
+    }
+  }
+
+  /// 预热（启动时调用）：把磁盘缓存**在后台**读进内存，别让首个 cell 的
+  /// `cached(key:)` 在主线程解析整张表（原来首次访问就是主线程 parse 全表 JSON）。
+  func warmUp() {
+    DispatchQueue.global(qos: .utility).async { [weak self] in
+      guard let self else { return }
+      self.lock.withLock { self.loadDiskLocked() }
     }
   }
 
@@ -547,7 +564,7 @@ final class TiebaForumAvatarCache: @unchecked Sendable {
       inflight.remove(key)
       guard !avatar.isEmpty, memory[key] != avatar else { return false }
       memory[key] = avatar
-      persistLocked()
+      schedulePersistLocked()
       return true
     }
   }
@@ -567,7 +584,34 @@ final class TiebaForumAvatarCache: @unchecked Sendable {
     }
   }
 
+  /// 合并写盘：窗口内的多次提交只落一次盘（口径见 persistInterval）。
+  private func schedulePersistLocked() {
+    let now = ProcessInfo.processInfo.systemUptime
+    if now - lastPersistAt >= Self.persistInterval {
+      persistLocked()
+      return
+    }
+    guard !persistScheduled else { return }
+    persistScheduled = true
+    let delay = Self.persistInterval - (now - lastPersistAt)
+    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay) { [weak self] in
+      guard let self else { return }
+      self.lock.withLock {
+        self.persistScheduled = false
+        self.persistLocked()
+      }
+    }
+  }
+
   private func persistLocked() {
+    lastPersistAt = ProcessInfo.processInfo.systemUptime
+    // 容量上限：到顶淘汰四分之一（按键序近似最旧；头像这层不需要精确 LRU，
+    // 只要别无界增长——被淘汰的条目下次进页面会重新拉一次）。
+    if memory.count > Self.maxEntries {
+      for key in memory.keys.prefix(Self.maxEntries / 4) {
+        memory.removeValue(forKey: key)
+      }
+    }
     let payload = memory.mapValues {
       ["avatar": $0, "ts": Int(Date().timeIntervalSince1970 * 1000)] as [String: Any]
     }

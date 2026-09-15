@@ -56,12 +56,18 @@ enum TiebaUserAPI {
     TiebaBackgroundSnapshot.shared.load()
   }
 
-  /// 冷启动档案缓存：解析失败/缺 uid → nil（页面回落空态，不猜）。
+  /// 档案缓存 TTL：昵称/头像/简介可能被改（本机编辑资料、或别的设备改），
+  /// 过期就当作没有缓存、让页面走网络拿新的。
+  private static let accountCacheTTL: TimeInterval = 24 * 60 * 60
+
+  /// 冷启动档案缓存：解析失败/缺 uid/过期 → nil（页面回落空态或走网络，不猜）。
   static func cachedAccount() -> TiebaAccountProfile? {
     guard let raw = TiebaKvStore.shared.get(key: accountCacheKey),
       let data = raw.data(using: .utf8),
       let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     else { return nil }
+    let ts = TiebaJSON.doubleValue(object["ts"]) ?? 0
+    if ts > 0, Date().timeIntervalSince1970 * 1000 - ts > accountCacheTTL * 1000 { return nil }
     var account = TiebaAccountProfile()
     account.uid = TiebaJSON.stringValue(object["uid"]) ?? ""
     account.name = TiebaJSON.stringValue(object["name"]) ?? ""

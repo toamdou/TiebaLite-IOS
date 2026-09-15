@@ -4,7 +4,8 @@
 import UIKit
 
 final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectable {
-  enum Segment {
+  /// 快照键用的分段名（String 原始值：键里要拼进 KV）。
+  enum Segment: String {
     case personalized
     case concern
   }
@@ -93,7 +94,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
       pill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82),
     ])
-    if segment == .personalized, let seed = seedItems() {
+    if let seed = seedItems() {
       items = seed
       publishFresh()
       showList()
@@ -224,6 +225,9 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
         page = 2
         lastLoadedAt = Date()
         isLoadingMore = false
+        // 首屏成功即写 SWR 快照（下次冷启动首帧就有内容，且是新鲜的——旧实现
+        // 只读不写，读到的是几个月前的死数据）。
+        TiebaFeedAPI.saveSnapshot(items, segment: segment.rawValue)
         publishFresh()
         if items.isEmpty {
           showState(emptyState)
@@ -293,9 +297,10 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     return result
   }
 
-  /// 首屏 seed：JS 在推荐 page=1 成功后写入的 SWR 快照（只读，解析失败即无 seed）。
+  /// 首屏 seed：分段自己的 SWR 快照（推荐/关注各一份、按账号键控；写入侧见
+  /// reload 的 page=1 成功分支）。空/过期/解析失败即无 seed。
   private func seedItems() -> [[String: Any]]? {
-    let snapshot = TiebaFeedAPI.cachedSnapshot()
+    let snapshot = TiebaFeedAPI.cachedSnapshot(segment: segment.rawValue)
     guard !snapshot.isEmpty else { return nil }
     let filtered = TiebaFeedFilter.visible(
       snapshot,

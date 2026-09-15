@@ -124,6 +124,9 @@ public enum TiebaNuke {
     )
     let dataCache = try? DataCache(name: diskCacheName)
     dataCache?.sizeLimit = defaultDiskLimitBytes
+    // ⚠️ 磁盘图片缓存**没有 TTL**（vendored Nuke 13 的 DataCache 只有容量上限，
+    // 淘汰是纯 LRU；sweepInterval 只是"多久跑一次 LRU 清扫"）。想限制图片寿命
+    // 就得降 sizeLimit，别指望过期时间——这里是唯一改动点。
 
     var configuration = ImagePipeline.Configuration(dataLoader: dataLoader)
     configuration.dataCache = dataCache

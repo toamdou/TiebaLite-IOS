@@ -158,6 +158,9 @@ final class TiebaEditProfileViewController: UIViewController {
       }
       do {
         try await TiebaSocialAPI.modifyProfile(intro: bio, sex: sexValue, nickName: nick)
+        // 档案缓存立即回填：否则改造过的昵称/简介要到过期或重登才生效
+        //（首页、图片水印都读这份缓存）。
+        await TiebaSession.refreshProfile(uid: uid)
         TiebaSceneHaptics.fire("action-success")
         let alert = UIAlertController(title: "已保存", message: "个人资料已更新", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "好", style: .default) { _ in

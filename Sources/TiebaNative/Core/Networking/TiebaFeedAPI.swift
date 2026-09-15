@@ -41,10 +41,36 @@ enum TiebaFeedAPI {
 
   /// 推荐页容量（与 JS PERSONALIZED_PAGE_SIZE 同值：无 page 字段，翻页按条目数判）。
   static let personalizedPageSize = 11
+  /// 旧 JS 写过的键：只用于写入时顺手清理。
   private static let snapshotKey = "@tiebalite:feed_snapshot_v1"
 
   /// 关注流增量时间戳（对齐 JS feed.ts 的模块级 lastSuccessRequestUnix）。
+  /// **按天作用域**：进程挂夜后第二天第一次刷新仍带着昨天的游标，会让服务端只回
+  /// "昨天之后"的增量；跨天就当没有游标、从头拉一次（与签到态同一条纪律）。
   nonisolated(unsafe) private static var lastUserLikeUnix = 0
+  nonisolated(unsafe) private static var lastUserLikeDay = ""
+
+  private static let cursorDayFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+    formatter.dateFormat = "yyyy-MM-dd"
+    return formatter
+  }()
+
+  private static func cursorDay() -> String { cursorDayFormatter.string(from: Date()) }
+
+  /// 当前应当使用的游标：跨天 → 0（重新拉，不走增量）。
+  private static func currentUserLikeUnix() -> Int {
+    let today = cursorDay()
+    guard lastUserLikeDay == today else {
+      lastUserLikeUnix = 0
+      lastUserLikeDay = today
+      return 0
+    }
+    return lastUserLikeUnix
+  }
 
   // MARK: - 推荐 / 关注
 
@@ -81,7 +107,7 @@ enum TiebaFeedAPI {
   }
 
   static func userLike(pageTag: String, loadType: Int) async throws -> UserLikePage {
-    let unix = lastUserLikeUnix
+    let unix = currentUserLikeUnix()
     let data = try await TiebaForumAPI.protoPost(path: "/c/f/concern/userlike", cmd: "309474") { common in
       var body = Tieba_UserLike_UserLikeRequestData()
       body.common = common
@@ -105,6 +131,7 @@ enum TiebaFeedAPI {
     ) as? [String: Any] ?? [:]
     if let next = TiebaSimpleRowParser.double(mapped["requestUnix"]), next > 0 {
       lastUserLikeUnix = Int(next)
+      lastUserLikeDay = cursorDay()
     }
     return UserLikePage(
       items: mapped["items"] as? [[String: Any]] ?? [],
@@ -187,14 +214,48 @@ enum TiebaFeedAPI {
     )
   }
 
-  // MARK: - 首屏 SWR 快照（JS 在推荐 page=1 成功后写入，原生只读）
+  // MARK: - 首屏 SWR 快照（写读同源）
+  //
+  // 旧键 @tiebalite:feed_snapshot_v1 是 JS 写的，JS 删除后**只读不写**变成死缓存：
+  // 冷启动会先闪一份几个月前的列表。现在写入侧接回来了（页面 page=1 成功后写），
+  // 并且带时间戳——过期就不采用，宁可走骨架也不给用户看陈年内容。
 
-  static func cachedSnapshot() -> [[String: Any]] {
-    guard let raw = TiebaKvStore.shared.get(key: snapshotKey),
+  /// 快照可采用的时效：30 分钟。超过就当作没有（列表页首屏用骨架，网络回来即替换）。
+  private static let snapshotMaxAge: TimeInterval = 30 * 60
+  /// 快照条数上限（与旧 JS 一致）：序列化体积 ~40KB，避免 KV 常驻膨胀。
+  private static let snapshotMaxItems = 25
+
+  private static func snapshotKey(segment: String, uid: String) -> String {
+    "@tiebalite:feed_snapshot_v2_\(segment)_\(uid.isEmpty ? "anon" : uid)"
+  }
+
+  /// 读快照（按分段 + 账号）：过期 / 跨天 / 脏行一律丢弃。
+  static func cachedSnapshot(segment: String) -> [[String: Any]] {
+    let key = snapshotKey(segment: segment, uid: TiebaBackgroundSnapshot.shared.uid)
+    guard let raw = TiebaKvStore.shared.get(key: key),
       let data = raw.data(using: .utf8),
-      let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let list = object["items"] as? [[String: Any]]
     else { return [] }
+    let ts = TiebaJSON.doubleValue(object["ts"]) ?? 0
+    guard ts > 0, Date().timeIntervalSince1970 * 1000 - ts <= snapshotMaxAge * 1000 else { return [] }
     return list.filter { ($0["threadInfo"] as? [String: Any])?["id"] is String }
+  }
+
+  /// 写快照（页面 page=1 成功后调用；失败静默——快照是加速手段，不影响主流程）。
+  static func saveSnapshot(_ items: [[String: Any]], segment: String) {
+    guard !items.isEmpty else { return }
+    let payload: [String: Any] = [
+      "ts": Int(Date().timeIntervalSince1970 * 1000),
+      "items": Array(items.prefix(snapshotMaxItems)),
+    ]
+    guard let data = try? JSONSerialization.data(withJSONObject: payload),
+      let text = String(data: data, encoding: .utf8)
+    else { return }
+    let key = snapshotKey(segment: segment, uid: TiebaBackgroundSnapshot.shared.uid)
+    try? TiebaKvStore.shared.set(key: key, value: text)
+    // 旧死键顺手清掉（只写不读的那份，留着永远占 KV）。
+    try? TiebaKvStore.shared.remove(key: snapshotKey)
   }
 }
 

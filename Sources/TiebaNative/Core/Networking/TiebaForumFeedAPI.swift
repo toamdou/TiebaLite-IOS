@@ -71,7 +71,13 @@ enum TiebaForumFeedAPI {
       request.common = common
       request.kw = encodedKw
       request.pn = Int32(page)
-      request.rn = 90
+      // rn = 服务端**最多**返回多少楼；rnNeed = 至少需要多少（官方客户端 90/30，
+      // JS 也是逐字照搬）。首屏只需要铺满一屏（~6 条）+ 一段滚动缓冲，90 对首屏
+      // 是纯浪费（多传输 + 多解码，弱网下直接反映在"进吧要等"）——所以第 1 页
+      // 砍到 45，翻页仍是 90（深度滚动不多发请求）。
+      // rnNeed 不动：响应缺 page 字段时 hasMore 的兜底判据是 threads.count >= 20，
+      // 把它降到 20 会让"刚好 20 条"的边界误判成没有更多。
+      request.rn = page == 1 ? 45 : 90
       request.rnNeed = 30
       request.qType = 2
       request.sortType = Int32(sortType)

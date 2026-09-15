@@ -197,6 +197,8 @@ public final class TiebaAppBootstrap {
     Task.detached(priority: .utility) {
       TiebaNuke.removeLegacyImageCacheDirectory()
     }
+    // 吧头像磁盘缓存在后台读进内存：否则首个用到它的 cell 会在主线程解析整张表。
+    TiebaForumAvatarCache.shared.warmUp()
     // 僵尸会话清理（Keychain 读 + 可能整份删除）：首帧前不做。
     TiebaSession.purgeOrphanedSession()
     maybeAutoCleanCache()
