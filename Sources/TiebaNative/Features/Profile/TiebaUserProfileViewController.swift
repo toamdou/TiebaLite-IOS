@@ -123,8 +123,15 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
         isUserRefresh = false
         list.endRefreshing()
       }
+      // 列表 tab 校正要在并发前定下来（loadList 一进去就读 activeTab）：回复 tab
+      // 只在本人主页存在，别人的主页被指到 replies 时回落贴子（旧页同判据）。
+      if uid != TiebaBackgroundSnapshot.shared.uid, activeTab == "replies" { activeTab = "threads" }
+      // 资料卡与第一页列表**并发**（原来 profile → userpost 串两个 RTT，首屏白等
+      // 一个来回）。两边都回来后各走各的落地：列表落地在 loadList 里。
+      async let profileTask = TiebaProfileAPI.profile(uid: uid)
+      async let listTask: Void = loadList(reset: true)
       do {
-        let result = try await TiebaProfileAPI.profile(uid: uid)
+        let result = try await profileTask
         detail = result
         isFollowing = result.isConcerned
         isOwn = result.uid == TiebaBackgroundSnapshot.shared.uid
@@ -136,7 +143,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
         syncHeader()
         // 标题来自资料卡（路由表标题为空），到数据后让壳重刷一次。
         (parent as? TiebaRouteHostViewController)?.syncNativeScreenChrome()
-        await loadList(reset: true)
+        await listTask
         if isUserRefresh { TiebaSceneHaptics.fire("toggle") }
       } catch {
         if detail == nil {

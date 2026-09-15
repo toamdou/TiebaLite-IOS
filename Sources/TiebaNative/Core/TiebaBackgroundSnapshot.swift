@@ -148,16 +148,20 @@ final class TiebaBackgroundSnapshot: @unchecked Sendable {
     deleteKeychain()
   }
 
-  func commonParams() -> [String: String] {
-    let now = Int(Date().timeIntervalSince1970 * 1000)
-    let date = Date()
-    // 数字日期格式固定 en_US_POSIX + Gregorian：不受用户地区/非公历日历
-    // 设置影响（否则 event_day 出现 12 小时制错位/佛历年份等脏数据）。
+  /// event_day 格式固定 en_US_POSIX + Gregorian：不受用户地区/非公历日历设置影响
+  ///（否则出现 12 小时制错位/佛历年份等脏数据）。**静态**——每个签名请求都要它，
+  /// 每请求新建 DateFormatter 是热路径上的纯浪费（同 TiebaForumAPI.eventDay）。
+  private static let eventDayFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.calendar = Calendar(identifier: .gregorian)
     formatter.dateFormat = "yyyyMdd"
-    let eventDay = formatter.string(from: date)
+    return formatter
+  }()
+
+  func commonParams() -> [String: String] {
+    let now = Int(Date().timeIntervalSince1970 * 1000)
+    let eventDay = Self.eventDayFormatter.string(from: Date())
     let id = clientId.isEmpty ? "00000000-0000-4000-8000-000000000000" : clientId
     var params = [
       "BDUSS": bduss,

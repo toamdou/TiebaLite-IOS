@@ -76,7 +76,11 @@ final class TiebaHttpClient: @unchecked Sendable {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = 30
     configuration.timeoutIntervalForResource = 180
-    configuration.httpShouldUsePipelining = true
+    // 不配 URLCache：API 全是 POST，HTTP 语义下本就不可缓存（缓存都在应用层 KV/SWR）；
+    // 显式置 nil 与 Nuke 侧（TiebaNuke 的 urlCache = nil）同一口径，避免系统默认
+    // 内存 URLCache 意外参与。
+    // 不设 httpShouldUsePipelining：iOS 10 起系统忽略它，HTTP/2 多路复用自己生效。
+    configuration.urlCache = nil
     configuration.waitsForConnectivity = false
     session = URLSession(configuration: configuration)
   }

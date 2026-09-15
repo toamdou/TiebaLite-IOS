@@ -120,8 +120,6 @@ final class TiebaNativeClient: Sendable {
       "User-Agent": "tieba/12.41.7.1",
       "Accept-Language": "zh-CN,zh;q=0.9",
       "Accept": "application/json",
-      "Accept-Encoding": "gzip",
-      "Connection": "keep-alive",
       "Charset": "UTF-8",
       "Content-Type": "application/x-www-form-urlencoded"
     ]
@@ -181,7 +179,6 @@ final class TiebaNativeClient: Sendable {
     request.setValue("multipart/form-data; boundary=\(TiebaSigner.boundary)", forHTTPHeaderField: "Content-Type")
     // URLSession transparently decompresses gzip responses when advertised.
     // Headers passed in from JS may override this (e.g. "gzip, deflate").
-    request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding")
     apply(headers, to: &request)
     return try await TiebaHttpClient.shared.sendData(request)
   }
