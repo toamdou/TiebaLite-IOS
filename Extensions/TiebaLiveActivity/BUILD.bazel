@@ -13,16 +13,15 @@ swift_library(
 )
 
 # rules_apple does not substitute MARKETING_VERSION / CURRENT_PROJECT_VERSION (the Xcode build
-# resolves them from the project); these must equal the app's Info.plist values (1.0.0 / 1),
-# since rules_apple rejects a child bundle whose version differs from its parent. The pbxproj's
-# MARKETING_VERSION = 1.1 was already inconsistent with the app's hardcoded 1.0.0.
+# resolves them from the project); these must equal the app's Info.plist values (2.0.0 / 2),
+# since rules_apple rejects a child bundle whose version differs from its parent.
 expand_template(
     name = "info_plist",
     out = "Info.bazel.plist",
     substitutions = {
-        "$(CURRENT_PROJECT_VERSION)": "1",
+        "$(CURRENT_PROJECT_VERSION)": "2",
         "$(EXECUTABLE_NAME)": "TiebaLiveActivity",
-        "$(MARKETING_VERSION)": "1.0.0",
+        "$(MARKETING_VERSION)": "2.0.0",
     },
     template = "Info.plist",
 )

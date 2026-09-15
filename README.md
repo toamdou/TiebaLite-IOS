@@ -4,7 +4,8 @@
 
 **第三方百度贴吧 iOS 客户端** — 纯 Swift / UIKit（零 JS、零 RN），iOS 26 液态玻璃风格
 
-[![Build iOS Unsigned IPA](https://github.com/toamdou/TiebaLite-RN-Swift/actions/workflows/build-ipa.yml/badge.svg)](https://github.com/toamdou/TiebaLite-RN-Swift/actions/workflows/build-ipa.yml)
+[![Build iOS Unsigned IPA](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml/badge.svg)](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml)
+![Version](https://img.shields.io/badge/version-2.0.0-208AEF)
 ![Platform](https://img.shields.io/badge/platform-iOS%2016.4%2B-208AEF)
 ![License](https://img.shields.io/badge/License-GPLv3-blue.svg)
 ![Stack](https://img.shields.io/badge/Swift%206%20%C2%B7%20UIKit-native-blue)
@@ -18,6 +19,28 @@
 <img src="docs/screenshots/settings.jpg" width="24%" alt="设置页" />
 
 </div>
+
+---
+
+## 🆕 2.0.0 · 从 React Native 完全迁移至纯原生
+
+> ⚠️ 本版本需要**重新登录**。
+
+**体积与性能**
+
+- 安装包 **15.7 MB → 6.6 MB**（约 −58%）
+- 全部页面原生重写：启动引导、关注、动态（推荐 / 关注 / 热榜 / 话题）、消息、我的、吧页、帖子详情、楼中楼、搜索、设置、登录、内置浏览器等
+- 顶栏 / 底栏"内容滚到栏下渐隐模糊"改用 iOS 26 系统的滚动边缘效果，无边界、无硬切边，不再是自绘的半透明色带
+- 空态 / 失败态 / 加载骨架、分享面板、动作菜单、表单控件全部使用系统组件（系统图标尺寸、行距与 iOS 26 液态玻璃按钮）
+- 构建改用 **Bazel**，大幅提高构建速度；迁移至原生架构后显著提高性能与省电
+
+**图片与查看器**
+
+- 点图直接进原生查看器：跟手拖拽、下拉关闭、多图横滑、双击放大、放大后滑到边缘切页
+
+**本版修掉的问题**
+
+- 吧详情页点进去报"响应解析失败"（服务端换掉了原来的接口，改走更稳的数据通道）
 
 ---
 
@@ -98,8 +121,8 @@ Tools/                     占位描述文件生成、产物隐私清洗
 ### 步骤
 
 ```bash
-git clone https://github.com/toamdou/TiebaLite-RN-Swift.git
-cd TiebaLite-RN-Swift
+git clone https://github.com/toamdou/TiebaLite-IOS.git
+cd TiebaLite-IOS
 
 # 模拟器编译+运行（无需签名）
 bazel build //:App --config=sim
