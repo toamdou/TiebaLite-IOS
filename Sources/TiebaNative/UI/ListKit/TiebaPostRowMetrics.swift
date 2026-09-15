@@ -927,29 +927,46 @@ struct TiebaPostRowPlan {
 
     y = max(avatarFrame.maxY, metaFrame.maxY) + TiebaPostRowLayout.authorBottom
 
+    // 块间距挂在"下一个块的块首"，不再挂在块尾：末尾没有块时那 12pt 会变成正文
+    // 最后一行到卡底的多余空白（用户 2026-09-15 报"回复离卡底空白太多"）。
+    var gap: CGFloat = 0
+    func flushGap() {
+      y += gap
+      gap = 0
+    }
+
     // ── 正文 / 屏蔽提示 ──
     if inputs.showsBlockedTip {
+      flushGap()
       blockedTipFrame = CGRect(x: contentX, y: y, width: 92, height: 24)
-      y += 24 + 8
+      y += 24
+      gap = 8
     }
     if let text = inputs.contentText, text.length > 0 {
+      flushGap()
       let height = TiebaSimpleText.measureHeight(text, width: contentW, maxLines: 0)
       textFrame = CGRect(x: contentX, y: y, width: contentW, height: height)
-      y += height + TiebaPostRowLayout.mediaGap
+      y += height
+      gap = TiebaPostRowLayout.mediaGap
     }
 
     // ── 图片块（hideMedia 时逐个占位条，不挂图）──
     if inputs.imagesHidden, !inputs.images.isEmpty {
+      flushGap()
       let count = min(inputs.images.count, TiebaPostRowLayout.maxImages)
       let rowHeight: CGFloat = 40
+      let rowSpacing: CGFloat = 6
       var y2 = y
       for _ in 0..<count {
         imagePlaceholderFrames.append(CGRect(x: contentX, y: y2, width: contentW, height: rowHeight))
-        y2 += rowHeight + 6
+        y2 += rowHeight + rowSpacing
       }
-      imagesFrame = CGRect(x: contentX, y: y, width: contentW, height: max(y2 - 6 - y, 0))
-      y = y2 + TiebaPostRowLayout.mediaGap
+      imagesFrame = CGRect(x: contentX, y: y, width: contentW, height: max(y2 - rowSpacing - y, 0))
+      // 占位条的行距照旧算进下一个块（6+12），只是不再留在卡尾。
+      y = y2 - rowSpacing
+      gap = TiebaPostRowLayout.mediaGap + rowSpacing
     } else if !inputs.images.isEmpty {
+      flushGap()
       if inputs.images.count == 1 {
         let image = inputs.images[0]
         let height = image.isTall
@@ -969,28 +986,36 @@ struct TiebaPostRowPlan {
         imagesFrame = CGRect(x: contentX, y: y, width: contentW, height: TiebaPostRowLayout.stripHeight)
         imageItemFrames = frames
       }
-      y += (imagesFrame?.height ?? 0) + TiebaPostRowLayout.mediaGap
+      y += (imagesFrame?.height ?? 0)
+      gap = TiebaPostRowLayout.mediaGap
     }
 
     // ── 视频 ──
     if let video = inputs.video {
+      flushGap()
       let height = contentW / CGFloat(max(video.aspect, 0.01))
       videoFrame = CGRect(x: contentX, y: y, width: contentW, height: max(height, 1))
-      y += max(height, 1) + TiebaPostRowLayout.mediaGap
+      y += max(height, 1)
+      gap = TiebaPostRowLayout.mediaGap
     } else if inputs.videoPlaceholder != nil {
+      flushGap()
       videoPlaceholderFrame = CGRect(x: contentX, y: y, width: contentW, height: 40)
-      y += 40 + TiebaPostRowLayout.mediaGap
+      y += 40
+      gap = TiebaPostRowLayout.mediaGap
     }
 
     // ── 语音 ──
     if inputs.audio != nil {
+      flushGap()
       audioFrame = CGRect(x: contentX, y: y, width: contentW, height: TiebaPostRowLayout.audioHeight)
-      y += TiebaPostRowLayout.audioHeight + TiebaPostRowLayout.mediaGap
+      y += TiebaPostRowLayout.audioHeight
+      gap = TiebaPostRowLayout.mediaGap
     }
 
     // ── 楼中楼预览 ──
     let subPosts = inputs.post.subPosts
     if !subPosts.isEmpty || inputs.post.subPostNum > 0 {
+      flushGap()
       y += TiebaPostRowLayout.subPostTop
       var subY = y + TiebaPostRowLayout.subPostTop
       for (idx, sub) in subPosts.enumerated() {
