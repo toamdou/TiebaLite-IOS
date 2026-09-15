@@ -1,8 +1,7 @@
 // ============================================================
 // TiebaWebViewController —— 内置浏览器（原 src/app/webview.tsx）
 //
-// 整屏原生：工具栏（自绘行）+ WKWebView + 加载骨架。本类是页面本体
-//（TiebaWebView 是给原生宿主复用的内嵌 WebView 视图）。
+// 整屏原生：工具栏（自绘行）+ WKWebView + 加载骨架/失败页。
 //
 // 逐项对齐旧页面（行为是硬指标，勿"顺手优化"）：
 //   · 路由参数：TiebaRoute.webview(url:title:) 的类型化值（原生解析，JS 侧不参与）。
@@ -14,7 +13,7 @@
 //     打开，并 dismissTo('/')（原生等价 = selectTab(0)，先把栈收敛回根屏）。
 //     ⚠️ 这一支**不发起 WebView 加载**：旧代码是先渲染再 useEffect 弹走，WebView
 //     那一帧的加载是渲染顺序的副产物；WKWebView 一旦 load 就拉起 ~200MB 的
-//     WebContent 进程（见 CookieService 注释），为一个正在被关掉的页面付这笔钱
+//     WebContent 进程（见 TiebaCookieStore 注释），为一个正在被关掉的页面付这笔钱
 //     没有道理（用户可见行为不变）。
 //   · 加载态：工具栏标题「加载中…」+ 主色小转圈 + 屏幕顶部骨架（4 张卡片）+
 //     底部 2pt 主色加载条；骨架为指针穿透（原 pointerEvents="none"）。
@@ -22,6 +21,11 @@
 //     中打开、取消）。后退不可用时不置灰（点它 = router.back() 兜底退出，仅视觉
 //     0.3 透明）；前进不可用 = 真禁用（不触发触觉）；每个动作前 press 触觉。
 //   · 内容进程崩溃：恢复加载态并 reload（避免黑屏 + 假 loading 结束）。
+//   · 加载失败：系统状态块（图标/标题/说明/重试）盖住正文区，重试回原地址——
+//     原实现失败后只剩一片空白（2026-09-15 补齐）。
+//   · 非 http(s) scheme（weixin:// 等）：旧行为是点了没反应，现在交回系统打开。
+//   · target="_blank" / window.open：单标签浏览器就地加载。
+//   · UA 用平台默认：旧页同样没设（登录页那条 UA 是 passport 专用伪装，不通用）。
 //   · Cookie：加载前把 Foundation 存储的会话 cookie 灌进 WK 存储，并把 WK 侧
 //     变化写回 Foundation（原 sharedCookiesEnabled 的语义）；退出时摘观察者。
 //   · JS 对话框（alert/confirm/prompt）：UIAlertController 实现，按钮文案
@@ -59,6 +63,8 @@ final class TiebaWebViewController: UIViewController {
   private var didPerformInitialNavigation = false
   private var didLoadOnce = false
   private var cookiesObserverInstalled = false
+  /// 上一次失败的地址（错误页「重试」用它；成功导航后清空）。
+  private var failedURL: String?
 
   // MARK: - 视图
   private let toolbar = UIView()
@@ -72,13 +78,15 @@ final class TiebaWebViewController: UIViewController {
   private let moreButton = TiebaToolbarIconButton(symbol: "ellipsis", slot: 22, label: "更多")
   private let loadingBar = UIView()
   private let loadingOverlay = TiebaWebLoadingOverlayView()
+  /// 加载失败页（系统状态块 + 重试）：原实现失败后只剩一片空白。
+  private let errorView = TiebaStateContentView()
   private var hairlineHeightConstraint: NSLayoutConstraint?
 
   init(url: String, title: String) {
     self.url = url
     let configuration = WKWebViewConfiguration()
     configuration.websiteDataStore = .default()
-    // 旧包 iOS 默认值（TiebaWebView 的同款配置）：不允许内联播放、媒体播放需要手势。
+    // 旧包 iOS 默认值（同登录页 WebView 的配置）：不允许内联播放、媒体播放需要手势。
     configuration.allowsInlineMediaPlayback = false
     configuration.mediaTypesRequiringUserActionForPlayback = .all
     configuration.defaultWebpagePreferences.allowsContentJavaScript = true
@@ -129,7 +137,7 @@ final class TiebaWebViewController: UIViewController {
 
   override func viewDidDisappear(_ animated: Bool) {
     super.viewDidDisappear(animated)
-    // WKHTTPCookieStore 是进程级单例、强引用观察者，离屏必须摘（同 TiebaWebView）。
+    // WKHTTPCookieStore 是进程级单例、强引用观察者，离屏必须摘（同登录页 WebView）。
     removeCookieObserver()
     loadingOverlay.setPulsing(false)
   }
@@ -255,6 +263,34 @@ final class TiebaWebViewController: UIViewController {
       loadingBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
       loadingBar.heightAnchor.constraint(equalToConstant: 2),
     ])
+    setUpErrorView()
+  }
+
+  /// 失败页盖在 WebView 上（顶到工具栏底下）：正文区整块被失败态替掉，
+  /// 重试按钮回原地址。
+  private func setUpErrorView() {
+    errorView.backgroundColor = .systemBackground
+    errorView.isHidden = true
+    errorView.onButtonPress = { [weak self] id in
+      guard id == "retry" else { return }
+      self?.retryFailedLoad()
+    }
+    errorView.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(errorView)
+    NSLayoutConstraint.activate([
+      errorView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      errorView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      errorView.topAnchor.constraint(equalTo: webView.topAnchor),
+      errorView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+    ])
+  }
+
+  private func retryFailedLoad() {
+    let target = failedURL ?? url
+    failedURL = nil
+    errorView.isHidden = true
+    guard !target.isEmpty else { return }
+    load(Self.isTrustedWebURL(target) ? target : Self.defaultURL)
   }
 
   // MARK: - 状态刷新
@@ -438,6 +474,17 @@ extension TiebaWebViewController: WKNavigationDelegate {
     decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void
   ) {
     let request = navigationAction.request
+    // 非 http(s) 的自定义 scheme（weixin:// taobao:// bilibili://…）：WKWebView 自己
+    // 处理不了，原行为是"点了没反应"。只认用户真的点了链接（linkActivated）——
+    // iframe 里的 data:/about: 之类别误伤。
+    if navigationAction.navigationType == .linkActivated,
+      let url = request.url, let scheme = url.scheme?.lowercased(),
+      scheme != "http", scheme != "https"
+    {
+      decisionHandler(.cancel)
+      UIApplication.shared.open(url)
+      return
+    }
     // isTopFrame 判据与旧包一致：请求 URL == 主文档 URL = 顶层导航。
     let isTopFrame = request.url == request.mainDocumentURL
     guard isTopFrame else {
@@ -458,12 +505,16 @@ extension TiebaWebViewController: WKNavigationDelegate {
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
     // 原 onLoadStart：loading=true + 导航状态同步（onNavigationStateChange）。
     isLoading = true
+    failedURL = nil
+    errorView.isHidden = true
     syncNavigationState()
     updateChrome()
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     isLoading = false
+    failedURL = nil
+    errorView.isHidden = true
     syncNavigationState()
     updateChrome()
   }
@@ -481,6 +532,7 @@ extension TiebaWebViewController: WKNavigationDelegate {
     // 原 onLoadEnd 在 loadingError 路径同样触发 → loading 收尾（不看 title/nav）。
     isLoading = false
     updateChrome()
+    showLoadFailure(error)
   }
 
   /// 已提交导航中途失败（didFailProvisionalNavigation 之外的那半）：原 onLoadEnd
@@ -488,6 +540,28 @@ extension TiebaWebViewController: WKNavigationDelegate {
   func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
     isLoading = false
     updateChrome()
+    showLoadFailure(error)
+  }
+
+  /// 加载失败页 = 系统状态块（图标/标题/说明/重试按钮全由系统排版）。
+  private func showLoadFailure(_ error: Error) {
+    failedURL = webView.url?.absoluteString ?? (url.isEmpty ? Self.defaultURL : url)
+    errorView.state = .error(message: error.localizedDescription)
+    errorView.isHidden = false
+  }
+
+  /// target="_blank" / window.open：单标签浏览器就地加载，不返回新 WebView
+  ///（旧行为是点了什么都不发生）。
+  func webView(
+    _ webView: WKWebView,
+    createWebViewWith configuration: WKWebViewConfiguration,
+    for navigationAction: WKNavigationAction,
+    windowFeatures: WKWindowFeatures
+  ) -> WKWebView? {
+    if navigationAction.targetFrame == nil {
+      webView.load(navigationAction.request)
+    }
+    return nil
   }
 
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
