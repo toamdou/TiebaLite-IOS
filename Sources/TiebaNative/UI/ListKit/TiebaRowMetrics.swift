@@ -381,7 +381,9 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
     let menuOptions = (TiebaFeedRowParser.array(raw["closeMenuOptions"]) ?? [])
       .compactMap { TiebaRowDict.string($0) }
       .filter { ["dislike", "block", "copy-title"].contains($0) }
-    let showsImageContextMenu = TiebaRowDict.bool(raw["imageContextMenu"]) == true
+    // 缺 key = 开（只有显式 false 才关）：造行的页面漏传过一次就让整页长按失效
+    //（吧页/话题页，2026-09-15），而"少一个菜单"比"多一个菜单"难发现得多。
+    let showsImageContextMenu = TiebaRowDict.bool(raw["imageContextMenu"]) != false
 
     // ── 置顶横幅 ──
     let bannerText: String
