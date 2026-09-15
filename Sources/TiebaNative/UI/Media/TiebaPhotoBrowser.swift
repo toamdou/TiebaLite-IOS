@@ -633,14 +633,21 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   /// 若是揭示移位后的目标位（图片视图与矩形只差一个纵向位移）→ 几何保留矩形
   /// （退出飞回才落在已就位处），垫图仍换真图，避免把矩形里的文字截进去。
   /// 都解析不到（未加载/非图片）→ (原矩形, 无图)，调用方矩形本身就是合法几何。
+  ///
+  /// ⚠️ 顺序是"同尺寸最近"优先、"完整落在矩形内"兜底：移位后的矩形容不下真图
+  /// （两者差一个纵向位移），而卡片里的吧头像/角标小图恰好完整落在矩形内——反过来
+  /// 先做 contained 就会拿吧头像当转场源（2026-09-15 用户报"点被屏幕底边裁掉的图，
+  /// 先弹出吧头像再显示真实图片"）。
   private func transitionSource(in window: UIWindow) -> (frame: CGRect, image: UIImage?)? {
     guard let rect = transitionFrame, rect.width >= 2, rect.height >= 2,
           rect.width.isFinite, rect.height.isFinite else { return nil }
+    if let near = TiebaPhotoBrowserSession.imageView(matching: rect, in: window) {
+      return (rect, near.image)
+    }
     if let contained = TiebaPhotoBrowserSession.imageView(containedIn: rect, in: window) {
       return (contained.convert(contained.bounds, to: nil), contained.image)
     }
-    let near = TiebaPhotoBrowserSession.imageView(matching: rect, in: window)
-    return (rect, near?.image)
+    return (rect, nil)
   }
 
   /// 窗口层级里"完整落在 rect 内"的图片视图（有图、可见）：先要命中矩形中心

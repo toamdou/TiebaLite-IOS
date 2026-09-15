@@ -1760,9 +1760,15 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   /// 转场源图：行内第 index 张图已加载的那张压缩图（imageView 铺满该格，
   /// 所以 mediaHit/mediaVisibleRect 给的矩形就是它的窗口矩形）。交给查看器当
   /// 权威源，省掉"窗口扫描找 imageView、找不到就按矩形截屏"那条会截到整张卡片的兜底。
+  /// ⚠️ 单图行必须也走这里：它的图在 singleMediaView（不是横滑带），漏掉就会落回
+  /// 窗口扫描——图被屏幕边缘裁掉时矩形被揭示移位改过，扫描会扫到卡片里的吧头像。
   public func mediaImage(at index: Int) -> UIImage? {
     guard let model, !model.isTopBanner, model.showsMedia,
-          stripItems.indices.contains(index) else { return nil }
+          model.media.indices.contains(index) else { return nil }
+    guard model.mediaIsStrip else {
+      return index == 0 ? singleMediaView.transitionSourceImage : nil
+    }
+    guard stripItems.indices.contains(index) else { return nil }
     return stripItems[index].transitionSourceImage
   }
 
