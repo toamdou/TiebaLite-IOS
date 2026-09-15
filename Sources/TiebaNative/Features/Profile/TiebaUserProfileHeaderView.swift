@@ -107,7 +107,8 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
   )
   private let segment = UISegmentedControl()
 
-  private var tabs: [String] = []
+  /// 段：标签给显示、值给回传（数据 tab 名，页头不许把标签当值用）。
+  private var tabs: [(label: String, value: String)] = []
   /// 当前分段标题（判重：重装分段会重置选中态）。
   private var segmentTitles: [String] = []
 
@@ -302,19 +303,19 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
       label: "获赞", valueColor: text, labelColor: tertiary
     )
 
-    // 分段：回复 tab 只在本人主页出现（旧页同判据）。选中项按 value 在**过滤后**
-    // 的 tabs 里反查——传过滤前的下标会在别人主页把「关注的吧」选成第 0 段。
-    let rawTabs = (spec["tabs"] as? [String]) ?? []
-    tabs = isOwn ? rawTabs : rawTabs.filter { $0 != "replies" }
-    if tabs != segmentTitles {
-      segmentTitles = tabs
+    // 分段：标签/值成对，选中项按 value 反查（下标会随过滤错位；标签与值不同名）。
+    let labels = (spec["tabs"] as? [String]) ?? []
+    let values = (spec["tabValues"] as? [String]) ?? []
+    tabs = zip(labels, values).map { (label: $0.0, value: $0.1) }
+    if tabs.map(\.label) != segmentTitles {
+      segmentTitles = tabs.map(\.label)
       segment.removeAllSegments()
       for (index, tab) in tabs.enumerated() {
-        segment.insertSegment(withTitle: tab, at: index, animated: false)
+        segment.insertSegment(withTitle: tab.label, at: index, animated: false)
       }
     }
     if let value = TiebaSimpleRowParser.nonEmpty(spec["tabValue"]),
-      let index = tabs.firstIndex(of: value) {
+      let index = tabs.firstIndex(where: { $0.value == value }) {
       segment.selectedSegmentIndex = index
     }
 
@@ -416,7 +417,7 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
     TiebaSceneHaptics.fire("segment")
     let index = segment.selectedSegmentIndex
     guard index >= 0, index < tabs.count else { return }
-    onAction?(.userProfile(.tab(value: tabs[index])), [:])
+    onAction?(.userProfile(.tab(value: tabs[index].value)), [:])
   }
 }
 

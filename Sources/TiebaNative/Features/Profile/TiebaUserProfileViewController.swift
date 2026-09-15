@@ -359,6 +359,8 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
       list.headerSpec = nil
       return
     }
+    // 回复段只在本人主页出现（旧页同判据）；过滤只做在这里，页头只管显示与回传。
+    let visibleTabs = isOwn ? Self.tabs : Self.tabs.filter { $0.value != "replies" }
     var spec: [String: Any] = [
       "kind": "userProfile",
       "name": detail.name,
@@ -377,8 +379,9 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
       "blocked": isBlocked,
       "own": isOwn,
       "loggedIn": !TiebaBackgroundSnapshot.shared.bduss.isEmpty,
-      "tabs": Self.tabs.map(\.label),
-      // 传 value 不传下标：页头会把 replies 过滤掉（非本人主页），下标会错位。
+      "tabs": visibleTabs.map(\.label),
+      // 标签只管显示，回传的是值：页头把标签当值传回来会把「贴子」当成数据 tab 名。
+      "tabValues": visibleTabs.map(\.value),
       "tabValue": activeTab,
       "colors": TiebaRowTheme.colors(),
     ]
