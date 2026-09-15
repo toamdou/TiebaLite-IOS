@@ -6,6 +6,7 @@ import NukeExtensions
 
 final class TiebaThreadKnownPostView: UIView {
   private let card = UIView()
+  private let titleLabel = UILabel()
   private let authorLabel = UILabel()
   private let abstractLabel = UILabel()
   private let imageView = UIImageView()
@@ -56,6 +57,7 @@ final class TiebaThreadKnownPostView: UIView {
     self.palette = palette
     card.backgroundColor = palette.card
     card.layer.borderColor = palette.borderCard.cgColor
+    titleLabel.textColor = palette.text
     authorLabel.textColor = palette.textSecondary
     abstractLabel.textColor = palette.textSecondary
     imageView.backgroundColor = palette.placeholder
@@ -80,6 +82,19 @@ final class TiebaThreadKnownPostView: UIView {
     )
     stack.translatesAutoresizingMaskIntoConstraints = false
     card.addSubview(stack)
+
+    // 标题：占位卡的第一个块（JS knownTitle 17pt/22pt/最多 3 行）。快照里标题一直
+    // 有，漏掉它占位卡就没有帖名——与作者行、摘要同尺排下去，换真卡不位移。
+    if !snapshot.title.isEmpty {
+      titleLabel.font = TiebaSimpleText.font(size: 17, weight: .medium)
+      titleLabel.numberOfLines = 3
+      titleLabel.attributedText = TiebaSimpleText.makeAttributed(
+        text: snapshot.title,
+        font: TiebaSimpleText.font(size: 17, weight: .medium),
+        lineHeight: 22
+      )
+      stack.addArrangedSubview(titleLabel)
+    }
 
     // 作者行：与真实主贴卡同尺（头像 40 / 昵称 16 semibold）——换卡时不位移。
     let row = UIStackView()

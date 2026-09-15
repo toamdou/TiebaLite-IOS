@@ -533,6 +533,8 @@ public final class TiebaKindListContentView: UIView {
       TiebaRowPagePins.shared.unpin(previousKey)
       syncPagePin()
     }
+    // 行高数组是"要不要换新 layout 对象"的判据（见 refreshGeometry），先留旧值再清缓存。
+    let previousHeights = isSamePage ? frameHeightCache?.heights : nil
     frameHeightCache = nil
     if !isSamePage {
       // 换页后可见区间即便与旧页数值相同（都 0…7）也必须重发，否则懒回填
@@ -544,7 +546,7 @@ public final class TiebaKindListContentView: UIView {
     // 占位行（行高走兜底），不能靠度量缓存的行数。
     let count = TiebaKindRowPages.shared.rowCount(pageKey: pageKey)
     if isSamePage, count == itemCount {
-      collectionView.collectionViewLayout.invalidateLayout()
+      refreshGeometry(previousHeights: previousHeights, count: count)
       reconfigureVisibleItems()
       return
     }
@@ -567,7 +569,29 @@ public final class TiebaKindListContentView: UIView {
       dataSource.applySnapshotUsingReloadData(snapshot)
     }
     collectionView.collectionViewLayout.invalidateLayout()
+    // 行数/内容变了，行高数组可能一起变（展开「显示更多」等），这里再按新数组定几何。
+    refreshGeometry(previousHeights: previousHeights, count: count)
     setNeedsLayout()
+  }
+
+  /// 按新行高数组刷新集合视图几何。行高变了必须**换新 layout 对象**：组合布局的
+  /// custom group 帧与组高是构建期快照，只 invalidateLayout() 时行高会停在旧值
+  ///（用户报的「点显示更多没反应、内容没变、按钮却消失」）。没变才走轻量 invalidate。
+  private func refreshGeometry(previousHeights: [CGFloat]?, count: Int) {
+    let width = itemWidth
+    guard width > 0, count > 0 else { return }
+    let heights = frameHeights(width: width, count: count)
+    var changed = true
+    if let previousHeights, previousHeights.count == heights.count {
+      changed = (0..<heights.count).contains { previousHeights[$0] != heights[$0] }
+    }
+    guard changed else {
+      collectionView.collectionViewLayout.invalidateLayout()
+      return
+    }
+    let offset = collectionView.contentOffset
+    collectionView.setCollectionViewLayout(makeLayout(), animated: false)
+    collectionView.contentOffset = offset
   }
 
   public func scrollToTop(animated: Bool) {
@@ -1417,8 +1441,8 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
   public func scrollViewDidScroll(_ scrollView: UIScrollView) {
     updateVisibleRange()
     updateReachEnd()
-    // 底栏就是这个手势收起来的：收纳态一变，底部那层模糊跟着走（调用本身 O(1)）。
-    TiebaChrome.syncTabBarMinimizedState()
+    // 底边不做软模糊：系统可能重挂 automatic 处理，滚动路径按需清掉（调用本身 O(1)）。
+    TiebaChrome.hideBottomEdgeEffect(scrollView)
     onScroll?(scrollView)
   }
 

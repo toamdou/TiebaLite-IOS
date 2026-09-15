@@ -218,6 +218,9 @@ public struct TiebaPhotoItem: Sendable {
   let originUrl: URL?
   let isGif: Bool
   let isLong: Bool
+  /// 服务端「显示查看原图按钮」（Media.show_original_btn，proto 字段 20；GIF 恒
+  /// 为 0）：true 且该页当前展示的不是原图时，菜单才出现「查看原图」。
+  let canViewOriginal: Bool
   let width: CGFloat
   let height: CGFloat
 
@@ -228,20 +231,39 @@ public struct TiebaPhotoItem: Sendable {
     isGif: Bool,
     isLong: Bool,
     width: Double,
-    height: Double
+    height: Double,
+    canViewOriginal: Bool = false
   ) {
     self.url = url
     self.thumbUrl = (thumbUrl != url) ? thumbUrl : nil
-    self.originUrl = originUrl
+    // 与原图档同 URL（GIF/原档模式、src==originSrc 的帖）：视为没有独立原图档，
+    // 否则菜单会多出一个点了什么都不换的「查看原图」。
+    self.originUrl = (originUrl != url) ? originUrl : nil
     self.isGif = isGif
     self.isLong = isLong
+    self.canViewOriginal = canViewOriginal
     self.width = CGFloat(width)
     self.height = CGFloat(height)
   }
 
+  /// 切到原图档（长按「查看原图」用）：显示 URL 换成原图、thumbUrl 保留旧档垫图、
+  /// canViewOriginal 置 false（该页已在显示原图，菜单项随之消失）。
+  func showingOriginal() -> TiebaPhotoItem {
+    guard let originUrl else { return self }
+    return TiebaPhotoItem(
+      url: originUrl,
+      thumbUrl: thumbUrl ?? url,
+      originUrl: originUrl,
+      isGif: isGif,
+      isLong: isLong,
+      width: width,
+      height: height,
+      canViewOriginal: false
+    )
+  }
+
   /// 帖子行图片 → 查看器项（档位选择与行内图片展示同源：GIF / 原档模式取原图，
-  /// 其余取显示档、空则回落原图；url 非法 → nil 丢弃）。originUrl 恒 nil：帖子行
-  /// 旧接口不下发原图档（保存原图项不展示），逐字段保持一致。
+  /// 其余取显示档、空则回落原图；url 非法 → nil 丢弃）。
   init?(image: TiebaThreadImage, preferences: TiebaPostPreferences) {
     let origin = image.originSrc.isEmpty ? image.src : image.originSrc
     let raw = image.isGif || preferences.dataSaverMode == "origin"
@@ -253,11 +275,12 @@ public struct TiebaPhotoItem: Sendable {
     self.init(
       url: url,
       thumbUrl: TiebaPhotoItem.normalizedURL(thumbRaw),
-      originUrl: nil,
+      originUrl: TiebaPhotoItem.normalizedURL(origin),
       isGif: image.isGif,
       isLong: image.isTall,
       width: image.width,
-      height: image.height
+      height: image.height,
+      canViewOriginal: image.showOriginalBtn
     )
   }
 
@@ -427,7 +450,9 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   let items: [TiebaPhotoItem]
   let initialIndex: Int
   let contextTitle: String?
-
+  /// 手动「查看原图」的页（下标集合）：这些页改用原图档重载，菜单项随之消失
+  ///（旧 JS ImageViewer 的 manualOriginalPages，逐页生效、翻页不回退）。
+  private var manualOriginalPages: Set<Int> = []
   private weak var host: UIViewController?
   private(set) var browser: TiebaPhotoBrowserViewController?
   private let actions = TiebaPhotoBrowserActionController()
@@ -459,11 +484,14 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   private var didFinish = false
 
   /// 长按菜单项 = 旧查看器 VIEWER_IMAGE_ACTIONS（ImageViewer.tsx:74-78）：
-  /// 保存 / 保存原图 / 分享。动作在原生执行（TiebaPhotoBrowserActionController），
-  /// 不再上报 JS；「保存原图」需要 originUrl（缺失时该项不展示，见 TiebaPhotoItem）。
+  /// 保存 / 保存原图 / 分享 / 查看原图（末项逐页追加，见 ImageViewer.tsx:1282-1288）。
+  /// 动作在原生执行（TiebaPhotoBrowserActionController），不再上报 JS；「保存原图」
+  /// 需要 originUrl、「查看原图」需要服务端 showOriginalBtn（缺失时该项不展示，
+  /// 见 TiebaPhotoItem）。
   static let menuActions: [(id: String, title: String, icon: String)] = [
     (id: "save", title: "保存图片", icon: "square.and.arrow.down"),
     (id: "save-original", title: "保存原图", icon: "arrow.down.to.line"),
+    (id: "view-original", title: "查看原图", icon: "photo"),
     (id: "share", title: "分享图片", icon: "square.and.arrow.up"),
   ]
 
@@ -766,6 +794,11 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
       imageCell.onSingleTap = { [weak self] in self?.toggleChrome() }
       imageCell.onMenuAction = { [weak self] action in
         guard let self, self.items.indices.contains(index) else { return }
+        // 「查看原图」是视图状态（逐页切档 + 重载），不是保存/分享那类动作。
+        if action == "view-original" {
+          self.showOriginal(at: index)
+          return
+        }
         self.actions.perform(action: action, item: self.items[index])
       }
       imageCell.onLoadFailed = { [weak self] in self?.actions.showTransientFailure("图片加载失败") }
@@ -784,11 +817,26 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     guard let imageCell = cell as? TiebaPhotoBrowserImageCell,
           items.indices.contains(index) else { return }
     imageCell.configure(
-      item: items[index],
+      item: displayItem(at: index),
       index: index,
       targetPixelSize: downsamplingPixelSize(for: browser),
       containerSize: browser.view.bounds.size
     )
+  }
+
+  /// 该页实际要展示的项：手动「查看原图」的页换成原图档（其余页原样）。切档后
+  /// canViewOriginal 变 false → 菜单里「查看原图」消失（与旧 JS 判据一致）。
+  private func displayItem(at index: Int) -> TiebaPhotoItem {
+    guard manualOriginalPages.contains(index) else { return items[index] }
+    return items[index].showingOriginal()
+  }
+
+  /// 长按「查看原图」：记下该页改用原图档，然后整页重载（JXPhotoBrowser 的
+  /// reloadData 保当前页与循环位置，会重新走 willDisplay → 用原图档配置）。
+  private func showOriginal(at index: Int) {
+    guard items.indices.contains(index), items[index].originUrl != nil,
+          manualOriginalPages.insert(index).inserted else { return }
+    browser?.reloadData()
   }
 
   func photoBrowser(
@@ -1384,6 +1432,8 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
   private var appliedURL: URL?
   /// 当前页是否有原图档（决定长按菜单是否展示「保存原图」）。
   private var hasOrigin = false
+  /// 当前页是否可切看原图（服务端 showOriginalBtn 且有独立原图档，且不在展示原图）。
+  private var hasViewOriginal = false
   private var wantsLongFit = false
   private var longFitApplied = false
   private var isApplyingLongFit = false
@@ -1422,6 +1472,7 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     retryCount = 0
     fullImageReady = false
     hasOrigin = false
+    hasViewOriginal = false
     wantsLongFit = false
     longFitApplied = false
     spinner.stopAnimating()
@@ -1433,6 +1484,7 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     guard appliedURL != item.url else { return }
     appliedURL = item.url
     hasOrigin = item.originUrl != nil
+    hasViewOriginal = item.canViewOriginal && item.originUrl != nil
     generation += 1
     let generation = self.generation
     retryCount = 0
@@ -1579,10 +1631,18 @@ extension TiebaPhotoBrowserImageCell: UIContextMenuInteractionDelegate {
     configurationForMenuAtLocation location: CGPoint
   ) -> UIContextMenuConfiguration? {
     UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
-      // 原图档缺失时不展示「保存原图」（对齐旧 JS showOriginalBtn）。
-      let showsOriginal = self?.hasOrigin ?? false
+      // 原图档缺失时不展示「保存原图」；「查看原图」还要服务端 showOriginalBtn
+      // 且该页当前没在展示原图（已在展示时切档会把该项摘掉，对齐旧 JS）。
+      let showsOrigin = self?.hasOrigin ?? false
+      let showsViewOriginal = self?.hasViewOriginal ?? false
       let children = TiebaPhotoBrowserSession.menuActions
-        .filter { $0.id != "save-original" || showsOriginal }
+        .filter { spec in
+          switch spec.id {
+          case "save-original": return showsOrigin
+          case "view-original": return showsViewOriginal
+          default: return true
+          }
+        }
         .map { spec in
           UIAction(title: spec.title, image: UIImage(systemName: spec.icon)) { [weak self] _ in
             self?.onMenuAction?(spec.id)

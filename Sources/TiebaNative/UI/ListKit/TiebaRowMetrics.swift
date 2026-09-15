@@ -35,6 +35,9 @@ public nonisolated struct TiebaFeedRowMedia: Sendable {
   public let isGif: Bool
   /// height/width > 2.4（MediaPager.tsx:121 LONG_IMAGE_RATIO，右下角「长图」徽标）。
   public let isLong: Bool
+  /// 服务端「显示查看原图按钮」（show_original_btn）：查看器长按菜单据此出现
+  /// 「查看原图」（GIF 恒为 0，见 TiebaPhotoItem.canViewOriginal）。
+  public let showOriginalBtn: Bool
   public let width: Double
   public let height: Double
 
@@ -201,9 +204,12 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
     let isTop = TiebaRowDict.bool(raw["isTop"]) == true
     let expanded = TiebaRowDict.bool(raw["expanded"]) == true
     let weighted = TiebaFeedRowParser.weightedTextLength(titleText, abstractText)
-    let isCollapsible = TiebaRowDict.bool(raw["collapsible"])
+    // 折叠候选 = JS 判据（显式 collapsible 或字数超阈值）。是否**真**可展开要到
+    // 折叠行数下量出截断才知道：只看字数会让阈值内的短卡也长出「显示更多」，
+    // 点开没有任何被藏起来的文字（用户报的"点了没反应、按钮还消失了"）。
+    let collapseCandidate = TiebaRowDict.bool(raw["collapsible"])
       ?? (weighted > TiebaFeedRowLayout.longTextWeightedChars / max(fontScale, 0.1))
-    let collapsed = isCollapsible && !expanded
+    let collapsed = collapseCandidate && !expanded
     let titleLineLimit = collapsed ? 2 : 0
     let abstractLineLimit = collapsed ? TiebaFeedRowLayout.collapseLines - 2 : 0
 
@@ -229,9 +235,10 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
       ))
       titleAttributed = composed
     }
-    let titleHeight = titleAttributed.map {
-      TiebaRowText.measureHeight($0, width: textWidth, maxLines: titleLineLimit)
+    let titleMeasure = titleAttributed.map {
+      TiebaRowText.measure($0, width: textWidth, maxLines: titleLineLimit)
     }
+    let titleHeight = titleMeasure?.height
 
     var abstractAttributed: NSAttributedString?
     if !abstractText.isEmpty {
@@ -242,11 +249,17 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
         lineHeight: lineHeights.abstract
       )
     }
-    let abstractHeight = abstractAttributed.map {
-      TiebaRowText.measureHeight($0, width: textWidth, maxLines: abstractLineLimit)
+    let abstractMeasure = abstractAttributed.map {
+      TiebaRowText.measure($0, width: textWidth, maxLines: abstractLineLimit)
     }
+    let abstractHeight = abstractMeasure?.height
 
-    let showMoreVisible = collapsed && (titleHeight != nil || abstractHeight != nil)
+    // 只有真被截断才给「显示更多」：按钮存在与否 = 有没有被藏起来的文字。
+    let truncated = (titleMeasure?.truncated ?? false) || (abstractMeasure?.truncated ?? false)
+    // 展开态下量的是全文（不限行）判不出截断，沿用候选值；此时行已展开，
+    // isCollapsible 不参与任何绘制。
+    let isCollapsible = expanded ? collapseCandidate : (collapseCandidate && truncated)
+    let showMoreVisible = collapsed && truncated
     let showMoreText = "显示更多"
     let showMoreHeight: CGFloat? = showMoreVisible ? lineHeights.subhead + 4 : nil
 
@@ -1442,7 +1455,17 @@ public nonisolated final class TiebaRowMetrics: @unchecked Sendable {
 nonisolated enum TiebaRowText {
   /// 调用方保证在测量队列上；maxLines = 0 表示不限行数（NSTextContainer 语义）。
   static func measureHeight(_ attributed: NSAttributedString, width: CGFloat, maxLines: Int) -> CGFloat {
-    guard attributed.length > 0, width > 0 else { return 0 }
+    measure(attributed, width: width, maxLines: maxLines).height
+  }
+
+  /// 高度 + 是否真被 maxLines 截断（同一趟布局里判：截断时可见字形范围盖不到
+  /// 末字形）。折叠判据必须用"真截断"，不能只比字数。
+  static func measure(
+    _ attributed: NSAttributedString,
+    width: CGFloat,
+    maxLines: Int
+  ) -> (height: CGFloat, truncated: Bool) {
+    guard attributed.length > 0, width > 0 else { return (0, false) }
     let storage = NSTextStorage(attributedString: attributed)
     let layoutManager = NSLayoutManager()
     let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
@@ -1452,8 +1475,11 @@ nonisolated enum TiebaRowText {
     storage.addLayoutManager(layoutManager)
     layoutManager.addTextContainer(container)
     layoutManager.ensureLayout(for: container)
+    let visible = layoutManager.glyphRange(for: container)
     // ceil：避免 22.0001 → 22 后 UILabel 最后一行被裁掉半像素。
-    return ceil(layoutManager.usedRect(for: container).height)
+    let height = ceil(layoutManager.usedRect(for: container).height)
+    let truncated = maxLines > 0 && visible.upperBound < layoutManager.numberOfGlyphs
+    return (height, truncated)
   }
 
   /// 单行文本宽（徽章内联定位用；不改行高）。
@@ -1620,6 +1646,9 @@ private nonisolated enum TiebaFeedRowParser {
         originURL: TiebaRowDict.nonEmpty(item["originSrc"]).flatMap(TiebaRowDict.sanitizedURL),
         isGif: TiebaRowDict.bool(item["isGif"]) == true,
         isLong: isLong,
+        // 服务端「显示查看原图按钮」标记（Media.show_original_btn，proto 字段 20；
+        // GIF 恒为 0）。true 且当前未显示原图时查看器菜单才出现「查看原图」。
+        showOriginalBtn: TiebaRowDict.bool(item["showOriginalBtn"]) == true,
         width: resolvedWidth,
         height: resolvedHeight
       ))

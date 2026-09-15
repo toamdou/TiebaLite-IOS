@@ -25,16 +25,6 @@ enum TiebaChrome {
     nonisolated(unsafe) static var darkMode: Bool? = nil
     nonisolated(unsafe) static var scrollHooked = false
 
-    // ── 底栏收纳（2026-09-15）──
-    /// 重扫时捡到的底栏（弱引用）：滚动路径每帧要读它，不能每帧全树遍历。
-    nonisolated(unsafe) static weak var cachedTabBar: UITabBar?
-    /// 底栏展开态基线（窗口尺寸 + 见过的最大栏高）：判定"收纳"必须跟它自己的
-    /// 展开态比——49/83 这类绝对值随机型、横竖屏、iPad 都不同，写死必错。
-    nonisolated(unsafe) static var tabBarWindowSize = CGSize.zero
-    nonisolated(unsafe) static var tabBarExpandedHeight: CGFloat = 0
-    /// 上一次已知的收纳态：只有翻转才动视图树（每次收纳/展开各一次）。
-    nonisolated(unsafe) static var tabBarMinimized = false
-
     // ── 空转治理（2026-09-12 发热审查）──
     // force 每次要做两趟视图树全量遍历：collectChromeBars 扫所有窗口的
     // 整棵树，applyScrollEdgeEffects 再扫顶层页面整棵树。改前 1.5s timer
@@ -78,36 +68,13 @@ enum TiebaChrome {
   /// 标记视图层级已变化：下一次 tick / 事件会做一次全量重扫（幂等、零遍历）。
   static func markChromeDirty() { ChromeState.needsRescan = true }
 
-  /// 底栏登记（TiebaMainTabBarController 挂载时调用）：收纳判定要走滚动路径，
-  /// 每帧都得读到这条栏，不能每帧全树遍历。
-  static func registerTabBar(_ bar: UITabBar) { ChromeState.cachedTabBar = bar }
-
-  /// 底栏收纳态同步（滚动路径调用，O(1) 读；只在翻转时重算滚动边缘效果）。
-  ///
-  /// 系统没有公开"已收纳"状态位（iOS 27 SDK 只有 tabBarMinimizeBehavior 这个
-  /// 策略属性），只能看几何：收纳后的药丸不再贴住屏幕底边，且高度明显小于它
-  /// 自己的展开态——两条任一命中即算收纳。基线随窗口尺寸重学（横屏栏更矮）。
-  static func syncTabBarMinimizedState() {
-    guard Thread.isMainThread, let bar = ChromeState.cachedTabBar,
-      let window = bar.window, window.bounds.height > 0
-    else { return }
-    let size = window.bounds.size
-    let frame = bar.convert(bar.bounds, to: window)
-    if size != ChromeState.tabBarWindowSize {
-      ChromeState.tabBarWindowSize = size
-      ChromeState.tabBarExpandedHeight = frame.height
-    }
-    let baseline = max(ChromeState.tabBarExpandedHeight, frame.height)
-    ChromeState.tabBarExpandedHeight = baseline
-    let minimized = frame.maxY < window.bounds.height - 2 || frame.height < baseline - 6
-    guard minimized != ChromeState.tabBarMinimized else { return }
-    ChromeState.tabBarMinimized = minimized
-    // 翻转才动视图树，且不走 force 的节流：收纳动画一结束，模糊就要跟着走
-    //（等 2s 的 tick 会留下"药丸收起了、底下一块还糊着"的中间态）。
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    _ = applyScrollEdgeEffects(glass: ChromeState.routeEnabled)
-    CATransaction.commit()
+  /// 底边一律不做软模糊（用户 2026-09-14 令：动态页滚动时底栏区域那层模糊要删掉）。
+  /// 底栏本身是悬浮玻璃，内容从它下面穿过就是系统原生观感；再叠一层软边会在底栏
+  /// 区域多出一圈糊，底栏收纳成药丸后更明显（那块地方已经什么都没有了，糊还在）。
+  /// 滚动路径每帧调用（O(1)：已是隐藏态就直接返回），因为系统可能重挂 automatic。
+  static func hideBottomEdgeEffect(_ scroll: UIScrollView) {
+    guard Thread.isMainThread else { return }
+    _ = setEdgeEffect(scroll.bottomEdgeEffect, soft: false)
   }
 
   /// 合并排一次 tick 重扫（2026-09-12 二轮空转治理）：改前每个布局/挂载事件都
@@ -442,10 +409,10 @@ enum TiebaChrome {
   /// 实测）：两层软模糊叠在一起，滑动时栏下内容被糊死。
   /// 幂等：已是目标状态时不写（写会打断进行中的模糊动画）。
   ///
-  /// 底边（2026-09-13 补齐）：整屏竖向列表且底边真的压到屏幕底时同样开 soft——
-  /// 底部玻璃栏要折射的就是这一层，替掉原先三处手绘 110pt 渐变蒙罩
-  ///（TiebaBottomFadeView，已删）。够不到屏幕底的滚动视图（表单等）没有底栏
-  /// 可压，显式关掉。顶/底同一套判据，不引入第二套几何条件。
+  /// 底边（2026-09-14 起不做软模糊）：底栏是悬浮玻璃，内容从它下面穿过就是系统
+  /// 原生观感。原先在底边补的那层 soft 会在底栏区域多出一圈可辨的糊，底栏收纳成
+  /// 药丸后那地方空着、糊还在，用户据此报"底栏区域带模糊"⇒ 底边一律显式关掉
+  ///（hidden=true，不是交给 automatic），滚动路径另见 hideBottomEdgeEffect。
   @discardableResult
   private static func applyScrollEdgeEffects(glass: Bool) -> Bool {
     guard let screen = topScreenView(), screen.bounds.height > 0 else { return false }
@@ -469,10 +436,9 @@ enum TiebaChrome {
       let qualifies = visible && frameInScreen.height > 80 && (touchesTop || reachesBottom)
       guard qualifies else { return }
       if setEdgeEffect(scroll.topEdgeEffect, soft: glass && isList && touchesTop) { changed = true }
-      // 底边：底栏收纳（滚到下方时收成悬浮药丸）后它下面那层模糊要跟着收掉，
-      // 否则药丸走了、模糊还在（用户 2026-09-15 报的"底栏区域仍然变模糊"）。
-      let bottomBlur = isList && reachesBottom && !ChromeState.tabBarMinimized
-      if setEdgeEffect(scroll.bottomEdgeEffect, soft: bottomBlur) { changed = true }
+      // 底边不做软模糊（见 hideBottomEdgeEffect）：显式关掉，否则系统会按
+      // automatic 解析（iOS 27 上是 hard 硬边），底栏区域就会多出一层可辨的糊。
+      if setEdgeEffect(scroll.bottomEdgeEffect, soft: false) { changed = true }
     }
     screen.forEachSubviewRecursively { view in
       if let scroll = view as? UIScrollView { configure(scroll) }

@@ -109,7 +109,8 @@ enum TiebaFeedRowInteraction {
           isGif: entry.isGif,
           isLong: entry.isLong,
           width: entry.width,
-          height: entry.height
+          height: entry.height,
+          canViewOriginal: entry.showOriginalBtn
         )
       )
     }
