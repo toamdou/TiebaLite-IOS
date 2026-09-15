@@ -76,27 +76,24 @@ final class TiebaSignService {
     for observer in progressObservers.values { observer() }
   }
 
-  /// 一次进度刷新：页内观察者 + 当前展示位（灵动岛 / 通知栏横幅）一起推。
-  /// 展示位原来只在开始与结束各写一次，中途完全不动（用户："没有实时同步进度"）。
+  /// 一次进度刷新：页内观察者 + 灵动岛一起推。展示位原来只在开始与结束各写一次，
+  /// 中途完全不动（用户："没有实时同步进度"）。
+  /// ⚠️ 只推灵动岛：通知栏那条进度横幅（原 signDisplayMode=notification）实测永远停在
+  /// 0/N（投递后无人更新），用户在通知中心看到一条卡死 0 的通知，已整体删除。
   private func publishProgress(
     activityId: String?,
-    banner: Bool,
     total: Int,
-    silent: Bool,
     success: Int,
     fail: Int,
     exp: Int,
     name: String
   ) {
     notifyProgress()
+    guard let activityId else { return }
     let done = success + fail
-    if banner {
-      Notifications.setProgress(done: done, total: total, silent: silent)
-    } else if let activityId {
-      updateActivity(
-        activityId, done: done, total: total, name: name, success: success, fail: fail, exp: exp
-      )
-    }
+    updateActivity(
+      activityId, done: done, total: total, name: name, success: success, fail: fail, exp: exp
+    )
   }
 
   private let alreadySignedCode = 1101
@@ -122,20 +119,9 @@ final class TiebaSignService {
     notifyProgress()
     onStateChange?()
 
-    let silent = TiebaPreferenceSnapshot.bool("signSilent", default: false)
-    let bannerMode = TiebaPreferenceSnapshot.string("signDisplayMode") == "notification"
-    let islandMode = !bannerMode
-      && TiebaPreferenceSnapshot.bool("liveActivitySignEnabled", default: true)
+    // 展示位只有灵动岛（liveActivitySignEnabled 关掉就后台静默完成）。
+    let islandMode = TiebaPreferenceSnapshot.bool("liveActivitySignEnabled", default: true)
     var activityId: String? = islandMode ? startActivity(total: 0) : nil
-    if bannerMode {
-      // 切到通知栏：顺手结束在场的签到灵动岛（上次中途退出/换过展示位留下的）。
-      // 否则通知中心里「实时活动 + 通知」两条并存（用户实证，设置里选了只显示一个）。
-      Task { @MainActor in await TiebaLiveActivityManager.shared.endAllInterrupted() }
-      Notifications.setProgress(done: 0, total: 0, silent: silent)
-    } else if islandMode {
-      // 灵动岛模式：撤掉可能残留的进度通知（后台自动签到投的）。
-      Notifications.cancelProgress()
-    }
 
     Task { @MainActor in
       var success = 0
@@ -146,14 +132,13 @@ final class TiebaSignService {
         let forums = try await TiebaFollowedForums.fetchAll(force: true)
         let targets = forums.filter { !$0.isSign }
         guard !targets.isEmpty else {
-          finishDisplay(activityId: activityId, banner: bannerMode, success: 0, fail: 0, exp: 0)
+          finishDisplay(activityId: activityId, success: 0, fail: 0, exp: 0)
           isSigning = false
           onStateChange?()
           TiebaSceneHaptics.fire("action-success")
           Self.toast("今天所有关注的吧都已签到过了", on: presenter)
           return
         }
-        Notifications.setProgress(done: 0, total: targets.count, silent: silent)
         updateActivity(activityId, done: 0, total: targets.count, name: "", success: 0, fail: 0, exp: 0)
         progressItems = targets.map { ProgressItem(forumId: $0.forumId, forumName: $0.forumName) }
         notifyProgress()
@@ -175,7 +160,7 @@ final class TiebaSignService {
               }
             }
             publishProgress(
-              activityId: activityId, banner: bannerMode, total: targets.count, silent: silent,
+              activityId: activityId, total: targets.count,
               success: success, fail: fail, exp: exp, name: chunk.first?.forumName ?? ""
             )
             let outcomes = try await signBatch(chunk)
@@ -193,7 +178,7 @@ final class TiebaSignService {
             progressExp = exp
             progressDone = success + fail
             publishProgress(
-              activityId: activityId, banner: bannerMode, total: targets.count, silent: silent,
+              activityId: activityId, total: targets.count,
               success: success, fail: fail, exp: exp, name: chunk.last?.forumName ?? ""
             )
             offset += chunkSize
@@ -207,7 +192,7 @@ final class TiebaSignService {
           if let itemIndex = progressItems.firstIndex(where: { $0.forumId == forum.forumId }) {
             progressItems[itemIndex].status = "signing"
             publishProgress(
-              activityId: activityId, banner: bannerMode, total: targets.count, silent: silent,
+              activityId: activityId, total: targets.count,
               success: success, fail: fail, exp: exp, name: forum.forumName
             )
           }
@@ -228,7 +213,7 @@ final class TiebaSignService {
           progressExp = exp
           progressDone = success + fail
           publishProgress(
-            activityId: activityId, banner: bannerMode, total: targets.count, silent: silent,
+            activityId: activityId, total: targets.count,
             success: success, fail: fail, exp: exp, name: forum.forumName
           )
           if failAutoStop, !(result?.signed ?? false), fail > 0 { break }
@@ -239,7 +224,7 @@ final class TiebaSignService {
           }
         }
         TiebaFollowedForums.markSigned(signedIds)
-        finishDisplay(activityId: activityId, banner: bannerMode, success: success, fail: fail, exp: exp)
+        finishDisplay(activityId: activityId, success: success, fail: fail, exp: exp)
         activityId = nil
         isSigning = false
         onStateChange?()
@@ -262,7 +247,7 @@ final class TiebaSignService {
         onFinished?()
       } catch {
         lastError = error.localizedDescription
-        finishDisplay(activityId: activityId, banner: bannerMode, success: success, fail: fail, exp: exp)
+        finishDisplay(activityId: activityId, success: success, fail: fail, exp: exp)
         activityId = nil
         isSigning = false
         onStateChange?()
@@ -327,11 +312,7 @@ final class TiebaSignService {
     Task { await TiebaLiveActivityManager.shared.update(activityId: id, state: LiveActivityKitAttributes.ContentState(raw: state)) }
   }
 
-  private func finishDisplay(activityId: String?, banner: Bool, success: Int, fail: Int, exp: Int) {
-    if banner {
-      Notifications.cancelProgress()
-      return
-    }
+  private func finishDisplay(activityId: String?, success: Int, fail: Int, exp: Int) {
     guard let activityId else { return }
     let done = success + fail
     let state = activityState(
@@ -378,26 +359,6 @@ final class TiebaSignService {
   }
 
   // MARK: - 工具
-
-  private enum Notifications {
-    static let progressId = "sign-progress"
-
-    /// 进度横幅：同一 id 覆盖式投递（deliver 内部 add 同 id 即替换）。
-    static func setProgress(done: Int, total: Int, silent: Bool) {
-      TiebaNotificationCenter.shared.deliver(
-        identifier: progressId,
-        title: "正在签到",
-        body: "\(done) / \(total) 个吧",
-        badge: 0,
-        interruptionLevel: silent ? .passive : .active,
-        dataType: "sign_progress"
-      )
-    }
-
-    static func cancelProgress() {
-      TiebaNotificationCenter.shared.cancel(identifier: progressId)
-    }
-  }
 
   private static func toast(_ text: String, on presenter: UIViewController) {
     let pill = TiebaSignToastView()

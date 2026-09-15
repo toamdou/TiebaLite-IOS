@@ -47,8 +47,6 @@ final class TiebaOKSignViewController: UIViewController {
       ?? TiebaThemePalette.accent(themeName: "default", customPrimary: nil, isDark: dark)
     let loggedIn = TiebaUserAPI.isLoggedIn
     let isSigning = service.isSigning
-    let displayMode = TiebaPreferences.string(
-      "signDisplayMode", allowed: ["liveActivity", "notification"], default: "liveActivity")
     let autoSign = TiebaPreferences.bool("autoSign", default: false)
     let autoSignTime = TiebaPreferences.string("autoSignTime", default: "08:00")
 
@@ -122,31 +120,20 @@ final class TiebaOKSignViewController: UIViewController {
       ])
     }
 
-    var displayRows: [[String: Any]] = [
+    // 展示位只有灵动岛：通知栏那条进度横幅实测永远停在 0/N（投递后无人更新），
+    // 已连同 signDisplayMode 偏好一起删除（用户 2026-09-15 报）。
+    let displayRows: [[String: Any]] = [
       [
-        "id": "signDisplayMode", "kind": "picker", "title": "签到进度显示位置",
-        "value": displayMode,
-        "options": [
-          ["value": "liveActivity", "label": "灵动岛"], ["value": "notification", "label": "通知栏"],
-        ],
-      ],
-      [
-        "id": "displayModeHint", "kind": "text", "textStyle": "caption",
-        "color": "secondaryLabel", "title": "选择在灵动岛还是通知栏显示签到进度",
-      ],
-    ]
-    if displayMode == "liveActivity" {
-      displayRows.append([
         "id": "liveActivitySignEnabled", "kind": "toggle", "title": "灵动岛实时进度",
         "subtitle": "关闭后签到进度不再显示在灵动岛，后台静默完成",
         "value": TiebaPreferences.bool("liveActivitySignEnabled", default: true) ? "1" : "0",
-      ])
-    }
-    displayRows.append([
-      "id": "signSilent", "kind": "toggle", "title": "静默显示",
-      "subtitle": "签到完成通知不发声，横幅照常显示",
-      "value": TiebaPreferences.bool("signSilent", default: false) ? "1" : "0",
-    ])
+      ],
+      [
+        "id": "signSilent", "kind": "toggle", "title": "静默显示",
+        "subtitle": "后台自动签到的完成通知不发声，横幅照常显示",
+        "value": TiebaPreferences.bool("signSilent", default: false) ? "1" : "0",
+      ],
+    ]
     sections.append(["title": "进度显示", "rows": displayRows])
 
     var autoRows: [[String: Any]] = [
@@ -285,12 +272,6 @@ final class TiebaOKSignViewController: UIViewController {
 
   private func handlePick(_ id: String, _ value: String) {
     switch id {
-    case "signDisplayMode":
-      TiebaSceneHaptics.fire("toggle")
-      let mode = value == "notification" ? "notification" : "liveActivity"
-      TiebaPreferences.set("signDisplayMode", string: mode)
-      if mode == "notification" { recoverStaleSignActivities() }
-      reload()
     case "autoSignTime":
       let previous = TiebaPreferences.string("autoSignTime", default: "08:00")
       TiebaPreferences.set("autoSignTime", string: value)
