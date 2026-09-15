@@ -124,21 +124,41 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
     _ tabBarController: UITabBarController,
     shouldSelect viewController: UIViewController
   ) -> Bool {
-    let tapped = viewControllers?.firstIndex(of: viewController) ?? -1
-    guard tapped >= 0 else { return true }
-    if tapped == selectedIndex {
+    handleTabSelection(viewControllers?.firstIndex(of: viewController) ?? -1)
+    return true
+  }
+
+  /// iOS 18 起 UIKit 有两套「将要选中」回调：viewController 版与 UITab 版。
+  /// 系统在真机上到底调哪一套（甚至是否两套都调）随版本与栏的配置方式而变，
+  /// 只实现一套就可能一次都收不到 —— 「底栏点了没振动」的根因就在这（2026-09-15
+  /// 用户复报）。两套都接、落到同一个处理函数，用 50ms 去重保证不双发。
+  public func tabBarController(
+    _ tabBarController: UITabBarController,
+    shouldSelectTab tab: UITab
+  ) -> Bool {
+    handleTabSelection(tab.viewController.flatMap { viewControllers?.firstIndex(of: $0) } ?? -1)
+    return true
+  }
+
+  /// 底栏一次选中的全部动作（触觉 + 重按回调）。dedupWindow 内同一 tab 只处理一次：
+  /// 两套 UIKit 回调可能在同一次点击里各来一发。
+  private func handleTabSelection(_ index: Int) {
+    guard index >= 0 else { return }
+    let now = ProcessInfo.processInfo.systemUptime
+    let state = TiebaChrome.HapticsState.self
+    if index == state.lastTabIndex, now - state.lastTabAt < 0.05 { return }
+    state.lastTabIndex = index
+    state.lastTabAt = now
+    if index == selectedIndex {
       // 重按已选中 tab（回顶/刷新由各 tab 根屏的 tabReselected 受理），档位
-      // 对齐原 JS handleTabReselect 的 'press'。触觉只在这里发：didSelect 对
-      // 同一 tab 也会回调一次，放那边会重复。
+      // 对齐原 JS handleTabReselect 的 'press'。
       TiebaSceneHaptics.fire("press")
-      onReselect?(tapped)
+      onReselect?(index)
     } else {
-      // 换 tab：档位对齐原 JS 底栏按钮的 'segment'（RN 在 onPress 时机发，
-      // 即抬手，本回调同刻）。程序化 selectedIndex 赋值不触发本回调，深链
-      // 切 tab 不会误振。
+      // 换 tab：档位对齐原 JS 底栏按钮的 'segment'。程序化 selectedIndex 赋值
+      // 不触发本回调，深链切 tab 不会误振。
       TiebaSceneHaptics.fire("segment")
     }
-    return true
   }
 
   /// 在视图树里找"主滚动视图"，返回面积最大的那个。

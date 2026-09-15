@@ -15,6 +15,10 @@ extension TiebaChrome {
     /// 同控件去重：pop 转场期间 UIKit 会重放一次按压，连按也从两次降至一次。
     nonisolated(unsafe) static var lastChromeControl: UIControl?
     nonisolated(unsafe) static var lastChromeAt: TimeInterval = 0
+    /// 底栏选中的去重（viewController 版与 UITab 版回调可能各来一发，见
+    /// TiebaNavigationShell.handleTabSelection）。
+    nonisolated(unsafe) static var lastTabIndex = -1
+    nonisolated(unsafe) static var lastTabAt: TimeInterval = 0
   }
 
   /// 触觉总开关转发（启动与设置页的写入点）：真相源在 TiebaHaptics 引擎层

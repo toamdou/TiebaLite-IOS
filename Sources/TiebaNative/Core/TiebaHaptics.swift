@@ -401,6 +401,13 @@ enum TiebaHaptics {
         TiebaHaptics.rebuildEngine()
       }
     }
+    // 引擎被停机（音频打断/系统回收）时也重建：只挂 resetHandler 的话，
+    // 停机后播放器 start 会静默失败，此后所有触觉一直哑到下次前后台。
+    engine.stoppedHandler = { _ in
+      DispatchQueue.main.async {
+        TiebaHaptics.rebuildEngine()
+      }
+    }
     do {
       try engine.start()
     } catch {
