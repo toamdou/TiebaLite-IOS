@@ -153,17 +153,6 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     return item
   }
 
-  /// 顶栏滚动边缘模糊的路由门控（原 JS 侧按 pathname 判定后调
-  /// setNavBarGlassEnabled）。主 tab 页的开：关注/动态/消息/我的的"顶栏"是
-  /// RN 自绘的搜索行与页签，原生栏在它们上面是透明空壳，内容滚到那一段被
-  /// 模糊没有意义，且会糊住自绘行。规则：不在主 tab 即开——新页面默认拿到
-  /// 统一观感（与 JS 侧原实现的"黑名单"语义一致）。
-  private func syncNavBarGlass() {
-    let top = rootNav?.topViewController
-    let isMainTab = (top is TiebaMainTabBarController)
-    TiebaChrome.setNavBarRouteEnabled(!isMainTab)
-  }
-
   // MARK: - 指令
 
   /// 路由入口（类型化）。深链先经 TiebaRouteTable.parse 产出同一个类型，再走这里；
@@ -248,7 +237,6 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       // that happen inside the window"）。
       presenter.present(presentable, animated: true)
     }
-    syncNavBarGlass()
   }
 
   /// 返回上一屏（栈深 > 1）。返回 false = 已在栈底（调用方决定是否切 tab）。
@@ -540,7 +528,6 @@ extension TiebaNavigator: UINavigationControllerDelegate {
       wantHidden = false
     }
     navigationController.setNavigationBarHidden(wantHidden, animated: false)
-    syncNavBarGlass()
   }
 
   public func navigationController(
@@ -550,11 +537,9 @@ extension TiebaNavigator: UINavigationControllerDelegate {
   ) {
     // 滚动视图的跟踪关联由各宿主 VC 自己在 viewDidLayoutSubviews 里做
     // （setContentScrollView 是子 VC 的职责，容器没有替它设的 API）。
-    syncNavBarGlass()
     // 转场完成即重扫（原来监听未公开的 UINavigationControllerDidShowNotification，
     // 2026-09-13 改为走这个公开回调）：push/pop 动画期间 RunLoop 处于 tracking
     // 模式，动画结束后新 bar 已建成但还没被处理（"进帖子页无效果"的 timing 缺口）。
-    // syncNavBarGlass 刚写过路由门控，这里紧接着按新路由重挂边缘效果。
     _ = TiebaChrome.forceNavBarLiquidGlass()
   }
 }
