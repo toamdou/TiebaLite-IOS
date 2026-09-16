@@ -665,6 +665,12 @@ public final class TiebaKindListContentView: UIView {
 
   private let prefetcher = TiebaNuke.makePrefetcher()
 
+  /// 甩动闸门：高速滑动期间不启动预取（见 prefetchItemsAt）。
+  private var isFlinging = false
+  /// 判定"甩起来了"的竖直速度阈值（pt/s）。取高值：正常拖动/慢滑不受影响，
+  /// 只有真甩动（每秒掠过好几行）才闸。
+  private static let flingVelocityThreshold: CGFloat = 2500
+
   // MARK: 子视图
 
   private lazy var collectionView: UICollectionView = {
@@ -1462,12 +1468,48 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
     // 区间只可能在那些时刻变化；滚动回调里再扫一遍等于每帧一次
     // indexPathsForVisibleItems（数组分配 + 逐个 IndexPath），而绝大多数帧的区间
     // 与上一帧相同 ⇒ 纯浪费（120Hz 下每秒 120 次）。
+    updateFlingGate(scrollView)
     updateReachEnd()
     onScroll?(scrollView)
   }
 
+  public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+    if !decelerate { setFlinging(false) }
+  }
+
+  public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+    setFlinging(false)
+  }
+
+  /// 甩动判定：拖拽/惯性中且竖直速度过阈值。速度掉回阈值以下（用户慢下来了）
+  /// 或滚动结束就放闸——放闸那一拍补一次可见窗口的预取，把闸住的那几行补上。
+  private func updateFlingGate(_ scrollView: UIScrollView) {
+    let moving = scrollView.isDragging || scrollView.isDecelerating
+    let fast = abs(scrollView.panGestureRecognizer.velocity(in: scrollView).y)
+      > Self.flingVelocityThreshold
+    setFlinging(moving && fast)
+  }
+
+  private func setFlinging(_ value: Bool) {
+    guard value != isFlinging else { return }
+    isFlinging = value
+    guard !value else { return }
+    prefetchVisibleWindow()
+  }
+
+  /// 放闸后补预取：只取当前可见窗口（预取窗口由 UIKit 在后续滚动中自然补齐）。
+  private func prefetchVisibleWindow() {
+    guard !pageKey.isEmpty, window != nil else { return }
+    let paths = collectionView.indexPathsForVisibleItems
+    guard !paths.isEmpty else { return }
+    let requests = prefetchRequests(for: paths)
+    guard !requests.isEmpty else { return }
+    prefetcher.startPrefetching(with: requests)
+  }
+
   /// 程序化滚动落位（setContentOffset(animated:)/scrollToTop 的完成回调）。
   public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+    setFlinging(false)
     onScrollAnimationEnd?()
   }
 
@@ -1522,6 +1564,11 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
 
 extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
   public func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
+    // 甩动期间不预取：预取会给"马上就被划走"的行启动完整取图管线（建任务 + 读缓存
+    // + 解码 + 缩放 + 写回内存缓存），主线程上落一份、后台又与滚动抢 CPU/带宽——
+    // 掉一帧的感觉就是这么来的。停下来那一拍再补（见 setFlinging(false) 的
+    // prefetchVisibleWindow）。慢滑/拖动不受影响。
+    guard !isFlinging else { return }
     let requests = prefetchRequests(for: indexPaths)
     guard !requests.isEmpty else { return }
     prefetcher.startPrefetching(with: requests)
