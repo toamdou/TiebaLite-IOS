@@ -171,7 +171,7 @@ enum TiebaChrome {
   // 历史（勿再回头）：v3–v33 曾在渲染层直接操作 _UIBarBackground 里的
   // UIVisualEffectView（设 systemMaterial/ultraThin + 渐变 mask）自建磨砂——
   // iOS 27 上栏底材质会被 UIKit 按 appearance 重建（双图层感/矩形磨砂），
-  // v34 起全部撤除，模糊改由系统的滚动边缘效果承担（softStyle）。
+  // v34 起全部撤除；2026-09-16 定案为自建 UIGlassEffect 玻璃层（见 applyNavGlassLayer）。
   static let navChromeHooks: Void = {
     let nc = NotificationCenter.default
     nc.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
@@ -330,9 +330,9 @@ enum TiebaChrome {
   //
   // 定案（2026-09-16）：顶栏玻璃 = **UIGlassEffect**（iOS 26 的玻璃接口，仓库既有配方，
   // 见 applyNavGlassLayer），栏自身 appearance 置透明，玻璃只由这一个提供者画。
-  // 此外本文件对栏只做：装手势（双击回顶、栏内按压触觉）、顶边滚动边缘效果设成系统的
-  // soft 样式、底边边缘效果关掉。**不手写材质、不挂渐变 mask**（UIBlurEffect + mask 那版
-  // 用户评价"非常拉跨、栏底一条亮边"）。
+  // 此外本文件对栏只做：装手势（双击回顶、栏内按压触觉）、底边滚动边缘效果关掉。
+  // 顶边滚动边缘效果**不写**——它渲出来的那一层被玻璃层盖住，只会白花每帧的 GPU。
+  // **不手写材质、不挂渐变 mask**（UIBlurEffect + mask 那版用户评价"非常拉跨、栏底一条亮边"）。
   // ── 顶栏液态玻璃（iOS 26 的 UIGlassEffect，仓库既有配方）──
   // 这一版不再手写任何材质：玻璃本体就是 `UIGlassEffect`（= iOS 26 的玻璃接口，
   // 查看器顶栏 / 帖子页悬浮胶囊用的是同一份配方，见 TiebaPhotoBrowser 与
@@ -454,42 +454,6 @@ enum TiebaChrome {
     return vc.view
   }
 
-  /// 顶边：用系统的 **soft** 样式（`UIScrollEdgeEffect.Style.soft` = "A soft-edged
-  /// scroll edge effect"，iOS 26 的"无边界"形态；`.hard` = "hard cutoff and dividing
-  /// line" = 硬切边 + 分隔线）。这是 UIKit 自带的接口，不是自绘。
-  ///
-  /// **断言式**（要的就是"可见 + soft"，hidden 也一并纠正）：写边缘效果会让 UIKit
-  /// 重建该滚动视图的效果容器，而重建会把**另一条边**复位成系统默认——这就是"底栏
-  /// 模糊一写、顶栏那层就没了"的真根因（2026-09-14 ff379b1 实测过一次）。所以本函数
-  /// 每轮重扫都跑，且必须排在底边写入**之后**；恢复默认不是终态、下一轮就会被纠回来。
-  ///
-  /// 只给"整屏竖向列表"写：横向分页器、行内横滑条的顶边也在栏下、又盖在列表之上，
-  /// 给它们也开 soft 就是两层软模糊叠在一起，滑动时栏下内容被糊死（2026-09-11 实测）。
-  @discardableResult
-  private static func applyTopScrollEdgeStyle() -> Bool {
-    guard let screen = topScreenView(), screen.bounds.height > 0 else { return false }
-    var changed = false
-    screen.forEachSubviewRecursively { view in
-      guard let scroll = view as? UIScrollView, !scroll.isHidden, scroll.alpha > 0.01 else { return }
-      let frame = scroll.convert(scroll.bounds, to: screen)
-      // 贴着屏幕顶 + 整屏高的竖向列表，才是栏下真正滚动的那一个；横向可见性
-      // 也要判（分页器并排放着各段页面，屏幕外的列表不算栏的滚动源）。
-      guard frame.minY <= 1, frame.height > screen.bounds.height * 0.4 else { return }
-      guard scroll.contentSize.width <= scroll.bounds.width + 1, !scroll.isPagingEnabled else { return }
-      guard frame.minX >= -1, frame.maxX <= screen.bounds.width + 1 else { return }
-      let effect = scroll.topEdgeEffect
-      if effect.isHidden {
-        effect.isHidden = false
-        changed = true
-      }
-      if effect.style !== UIScrollEdgeEffect.Style.soft {
-        effect.style = .soft
-        changed = true
-      }
-    }
-    return changed
-  }
-
   /// 底边边缘效果一律显式关掉（用户 2026-09-14 报"底栏区域带模糊"要删；底栏是
   /// 悬浮药丸玻璃，内容从它下面穿过就是系统原生观感）。
   ///
@@ -498,8 +462,9 @@ enum TiebaChrome {
   /// 下一轮也会被纠回来（自愈），而稳态下（已 hidden）一次都不写——写边缘效果会走
   /// NSISEngine，每轮都写就是周期性触发布局引擎操作。
   ///
-  /// ⚠️ 本函数必须在 applyTopScrollEdgeStyle **之前**调用：底边写入会把顶边复位成
-  /// 系统默认，顶边那轮写在后面才收得住（见 applyTopScrollEdgeStyle 头注）。
+  /// ⚠️ 写它会连带把另一条边（顶边）复位成系统默认——顶边我们不写了（自动态即
+  /// 目标态），所以这个副作用无害；但**不要**再回头去"重申顶边"，那等于给每个滚动
+  /// 视图每帧多渲一层被玻璃层盖住的模糊。
   @discardableResult
   private static func hideBottomScrollEdgeEffects() -> Bool {
     guard let screen = topScreenView(), screen.bounds.height > 0 else { return false }
@@ -598,20 +563,11 @@ enum TiebaChrome {
     }
     // 底栏不装按压手势：底栏项的视图层级不是公开的 UIControl 保证（栏内 hitTest
     // 找不到 UIControl ⇒ 手势永远不发触觉）；底栏触觉走 UITabBarControllerDelegate。
-    // 顺序要紧：先底边、后顶边。写任一条边的效果都会让 UIKit 重建该滚动视图的效果
-    // 容器、把另一条边复位成系统默认——底边写完再写顶边，收尾的就是顶边（用户报的
-    //"顶栏又变成完全透明"就是这个复位）。底边这轮真写过了，再补排一拍重申顶边：
-    // 复位发生在本趟之后时，只有下一趟才收得回来。
-    var bottomWritten = false
+    // 只关底边（用户明确不要那块糊）。**顶边一个字节都不写**：顶栏模糊由自建玻璃层
+    // 独家提供（见 applyNavGlassLayer），再给滚动视图开一层 soft 等于每帧多渲一层
+    // 模糊、而那一层正好被玻璃层盖住——纯浪费；不写，系统的 automatic 自己决定。
     if hideBottomScrollEdgeEffects() {
       applied = true
-      bottomWritten = true
-    }
-    if applyTopScrollEdgeStyle() {
-      applied = true
-    }
-    if bottomWritten {
-      DispatchQueue.main.async { _ = TiebaChrome.forceNavBarLiquidGlass() }
     }
     CATransaction.commit()
     // Fabric 的 JS 线程会在任意时刻 flush CA transaction：若导航栏仍带 dirty
