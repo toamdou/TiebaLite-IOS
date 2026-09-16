@@ -70,12 +70,16 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
   public let avatarURL: URL?
   public let avatarInitial: String
   public let displayName: String
-  /// 「@原始用户名」（设置 showBothUsername 开启且与显示名不同时才有）。
-  public let handleText: String?
   /// 「发帖于 3小时前」/「回复于 …」（JS 可用 timeText 键预解析；否则原生算）。
+  /// （「@原始用户名」不再单列：它与时间合成 metaAttributed，见下。）
   public let timeText: String?
   /// 「IP属地：xx」（设置 showIpLocation 默认开）。
   public let ipText: String?
+  /// 名字行尾部的元信息 =「@昵称 + 时间」合成**一个** attributed（两段同为 15pt
+  /// regular）：合成后每张卡少一个 label、少一次文本布局。两段之间的 4pt 空隙烘进
+  /// 前一段最后一个字符的 kern（= RN nameRow 的 gap），所以位置与"两个 label 各占
+  /// 一段"逐像素一致；单行尾部截断。
+  public let metaAttributed: NSAttributedString?
 
   // ── 正文（TweetCard.tsx:407-450）──
   public let titleText: String
@@ -253,6 +257,38 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
       TiebaRowText.measure($0, width: textWidth, maxLines: abstractLineLimit)
     }
     let abstractHeight = abstractMeasure?.height
+
+    // 名字行尾部元信息：@昵称 + 时间 合成一个 attributed（见 metaAttributed 注释）。
+    var metaAttributed: NSAttributedString?
+    if handleText != nil || timeText != nil {
+      let composed = NSMutableAttributedString()
+      if let handleText {
+        composed.append(TiebaFeedRowLayout.makeAttributed(
+          text: handleText,
+          font: fonts.handle,
+          color: .secondaryLabel,
+          lineHeight: lineHeights.subhead
+        ))
+        if timeText != nil, composed.length > 0 {
+          // 空隙烘进前一段的最后一个字符（kern 加在字符之后）⇒ 合成串的排版宽度
+          // = handleWidth + headerTextGap + timeWidth，与原来两段各排一次完全相等。
+          composed.addAttribute(
+            .kern,
+            value: TiebaFeedRowLayout.headerTextGap,
+            range: NSRange(location: composed.length - 1, length: 1)
+          )
+        }
+      }
+      if let timeText {
+        composed.append(TiebaFeedRowLayout.makeAttributed(
+          text: timeText,
+          font: fonts.time,
+          color: .secondaryLabel,
+          lineHeight: lineHeights.subhead
+        ))
+      }
+      metaAttributed = composed
+    }
 
     // 只有真被截断才给「显示更多」：按钮存在与否 = 有没有被藏起来的文字。
     let truncated = (titleMeasure?.truncated ?? false) || (abstractMeasure?.truncated ?? false)
@@ -475,9 +511,9 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
     self.avatarURL = avatarURL
     self.avatarInitial = avatarInitial
     self.displayName = displayName
-    self.handleText = handleText
     self.timeText = timeText
     self.ipText = ipText
+    self.metaAttributed = metaAttributed
     self.titleText = titleText
     self.titlePrefix = isGood ? "精品 " : nil
     self.abstractText = abstractText
@@ -576,8 +612,8 @@ nonisolated struct TiebaFeedRowLayoutPlan {
   let cardFrame: CGRect
   let avatarFrame: CGRect?
   let displayNameFrame: CGRect?
-  let handleFrame: CGRect?
-  let timeFrame: CGRect?
+  /// 名字行尾部元信息（@昵称 + 时间）的矩形——一个 label（见 metaAttributed）。
+  let metaFrame: CGRect?
   let ipFrame: CGRect?
   let titleFrame: CGRect?
   let abstractFrame: CGRect?
@@ -848,8 +884,7 @@ nonisolated enum TiebaFeedRowLayout {
         cardFrame: frame,
         avatarFrame: nil,
         displayNameFrame: nil,
-        handleFrame: nil,
-        timeFrame: nil,
+        metaFrame: nil,
         ipFrame: nil,
         titleFrame: nil,
         abstractFrame: nil,
@@ -904,18 +939,16 @@ nonisolated enum TiebaFeedRowLayout {
     // nameCol 宽一致）；handle/time 依次排在 displayName 之后、超宽即截断。
     let nameRowRight = contentX + availableNameWidth
     var nameCursor = displayNameFrame.maxX
-    var handleFrame: CGRect?
-    if let handleWidth = blocks.handleWidth {
+    // 元信息（@昵称 + 时间）是**一个** label：宽度 = 两段自然宽 + 段间 4pt（段间空隙
+    // 由模型侧烘进 kern，见 metaAttributed）。只有一段时不含段间空隙。
+    var metaFrame: CGRect?
+    let handleWidth = blocks.handleWidth ?? 0
+    let timeWidth = blocks.timeWidth ?? 0
+    if blocks.handleWidth != nil || blocks.timeWidth != nil {
       let x = nameCursor + headerTextGap
-      let width = max(min(handleWidth, nameRowRight - x), 0)
-      handleFrame = CGRect(x: x, y: nameTop, width: width, height: nameRowHeight)
-      nameCursor = x + width
-    }
-    var timeFrame: CGRect?
-    if let timeWidth = blocks.timeWidth {
-      let x = nameCursor + headerTextGap
-      let width = max(min(timeWidth, nameRowRight - x), 0)
-      timeFrame = CGRect(x: x, y: nameTop, width: width, height: nameRowHeight)
+      let gapBetween = (blocks.handleWidth != nil && blocks.timeWidth != nil) ? headerTextGap : 0
+      let width = max(min(handleWidth + gapBetween + timeWidth, nameRowRight - x), 0)
+      metaFrame = CGRect(x: x, y: nameTop, width: width, height: nameRowHeight)
       nameCursor = x + width
     }
     var ipFrame: CGRect?
@@ -1089,8 +1122,7 @@ nonisolated enum TiebaFeedRowLayout {
       cardFrame: CGRect(x: cardX, y: cardY, width: cardW, height: cardHeight),
       avatarFrame: avatarFrame,
       displayNameFrame: displayNameFrame,
-      handleFrame: handleFrame,
-      timeFrame: timeFrame,
+      metaFrame: metaFrame,
       ipFrame: ipFrame,
       titleFrame: titleFrame,
       abstractFrame: abstractFrame,

@@ -699,6 +699,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     rowIndex = -1
     applying = false
     model = nil
+    placedToken = nil
     resetAnimations()
     resetContent()
     accessibilityLabel = nil
@@ -793,6 +794,12 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   // MARK: - 状态
 
   private var model: TiebaFeedRowModel?
+  /// 上次摆 frame 的输入指纹（模型身份 + 尺寸）：相同就不必再摆一遍（见 layoutSubviews）。
+  private struct PlacedToken: Equatable {
+    let model: ObjectIdentifier
+    let size: CGSize
+  }
+  private var placedToken: PlacedToken?
   private var applying = false
   private var stripItems: [TiebaFeedRowMediaItemView] = []
   private var stripFrames: [CGRect] = []
@@ -823,8 +830,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   private let avatarInitialLabel = UILabel()
   private let avatarView = UIImageView()
   private let displayNameLabel = UILabel()
-  private let handleLabel = UILabel()
-  private let timeLabel = UILabel()
+  /// 名字行尾部元信息 =「@昵称 + 时间」一个 label（模型把 4pt 段间空隙烘进 kern，
+  /// 见 TiebaFeedRowModel.metaAttributed）：少一个 label、少一次文本布局。
+  private let metaLabel = UILabel()
   private let ipLabel = UILabel()
   /// 右上角 26×26 菜单钮（TweetCard styles.closeButton：xmark 13 bold + textTertiary）。
   private let menuButton = TiebaFeedRowMenuButton(frame: .zero)
@@ -882,12 +890,10 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     cardView.addSubview(avatarContainer)
 
     configureStaticLabel(displayNameLabel)
-    configureStaticLabel(handleLabel)
-    configureStaticLabel(timeLabel)
+    configureStaticLabel(metaLabel)
     configureStaticLabel(ipLabel)
     cardView.addSubview(displayNameLabel)
-    cardView.addSubview(handleLabel)
-    cardView.addSubview(timeLabel)
+    cardView.addSubview(metaLabel)
     cardView.addSubview(ipLabel)
 
     // 右上角菜单钮（TweetCard closeButton 的 UIKit 直译）：26×26 圆形、
@@ -1093,7 +1099,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   private var allTextLabels: [UILabel] {
     [
-      displayNameLabel, handleLabel, timeLabel, ipLabel,
+      displayNameLabel, metaLabel, ipLabel,
       titleLabel, abstractLabel, showMoreLabel,
       quoteForumLabel, quoteTitleLabel, quoteContentLabel, chipLabel,
       bannerBadgeLabel, bannerTextLabel,
@@ -1185,8 +1191,17 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     }
 
     setText(displayNameLabel, model.displayName, font: fonts.displayName, color: palette.text)
-    setText(handleLabel, model.handleText, font: fonts.handle, color: palette.textSecondary)
-    setText(timeLabel, model.timeText, font: fonts.time, color: palette.textSecondary)
+    // 元信息串：色按当前色板统一覆盖（模型侧只写语义色，换主题即变）。
+    if let attributed = model.metaAttributed {
+      let colored = NSMutableAttributedString(attributedString: attributed)
+      colored.addAttribute(
+        .foregroundColor,
+        value: palette.textSecondary,
+        range: NSRange(location: 0, length: colored.length)
+      )
+      metaLabel.attributedText = colored
+      metaLabel.isHidden = false
+    }
     setText(ipLabel, model.ipText, font: fonts.ip, color: palette.textSecondary)
 
     // 正文：attributed 已由测量期构建，这里零重建；「精品」前缀按主题色板补色
@@ -1584,6 +1599,11 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   public override func layoutSubviews() {
     super.layoutSubviews()
     guard let model else { return }
+    // 同一个模型 + 同一尺寸 ⇒ 帧计划没变，四十来个 frame 不必再摆一遍（配置、图片
+    // 到达、系统多次布局都会把 layoutSubviews 叫醒）；换行/换宽度/换模型都会换 token。
+    let token = PlacedToken(model: ObjectIdentifier(model), size: bounds.size)
+    if placedToken == token { return }
+    placedToken = token
     // 帧计划在测量期已算好（模型不可变），布局期只摆 frame。
     let plan = model.plan
 
@@ -1607,8 +1627,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     avatarInitialLabel.frame = avatarContainer.bounds
     avatarView.frame = avatarContainer.bounds
     place(displayNameLabel, plan.displayNameFrame)
-    place(handleLabel, plan.handleFrame)
-    place(timeLabel, plan.timeFrame)
+    place(metaLabel, plan.metaFrame)
     place(ipLabel, plan.ipFrame)
     place(menuButton, plan.menuButtonFrame)
     place(titleLabel, plan.titleFrame)
