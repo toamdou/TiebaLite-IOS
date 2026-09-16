@@ -1214,6 +1214,22 @@ public final class TiebaKindListContentView: UIView {
     onListEvent?(.rowTap(index: index, region: region, actionIndex: nil))
   }
 
+  /// 图片带的**初始**预取区间：与带视口相交的格 + 其后 2 格（与
+  /// TiebaFeedRowView.extendStripLoadWindow 同一口径：预取与展示必须同窗口，
+  /// 否则两边各自解码一遍）。未上屏的行带偏移恒为 0（首格左缘对齐内容列）。
+  private func stripPrefetchRange(_ row: TiebaFeedRowModel) -> Range<Int> {
+    let frames = row.plan.mediaItemFrames
+    guard !frames.isEmpty, let mediaFrame = row.plan.mediaFrame, mediaFrame.width > 0 else {
+      return 0..<0
+    }
+    var last = -1
+    for (index, frame) in frames.enumerated() where frame.minX < mediaFrame.width {
+      last = max(last, index)
+    }
+    guard last >= 0 else { return 0..<0 }
+    return 0..<min(last + 3, frames.count)
+  }
+
   /// 行内菜单（右上角 × 的 ActionSheet；行视图自弹，选中项只回传）。
   private func handleRowMenuAction(_ action: String, at indexPath: IndexPath) {
     onListEvent?(.menuAction(index: indexPath.item, action: action))
@@ -1567,9 +1583,14 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
         if row.showsMedia {
           if row.mediaIsStrip {
             // 带的显示目标 = 帧计划里那一格的真实尺寸（与展示侧 loadDisplay 同口径）。
-            for (index, media) in row.media.prefix(TiebaFeedRowLayout.maxImagesPerRow).enumerated() {
-              guard row.plan.mediaItemFrames.indices.contains(index) else { break }
-              appendDisplay(media.url, size: row.plan.mediaItemFrames[index].size, radius: 0)
+            // **只预取初始窗口**（可见 + 2 格，口径同 TiebaFeedRowView.extendStripLoadWindow）：
+            // 展示侧已经改成懒加载，这里若仍预取全部 9 张，等于把省下的解码又做了一遍。
+            for index in stripPrefetchRange(row) {
+              appendDisplay(
+                row.media[index].url,
+                size: row.plan.mediaItemFrames[index].size,
+                radius: 0
+              )
             }
           } else {
             let columnWidth = TiebaFeedRowLayout.textColumnWidth(containerWidth: row.containerWidth)

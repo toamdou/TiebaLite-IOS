@@ -798,6 +798,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   private var stripFrames: [CGRect] = []
   private var stripActiveIndex = 0
   private var stripTotalCount = 0
+  /// 图片带里**已经发过图片请求**的下标（懒加载记账，见 extendStripLoadWindow）。
+  /// 只有换行（换帖/换宽度）才清空——同行重配要保持已加载的那几张不回退。
+  private var stripLoadedIndexes: Set<Int> = []
   /// 外观档变化登记（registerForTraitChanges，iOS 17 起；traitCollectionDidChange 已废弃）。
   private var styleRegistration: UITraitChangeRegistration?
   /// 已配置的 (pageKey#index)：主题重刷走 configure 但不能重置图片带滚动位置。
@@ -1273,17 +1276,11 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
           onMenuAction: mediaMenuHandler,
           onPreviewCommit: mediaOpenHandler
         )
-        if !isSameRow, model.plan.mediaItemFrames.indices.contains(index) {
-          // 显示尺寸取帧计划里这一格的真实尺寸：宽图会被 plan 钳到 300pt，按未钳
-          // 的 stripHeight×aspect 取图会多解一倍像素，且 fit 档在 aspectFill 视图里
-          // 还会被放大（糊）。
-          item.loadDisplay(
-            url: media.url,
-            targetSize: model.plan.mediaItemFrames[index].size,
-            cornerRadius: 0,
-            scale: scale
-          )
-        }
+      }
+      // 图片请求整段一次做完（只解可见 + 2 格，其余随横滑补，见 extendStripLoadWindow）。
+      if !isSameRow {
+        stripLoadedIndexes.removeAll(keepingCapacity: true)
+        extendStripLoadWindow(offsetX: stripScrollView.contentOffset.x)
       }
     } else {
       let media = model.media.first
@@ -1806,6 +1803,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   public func scrollViewDidScroll(_ scrollView: UIScrollView) {
     guard scrollView === stripScrollView, !stripFrames.isEmpty else { return }
+    // 横滑把新格带进视口 → 补发它们的图片（幂等：已发过的不再发）。
+    extendStripLoadWindow(offsetX: scrollView.contentOffset.x)
     let center = scrollView.contentOffset.x + scrollView.bounds.width / 2
     var index = 0
     for (i, frame) in stripFrames.enumerated() {
@@ -1818,5 +1817,42 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     guard index != stripActiveIndex else { return }
     stripActiveIndex = index
     stripCountLabel.text = "\(index + 1)/\(stripTotalCount)"
+  }
+
+  /// 图片带懒加载：只给"可见 + 2 格"发图片请求（幂等，已发过的下标跳过）。
+  ///
+  /// 为什么：一行最多 9 张，以前挂上就全解——其中六七张用户根本没横滑到，解码、
+  /// 内存缓存、纹理全白做，还把内存图片缓存挤掉（往回滚要重解）。窗口往后多留
+  /// 2 格是横滑余量：正常速度横滑时下一格已经在位，不会看到占位块。没进窗口的
+  /// 格保持占位底色（与"图还没到"同观感）。
+  ///
+  /// 显示尺寸取帧计划里这一格的真实尺寸：宽图会被 plan 钳到 300pt，按未钳的
+  /// stripHeight×aspect 取图会多解一倍像素，且 fit 档在 aspectFill 视图里还会被放大（糊）。
+  private func extendStripLoadWindow(offsetX: CGFloat) {
+    guard let model, let mediaFrame = model.plan.mediaFrame, mediaFrame.width > 0 else { return }
+    let frames = model.plan.mediaItemFrames
+    guard !frames.isEmpty else { return }
+    var first = frames.count
+    var last = -1
+    let visibleMaxX = offsetX + mediaFrame.width
+    for (index, frame) in frames.enumerated() where frame.maxX > offsetX && frame.minX < visibleMaxX {
+      first = min(first, index)
+      last = max(last, index)
+    }
+    guard last >= first else { return }
+    let margin = 2
+    let scale = max(traitCollection.displayScale, 1)
+    for index in max(first - margin, 0)...min(last + margin, frames.count - 1) {
+      guard stripLoadedIndexes.insert(index).inserted,
+            stripItems.indices.contains(index),
+            model.media.indices.contains(index)
+      else { continue }
+      stripItems[index].loadDisplay(
+        url: model.media[index].url,
+        targetSize: frames[index].size,
+        cornerRadius: 0,
+        scale: scale
+      )
+    }
   }
 }
