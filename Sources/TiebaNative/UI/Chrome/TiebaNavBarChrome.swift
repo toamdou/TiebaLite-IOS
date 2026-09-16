@@ -68,15 +68,6 @@ enum TiebaChrome {
   /// 标记视图层级已变化：下一次 tick / 事件会做一次全量重扫（幂等、零遍历）。
   static func markChromeDirty() { ChromeState.needsRescan = true }
 
-  /// 底边一律不做软模糊（用户 2026-09-14 令：动态页滚动时底栏区域那层模糊要删掉）。
-  /// 底栏本身是悬浮玻璃，内容从它下面穿过就是系统原生观感；再叠一层软边会在底栏
-  /// 区域多出一圈糊，底栏收纳成药丸后更明显（那块地方已经什么都没有了，糊还在）。
-  /// 滚动路径每帧调用（O(1)：已是隐藏态就直接返回），因为系统可能重挂 automatic。
-  static func hideBottomEdgeEffect(_ scroll: UIScrollView) {
-    guard Thread.isMainThread else { return }
-    _ = setEdgeEffect(scroll.bottomEdgeEffect, soft: false)
-  }
-
   /// 合并排一次 tick 重扫（2026-09-12 二轮空转治理）：改前每个布局/挂载事件都
   /// 各自 async 一个 force 块，快滚时主队列被无界块灌满（每帧数趟全树遍历）。
   /// 现在至多一个块在飞，且按 tickScanInterval 补齐到上次重扫之后触发：
@@ -412,7 +403,9 @@ enum TiebaChrome {
   /// 底边（2026-09-14 起不做软模糊）：底栏是悬浮玻璃，内容从它下面穿过就是系统
   /// 原生观感。原先在底边补的那层 soft 会在底栏区域多出一圈可辨的糊，底栏收纳成
   /// 药丸后那地方空着、糊还在，用户据此报"底栏区域带模糊"⇒ 底边一律显式关掉
-  ///（hidden=true，不是交给 automatic），滚动路径另见 hideBottomEdgeEffect。
+  ///（hidden=true，不是交给 automatic）。**只在重扫时写一次**：改成滚动路径每帧
+  /// 重申的话，写边缘效果会走 NSISEngine（见 forceNavBarLiquidGlass 头注），等于
+  /// 每帧一次布局引擎操作，是滚动掉帧的典型来源。
   @discardableResult
   private static func applyScrollEdgeEffects(glass: Bool) -> Bool {
     guard let screen = topScreenView(), screen.bounds.height > 0 else { return false }
@@ -435,10 +428,13 @@ enum TiebaChrome {
       let touchesTop = frameInScreen.minY <= 1
       let qualifies = visible && frameInScreen.height > 80 && (touchesTop || reachesBottom)
       guard qualifies else { return }
-      if setEdgeEffect(scroll.topEdgeEffect, soft: glass && isList && touchesTop) { changed = true }
-      // 底边不做软模糊（见 hideBottomEdgeEffect）：显式关掉，否则系统会按
-      // automatic 解析（iOS 27 上是 hard 硬边），底栏区域就会多出一层可辨的糊。
+      // ⚠️ 底边先写、顶边后写，顺序不能反：写任一 UIScrollEdgeEffect 都会让 UIKit
+      // 重建该滚动视图的边缘效果容器，容器重建时**同一次里已经写过的另一边会被
+      // 复位成默认（automatic）**——先写顶边再写底边，顶栏那层 soft 就被吃掉了，
+      // 表现是"顶栏纯透明、没有模糊"（用户 2026-09-15 报的回归）。顶边写在最后，
+      // 保证它落地即生效。
       if setEdgeEffect(scroll.bottomEdgeEffect, soft: false) { changed = true }
+      if setEdgeEffect(scroll.topEdgeEffect, soft: glass && isList && touchesTop) { changed = true }
     }
     screen.forEachSubviewRecursively { view in
       if let scroll = view as? UIScrollView { configure(scroll) }

@@ -623,10 +623,7 @@ private final class TiebaFeedRowActionView: UIControl {
   }
 
   func configure(systemImage: String, text: String, tint: UIColor, font: UIFont) {
-    iconView.image = UIImage(
-      systemName: systemImage,
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)
-    )
+    iconView.image = TiebaSymbols.image(systemImage, pointSize: 17, weight: .regular)
     iconView.tintColor = tint
     label.text = text
     label.font = font

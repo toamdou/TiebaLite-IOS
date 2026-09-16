@@ -1098,25 +1098,17 @@ public final class TiebaSimpleRowView: UIView {
         badgeView.isHidden = false
       }
       if model.showsChevron {
-        chevronView.image = UIImage(
-          systemName: "chevron.right",
-          withConfiguration: UIImage.SymbolConfiguration(
-            pointSize: max(model.chevronSize, 1),
-            weight: symbolWeight(model.chevronWeight)
-          )
+        chevronView.image = TiebaSymbols.image(
+          "chevron.right",
+          pointSize: max(model.chevronSize, 1),
+          weight: symbolWeight(model.chevronWeight)
         )
         chevronView.isHidden = false
       }
     case .message:
       configureAvatar(model)
       if let name = model.typeIconName {
-        typeIconView.image = UIImage(
-          systemName: name,
-          withConfiguration: UIImage.SymbolConfiguration(
-            pointSize: max(model.typeIconSize, 1),
-            weight: .semibold
-          )
-        )
+        typeIconView.image = TiebaSymbols.image(name, pointSize: max(model.typeIconSize, 1), weight: .semibold)
         typeIconView.isHidden = false
       }
       unreadDotView.isHidden = !model.isUnread
@@ -1125,13 +1117,7 @@ public final class TiebaSimpleRowView: UIView {
       sectionDotView.isHidden = false
     case .summary:
       if let name = model.iconName {
-        iconView.image = UIImage(
-          systemName: name,
-          withConfiguration: UIImage.SymbolConfiguration(
-            pointSize: max(model.iconSize, 1),
-            weight: .regular
-          )
-        )
+        iconView.image = TiebaSymbols.image(name, pointSize: max(model.iconSize, 1), weight: .regular)
       }
       iconBoxView.isHidden = false
     }

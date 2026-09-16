@@ -18,6 +18,9 @@ public final class TiebaRowPageDriver {
   /// 调用方必须传 `[weak self]` 闭包，否则 page → driver → 闭包 → page 成环。
   private var lastMakeRows: (() -> [[String: Any]])?
 
+  /// 上次发布的整页行字典（判"追加"用，见 publish）。每屏一份、只留最近一页。
+  private var lastRows: [[String: Any]] = []
+
   /// 当前页键（fresh 发布时 = "\(keyPrefix)-\(pageSeq)"；未发布 = ""）。
   public private(set) var pageKey = ""
 
@@ -56,21 +59,29 @@ public final class TiebaRowPageDriver {
     publish(fresh: false, makeRows: makeRows)
   }
 
-  /// 发布整页：fresh=true 换页键（数据集合变了），false = 同页重推（展开态/
-  /// 回填/换色，保留滚动位置）。无宽度时先记 pending，等 updateWidth 补发。
-  /// makeRows 在宽度变化时会被再次调用，因此是 @escaping；调用方用 `[weak self]`
-  /// 闭包，避免 page → driver → 闭包 → page 的环。
+  /// 发布整页：fresh=true 表示"数据集合变了"。**但"追加下一页"不该换页键**——
+  /// 页键进了行标识（pageKey#index），换键 = 所有行的标识全变 ⇒ 集合视图整页
+  /// reload（可见 cell 全部销毁重建），而那正是用户滚到底触发加载的那一刻，表现
+  /// 就是"每加载一页卡一下、图还要重贴一遍"。旧行逐字未变（= 新行以旧行为前缀）
+  /// 时保持页键，只把新增的尾部 insert 进去，既有 cell 原样留着；任何一行变了
+  /// （点赞/换排序/首屏换数据/偏好变更）前缀就不成立，照旧换键整页 reload。
+  /// 无宽度时先记 pending，等 updateWidth 补发。makeRows 在宽度变化时会被再次
+  /// 调用，因此是 @escaping；调用方用 `[weak self]` 闭包，避免成环。
   public func publish(fresh: Bool, makeRows: @escaping () -> [[String: Any]]) {
-    if fresh {
+    let rows = makeRows()
+    if fresh, !isAppend(rows) {
       pageSeq += 1
       pageKey = "\(keyPrefix)-\(pageSeq)"
     }
     guard !pageKey.isEmpty else { return }
     lastMakeRows = makeRows
-    guard lastWidth > 0 else { return }   // 宽度未就位：updateWidth 会用同一闭包补发
+    guard lastWidth > 0 else {
+      lastRows = rows   // 宽度未就位：补发时也要能判出这是不是追加
+      return
+    }
     let key = pageKey
     let width = lastWidth
-    let box = RowsBox(rows: makeRows())
+    let box = RowsBox(rows: rows)
     Task { @MainActor [weak self] in
       await Task.detached(priority: .userInitiated) {
         TiebaKindRowPages.shared.prepareBlocking(
@@ -80,8 +91,20 @@ public final class TiebaRowPageDriver {
         )
       }.value
       guard let self, self.pageKey == key else { return }
+      self.lastRows = box.rows
       self.list.setPage(pageKey: key)
     }
+  }
+
+  /// 新行是否只是"旧行的尾部追加"。逐行早期退出：换排序/换数据在第 0 行就退，
+  /// 只有真追加才走满（一次发布一次，不在滚动路径上）。
+  private func isAppend(_ rows: [[String: Any]]) -> Bool {
+    guard !lastRows.isEmpty, lastRows.count <= rows.count else { return false }
+    for index in lastRows.indices
+    where !(lastRows[index] as NSDictionary).isEqual(to: rows[index]) {
+      return false
+    }
+    return true
   }
 
   private struct RowsBox: @unchecked Sendable {

@@ -664,10 +664,7 @@ final class TiebaPostPlaceholderView: UIView {
     backgroundColor = palette.chip
     layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     layer.borderColor = palette.separator.cgColor
-    iconView.image = UIImage(
-      systemName: icon,
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-    )
+    iconView.image = TiebaSymbols.image(icon, pointSize: 14, weight: .regular)
     iconView.tintColor = palette.textSecondary
     label.text = text
     label.textColor = palette.textSecondary

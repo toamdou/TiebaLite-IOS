@@ -565,12 +565,15 @@ public final class TiebaKindListContentView: UIView {
     }
     if isSamePage {
       dataSource.apply(snapshot, animatingDifferences: false)
+      // 同页重推（展开/点赞/回填）没有别的失效来源，行高数组变了必须自己换布局对象。
+      refreshGeometry(previousHeights: previousHeights, count: count)
     } else {
       dataSource.applySnapshotUsingReloadData(snapshot)
+      // 换页键 = 整页 reload：reload 本身就会让布局重跑 section provider，别再叠一次
+      // 换 layout 对象（每翻一页都换一次 = 整页属性重建 + 可见 cell 全量重配，正好
+      // 落在用户滚到底触发加载的那一刻）。
+      collectionView.collectionViewLayout.invalidateLayout()
     }
-    collectionView.collectionViewLayout.invalidateLayout()
-    // 行数/内容变了，行高数组可能一起变（展开「显示更多」等），这里再按新数组定几何。
-    refreshGeometry(previousHeights: previousHeights, count: count)
     setNeedsLayout()
   }
 
@@ -1441,8 +1444,6 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
   public func scrollViewDidScroll(_ scrollView: UIScrollView) {
     updateVisibleRange()
     updateReachEnd()
-    // 底边不做软模糊：系统可能重挂 automatic 处理，滚动路径按需清掉（调用本身 O(1)）。
-    TiebaChrome.hideBottomEdgeEffect(scrollView)
     onScroll?(scrollView)
   }
 
