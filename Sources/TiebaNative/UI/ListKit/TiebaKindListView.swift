@@ -1458,7 +1458,10 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
   }
 
   public func scrollViewDidScroll(_ scrollView: UIScrollView) {
-    updateVisibleRange()
+    // ⚠️ 这里**不**扫可见区间：willDisplay/didEndDisplaying 对每次进出都会回调，
+    // 区间只可能在那些时刻变化；滚动回调里再扫一遍等于每帧一次
+    // indexPathsForVisibleItems（数组分配 + 逐个 IndexPath），而绝大多数帧的区间
+    // 与上一帧相同 ⇒ 纯浪费（120Hz 下每秒 120 次）。
     updateReachEnd()
     onScroll?(scrollView)
   }
