@@ -407,6 +407,9 @@ final class TiebaPostRowModel: @unchecked Sendable {
   let audio: (src: String, duration: Double)?
   let forumName: String
   let showsBlockedTip: Bool
+  /// 主贴卡标题（回复行为 nil）。不带前景色：颜色走 titleLabel.textColor 现取色板，
+  /// 与已知主贴占位卡同一套（主题切换时两者同时变色）。
+  let titleText: NSAttributedString?
 
   private let textBuild: TiebaPostTextBuild
   private let subPostBuilds: [TiebaPostTextBuild]
@@ -486,7 +489,8 @@ final class TiebaPostRowModel: @unchecked Sendable {
     blockFilter: TiebaPostBlockFilter,
     palette: TiebaFeedRowPalette,
     forumName: String,
-    containerWidth: CGFloat
+    containerWidth: CGFloat,
+    title: String = ""
   ) {
     self.pageKey = pageKey
     self.index = index
@@ -539,11 +543,20 @@ final class TiebaPostRowModel: @unchecked Sendable {
       preferences: preferences
     )
     self.likeText = post.agreeNum > 0 ? TiebaForumFormat.count(post.agreeNum) : ""
+    self.titleText =
+      isMain && !title.isEmpty
+      ? TiebaSimpleText.makeAttributed(
+        text: title,
+        font: TiebaPostRowLayout.titleFont,
+        lineHeight: TiebaPostRowLayout.titleLineHeight
+      )
+      : nil
     // plan 只依赖上面这些已就位的值（自身尚未初始化完，不能把 self 传出去）。
     let plan = TiebaPostRowPlan(TiebaPostRowPlanInputs(
       containerWidth: self.containerWidth,
       isMain: isMain,
       post: post,
+      titleText: self.titleText,
       nameText: self.nameText,
       levelText: self.levelText,
       isLz: self.isLz,
@@ -580,7 +593,8 @@ final class TiebaPostRowModel: @unchecked Sendable {
       blockFilter: model.blockFilter,
       palette: model.palette,
       forumName: model.forumName,
-      containerWidth: model.containerWidth
+      containerWidth: model.containerWidth,
+      title: model.titleText?.string ?? ""
     )
   }
 
@@ -681,6 +695,11 @@ enum TiebaPostRowLayout {
 
   static var nameFont: UIFont { TiebaSimpleText.font(size: 15, weight: .semibold) }
   static var nameFontMain: UIFont { TiebaSimpleText.font(size: 16, weight: .semibold) }
+  /// 主贴卡标题（仅主贴行）：与已知主贴占位卡 knownTitle 逐项同尺（17pt/22pt/3 行），
+  /// 首包落地换卡时标题原地接管，下面的作者行/正文不位移。
+  static var titleFont: UIFont { TiebaSimpleText.font(size: 17, weight: .medium) }
+  static let titleLineHeight: CGFloat = 22
+  static let titleLineLimit = 3
   static var metaFont: UIFont { TiebaSimpleText.font(size: 12, weight: .regular) }
   static var badgeFont: UIFont { TiebaSimpleText.font(size: 11, weight: .bold) }
   static var lzFont: UIFont { TiebaSimpleText.font(size: 11, weight: .semibold) }
@@ -817,6 +836,8 @@ struct TiebaPostRowPlanInputs {
   var containerWidth: CGFloat
   var isMain: Bool
   var post: TiebaThreadPost
+  /// 帖子标题（只有主贴行用；楼中楼父卡不显示标题）。
+  var titleText: NSAttributedString?
   var nameText: String
   var levelText: String?
   var isLz: Bool
@@ -838,6 +859,7 @@ struct TiebaPostRowPlanInputs {
 struct TiebaPostRowPlan {
   var rowHeight: CGFloat = 0
   var cardFrame: CGRect = .zero
+  var titleFrame: CGRect?
   var avatarFrame: CGRect = .zero
   var nameFrame: CGRect = .zero
   var levelFrame: CGRect?
@@ -874,6 +896,19 @@ struct TiebaPostRowPlan {
     var y = TiebaPostRowLayout.cardMarginV
     let cardTop = y
     y += TiebaPostRowLayout.cardPadding
+
+    // ── 标题（仅主贴卡）──
+    // 卡片顶端第一块，下方留 authorBottom(12) —— 与已知主贴占位卡同尺同距
+    //（占位卡 padding 16 / gap 12）：首包落地换卡时标题原地接管，不位移。
+    if inputs.isMain, let title = inputs.titleText, title.length > 0 {
+      let height = TiebaSimpleText.measureHeight(
+        title,
+        width: contentW,
+        maxLines: TiebaPostRowLayout.titleLineLimit
+      )
+      titleFrame = CGRect(x: contentX, y: y, width: contentW, height: height)
+      y += height + TiebaPostRowLayout.authorBottom
+    }
 
     // ── 作者行 ──
     // 右侧操作组（⋮18 + gap12 + 点赞）按内容实测宽度占位，不能写死：固定占位会把

@@ -347,6 +347,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     let source = (mainPost.map { [$0] } ?? []) + posts
     let threadAuthorId = thread?.authorId ?? ""
     let forumName = thread?.forumName ?? ""
+    let threadTitle = thread?.title ?? ""
     let mainId = mainPost?.id
     let toolbar = toolbarModel()
     let preferences = TiebaPostPreferences.load()
@@ -377,7 +378,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
             blockFilter: blockFilter,
             palette: palette,
             forumName: forumName,
-            containerWidth: width
+            containerWidth: width,
+            title: threadTitle
           ))
           kept.append(post)
         }

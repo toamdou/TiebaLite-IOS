@@ -697,6 +697,7 @@ final class TiebaPostRowView: UIView {
 
   private let cardView = UIView()
   private var avatarView: TiebaForumAvatarView?
+  private let titleLabel = UILabel()
   private let nameLabel = UILabel()
   private let metaLabel = UILabel()
   private let levelLabel = UILabel()
@@ -773,6 +774,14 @@ final class TiebaPostRowView: UIView {
     cardView.layer.borderColor = model.palette.borderCard.cgColor
 
     avatarControl.frame = plan.avatarFrame
+    titleLabel.isHidden = plan.titleFrame == nil
+    if let titleFrame = plan.titleFrame {
+      titleLabel.frame = titleFrame
+      titleLabel.attributedText = model.titleText
+      titleLabel.textColor = model.palette.text
+    } else {
+      titleLabel.attributedText = nil
+    }
     configureAvatar(model: model, frame: plan.avatarFrame)
     nameLabel.frame = plan.nameFrame
     nameLabel.text = model.nameText
@@ -854,6 +863,7 @@ final class TiebaPostRowView: UIView {
 
   func applyPalette(_ palette: TiebaFeedRowPalette) {
     self.palette = palette
+    titleLabel.textColor = palette.text
     textView.textColor = palette.text
     textView.linkTextAttributes = [
       .foregroundColor: palette.primary,
@@ -890,6 +900,7 @@ final class TiebaPostRowView: UIView {
     appliedModel = nil
     imageScrollView.contentOffset = .zero
     assignedText = nil
+    titleLabel.attributedText = nil
     textView.attributedText = nil
     for view in imageViews {
       view.image = nil
@@ -929,6 +940,11 @@ final class TiebaPostRowView: UIView {
 
   private func buildSubviews() {
     addSubview(cardView)
+    // 主贴卡标题（卡顶第一块，见 TiebaPostRowPlan 的标题块）：行高/行数/截断都在
+    // 段落样式里（makeAttributed），这里只管行数与颜色（颜色现取色板，与占位卡同款）。
+    titleLabel.numberOfLines = TiebaPostRowLayout.titleLineLimit
+    titleLabel.isHidden = true
+    addSubview(titleLabel)
     addSubview(avatarControl)
     avatarControl.addTarget(self, action: #selector(handleAvatar), for: .touchUpInside)
     nameLabel.numberOfLines = 1
