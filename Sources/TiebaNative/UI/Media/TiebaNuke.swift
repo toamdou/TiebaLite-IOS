@@ -37,8 +37,9 @@
 //   - 图片请求不设 User-Agent（TiebaNativeClient.swift:133 的 "tieba/12.41.7.1"
 //     只用于 API 请求）；需要再加头时用 TiebaNukePipelineDelegate(additionalHeaders:)。
 //
-// 缓存上限：内存 32MB / 磁盘 400MB，启动与设置页滑块都经
-// setCacheLimits(diskBytes:memoryBytes:) 重设（内存 = 磁盘/16，夹 8–32MB）。
+// 缓存上限：磁盘 400MB（偏好 cacheMaxSizeMb）、内存按磁盘推出（见
+// memoryLimitBytes(forDiskBytes:)，磁盘/4 夹 32–96MB）。启动与设置页滑块都经
+// setCacheLimits(diskBytes:memoryBytes:) 重设，两处共用同一份公式。
 // 磁盘上限对应偏好 cacheMaxSizeMb（默认 400），清缓存必须同时清
 // DataCache 与内存 ImageCache（只删目录清不到已解码位图）。
 //
@@ -92,11 +93,19 @@ public enum TiebaNuke {
   /// 磁盘缓存默认上限：400MB（旧 expo-image maxDiskSize 默认档 + 原生缩略图上限）。
   public static let defaultDiskLimitBytes = 400 * 1024 * 1024
 
-  /// 内存缓存默认上限：32MB（旧 expo-image maxMemoryCost 档位带 8–32MB 的上限）。
-  public static let defaultMemoryLimitBytes = 32 * 1024 * 1024
+  /// 内存缓存上限由磁盘上限推出（唯一一份公式：管线初始化 / 启动 / 设置页滑块共用）。
+  ///
+  /// 口径：磁盘/4，夹 32–96MB。**这不是随手定的数**——内存层存的是**已解码位图**，
+  /// 命中即零成本；动态页/吧页一屏就是几十张（图片带一行最多 9 张），只装得下一两屏
+  /// 时往回滚必然重解（Nuke 的 cost = 位图字节数，带内一张小图约 0.3MB）。
+  /// 旧口径 disk/16 夹 8–32MB（默认 400MB 磁盘 → 25MB）连一屏都装不满。
+  /// 放大是安全的：内存告警会清两层缓存（见 TiebaAppBootstrap）。
+  public static func memoryLimitBytes(forDiskBytes diskBytes: Int) -> Int {
+    min(max(diskBytes / 4, 32 * 1024 * 1024), 96 * 1024 * 1024)
+  }
 
-  /// 内存缓存条目数上限（200 条：一屏列表图片 + 头像余量）。
-  public static let defaultMemoryCountLimit = 200
+  /// 内存缓存条目数上限（400 条：一屏列表图片 + 头像 + 相邻屏余量）。
+  public static let defaultMemoryCountLimit = 400
 
   /// DataCache 目录名（位于 Library/Caches 下：系统可回收；clearCaches 清它，
   /// 删整个 Caches 目录的清理路径也会一并覆盖）。
@@ -119,7 +128,7 @@ public enum TiebaNuke {
   public static let pipeline: ImagePipeline = {
     let dataLoader = makeHeaderInjectingDataLoader()
     let imageCache = ImageCache(
-      costLimit: defaultMemoryLimitBytes,
+      costLimit: memoryLimitBytes(forDiskBytes: defaultDiskLimitBytes),
       countLimit: defaultMemoryCountLimit
     )
     let dataCache = try? DataCache(name: diskCacheName)
@@ -277,7 +286,7 @@ public enum TiebaNuke {
   /// 运行时调整缓存上限（对齐"设置 → 最大缓存大小"滑块）。
   ///
   /// 调用点：TiebaAppBootstrap.applyCacheLimits 与 TiebaMoreSettingsViewController
-  /// 的缓存档位变更（两条路径口径一致：内存 = 磁盘/16 夹 8–32MB）。
+  /// 的缓存档位变更（两条路径口径一致：内存走 memoryLimitBytes(forDiskBytes:)）。
   ///
   /// 线程：nonisolated，ImageCache/DataCache 自身线程安全，任意线程可调。
   public static func setCacheLimits(diskBytes: Int, memoryBytes: Int) {

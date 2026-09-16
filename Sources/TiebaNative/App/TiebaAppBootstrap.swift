@@ -147,13 +147,15 @@ public final class TiebaAppBootstrap {
     TiebaNavigator.shared.selectTab(index)
   }
 
-  /// 图片缓存上限（设置→最大缓存大小，默认 400MB）。内存档 = 磁盘的 1/16，
-  /// 夹在 8–32MB（同原 JS applyCacheMaxSize 口径；首屏解码峰值曾把进程推到 500MB+）。
+  /// 图片缓存上限（设置→最大缓存大小，默认 400MB）。内存档口径见
+  /// TiebaNuke.memoryLimitBytes(forDiskBytes:)（磁盘/4 夹 32–96MB，唯一一份公式）。
   private func applyCacheLimits() {
     let mb = max(0, TiebaPreferences.number("cacheMaxSizeMb", default: 400))
     let bytes = Int(mb * 1024 * 1024)
-    let memory = min(max(bytes / 16, 8 * 1024 * 1024), 32 * 1024 * 1024)
-    TiebaNuke.setCacheLimits(diskBytes: bytes, memoryBytes: memory)
+    TiebaNuke.setCacheLimits(
+      diskBytes: bytes,
+      memoryBytes: TiebaNuke.memoryLimitBytes(forDiskBytes: bytes)
+    )
   }
 
   /// 启动图：原生挂载（幂等）后延一帧淡出。原 JS 在 bundle 求值期 prevent、

@@ -185,15 +185,14 @@ final class TiebaMoreSettingsViewController: TiebaFormPageController {
 
   // MARK: - 缓存
 
-  /// 内存 = 磁盘档位的 1/16，夹在 8–32MB（与旧 applyCacheMaxSize 同口径）。
+  /// 内存档口径与启动同源（TiebaNuke.memoryLimitBytes，磁盘/4 夹 32–96MB）；
+  /// 两处共用一份公式，避免滑块拖完与重启后上限不一致。
   private func applyCacheLimit(mb: Double) {
     let bytes = Int(max(0, mb) * 1024 * 1024)
-    tiebaNukeCacheLimits(diskBytes: bytes)
-  }
-
-  private func tiebaNukeCacheLimits(diskBytes: Int) {
-    let memoryMB = min(32, max(8, Int(round(Double(diskBytes) / 1024 / 1024 / 16))))
-    TiebaNuke.setCacheLimits(diskBytes: diskBytes, memoryBytes: memoryMB * 1024 * 1024)
+    TiebaNuke.setCacheLimits(
+      diskBytes: bytes,
+      memoryBytes: TiebaNuke.memoryLimitBytes(forDiskBytes: bytes)
+    )
   }
 
   private func clearImageCache() {
