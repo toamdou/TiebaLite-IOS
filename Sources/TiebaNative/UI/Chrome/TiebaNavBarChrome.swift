@@ -25,6 +25,14 @@ enum TiebaChrome {
     nonisolated(unsafe) static var darkMode: Bool? = nil
     nonisolated(unsafe) static var scrollHooked = false
 
+    /// 已写过"底边隐藏"的滚动视图（弱引用，随视图释放自动清理）。
+    ///
+    /// 为什么要有这份记账：**写任一条边的边缘效果都会让 UIKit 重建该滚动视图的效果
+    /// 容器，重建会把另一条边（顶边）的 soft 样式复位**——实测表现就是"每次重扫后
+    /// 顶栏那层模糊又没了、只有纯透明"（用户 2026-09-16 复报）。所以底边每个滚动
+    /// 视图只写一次，之后的重扫只重申顶边。滚动视图换了（列表重建）自然重新记一笔。
+    nonisolated(unsafe) static let bottomHiddenScrollViews = NSHashTable<UIScrollView>.weakObjects()
+
     // ── 空转治理（2026-09-12 发热审查）──
     // force 每次要做两趟视图树全量遍历：collectChromeBars 扫所有窗口的
     // 整棵树，applyScrollEdgeEffects 再扫顶层页面整棵树。改前 1.5s timer
@@ -428,12 +436,20 @@ enum TiebaChrome {
       let touchesTop = frameInScreen.minY <= 1
       let qualifies = visible && frameInScreen.height > 80 && (touchesTop || reachesBottom)
       guard qualifies else { return }
-      // ⚠️ 底边先写、顶边后写，顺序不能反：写任一 UIScrollEdgeEffect 都会让 UIKit
-      // 重建该滚动视图的边缘效果容器，容器重建时**同一次里已经写过的另一边会被
-      // 复位成默认（automatic）**——先写顶边再写底边，顶栏那层 soft 就被吃掉了，
-      // 表现是"顶栏纯透明、没有模糊"（用户 2026-09-15 报的回归）。顶边写在最后，
-      // 保证它落地即生效。
-      if setEdgeEffect(scroll.bottomEdgeEffect, soft: false) { changed = true }
+      // ⚠️ 底边只写一次、且必须写在顶边之前：写边缘效果会让 UIKit 重建效果容器，
+      // 同一次里先写的另一边会被复位成默认（automatic）。每次重扫都重写底边 =
+      // 每次都把顶边的 soft 打回去（用户报的"顶栏纯透明、没有模糊"）。
+      // 记账见 ChromeState.bottomHiddenScrollViews。
+      if !ChromeState.bottomHiddenScrollViews.contains(scroll) {
+        ChromeState.bottomHiddenScrollViews.add(scroll)
+        if setEdgeEffect(scroll.bottomEdgeEffect, soft: false) {
+          changed = true
+          // 这次写入可能让 UIKit 在本趟之后才重建容器、把顶边复位：下一拍重申一次
+          // 顶边（底边已记账，不会再写，所以第二趟起只有顶边被写）。每个滚动视图
+          // 只发生一次。
+          DispatchQueue.main.async { _ = TiebaChrome.forceNavBarLiquidGlass() }
+        }
+      }
       if setEdgeEffect(scroll.topEdgeEffect, soft: glass && isList && touchesTop) { changed = true }
     }
     screen.forEachSubviewRecursively { view in
