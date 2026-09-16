@@ -692,6 +692,9 @@ final class TiebaPostRowView: UIView {
   /// 上一次真正贴上去的模型（身份比较）：同一个实例重复 apply 直接返回（见 apply(model:)）。
   private weak var appliedModel: TiebaPostRowModel?
 
+  /// 上一次贴进 textView 的正文（身份比较，见 loadEmoticonsIfNeeded）。
+  private var assignedText: NSAttributedString?
+
   private let cardView = UIView()
   private var avatarView: TiebaForumAvatarView?
   private let nameLabel = UILabel()
@@ -817,8 +820,10 @@ final class TiebaPostRowView: UIView {
     textView.isHidden = plan.textFrame == nil
     if let frame = plan.textFrame {
       textView.frame = frame
+      assignedText = model.contentText
       textView.attributedText = model.contentText
     } else {
+      assignedText = nil
       textView.attributedText = nil
     }
 
@@ -884,6 +889,7 @@ final class TiebaPostRowView: UIView {
     model = nil
     appliedModel = nil
     imageScrollView.contentOffset = .zero
+    assignedText = nil
     textView.attributedText = nil
     for view in imageViews {
       view.image = nil
@@ -1267,11 +1273,15 @@ final class TiebaPostRowView: UIView {
     let index = model.index
     TiebaEmoticonCache.shared.load(missing) { [weak self] in
       guard let self, let current = self.model, current.pageKey == key, current.index == index else { return }
-      self.textView.attributedText = current.rebuiltText() ?? current.contentText
-      // 楼中楼预览也要重建：model.subPostTexts 是建模型时固化的占位图版本。
-      let subTexts = current.rebuiltSubTexts()
+      // 一行有 N 个表情就回调 N 次；模型侧缓存过之后拿到的是同一份对象，
+      // 这里按对象身份再挡一次，只重排一次（列表里最贵的一笔就是正文排版）。
+      let texts = current.upgradeTexts()
+      if self.assignedText !== texts.text {
+        self.assignedText = texts.text
+        self.textView.attributedText = texts.text
+      }
       for (idx, view) in self.subPostTextViews.enumerated() where !view.isHidden {
-        view.attributedText = subTexts.indices.contains(idx) ? subTexts[idx] : nil
+        view.attributedText = texts.subs.indices.contains(idx) ? texts.subs[idx] : nil
       }
     }
   }

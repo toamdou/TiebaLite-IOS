@@ -413,10 +413,31 @@ final class TiebaPostRowModel: @unchecked Sendable {
   private let cachedText: NSAttributedString?
   private let cachedSubTexts: [NSAttributedString?]
 
-  var contentText: NSAttributedString? { cachedText }
-  var subPostTexts: [NSAttributedString?] { cachedSubTexts }
+  /// 表情图到达后的"占位图 → 真图"版本（一次性；见 upgradeTexts()）。
+  /// nonisolated(unsafe)+锁：写发生在主线程的表情回调，读可能来自行视图的贴模型。
+  private let upgradeLock = NSLock()
+  nonisolated(unsafe) private var upgraded: (text: NSAttributedString?, subs: [NSAttributedString?])?
+
+  var contentText: NSAttributedString? { upgraded?.text ?? cachedText }
+  var subPostTexts: [NSAttributedString?] { upgraded?.subs ?? cachedSubTexts }
+  /// 升级过之后不再报"缺表情"：再问一次也只会把同一份文本重排一遍。
   var missingEmoticons: [String] {
-    textBuild.missingEmoticons + subPostBuilds.flatMap(\.missingEmoticons)
+    upgradeLock.lock()
+    defer { upgradeLock.unlock() }
+    guard upgraded == nil else { return [] }
+    return textBuild.missingEmoticons + subPostBuilds.flatMap(\.missingEmoticons)
+  }
+
+  /// 表情图到达后重建正文 + 楼中楼（尺寸不变，行高不变）。**结果缓存回模型**：
+  /// 一行当天会有 N 个表情请求各回调一次，且滚走再滚回来还会再问一次——
+  /// 不缓存就是每次重排一遍正文（正文那趟才是最贵的一笔）。
+  func upgradeTexts() -> (text: NSAttributedString?, subs: [NSAttributedString?]) {
+    upgradeLock.lock()
+    defer { upgradeLock.unlock() }
+    if let upgraded { return upgraded }
+    let built = (text: rebuiltText() ?? cachedText, subs: rebuiltSubTexts())
+    upgraded = built
+    return built
   }
 
   /// 表情图到达后重建（尺寸不变，行高不变）。
