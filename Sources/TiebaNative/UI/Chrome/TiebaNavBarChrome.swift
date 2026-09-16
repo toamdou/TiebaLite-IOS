@@ -24,17 +24,9 @@ enum TiebaChrome {
     nonisolated(unsafe) static var darkMode: Bool? = nil
     nonisolated(unsafe) static var scrollHooked = false
 
-    /// 已写过"底边隐藏"的滚动视图（弱引用，随视图释放自动清理）。
-    ///
-    /// 为什么要记账：**写任一条边的效果都会让 UIKit 重建该滚动视图的效果容器**，
-    /// 重建会把另一条边复位成默认（automatic = iOS 27 上那条 hard 矩形磨砂+分隔线，
-    /// 用户点名最差的那版）。所以底边每个滚动视图只写一次，顶边每趟重申；写入后
-    /// 还补排一次 tick 把复位收回（复位发生在本趟之后）。
-    nonisolated(unsafe) static let bottomHiddenScrollViews = NSHashTable<UIScrollView>.weakObjects()
-
     // ── 空转治理（2026-09-12 发热审查）──
     // force 每次要做两趟视图树全量遍历：collectChromeBars 扫所有窗口的
-    // 整棵树，hideBottomScrollEdgeEffects 再扫顶层页面整棵树。改前 1.5s timer
+    // 整棵树，边缘效果那两个函数再各扫顶层页面整棵树。改前 1.5s timer
     // 无条件全扫，且 UINavigationBar.layoutSubviews 每次布局也全扫——转场/
     // 滚动期间栏逐帧布局，等于接近每帧两趟遍历（持续发热的真凶之一）。
     // 现在没有周期任务：timer 已删（轮询整棵视图树不是 UIKit 的做法），所有
@@ -351,12 +343,15 @@ enum TiebaChrome {
 
   /// 顶边：用系统的 **soft** 样式（`UIScrollEdgeEffect.Style.soft` = "A soft-edged
   /// scroll edge effect"，iOS 26 的"无边界"形态；`.hard` = "hard cutoff and dividing
-  /// line" = 硬切边 + 分隔线）。这是 UIKit 自带的接口，不是自绘；也不写 `hidden`
-  ///（默认就是可见），这里要的就是"开且软"。
+  /// line" = 硬切边 + 分隔线）。这是 UIKit 自带的接口，不是自绘。
+  ///
+  /// **断言式**（要的就是"可见 + soft"，hidden 也一并纠正）：写边缘效果会让 UIKit
+  /// 重建该滚动视图的效果容器，而重建会把**另一条边**复位成系统默认——这就是"底栏
+  /// 模糊一写、顶栏那层就没了"的真根因（2026-09-14 ff379b1 实测过一次）。所以本函数
+  /// 每轮重扫都跑，且必须排在底边写入**之后**；恢复默认不是终态、下一轮就会被纠回来。
   ///
   /// 只给"整屏竖向列表"写：横向分页器、行内横滑条的顶边也在栏下、又盖在列表之上，
   /// 给它们也开 soft 就是两层软模糊叠在一起，滑动时栏下内容被糊死（2026-09-11 实测）。
-  /// 幂等：已是 soft 就不写——写边缘效果会走 NSISEngine（见 force 头注）。
   @discardableResult
   private static func applyTopScrollEdgeStyle() -> Bool {
     guard let screen = topScreenView(), screen.bounds.height > 0 else { return false }
@@ -369,11 +364,15 @@ enum TiebaChrome {
       guard frame.minY <= 1, frame.height > screen.bounds.height * 0.4 else { return }
       guard scroll.contentSize.width <= scroll.bounds.width + 1, !scroll.isPagingEnabled else { return }
       guard frame.minX >= -1, frame.maxX <= screen.bounds.width + 1 else { return }
-      guard !scroll.topEdgeEffect.isHidden,
-        scroll.topEdgeEffect.style !== UIScrollEdgeEffect.Style.soft
-      else { return }
-      scroll.topEdgeEffect.style = .soft
-      changed = true
+      let effect = scroll.topEdgeEffect
+      if effect.isHidden {
+        effect.isHidden = false
+        changed = true
+      }
+      if effect.style !== UIScrollEdgeEffect.Style.soft {
+        effect.style = .soft
+        changed = true
+      }
     }
     return changed
   }
@@ -381,18 +380,19 @@ enum TiebaChrome {
   /// 底边边缘效果一律显式关掉（用户 2026-09-14 报"底栏区域带模糊"要删；底栏是
   /// 悬浮药丸玻璃，内容从它下面穿过就是系统原生观感）。
   ///
-  /// effect 的 `hidden` 默认 false = 系统 automatic，所以必须写一次才关得掉。
-  /// **只写一次**（记账见 ChromeState.bottomHiddenScrollViews）：写边缘效果会走
-  /// NSISEngine，每次重扫都写等于周期性触发布局引擎操作；写任一条边还会让 UIKit
-  /// 重建该滚动视图的效果容器。顶边不在这里写（见 applyTopScrollEdgeStyle）。
+  /// effect 的 `hidden` 默认 false = 系统 automatic，所以要写才关得掉。判据用
+  /// **effect 自身状态**而不是"写过没写过"的记账：这样即使它被 UIKit 重建复位，
+  /// 下一轮也会被纠回来（自愈），而稳态下（已 hidden）一次都不写——写边缘效果会走
+  /// NSISEngine，每轮都写就是周期性触发布局引擎操作。
+  ///
+  /// ⚠️ 本函数必须在 applyTopScrollEdgeStyle **之前**调用：底边写入会把顶边复位成
+  /// 系统默认，顶边那轮写在后面才收得住（见 applyTopScrollEdgeStyle 头注）。
   @discardableResult
   private static func hideBottomScrollEdgeEffects() -> Bool {
     guard let screen = topScreenView(), screen.bounds.height > 0 else { return false }
     var changed = false
     screen.forEachSubviewRecursively { view in
       guard let scroll = view as? UIScrollView else { return }
-      guard !ChromeState.bottomHiddenScrollViews.contains(scroll) else { return }
-      ChromeState.bottomHiddenScrollViews.add(scroll)
       if hideEdgeEffect(scroll.bottomEdgeEffect) { changed = true }
     }
     return changed
@@ -483,13 +483,20 @@ enum TiebaChrome {
     }
     // 底栏不装按压手势：底栏项的视图层级不是公开的 UIControl 保证（栏内 hitTest
     // 找不到 UIControl ⇒ 手势永远不发触觉）；底栏触觉走 UITabBarControllerDelegate。
-    // 顶边 = 系统 soft 样式（iOS 26 的无边界形态），底边显式关掉；两者都随 force
-    // 的节奏幂等补写：push 新页、列表重建都会带来新的滚动视图。
+    // 顺序要紧：先底边、后顶边。写任一条边的效果都会让 UIKit 重建该滚动视图的效果
+    // 容器、把另一条边复位成系统默认——底边写完再写顶边，收尾的就是顶边（用户报的
+    //"顶栏又变成完全透明"就是这个复位）。底边这轮真写过了，再补排一拍重申顶边：
+    // 复位发生在本趟之后时，只有下一趟才收得回来。
+    var bottomWritten = false
+    if hideBottomScrollEdgeEffects() {
+      applied = true
+      bottomWritten = true
+    }
     if applyTopScrollEdgeStyle() {
       applied = true
     }
-    if hideBottomScrollEdgeEffects() {
-      applied = true
+    if bottomWritten {
+      DispatchQueue.main.async { _ = TiebaChrome.forceNavBarLiquidGlass() }
     }
     CATransaction.commit()
     // Fabric 的 JS 线程会在任意时刻 flush CA transaction：若导航栏仍带 dirty
