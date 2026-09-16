@@ -324,27 +324,25 @@ enum TiebaChrome {
   // 用户要求："顶栏完全使用 UIKit，并遵循 iOS 26 之后的 UIKit 设计规范"，
   // 且点名要 iOS 26 的"无边界"模糊（当前系统 iOS 27 的默认观感是矩形硬边磨砂）。
   //
-  // 结论（SDK 原文）：iOS 26 起顶栏的模糊由滚动边缘效果承担——
-  // UIScrollEdgeEffect.Style.soft = "A soft-edged scroll edge effect"
+  // 结论（SDK 原文）：滚动边缘效果（UIScrollEdgeEffect）只覆盖**状态栏那一条**——
+  // 系统把栏区当作"栏自己的玻璃"处理；.soft = "A soft-edged scroll edge effect"
   //（无边界渐进模糊，内容滚到栏下才出现，看得清背后内容）；
   // .hard = "hard cutoff and dividing line"（矩形硬边+分隔线，用户嫌的那种）。
   // 因此 v19–v33 的自建磨砂层（自建 UIVisualEffectView + CAGradientLayer 渐变
-  // mask）、系统材质清空（clearBarEffects）、发丝隐藏（hideBarHairlines）、
-  // 三套 appearance 置透明/置默认（v30/v30b）全部撤除：栏底不画任何材质，
-  // 模糊交还 UIKit 的 UIScrollView.topEdgeEffect / bottomEdgeEffect
-  //（见 applyScrollEdgeEffects）。
+  // mask）撤除；栏区的模糊由栏自己用系统材质提供（见 makeNativeBarAppearance），
+  // 滚动边缘效果负责状态栏一条（见 applyScrollEdgeEffects）。两者区域相邻不重叠，
+  // 不存在 v30 那种"栏材质 + 自建层"的双图层。
   //
-  // 栏外观只保留"透明"这一个决定（挂载时一次写入，见 applyNativeBarAppearance）。
-  // v31 路由门控（setNavBarGlassEnabled）：主 tab 页关、吧页/帖子页开——
-  // v34 起门控的对象是滚动边缘模糊（栏底材质已全应用撤除）。
+  // v31 路由门控（setNavBarRouteEnabled）：主 tab 页关、吧页/帖子页开——
+  // 门控的对象是滚动边缘模糊（栏区材质不随之开关）。
   static func setNavBarRouteEnabled(_ enabled: Bool) { ChromeState.routeEnabled = enabled }
 
-  /// 栏外观只保留"透明"这一个决定：栏底材质=矩形磨砂（用户点名不要），模糊
-  /// 由滚动边缘效果承担（见 applyScrollEdgeEffects）。2026-09-13 起不再 swizzle
-  /// 三个 appearance setter：那是为拦 RNScreens 按 headerTransparent /
-  /// headerBlurEffect 的后写而做的，RNScreens 已不存在，全仓再无第二个写点。
+  /// 栏外观 = "系统材质 + 无底色 + 无分隔线"（见 makeNativeBarAppearance）。
+  /// 2026-09-13 起不再 swizzle 三个 appearance setter：那是为拦 RNScreens 按
+  /// headerTransparent / headerBlurEffect 的后写而做的，RNScreens 已不存在，
+  /// 全仓再无第二个写点。
   /// 写入时机=bar 挂载（见 navChromeScrollHooks.didMoveToWindow；重扫里按
-  /// hasTransparentBarAppearance 兜底补写一次），写后长期有效，且覆盖不属于
+  /// hasNativeBarAppearance 兜底补写一次），写后长期有效，且覆盖不属于
   /// TiebaRootNavigationController 的栏（如用户主页的 presentSocial sheet）。
   private static func applyNativeBarAppearance(to bar: UINavigationBar) {
     let appearance = makeNativeBarAppearance()
@@ -363,21 +361,31 @@ enum TiebaChrome {
   private static func makeNativeBarAppearance() -> UINavigationBarAppearance {
     let appearance = UINavigationBarAppearance()
     appearance.configureWithTransparentBackground()
+    // 栏区那层模糊必须**由栏自己**提供：iOS 26 的滚动边缘效果只覆盖状态栏那一条
+    //（系统把栏区当作"栏自己的玻璃"处理），栏置纯透明就只剩状态栏一条糊、栏区
+    // 全透——用户 2026-09-16 报的"只有状态栏区域有模糊，顶栏区域没有"。
+    // 用系统材质 + 显式清掉分隔线 = 无边界磨砂（区别于 v30 那种带发丝的矩形磨砂，
+    // 也区别于"栏材质 + 自建层"的双图层，本仓已无自建层）。
+    appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+    appearance.backgroundColor = .clear
+    appearance.shadowColor = .clear
     return appearance
   }
 
-  /// 栏的三套外观是否都已"透明"（configureWithTransparentBackground 的语义：
-  /// 背景模糊/图片/底色全空）。用作写外观的幂等判据——不维护"已规范化"缓存，
-  /// 直接看栏当前状态：真透明就不重写（重写会触发 UIKit 重建栏底）。
-  private static func hasTransparentBarAppearance(_ bar: UINavigationBar) -> Bool {
-    func transparent(_ appearance: UINavigationBarAppearance?) -> Bool {
+  /// 栏的三套外观是否都已是我们写入的那一份（材质在、底色透明、无分隔线）。
+  /// 用作写外观的幂等判据——不维护"已规范化"缓存，直接看栏当前状态：已是目标
+  /// 状态就不重写（重写会触发 UIKit 重建栏底，滚动中重写即闪烁）。
+  private static func hasNativeBarAppearance(_ bar: UINavigationBar) -> Bool {
+    func current(_ appearance: UINavigationBarAppearance?) -> Bool {
       guard let appearance else { return false }
-      return appearance.backgroundEffect == nil
+      // UIBlurEffect 不实现值相等，只判"有没有材质"这一件事。
+      return appearance.backgroundEffect != nil
         && appearance.backgroundImage == nil
         && (appearance.backgroundColor?.cgColor.alpha ?? 0) == 0
+        && (appearance.shadowColor?.cgColor.alpha ?? 0) == 0
     }
-    return transparent(bar.standardAppearance) && transparent(bar.compactAppearance)
-      && transparent(bar.scrollEdgeAppearance)
+    return current(bar.standardAppearance) && current(bar.compactAppearance)
+      && current(bar.scrollEdgeAppearance)
   }
 
   /// 顶层可见页面视图（presented 链 → 导航栈顶）：滚动边缘效果的作用域。
@@ -560,9 +568,9 @@ enum TiebaChrome {
       // 线，只写透明外观（applyNativeBarAppearance），其余（材质、分隔、滚动
       // 行为）全部按 iOS 26 规范由系统自渲染。
       // 正常路径由挂载钩子写一次；这里是启动首扫/钩子装晚的兜底：只有当前
-      // 三套外观**还没透明**才写（真透明就不写——重写会让 UIKit 重建栏底，
+      // 三套外观**还不是目标状态**才写（已是就不写——重写会让 UIKit 重建栏底，
       // 周期性重写即滚动闪烁源）。判据用外观自身状态，不维护"已写过"缓存。
-      if !hasTransparentBarAppearance(navBar) {
+      if !hasNativeBarAppearance(navBar) {
         applyNativeBarAppearance(to: navBar)
         applied = true
       }
