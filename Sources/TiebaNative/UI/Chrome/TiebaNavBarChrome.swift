@@ -27,15 +27,15 @@ enum TiebaChrome {
 
     /// 已写过"底边隐藏"的滚动视图（弱引用，随视图释放自动清理）。
     ///
-    /// 为什么要有这份记账：**写任一条边的边缘效果都会让 UIKit 重建该滚动视图的效果
-    /// 容器，重建会把另一条边（顶边）的 soft 样式复位**——实测表现就是"每次重扫后
-    /// 顶栏那层模糊又没了、只有纯透明"（用户 2026-09-16 复报）。所以底边每个滚动
-    /// 视图只写一次，之后的重扫只重申顶边。滚动视图换了（列表重建）自然重新记一笔。
+    /// 为什么要记账：**写任一条边的效果都会让 UIKit 重建该滚动视图的效果容器**，
+    /// 重建会把另一条边复位成默认（automatic = iOS 27 上那条 hard 矩形磨砂+分隔线，
+    /// 用户点名最差的那版）。所以底边每个滚动视图只写一次，顶边每趟重申；写入后
+    /// 还补排一次 tick 把复位收回（复位发生在本趟之后）。
     nonisolated(unsafe) static let bottomHiddenScrollViews = NSHashTable<UIScrollView>.weakObjects()
 
     // ── 空转治理（2026-09-12 发热审查）──
     // force 每次要做两趟视图树全量遍历：collectChromeBars 扫所有窗口的
-    // 整棵树，applyScrollEdgeEffects 再扫顶层页面整棵树。改前 1.5s timer
+    // 整棵树，hideScrollEdgeEffects 再扫顶层页面整棵树。改前 1.5s timer
     // 无条件全扫，且 UINavigationBar.layoutSubviews 每次布局也全扫——转场/
     // 滚动期间栏逐帧布局，等于接近每帧两趟遍历（持续发热的真凶之一）。
     // 现在没有周期任务：timer 已删（轮询整棵视图树不是 UIKit 的做法），所有
@@ -320,29 +320,30 @@ enum TiebaChrome {
     return ()
   }()
 
-  // ── v34 原生顶栏（2026-09-11 用户定调）──
+  // ── 原生顶栏（2026-09-11 用户定调，2026-09-16 定案）──
   // 用户要求："顶栏完全使用 UIKit，并遵循 iOS 26 之后的 UIKit 设计规范"，
-  // 且点名要 iOS 26 的"无边界"模糊（当前系统 iOS 27 的默认观感是矩形硬边磨砂）。
+  // 且点名要 iOS 26 的"无边界"模糊。
   //
-  // 结论（SDK 原文）：滚动边缘效果（UIScrollEdgeEffect）只覆盖**状态栏那一条**——
-  // 系统把栏区当作"栏自己的玻璃"处理；.soft = "A soft-edged scroll edge effect"
-  //（无边界渐进模糊，内容滚到栏下才出现，看得清背后内容）；
-  // .hard = "hard cutoff and dividing line"（矩形硬边+分隔线，用户嫌的那种）。
-  // 因此 v19–v33 的自建磨砂层（自建 UIVisualEffectView + CAGradientLayer 渐变
-  // mask）撤除；栏区的模糊由栏自己用系统材质提供（见 makeNativeBarAppearance），
-  // 滚动边缘效果负责状态栏一条（见 applyScrollEdgeEffects）。两者区域相邻不重叠，
-  // 不存在 v30 那种"栏材质 + 自建层"的双图层。
+  // 走过的两条错路（都已被用户当场否掉，别再回去）：
+  //   · 只靠系统滚动边缘效果（UIScrollEdgeEffect.soft）：iOS 27 上它只管**状态栏
+  //     那一条**，bar 区没有任何模糊提供者 ⇒ 用户报"只有状态栏区域有模糊"；
+  //   · 栏自带系统材质（appearance.backgroundEffect）：材质四边是硬的，就是用户
+  //     最早否掉的"矩形硬边磨砂"（"退化成最差的版本"）。
+  // 定案 = **自建渐变磨砂层**（v21/v32 那套，见 applyNavGlassLayer）：从屏幕顶
+  // 铺到 bar 底 + 64pt 溶解带，alpha 渐变收尾 ⇒ 无边界、无硬分界、可调强度。
+  // 系统边缘效果因此全部显式关掉（见 hideScrollEdgeEffects），栏外观保持纯透明
+  //（见 makeNativeBarAppearance）——模糊只有一个提供者，不会叠两层。
   //
   // v31 路由门控（setNavBarRouteEnabled）：主 tab 页关、吧页/帖子页开——
   // 门控的对象是滚动边缘模糊（栏区材质不随之开关）。
   static func setNavBarRouteEnabled(_ enabled: Bool) { ChromeState.routeEnabled = enabled }
 
-  /// 栏外观 = "系统材质 + 无底色 + 无分隔线"（见 makeNativeBarAppearance）。
+  /// 栏外观只保留"透明"这一个决定（模糊由自建层承担，见 applyNavGlassLayer）。
   /// 2026-09-13 起不再 swizzle 三个 appearance setter：那是为拦 RNScreens 按
   /// headerTransparent / headerBlurEffect 的后写而做的，RNScreens 已不存在，
   /// 全仓再无第二个写点。
   /// 写入时机=bar 挂载（见 navChromeScrollHooks.didMoveToWindow；重扫里按
-  /// hasNativeBarAppearance 兜底补写一次），写后长期有效，且覆盖不属于
+  /// hasTransparentBarAppearance 兜底补写一次），写后长期有效，且覆盖不属于
   /// TiebaRootNavigationController 的栏（如用户主页的 presentSocial sheet）。
   private static func applyNativeBarAppearance(to bar: UINavigationBar) {
     let appearance = makeNativeBarAppearance()
@@ -361,31 +362,21 @@ enum TiebaChrome {
   private static func makeNativeBarAppearance() -> UINavigationBarAppearance {
     let appearance = UINavigationBarAppearance()
     appearance.configureWithTransparentBackground()
-    // 栏区那层模糊必须**由栏自己**提供：iOS 26 的滚动边缘效果只覆盖状态栏那一条
-    //（系统把栏区当作"栏自己的玻璃"处理），栏置纯透明就只剩状态栏一条糊、栏区
-    // 全透——用户 2026-09-16 报的"只有状态栏区域有模糊，顶栏区域没有"。
-    // 用系统材质 + 显式清掉分隔线 = 无边界磨砂（区别于 v30 那种带发丝的矩形磨砂，
-    // 也区别于"栏材质 + 自建层"的双图层，本仓已无自建层）。
-    appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
-    appearance.backgroundColor = .clear
-    appearance.shadowColor = .clear
     return appearance
   }
 
-  /// 栏的三套外观是否都已是我们写入的那一份（材质在、底色透明、无分隔线）。
-  /// 用作写外观的幂等判据——不维护"已规范化"缓存，直接看栏当前状态：已是目标
-  /// 状态就不重写（重写会触发 UIKit 重建栏底，滚动中重写即闪烁）。
-  private static func hasNativeBarAppearance(_ bar: UINavigationBar) -> Bool {
-    func current(_ appearance: UINavigationBarAppearance?) -> Bool {
+  /// 栏的三套外观是否都已"透明"（configureWithTransparentBackground 的语义：
+  /// 背景模糊/图片/底色全空）。用作写外观的幂等判据——不维护"已规范化"缓存，
+  /// 直接看栏当前状态：真透明就不重写（重写会触发 UIKit 重建栏底）。
+  private static func hasTransparentBarAppearance(_ bar: UINavigationBar) -> Bool {
+    func transparent(_ appearance: UINavigationBarAppearance?) -> Bool {
       guard let appearance else { return false }
-      // UIBlurEffect 不实现值相等，只判"有没有材质"这一件事。
-      return appearance.backgroundEffect != nil
+      return appearance.backgroundEffect == nil
         && appearance.backgroundImage == nil
         && (appearance.backgroundColor?.cgColor.alpha ?? 0) == 0
-        && (appearance.shadowColor?.cgColor.alpha ?? 0) == 0
     }
-    return current(bar.standardAppearance) && current(bar.compactAppearance)
-      && current(bar.scrollEdgeAppearance)
+    return transparent(bar.standardAppearance) && transparent(bar.compactAppearance)
+      && transparent(bar.scrollEdgeAppearance)
   }
 
   /// 顶层可见页面视图（presented 链 → 导航栈顶）：滚动边缘效果的作用域。
@@ -400,89 +391,168 @@ enum TiebaChrome {
     return vc.view
   }
 
-  /// 滚动边缘效果 = 系统的 UIScrollView 边缘效果（iOS 26 规范形态）：给顶层页面
-  /// 里"顶边贴着屏幕顶"的滚动视图打开 soft 样式：内容滚到栏下时由 UIKit 做渐进
-  /// 模糊——无边界、无硬切边、看得清背后内容。hard 样式（"hard cutoff and
-  /// dividing line"，即用户嫌的矩形硬边）与栏底材质一律不用。
+  /// 顶栏那层模糊 = **自建层**（见 applyNavGlassLayer），所以系统滚动边缘效果
+  /// 一律显式关掉：两者都开就是叠两层糊（用户报过"栏下内容被糊死"）。
+  /// effect 的 `hidden` 默认是 false = 系统 automatic，iOS 27 上解析成 hard
+  /// 矩形磨砂 + 分隔线（用户点名最差的那版）——**不写就会冒出来**。
+  /// 底边同样关（用户 2026-09-14 报"底栏区域带模糊"要删）。
   ///
-  /// 路由链：内容页（吧页/帖子页/用户主页/搜索/设置…）顶边全开 soft；主 tab
-  ///（自绘顶栏，无原生栏）显式关——内容滚到透明空壳那一段被模糊没有意义。
-  ///
-  /// 只有"**整屏竖向列表**"配 soft：栏下真正滚动的是它。其余顶边贴屏幕顶的
-  /// 滚动视图（横向分页器、行内横滑条…）一律显式关掉：effect 的 hidden 默认是
-  /// false，不写就是系统 automatic 样式（iOS 27 上解析成 hard 矩形磨砂+分隔线），
-  /// 而分页器的顶边同样在栏下、又盖在列表之上，于是 hard 叠 soft，用户看到的
-  /// 就是"矩形磨砂 + 明显底边"。反过来给分页器也开 soft 更糟（2026-09-11 v36
-  /// 实测）：两层软模糊叠在一起，滑动时栏下内容被糊死。
-  /// 幂等：已是目标状态时不写（写会打断进行中的模糊动画）。
-  ///
-  /// 底边（2026-09-14 起不做软模糊）：底栏是悬浮玻璃，内容从它下面穿过就是系统
-  /// 原生观感。原先在底边补的那层 soft 会在底栏区域多出一圈可辨的糊，底栏收纳成
-  /// 药丸后那地方空着、糊还在，用户据此报"底栏区域带模糊"⇒ 底边一律显式关掉
-  ///（hidden=true，不是交给 automatic）。**只在重扫时写一次**：改成滚动路径每帧
-  /// 重申的话，写边缘效果会走 NSISEngine（见 forceNavBarLiquidGlass 头注），等于
-  /// 每帧一次布局引擎操作，是滚动掉帧的典型来源。
+  /// 顶/底互相复位：写任一条边都会让 UIKit 重建效果容器，另一条被复位成 automatic
+  /// ⇒ 底边只写一次（记账见 ChromeState.bottomHiddenScrollViews）并补排一次 tick，
+  /// 顶边每趟重申。幂等靠 effect 自身状态：写边缘效果会走 NSISEngine，滚动路径每帧
+  /// 重申就是每帧一次布局引擎操作（掉帧源），所以只在重扫时写"还不是目标状态"的。
   @discardableResult
-  private static func applyScrollEdgeEffects(glass: Bool) -> Bool {
+  private static func hideScrollEdgeEffects() -> Bool {
     guard let screen = topScreenView(), screen.bounds.height > 0 else { return false }
     var changed = false
-    func configure(_ scroll: UIScrollView) {
-      let frameInScreen = scroll.convert(scroll.bounds, to: screen)
-      let vertical = scroll.contentSize.width <= scroll.bounds.width + 1
-      // 横向可见性：分页器并排放着各段页面，屏幕外的页面也有列表，只有当前
-      // 可见那一屏的列表才算候选（否则会把栏交给一个看不见的列表）。
-      let onScreenX = frameInScreen.minX >= -1
-        && frameInScreen.maxX <= screen.bounds.width + 1
-      let isList = vertical && !scroll.isPagingEnabled && onScreenX
-        && frameInScreen.height > screen.bounds.height * 0.4
-      let reachesBottom = frameInScreen.maxY >= screen.bounds.height - 1
-      // 顶/底解耦（2026-09-14）：原来顶底共用 `minY <= 1` 一个判据，于是"从屏幕中部
-      // 开始的列表"（搜索结果、消息列表）连**底**边软边也拿不到——内容滑到底栏下面
-      // 是硬的。现在各自判各自的：贴顶才给顶边，压到屏底才给底边，另一侧显式关掉
-      // （effect 的 hidden 默认 false = 系统 automatic，iOS 27 上解析成 hard 硬边）。
-      let visible = !scroll.isHidden && scroll.alpha > 0.01
-      let touchesTop = frameInScreen.minY <= 1
-      let qualifies = visible && frameInScreen.height > 80 && (touchesTop || reachesBottom)
-      guard qualifies else { return }
-      // ⚠️ 底边只写一次、且必须写在顶边之前：写边缘效果会让 UIKit 重建效果容器，
-      // 同一次里先写的另一边会被复位成默认（automatic）。每次重扫都重写底边 =
-      // 每次都把顶边的 soft 打回去（用户报的"顶栏纯透明、没有模糊"）。
-      // 记账见 ChromeState.bottomHiddenScrollViews。
+    var wroteBottom = false
+    screen.forEachSubviewRecursively { view in
+      guard let scroll = view as? UIScrollView else { return }
       if !ChromeState.bottomHiddenScrollViews.contains(scroll) {
         ChromeState.bottomHiddenScrollViews.add(scroll)
-        if setEdgeEffect(scroll.bottomEdgeEffect, soft: false) {
+        if hideEdgeEffect(scroll.bottomEdgeEffect) {
           changed = true
-          // 这次写入可能让 UIKit 在本趟之后才重建容器、把顶边复位：下一拍重申一次
-          // 顶边（底边已记账，不会再写，所以第二趟起只有顶边被写）。每个滚动视图
-          // 只发生一次。
-          DispatchQueue.main.async { _ = TiebaChrome.forceNavBarLiquidGlass() }
+          wroteBottom = true
         }
       }
-      if setEdgeEffect(scroll.topEdgeEffect, soft: glass && isList && touchesTop) { changed = true }
+      if hideEdgeEffect(scroll.topEdgeEffect) { changed = true }
     }
-    screen.forEachSubviewRecursively { view in
-      if let scroll = view as? UIScrollView { configure(scroll) }
+    if wroteBottom {
+      DispatchQueue.main.async { _ = TiebaChrome.forceNavBarLiquidGlass() }
     }
     return changed
   }
 
-  /// 幂等写一个边缘效果：soft = soft 样式且显示；否则隐藏。
+  /// 幂等隐藏一个边缘效果（目标状态只有一个：hidden）。
   @discardableResult
-  private static func setEdgeEffect(_ effect: UIScrollEdgeEffect, soft: Bool) -> Bool {
-    if soft {
-      var changed = false
-      if effect.isHidden {
-        effect.isHidden = false
-        changed = true
-      }
-      if effect.style !== UIScrollEdgeEffect.Style.soft {
-        effect.style = .soft
-        changed = true
-      }
-      return changed
-    }
+  private static func hideEdgeEffect(_ effect: UIScrollEdgeEffect) -> Bool {
     guard !effect.isHidden else { return false }
     effect.isHidden = true
+    return true
+  }
+
+  // ── 顶栏无边界磨砂层（v21/v32 设计，2026-09-16 回归）──
+  // 系统滚动边缘效果不管 bar 区（只铺状态栏那一条），栏自带材质又是用户否掉的
+  // "矩形硬边磨砂"⇒ 模糊回到自建层：
+  //   · 一个 UIVisualEffectView 挂**栏的父视图**（挂 bar 子树里会盖住标题文字）；
+  //   · 上边缘补到父视图顶（= 屏幕顶，bar 常从状态栏下方开始，不补就"少一截"）；
+  //   · 下边缘 = bar 底 + band(64)，用 CAGradientLayer 做竖向 alpha 渐变
+  //     （顶部 0.6 → 中段 0.72 → bar 底 1.0 → 溶解带 0）——**溶解带就是"无边界"**：
+  //     栏底没有硬分界，内容在栏下渐隐。
+  // 路由门控同 v31：主 tab 页（自绘顶栏，原生栏是透明空壳）不挂。
+  private enum NavGlass {
+    static let identifier = "tieba.navGlassLayer.v1"
+    /// 计算属性：UIBlurEffect 在本 SDK 里是 main-actor 类型，静态存储属性的初始化
+    /// 不在主线程上下文里；只在建层时取一次，没有额外开销。
+    static var effect: UIVisualEffect { UIBlurEffect(style: .systemMaterial) }
+    /// bar 底以下的溶解带（磨砂渐隐到 0 的长度；无硬分界的关键）。
+    static let band: CGFloat = 64
+    static let alphaTop: CGFloat = 0.6
+    static let alphaMid: CGFloat = 0.72
+    static let alphaBottom: CGFloat = 1
+    /// 顶部均一段占层高比例（到这里开始往 bar 底渐变）。
+    static let topFade: CGFloat = 0.55
+  }
+
+  @discardableResult
+  private static func applyNavGlassLayer(to bar: UINavigationBar, enabled: Bool) -> Bool {
+    guard let host = navHost(for: bar) else { return false }
+    let existing = host.subviews
+      .compactMap { $0 as? UIVisualEffectView }
+      .first { $0.accessibilityIdentifier == NavGlass.identifier }
+    // 关（非门控路由、或栏被藏着）只隐藏不拆：路由来回切不产生增删抖动。
+    guard enabled, !bar.isHidden, bar.alpha > 0.01, bar.window != nil else {
+      guard let existing, !existing.isHidden else { return false }
+      existing.isHidden = true
+      return true
+    }
+    guard bar.bounds.width > 0, bar.bounds.height > 20, let window = bar.window else { return false }
+    var changed = false
+    let layer: UIVisualEffectView
+    if let existing {
+      layer = existing
+    } else {
+      layer = UIVisualEffectView(effect: NavGlass.effect)
+      layer.accessibilityIdentifier = NavGlass.identifier
+      layer.isUserInteractionEnabled = false
+      // 垫在栏之下、页面内容之上：bar 是父视图里最上面那层，插它正下方即可
+      //（插最底会跑到内容之下，模糊就看不见了）。
+      host.insertSubview(layer, belowSubview: bar)
+      changed = true
+    }
+    if layer.isHidden {
+      layer.isHidden = false
+      changed = true
+    }
+    // 几何一律在 window 坐标里算再换算回宿主机：上边缘 = 屏幕顶（bar 常从状态栏
+    // 下方开始，不补上这一段就是"少一截"），下边缘 = bar 底 + 溶解带。
+    let barRect = bar.convert(bar.bounds, to: window)
+    let target = host.convert(
+      CGRect(
+        x: 0,
+        y: 0,
+        width: window.bounds.width,
+        height: barRect.maxY + NavGlass.band
+      ),
+      from: window
+    )
+    if !layer.frame.equalTo(target) {
+      layer.frame = target
+      changed = true
+    }
+    if updateNavGlassMask(layer) { changed = true }
+    return changed
+  }
+
+  /// 玻璃层的宿主 = **导航容器的视图**。不用 bar.superview：iOS 27 上那可能是个
+  /// 只包着 bar 的私有容器（层贴它顶 = 从栏顶起，状态栏那一段盖不到，就是"少一截"
+  /// 那类投诉），导航容器的视图铺满整屏、能承接从屏幕顶起的一整块。
+  private static func navHost(for bar: UINavigationBar) -> UIView? {
+    var view: UIView? = bar.superview
+    while let current = view {
+      if let nav = current.next as? UINavigationController, nav.navigationBar === bar {
+        return current
+      }
+      view = current.superview
+    }
+    return bar.superview
+  }
+
+  /// 渐变 mask：结构只建一次，尺寸真变了才重算 colors/locations（写 mask 会
+  /// 触发一次重绘，滚动中反复写就是闪烁源）。
+  private static func updateNavGlassMask(_ layer: UIVisualEffectView) -> Bool {
+    let mask: CAGradientLayer
+    if let existing = layer.layer.mask as? CAGradientLayer,
+      existing.name == NavGlass.identifier
+    {
+      // 层尺寸没变（mask 跟层同尺寸）⇒ 渐变参数也不用重算。
+      guard !existing.frame.equalTo(layer.bounds) else { return false }
+      mask = existing
+    } else {
+      mask = CAGradientLayer()
+      mask.name = NavGlass.identifier
+      mask.startPoint = CGPoint(x: 0.5, y: 0)
+      mask.endPoint = CGPoint(x: 0.5, y: 1)
+      layer.layer.mask = mask
+    }
+    mask.frame = layer.bounds
+    // fade = bar 底在层里的位置（比例）：溶解带落在 bar 之外，所以栏底下缘没有
+    // 硬分界；上段保持顶部强度，到 min(topFade, fade×0.8) 才开始渐浓。
+    let height = max(layer.bounds.height, 1)
+    let fade = min(max((height - NavGlass.band) / height, 0.3), 0.9)
+    let white = UIColor.white
+    mask.colors = [
+      white.withAlphaComponent(NavGlass.alphaTop).cgColor,
+      white.withAlphaComponent(NavGlass.alphaMid).cgColor,
+      white.withAlphaComponent(NavGlass.alphaBottom).cgColor,
+      white.withAlphaComponent(0).cgColor,
+    ]
+    mask.locations = [
+      0,
+      NSNumber(value: min(NavGlass.topFade, fade * 0.8)),
+      NSNumber(value: fade),
+      1,
+    ]
     return true
   }
 
@@ -570,8 +640,11 @@ enum TiebaChrome {
       // 正常路径由挂载钩子写一次；这里是启动首扫/钩子装晚的兜底：只有当前
       // 三套外观**还不是目标状态**才写（已是就不写——重写会让 UIKit 重建栏底，
       // 周期性重写即滚动闪烁源）。判据用外观自身状态，不维护"已写过"缓存。
-      if !hasNativeBarAppearance(navBar) {
+      if !hasTransparentBarAppearance(navBar) {
         applyNativeBarAppearance(to: navBar)
+        applied = true
+      }
+      if applyNavGlassLayer(to: navBar, enabled: ChromeState.routeEnabled) {
         applied = true
       }
     }
@@ -580,7 +653,8 @@ enum TiebaChrome {
     // v34：栏模糊 = 系统滚动边缘效果（soft，iOS 26 规范形态），按路由门控
     //（吧页/帖子页开，其余页面顶边显式关；底边归整屏竖向列表）。随 force 的
     // 节奏幂等重挂：push 新页、列表重建都会带来新的滚动视图。
-    if TiebaChrome.applyScrollEdgeEffects(glass: ChromeState.routeEnabled) {
+    // 顶栏模糊由自建层承担 ⇒ 系统边缘效果（含 iOS 27 的 hard 矩形磨砂）全部关掉。
+    if hideScrollEdgeEffects() {
       applied = true
     }
     CATransaction.commit()
