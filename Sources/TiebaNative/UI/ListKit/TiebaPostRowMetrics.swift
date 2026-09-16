@@ -130,7 +130,9 @@ enum TiebaPostRowText {
     let paragraph = NSMutableParagraphStyle()
     paragraph.minimumLineHeight = lineHeight
     paragraph.maximumLineHeight = lineHeight
-    paragraph.lineBreakMode = .byWordWrapping
+    // 楼中楼预览恒两行截断（UILabel 的 numberOfLines 之外还看段落样式这一项），
+    // 楼层正文按字换行（截断交给行高的最大行数）。
+    paragraph.lineBreakMode = isSubPost ? .byTruncatingTail : .byWordWrapping
     let base: [NSAttributedString.Key: Any] = [
       .font: UIFont.systemFont(ofSize: fontSize, weight: .medium),
       .foregroundColor: palette.text,

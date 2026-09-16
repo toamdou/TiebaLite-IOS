@@ -689,6 +689,9 @@ final class TiebaPostPlaceholderView: UIView {
 final class TiebaPostRowView: UIView {
   var onEvent: ((TiebaPostRowEvent) -> Void)?
 
+  /// 上一次真正贴上去的模型（身份比较）：同一个实例重复 apply 直接返回（见 apply(model:)）。
+  private weak var appliedModel: TiebaPostRowModel?
+
   private let cardView = UIView()
   private var avatarView: TiebaForumAvatarView?
   private let nameLabel = UILabel()
@@ -714,7 +717,7 @@ final class TiebaPostRowView: UIView {
   private let subPostsControl = UIControl()
   private let subPostsHairline = UIView()
   private var subPostNameLabels: [UILabel] = []
-  private var subPostTextViews: [UITextView] = []
+  private var subPostTextViews: [UILabel] = []
   private var subPostDividers: [UIView] = []
   private let subPostsMoreLabel = UILabel()
   private let toolbarView = UIView()
@@ -740,6 +743,7 @@ final class TiebaPostRowView: UIView {
   func apply(pageKey: String, index: Int) {
     guard let model = TiebaPostRowMetrics.shared.row(pageKey: pageKey, index: index) else {
       self.model = nil
+      appliedModel = nil
       isHidden = true
       return
     }
@@ -748,6 +752,11 @@ final class TiebaPostRowView: UIView {
   }
 
   func apply(model: TiebaPostRowModel) {
+    // 同一个模型实例重复 apply（点赞/页脚变化引起的可见行重配）不必重贴：正文那个
+    // UITextView 一赋 attributedText 就是一次全文排版，是这行最贵的一笔；主题色变
+    // 走 applyPalette 另一条路。换行/换模型/reuse 都会让 token 失配。
+    if appliedModel === model { return }
+    appliedModel = model
     self.model = model
     self.palette = model.palette
     applyPalette(model.palette)
@@ -787,9 +796,11 @@ final class TiebaPostRowView: UIView {
     }
 
     likeIcon.frame = plan.likeIconFrame
-    likeIcon.image = UIImage(
-      systemName: model.post.isAgree ? "heart.fill" : "heart",
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
+    // SF Symbol 走 TiebaSymbols 缓存：每次 apply 现建一张会走 CoreGlyphs（滚动时每行两次）。
+    likeIcon.image = TiebaSymbols.image(
+      model.post.isAgree ? "heart.fill" : "heart",
+      pointSize: 18,
+      weight: .regular
     )
     likeIcon.tintColor = model.post.isAgree ? model.palette.liked : model.palette.textTertiary
     likeControl.frame = plan.likeFrame
@@ -800,13 +811,7 @@ final class TiebaPostRowView: UIView {
       likeLabel.textColor = model.post.isAgree ? model.palette.liked : model.palette.textTertiary
     }
     menuButton.frame = plan.menuFrame
-    menuButton.setImage(
-      UIImage(
-        systemName: "ellipsis",
-        withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .bold)
-      ),
-      for: .normal
-    )
+    menuButton.setImage(TiebaSymbols.image("ellipsis", pointSize: 18, weight: .bold), for: .normal)
     menuButton.tintColor = model.palette.textTertiary
 
     textView.isHidden = plan.textFrame == nil
@@ -858,9 +863,8 @@ final class TiebaPostRowView: UIView {
     subPostsHairline.backgroundColor = palette.separator
     for divider in subPostDividers { divider.backgroundColor = palette.separator }
     for label in subPostNameLabels { label.textColor = palette.textSecondary }
-    for view in subPostTextViews {
-      view.textColor = palette.textSecondary
-      view.linkTextAttributes = [.foregroundColor: palette.primary]
+    for label in subPostTextViews {
+      label.textColor = palette.textSecondary
     }
     subPostsMoreLabel.textColor = palette.primary
     // 底色 = 主题 surfaceSecondary（原 JS replyToolbar 的 colors.surfaceSecondary，
@@ -878,6 +882,7 @@ final class TiebaPostRowView: UIView {
 
   func prepareForReuse() {
     model = nil
+    appliedModel = nil
     imageScrollView.contentOffset = .zero
     textView.attributedText = nil
     for view in imageViews {
@@ -990,14 +995,12 @@ final class TiebaPostRowView: UIView {
       name.font = TiebaPostRowLayout.subPostNameFont
       addSubview(name)
       subPostNameLabels.append(name)
-      let text = UITextView()
-      text.isEditable = false
-      text.isScrollEnabled = false
-      text.isSelectable = false
-      text.backgroundColor = .clear
-      text.textContainerInset = .zero
-      text.textContainer.lineFragmentPadding = 0
-      text.isUserInteractionEnabled = false
+      let text = UILabel()
+      // 楼中楼预览**两行截断**（与 TiebaPostRowPlan 的 measureHeight(maxLines: 2) 同口径）；
+      // 非可选非交互，链接色已烘进 attributed，故用 UILabel 而非第二个 UITextView
+      //（文本框一赋值就是一趟 TextKit 排版：一行楼中楼预览不值得）。
+      text.numberOfLines = 2
+      text.lineBreakMode = .byTruncatingTail
       addSubview(text)
       subPostTextViews.append(text)
       let divider = UIView()
@@ -1187,8 +1190,6 @@ final class TiebaPostRowView: UIView {
         )
       }
       let text = subPostTextViews[index]
-      text.textContainer.maximumNumberOfLines = 2
-      text.textContainer.lineBreakMode = .byTruncatingTail
       text.isHidden = !hasPost
       if hasPost, plan.subPostTextFrames.indices.contains(index) {
         text.frame = plan.subPostTextFrames[index]
