@@ -2,7 +2,7 @@
 // + 三个常驻子页（各自保留滚动位置）；底栏重复点击 → 当前段回顶 + 刷新。
 import UIKit
 
-final class TiebaExploreViewController: UIViewController, TiebaTabReselectable {
+final class TiebaExploreViewController: UIViewController, TiebaTabReselectable, TiebaNativeScreen {
   private let segmented = UISegmentedControl(items: ["推荐", "关注", "热榜"])
   private let container = UIView()
   private let personalized = TiebaExploreFeedViewController(segment: .personalized)
@@ -43,6 +43,11 @@ final class TiebaExploreViewController: UIViewController, TiebaTabReselectable {
   /// 底栏重复点击（tab 根屏）：只有当前可见段响应。
   func tabReselected() {
     (segments[activeIndex] as? TiebaTabReselectable)?.tabReselected()
+  }
+
+  /// 主题变化（含跟随系统实时切换）：底色现取主题（动态色，等价重设一次）。
+  func screenThemeDidChange() {
+    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
   }
 
   @objc private func handleSegmentChange() {

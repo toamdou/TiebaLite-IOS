@@ -25,6 +25,10 @@ public protocol TiebaNativeScreen: UIViewController {
   var screenRightBarItems: [UIBarButtonItem]? { get }
   /// 本屏自绘的左侧栏按钮（nil = 保留系统的返回箭头）。
   var screenLeftBarItems: [UIBarButtonItem]? { get }
+  /// 应用主题变化（含**跟随系统**时的实时切换，见 TiebaAppBootstrap.observeTraitChanges）。
+  /// 导航壳会对在场的每个宿主（含其子 VC 树）回调一次；需要重着色自绘内容的屏在这里
+  /// 重取主题重刷（一般就是调自己的 applyPalette）。
+  func screenThemeDidChange()
 }
 
 public extension TiebaNativeScreen {
@@ -32,6 +36,7 @@ public extension TiebaNativeScreen {
   var preferredScreenStatusBarStyle: UIStatusBarStyle? { nil }
   var screenRightBarItems: [UIBarButtonItem]? { nil }
   var screenLeftBarItems: [UIBarButtonItem]? { nil }
+  func screenThemeDidChange() {}
 }
 
 /// 类型化路由 → 原生页面。路由表（TiebaRoute.name）里登记过的每一条都在这里落地，

@@ -120,6 +120,11 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     list.contentInsetBottom = view.safeAreaInsets.bottom + 16
   }
 
+  /// 主题变化（含跟随系统时的实时切换）→ 重取主题重刷自绘色（页面底色/列表色板/页头）。
+  func screenThemeDidChange() {
+    applyPalette()
+  }
+
   private func applyPalette() {
     var palette = TiebaSimpleRowPalette.default
     let tint = TiebaNavigator.shared.chromeTheme.tint

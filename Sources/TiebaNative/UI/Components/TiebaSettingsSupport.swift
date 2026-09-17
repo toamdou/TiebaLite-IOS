@@ -185,12 +185,25 @@ enum TiebaSettingsForm {
     let accent = TiebaFormColor.hex(accentHex) ?? .tintColor
     let toolbarPrimary = TiebaPreferences.bool("toolbarPrimaryColor", default: false)
     let statusBarFontDark = TiebaPreferences.bool("statusBarFontDark", default: false)
+    // 工具栏主色调档位下 navTint 依赖深浅 ⇒ 同样是动态色（跟随系统时实时切换）。
     let navTint: UIColor = toolbarPrimary
-      ? (dark ? .white : (statusBarFontDark ? .black : .white))
+      ? UIColor { $0.userInterfaceStyle == .dark ? .white : (statusBarFontDark ? .black : .white) }
       : .label
-    let themeName = TiebaThemePalette.themeName(dark: dark)
-    let backgroundHex = TiebaThemePalette.background(themeName: themeName, isDark: dark)
-    let background = backgroundHex.flatMap { TiebaFormColor.hex($0) } ?? .systemBackground
+    // 页面/窗口底色做成**动态色**：浅深两版现在就都算好，之后由 UIKit 按 trait 解析。
+    // 这样"跟随系统"时系统切深浅，所有持有这个颜色的视图（页面底色、宿主/窗口/
+    // 导航容器底色）自动跟着变，不需要谁去逐个重刷——之前是具体色，所以切完只有
+    // 系统语义色（卡片）变了、页面底色留在白色（用户 2026-09-16 报）。
+    // 手动模式也成立：窗口级 override 会把这个 trait 解析成应用主题那一档。
+    // ⚠️ provider 里不能再读偏好（UIColor 的解析发生在渲染/布局期，读 KV 是热路径活）。
+    let lightBackground = TiebaThemePalette
+      .background(themeName: TiebaThemePalette.themeName(dark: false), isDark: false)
+      .flatMap { TiebaFormColor.hex($0) } ?? .white
+    let darkBackground = TiebaThemePalette
+      .background(themeName: TiebaThemePalette.themeName(dark: true), isDark: true)
+      .flatMap { TiebaFormColor.hex($0) } ?? .black
+    let background = UIColor { traits in
+      traits.userInterfaceStyle == .dark ? darkBackground : lightBackground
+    }
     TiebaNavigator.shared.applyTheme(
       TiebaChromeTheme(tint: accent, navTint: navTint, background: background, dark: dark)
     )

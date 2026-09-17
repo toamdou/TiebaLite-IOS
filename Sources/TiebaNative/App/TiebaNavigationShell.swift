@@ -259,6 +259,15 @@ public final class TiebaRouteHostViewController: UIViewController {
     if let left = screen.screenLeftBarItems { navigationItem.leftBarButtonItems = left }
   }
 
+  /// 主题变化 → 转给子页（含分段容器里的常驻子页，所以递归整棵子 VC 树）。
+  func refreshScreenTheme() {
+    func visit(_ vc: UIViewController) {
+      (vc as? TiebaNativeScreen)?.screenThemeDidChange()
+      for child in vc.children { visit(child) }
+    }
+    visit(nativeChild)
+  }
+
   public override var preferredStatusBarStyle: UIStatusBarStyle {
     // 逐屏覆盖优先，否则用全局默认（由 JS 按"工具栏主色调 / 状态栏字色"
     // 偏好算出后下发）。应用内主题 ≠ 系统外观，所以不能交给 UIKit 自己判。

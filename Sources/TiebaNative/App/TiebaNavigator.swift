@@ -117,6 +117,9 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       }
       // 原生页面的系统语义色也要跟上（应用内主题 ≠ 系统外观）。
       host.syncNativeScreenChrome()
+      // 页面自绘部分（页面底色、列表色板、页头、行内描边）也重刷一遍：跟随系统
+      // 模式下系统切深浅走的就是这条路（用户报"卡片变了、页面底色还是白的"）。
+      host.refreshScreenTheme()
     }
   }
 

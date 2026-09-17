@@ -47,6 +47,11 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+  /// 主题变化（含跟随系统时的实时切换）→ 重取主题重刷自绘色（页面底色/列表色板/页头）。
+  func screenThemeDidChange() {
+    applyPalette()
+  }
+
   // MARK: - 生命周期
 
   override func viewDidLoad() {
