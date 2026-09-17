@@ -81,15 +81,26 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     applySpec()
   }
 
+  /// 卡片内文本可用宽 = 页头宽 − root 左右 10 − 卡片内边距 14。
+  private static func textWidth(forHeaderWidth width: CGFloat) -> CGFloat {
+    max(width - 48, 1)
+  }
+
   /// 页头高 = 该宽度下的自适应内容高（缓存；宽度变化即失效）。
   func headerHeight(forWidth width: CGFloat) -> CGFloat {
     if let cache = heightCache, cache.width == width { return cache.height }
+    // 多行标签先钉换行宽度再拟合：拟合趟与最终布局趟的换行宽度不一致时会差一整行
+    //（全仓不设 preferredMaxLayoutWidth 时这是默认状态），而宿主会把差额当空白
+    // 分给页头里的某一行（用户 2026-09-17 报"按钮/进度条上下很多空白"）。
+    introLabel.preferredMaxLayoutWidth = Self.textWidth(forHeaderWidth: width)
     let target = CGSize(width: width, height: UIView.layoutFittingCompressedSize.height)
-    let height = systemLayoutSizeFitting(
-      target,
-      withHorizontalFittingPriority: .required,
-      verticalFittingPriority: .fittingSizeLevel
-    ).height
+    let height = ceil(
+      systemLayoutSizeFitting(
+        target,
+        withHorizontalFittingPriority: .required,
+        verticalFittingPriority: .fittingSizeLevel
+      ).height
+    )
     heightCache = (width, height)
     return height
   }
@@ -269,6 +280,13 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     classifyRow.addArrangedSubview(makeSpacer())
     classifyRow.addArrangedSubview(classifyButton)
     root.addArrangedSubview(classifyRow)
+
+    // 兜底吸收器：万一单元格高比内容自然高多出一点（测量口径/缓存不同步），
+    // 这点高度落在这里（hugging 1 < 各行的 250），不会被栈分给排序行/等级行——
+    // 那两行是 center 对齐的单子控件行，一被拉伸就是"控件上下对称的空白"。
+    let tailSpacer = UIView()
+    tailSpacer.setContentHuggingPriority(UILayoutPriority(1), for: .vertical)
+    root.addArrangedSubview(tailSpacer)
   }
 
   /// 行内撑开用（横向 stack 里吸收剩余宽度的空视图）。

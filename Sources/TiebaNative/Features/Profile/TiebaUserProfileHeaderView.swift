@@ -57,6 +57,9 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
   /// 高度 = 内容自适应高（Auto Layout 单次测量，按宽度缓存）。
   public func headerHeight(forWidth width: CGFloat) -> CGFloat {
     if let cache = heightCache, cache.width == width { return cache.height }
+    // 多行简介先钉换行宽度：拟合趟与最终布局趟宽度不一致会差一整行，而宿主会把
+    // 差额当空白分给页头里的某一行（与 TiebaForumHeaderView 同款处理）。
+    introLabel.preferredMaxLayoutWidth = max(width - ProfileHeaderMetrics.paddingH * 2, 1)
     let target = CGSize(width: max(width, 1), height: UIView.layoutFittingCompressedSize.height)
     let size = systemLayoutSizeFitting(
       target,

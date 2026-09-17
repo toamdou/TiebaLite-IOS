@@ -511,6 +511,10 @@ public final class TiebaKindListContentView: UIView {
       refreshControl.tintColor = palette.base.primary
       updateVisibleFooter()
       headerContentView?.applyPalette(palette)
+      // 换色会重跑页头的 applySpec（文本/字重可能变），列表侧那份"按宽缓存"必须
+      // 一起作废，否则旧高度会把差额分给页头里的某一行（2026-09-17 报的空白）。
+      headerHeightCache = nil
+      collectionView.collectionViewLayout.invalidateLayout()
       for cell in collectionView.visibleCells {
         (cell as? TiebaKindListViewCell)?.applyPalette(palette)
         // 信息流行用 TiebaFeedRowPalette = 本页色板的 base（同一份主题字典
@@ -737,7 +741,7 @@ public final class TiebaKindListContentView: UIView {
           withReuseIdentifier: TiebaKindListHeaderHostView.reuseIdentifier,
           for: indexPath
         ) as? TiebaKindListHeaderHostView else { return nil }
-        host.configure(content: self.headerContentView, topPadding: 0)
+        host.configure(content: self.headerContentView)
         self.visibleHeaderHostView = host
         return host
       }
@@ -1038,7 +1042,7 @@ public final class TiebaKindListContentView: UIView {
 
   private var hasHeader: Bool { headerContentView != nil }
 
-  /// 页头总高 = contentInsetTop + 页头自适应高（按列表全宽）。0 = 不挂页头。
+  /// 页头项高 = 页头自适应高（按列表全宽；顶部内白由 contentInset.top 承担）。0 = 不挂页头。
   /// 缓存按宽度键控：宽度变化（旋转/分屏）时由 layoutSubviews 的 invalidate 重算。
   private func headerTotalHeight(width: CGFloat) -> CGFloat {
     guard let headerContentView else { return 0 }
@@ -1067,10 +1071,7 @@ public final class TiebaKindListContentView: UIView {
   /// 在屏 host 重新接管页头（spec/insets/主题变化时；高度变化由 invalidateLayout
   /// 重跑 section provider 完成）。
   private func updateVisibleHeader() {
-    visibleHeaderHostView?.configure(
-      content: headerContentView,
-      topPadding: 0
-    )
+    visibleHeaderHostView?.configure(content: headerContentView)
   }
 
   /// 页头动作转事件（动作已类型化，payload 原样透传：只承载视图测量几何）。

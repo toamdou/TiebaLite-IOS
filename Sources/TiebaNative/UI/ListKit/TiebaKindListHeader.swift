@@ -3,7 +3,7 @@
 //
 // 页头 = 原生 UIView，挂在 section 的 top boundary supplementary item 上（与页脚
 // 同一机制）。契约：headerHeight(forWidth:) 是"测多少画多少"的唯一来源（宽度 =
-// 列表全宽；不含 contentInsetTop，由列表另加在 host 里）；spec.colors 覆盖色板默认，
+// 列表全宽；顶部内白由滚动视图的 contentInset.top 承担，页头不含它）；spec.colors 覆盖色板默认，
 // 页头内点击经 onAction 外传（动作 = 各页头自己的类型化 enum，见
 // TiebaKindListHeaderAction），列表统一升格为 TiebaKindListEvent.headerAction。
 // ============================================================
@@ -70,15 +70,13 @@ public enum TiebaKindListHeaderFactory {
 
 // MARK: - 页头宿主（集合视图补充视图）
 
-/// boundary supplementary item 的宿主：只做"把页头摆在 topPadding 之下、铺满
-/// 剩余高度"这一件事（topPadding = 列表的 contentInsetTop，语义与"无页头时
-/// 加在首行之上的内白"完全一致——有页头时它落在页头之上）。
+/// boundary supplementary item 的宿主：只做"把页头铺满单元格"这一件事
+///（顶部内白不在这里——它是滚动视图的 contentInset.top，页头从内容顶开始）。
 final class TiebaKindListHeaderHostView: UICollectionReusableView {
   static let reuseIdentifier = "TiebaKindListHeaderHostView"
   static let elementKind = UICollectionView.elementKindSectionHeader
 
   private weak var content: (any TiebaKindListHeaderView)?
-  private var topPadding: CGFloat = 0
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -90,7 +88,7 @@ final class TiebaKindListHeaderHostView: UICollectionReusableView {
     fatalError("init(coder:) is not supported")
   }
 
-  func configure(content: (any TiebaKindListHeaderView)?, topPadding: CGFloat) {
+  func configure(content: (any TiebaKindListHeaderView)?) {
     if self.content !== content {
       self.content?.removeFromSuperview()
       if let content {
@@ -98,19 +96,13 @@ final class TiebaKindListHeaderHostView: UICollectionReusableView {
       }
     }
     self.content = content
-    self.topPadding = topPadding
     setNeedsLayout()
   }
 
   override func layoutSubviews() {
     super.layoutSubviews()
     guard let content else { return }
-    content.frame = CGRect(
-      x: 0,
-      y: topPadding,
-      width: bounds.width,
-      height: max(bounds.height - topPadding, 0)
-    )
+    content.frame = bounds
   }
 }
 
