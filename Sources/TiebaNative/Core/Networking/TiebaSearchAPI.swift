@@ -26,6 +26,32 @@ enum TiebaSearchAPI {
     var row: [String: Any] = [:]
   }
 
+  // MARK: - 输入联想（原 Kotlin searchSuggestionsFlow / /c/s/searchSug cmd=309438）
+
+  /// 搜索框输入联想：返回服务端建议词（最多 10 条）。匿名可读（2026-09-17 实测）。
+  /// isforum=0 = 关键词联想；返回的 forum_loc/forumList 本页不用。
+  static func suggest(word: String) async throws -> [String] {
+    let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return [] }
+    let data = try await TiebaForumAPI.protoPost(
+      path: "/c/s/searchSug", cmd: "309438&format=protobuf"
+    ) { common in
+      var body = Tieba_SearchSug_SearchSugRequestData()
+      body.common = common
+      body.word = trimmed
+      body.isforum = "0"
+      var request = Tieba_SearchSug_SearchSugRequest()
+      request.data = body
+      return request
+    }
+    let response = try Tieba_SearchSug_SearchSugResponse(serializedBytes: data)
+    if response.hasError, response.error.errorCode != 0 {
+      throw TiebaViewModelError(code: Double(response.error.errorCode), message: response.error.errorMsg)
+    }
+    guard response.hasData else { return [] }
+    return response.data.list.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+  }
+
   // MARK: - 贴 / 吧 / 人
 
   static func threads(

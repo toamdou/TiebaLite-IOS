@@ -210,7 +210,6 @@ public final class TiebaAppBootstrap {
     // 主 actor 只接收必须挂 UI/主 actor 单例的挂载点。
     await MainActor.run {
       TiebaForegroundNotifier.shared.start()
-      TiebaClipboardLinkDetector.shared.start()
     }
     await MainActor.run { TiebaAppBootstrap.shared.maybeAutoCheckUpdate() }
   }

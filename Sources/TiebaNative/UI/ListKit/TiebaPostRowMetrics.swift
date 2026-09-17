@@ -11,6 +11,8 @@ import Nuke
 struct TiebaPostPreferences: Sendable {
   var showIpLocation = true
   var showLevelBadge = true
+  /// 等级徽标后面接头衔名（如「Lv.5 F2.8」；头衔随作者字段下发）。
+  var showLevelTitle = false
   var showBothUsername = false
   var fontScale: CGFloat = 1
   var hideMedia = false
@@ -30,6 +32,7 @@ struct TiebaPostPreferences: Sendable {
     var prefs = TiebaPostPreferences()
     prefs.showIpLocation = TiebaPreferenceSnapshot.bool("showIpLocation", default: true)
     prefs.showLevelBadge = TiebaPreferenceSnapshot.bool("showLevelBadge", default: true)
+    prefs.showLevelTitle = TiebaPreferenceSnapshot.bool("showLevelTitle", default: false)
     prefs.showBothUsername = TiebaPreferenceSnapshot.bool("showBothUsername", default: false)
     prefs.fontScale = CGFloat(Double(TiebaPreferenceSnapshot.string("fontScale") ?? "") ?? 1)
     prefs.hideMedia = TiebaPreferenceSnapshot.bool("hideMedia", default: false)
@@ -399,6 +402,8 @@ final class TiebaPostRowModel: @unchecked Sendable {
   let nameText: String
   let metaText: String
   let levelText: String?
+  /// 放不下时的退档（「Lv.5」），见 TiebaPostRowPlan 的徽标测量。
+  let levelShortText: String?
   let levelColor: UIColor?
   let images: [TiebaThreadImage]
   let imagesHidden: Bool
@@ -535,7 +540,13 @@ final class TiebaPostRowModel: @unchecked Sendable {
     self.cachedSubTexts = subPostBuilds.map(\.attributed)
     self.avatarURL = TiebaSimpleRowParser.avatarURL(post.authorPortrait)
     self.nameText = post.displayName.isEmpty ? "吧友" : post.displayName
-    self.levelText = preferences.showLevelBadge && post.authorLevel > 0 ? "Lv.\(post.authorLevel)" : nil
+    self.levelShortText =
+      preferences.showLevelBadge && post.authorLevel > 0 ? "Lv.\(post.authorLevel)" : nil
+    let title = post.authorLevelName.trimmingCharacters(in: .whitespacesAndNewlines)
+    self.levelText =
+      preferences.showLevelTitle && !title.isEmpty && self.levelShortText != nil
+      ? "\(self.levelShortText ?? "") \(title)"
+      : self.levelShortText
     self.levelColor = TiebaPostRowLayout.levelColor(post.authorLevel)
     self.metaText = TiebaPostRowLayout.metaText(
       post: post,
@@ -560,6 +571,7 @@ final class TiebaPostRowModel: @unchecked Sendable {
       titleText: self.titleText,
       nameText: self.nameText,
       levelText: self.levelText,
+      levelShortText: self.levelShortText,
       isLz: self.isLz,
       metaText: self.metaText,
       likeText: self.likeText,
@@ -843,6 +855,7 @@ struct TiebaPostRowPlanInputs {
   var titleText: NSAttributedString?
   var nameText: String
   var levelText: String?
+  var levelShortText: String?
   var isLz: Bool
   var metaText: String
   var likeText: String
@@ -866,6 +879,8 @@ struct TiebaPostRowPlan {
   var avatarFrame: CGRect = .zero
   var nameFrame: CGRect = .zero
   var levelFrame: CGRect?
+  /// 徽标实际渲染的文案（放不下头衔时退成「Lv.N」，见下方测量）。
+  var levelRenderText: String?
   var lzFrame: CGRect?
   var metaFrame: CGRect = .zero
   var menuFrame: CGRect = .zero
@@ -938,9 +953,20 @@ struct TiebaPostRowPlan {
     let badgeLimit = actionsRight - actionsWidth - 4
     var badgeX = nameFrame.maxX + TiebaPostRowLayout.levelGap
     if let levelText = inputs.levelText {
-      let levelWidth = TiebaSimpleText.singleLineWidth(levelText, font: TiebaPostRowLayout.badgeFont) + 10
+      // 头衔把徽标撑宽后可能顶到右侧操作组：先试全串，放不下退成「Lv.N」——
+      // 挤昵称或整个徽标消失都会让用户少看到东西（用户 2026-09-17 要求接头衔）。
+      var text = levelText
+      var levelWidth = TiebaSimpleText.singleLineWidth(text, font: TiebaPostRowLayout.badgeFont) + 10
+      if badgeX + levelWidth > badgeLimit, let short = inputs.levelShortText {
+        let shortWidth = TiebaSimpleText.singleLineWidth(short, font: TiebaPostRowLayout.badgeFont) + 10
+        if badgeX + shortWidth <= badgeLimit {
+          text = short
+          levelWidth = shortWidth
+        }
+      }
       if badgeX + levelWidth <= badgeLimit {
         levelFrame = CGRect(x: badgeX, y: y + 5, width: levelWidth, height: 15)
+        levelRenderText = text
         badgeX += levelWidth + TiebaPostRowLayout.levelGap
       }
     }

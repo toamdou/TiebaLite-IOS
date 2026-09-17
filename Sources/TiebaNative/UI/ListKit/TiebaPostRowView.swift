@@ -796,7 +796,8 @@ final class TiebaPostRowView: UIView {
     levelLabel.isHidden = plan.levelFrame == nil
     if let frame = plan.levelFrame, let color = model.levelColor {
       levelLabel.frame = frame
-      levelLabel.text = model.levelText
+      // 文案由 plan 决定（头衔放不下时它已退成「Lv.N」）。
+      levelLabel.text = plan.levelRenderText ?? model.levelText
       levelLabel.textColor = color
       levelLabel.backgroundColor = color.withAlphaComponent(0.25)
     }

@@ -777,7 +777,9 @@ final class TiebaHomeForumCell: UICollectionViewCell {
     metaLabel.text = forum.memberCount > 0 ? "\(TiebaForumFormat.count(forum.memberCount)) 关注" : nil
     metaLabel.isHidden = forum.memberCount <= 0
     levelLabel.text = forum.levelId > 0 ? "Lv.\(forum.levelId)" : nil
-    levelLabel.textColor = tint
+    // 等级色与帖子行同一套（Kotlin getIconColorByLevel）：不同等级不同颜色，
+    // 不再统一用主题色（用户 2026-09-17 要求）。
+    levelLabel.textColor = TiebaPostRowLayout.levelColor(forum.levelId) ?? tint
     checkIcon.image = UIImage(
       systemName: "checkmark",
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .bold)

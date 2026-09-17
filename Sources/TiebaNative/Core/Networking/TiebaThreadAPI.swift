@@ -70,6 +70,8 @@ struct TiebaThreadPost: Sendable {
   var authorNameShow = ""
   var authorPortrait = ""
   var authorLevel = 0
+  /// 该吧等级头衔（User.level_name，服务端随作者一起下发，如「F2.8」）。
+  var authorLevelName = ""
   var content: [TiebaThreadContentSegment] = []
   var createTimeMs = 0.0
   var ipLocation = ""
@@ -349,6 +351,7 @@ enum TiebaThreadAPI {
     post.authorNameShow = author.nameShow.isEmpty ? author.name : author.nameShow
     post.authorPortrait = author.portrait
     post.authorLevel = Int(author.levelID)
+    post.authorLevelName = author.levelName
     return post
   }
 
@@ -410,6 +413,7 @@ enum TiebaThreadAPI {
     post.authorNameShow = author.nameShow.isEmpty ? author.name : author.nameShow
     post.authorPortrait = author.portrait
     post.authorLevel = Int(author.levelID)
+    post.authorLevelName = author.levelName
     post.ipLocation = authorIp(author)
 
     // UI 预览最多 3 条楼中楼（完整楼中楼走楼中楼页）。

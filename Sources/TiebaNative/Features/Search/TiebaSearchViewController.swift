@@ -84,6 +84,9 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private var needsPublish = false
   private var needsReveal = false
   private var suggestions: [String] = []
+  /// 服务端联想词（SearchSug），随输入防抖刷新；本地历史前缀匹配在它后面补位。
+  private var remoteSuggestions: [String] = []
+  private var suggestTask: Task<Void, Never>?
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -234,9 +237,9 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private var historyViewExpanded = false
 
   private func updateChrome() {
-    // 编辑态（聚焦且清空）也回历史/建议区；否则首次搜索后 historyView 再也出不来，
-    // suggestions 成死代码。
-    let editing = searchBar.isFirstResponder && (searchBar.text ?? "").isEmpty
+    // 聚焦就进历史/建议区（含"搜索后再点搜索框改词"，输入中的联想词才有地方显示）；
+    // 收起键盘（commit / 滚动列表）立刻回到结果列表。
+    let editing = searchBar.isFirstResponder
     let showHistory = !hasSearched || editing
     let showSegment = hasSearched
     let showSort = hasSearched && activeTab == .thread
@@ -264,6 +267,25 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
 
   private func refreshHistory() {
     history = TiebaSearchHistory.load(forumId: nil, limit: 20)
+    refreshSuggestionDisplay()
+  }
+
+  /// 建议区 = 服务端联想词在前，本地历史前缀匹配补位（去重，最多 8 条）。
+  private func currentSuggestions() -> [String] {
+    let text = (searchBar.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else { return [] }
+    // 服务端联想词直接采信（它们就是为这个词生成的，未必前缀命中）；历史只补前缀命中。
+    let localMatches = history.map(\.keyword).filter { $0.hasPrefix(text) }
+    var seen: Set<String> = []
+    var out: [String] = []
+    for candidate in remoteSuggestions + localMatches where !candidate.isEmpty {
+      if seen.insert(candidate).inserted { out.append(candidate) }
+      if out.count >= 8 { break }
+    }
+    return out
+  }
+
+  private func refreshSuggestionDisplay() {
     suggestions = currentSuggestions()
     historyView.configure(
       suggestions: suggestions,
@@ -272,10 +294,25 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     )
   }
 
-  private func currentSuggestions() -> [String] {
-    let text = (searchBar.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !text.isEmpty else { return [] }
-    return history.map(\.keyword).filter { $0.hasPrefix(text) }.prefix(5).map { $0 }
+  /// 输入联想：250ms 防抖 + 词一致才落库（旧请求回来时输入已变则丢弃）。
+  private func scheduleSuggestions(for text: String) {
+    suggestTask?.cancel()
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+      remoteSuggestions = []
+      refreshSuggestionDisplay()
+      return
+    }
+    suggestTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(nanoseconds: 250_000_000)
+      guard !Task.isCancelled else { return }
+      let list = (try? await TiebaSearchAPI.suggest(word: trimmed)) ?? []
+      guard let self, !Task.isCancelled else { return }
+      let current = (self.searchBar.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      guard current == trimmed else { return }
+      self.remoteSuggestions = list
+      self.refreshSuggestionDisplay()
+    }
   }
 
   private func deleteHistory(_ text: String) {
@@ -324,6 +361,8 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     guard !trimmed.isEmpty else { return }
     searchBar.text = trimmed
     searchBar.resignFirstResponder()
+    suggestTask?.cancel()
+    remoteSuggestions = []
     suggestions = []
     // 历史写盘（3 条写 + 重读）不在主线程同步跑；回来后只更内存副本。
     Task { @MainActor in
@@ -744,14 +783,19 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
 
 extension TiebaSearchViewController: UISearchBarDelegate {
   func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-    // 编辑态决定历史/建议区可见性（清空回到建议，重新输入回结果）。
+    // 编辑态决定历史/建议区可见性（聚焦显示建议，收起键盘回结果）。
     updateChrome()
-    suggestions = currentSuggestions()
-    historyView.configure(
-      suggestions: suggestions,
-      history: history,
-      expanded: historyViewExpanded
-    )
+    scheduleSuggestions(for: searchText)
+    refreshSuggestionDisplay()
+  }
+
+  func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
+    updateChrome()
+    refreshSuggestionDisplay()
+  }
+
+  func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
+    updateChrome()
   }
 
   func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
@@ -766,6 +810,8 @@ extension TiebaSearchViewController: UISearchBarDelegate {
       return
     }
     searchBar.text = ""
+    suggestTask?.cancel()
+    remoteSuggestions = []
     refreshHistory()
   }
 }
