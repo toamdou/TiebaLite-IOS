@@ -484,6 +484,7 @@ public final class TiebaKindListContentView: UIView {
     didSet {
       guard contentInsetTop != oldValue else { return }
       headerHeightCache = nil
+      applyContentInset()
       collectionView.collectionViewLayout.invalidateLayout()
       updateVisibleHeader()
     }
@@ -736,7 +737,7 @@ public final class TiebaKindListContentView: UIView {
           withReuseIdentifier: TiebaKindListHeaderHostView.reuseIdentifier,
           for: indexPath
         ) as? TiebaKindListHeaderHostView else { return nil }
-        host.configure(content: self.headerContentView, topPadding: max(self.contentInsetTop, 0))
+        host.configure(content: self.headerContentView, topPadding: 0)
         self.visibleHeaderHostView = host
         return host
       }
@@ -912,8 +913,14 @@ public final class TiebaKindListContentView: UIView {
   }
 
   private func applyContentInset() {
+    // 顶部内白**必须是真实的 contentInset.top**（不是内容内白）：`UIRefreshControl`
+    // 的静止位挂在"内容顶"上方，而内容顶由 inset.top 决定——inset.top = 0 时内容顶
+    // 贴着滚动视图顶（屏幕最上沿），下拉刷新动画就出现在灵动岛那一带被压扁
+    //（用户 2026-09-17 报"应该在吧卡片上方"）。给了真实 inset 之后内容顶落在栏下，
+    // 刷新动画出现在卡片上方、也在栏下。
+    // 代价：下拉要拉过 inset 这一段才看得到 spinner（系统标准行为，Apple 自家列表同款）。
     collectionView.contentInset = UIEdgeInsets(
-      top: 0,
+      top: max(contentInsetTop, 0),
       left: 0,
       bottom: contentInsetBottom,
       right: 0
@@ -1038,7 +1045,8 @@ public final class TiebaKindListContentView: UIView {
     if let cache = headerHeightCache, cache.width == width {
       return cache.height
     }
-    let height = max(contentInsetTop, 0) + headerContentView.headerHeight(forWidth: width)
+    // 内白已由 contentInset.top 承担，页头项高 = 页头自身的自适应高。
+    let height = headerContentView.headerHeight(forWidth: width)
     headerHeightCache = (width, height)
     return height
   }
@@ -1061,7 +1069,7 @@ public final class TiebaKindListContentView: UIView {
   private func updateVisibleHeader() {
     visibleHeaderHostView?.configure(
       content: headerContentView,
-      topPadding: max(contentInsetTop, 0)
+      topPadding: 0
     )
   }
 
@@ -1107,11 +1115,10 @@ public final class TiebaKindListContentView: UIView {
     let inset = horizontalInset
     var frames: [NSCollectionLayoutGroupCustomItem] = []
     frames.reserveCapacity(count)
-    // 内容内白（paddingTop 语义）：有页头时页头在最上、内白在页头之上（由 header
-    // host 的 topPadding 承担，见 updateVisibleHeader / headerTotalHeight），
-    // 组内不再留白；无页头时保持原行为（内白加在首行 frame 之上、随滚动滑出）。
+    // 内容内白统一由滚动视图的 contentInset.top 承担（见 applyContentInset），
+    // 组内不再留白：行坐标从 0 起算。
     let heights = frameHeights(width: itemWidth, count: count)
-    var y: CGFloat = hasHeader ? 0 : max(contentInsetTop, 0)
+    var y: CGFloat = 0
     for index in 0..<count {
       let height = heights[index]
       frames.append(

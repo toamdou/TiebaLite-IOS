@@ -87,7 +87,9 @@ final class TiebaThreadKnownPostView: UIView {
     // 有，漏掉它占位卡就没有帖名——与作者行、摘要同尺排下去，换真卡不位移。
     if !snapshot.title.isEmpty {
       titleLabel.font = TiebaSimpleText.font(size: 17, weight: .medium)
-      titleLabel.numberOfLines = 3
+      // 与真卡（TiebaPostRowLayout.titleLineLimit = 0）保持一致：都不截断，
+      // 否则换卡那一刻标题行数会变、下面整块跳一次。
+      titleLabel.numberOfLines = TiebaPostRowLayout.titleLineLimit
       titleLabel.attributedText = TiebaSimpleText.makeAttributed(
         text: snapshot.title,
         font: TiebaSimpleText.font(size: 17, weight: .medium),

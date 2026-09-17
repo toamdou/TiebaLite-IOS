@@ -548,7 +548,8 @@ final class TiebaPostRowModel: @unchecked Sendable {
       ? TiebaSimpleText.makeAttributed(
         text: title,
         font: TiebaPostRowLayout.titleFont,
-        lineHeight: TiebaPostRowLayout.titleLineHeight
+        lineHeight: TiebaPostRowLayout.titleLineHeight,
+        truncating: TiebaPostRowLayout.titleLineLimit > 0
       )
       : nil
     // plan 只依赖上面这些已就位的值（自身尚未初始化完，不能把 self 传出去）。
@@ -699,7 +700,9 @@ enum TiebaPostRowLayout {
   /// 首包落地换卡时标题原地接管，下面的作者行/正文不位移。
   static var titleFont: UIFont { TiebaSimpleText.font(size: 17, weight: .medium) }
   static let titleLineHeight: CGFloat = 22
-  static let titleLineLimit = 3
+  /// 标题**不限行**（0 = 不截断）：用户 2026-09-17 报"长标题被截断、显示不全"。
+  /// 占位卡（TiebaThreadKnownPostView）的行数必须与这里一致，换卡才不跳。
+  static let titleLineLimit = 0
   static var metaFont: UIFont { TiebaSimpleText.font(size: 12, weight: .regular) }
   static var badgeFont: UIFont { TiebaSimpleText.font(size: 11, weight: .bold) }
   static var lzFont: UIFont { TiebaSimpleText.font(size: 11, weight: .semibold) }

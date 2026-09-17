@@ -176,11 +176,19 @@ nonisolated enum TiebaSimpleText {
 
   /// 测量用 attributed（只用 font + paragraph lineHeight；**不写颜色**——
   /// 绘制期按色板补色，换主题无需重测）。
-  static func makeAttributed(text: String, font: UIFont, lineHeight: CGFloat) -> NSAttributedString {
+  /// truncating = true（默认）时末行截断加省略号（单/多行摘要用）；false 时按字换行、
+  /// 不截断（不限行的主贴标题用——段落样式里的 byTruncatingTail 会盖过 label 的
+  /// numberOfLines=0，留着它最后一行照样带省略号）。
+  static func makeAttributed(
+    text: String,
+    font: UIFont,
+    lineHeight: CGFloat,
+    truncating: Bool = true
+  ) -> NSAttributedString {
     let paragraph = NSMutableParagraphStyle()
     paragraph.minimumLineHeight = lineHeight
     paragraph.maximumLineHeight = lineHeight
-    paragraph.lineBreakMode = .byTruncatingTail
+    paragraph.lineBreakMode = truncating ? .byTruncatingTail : .byWordWrapping
     return NSAttributedString(
       string: text,
       attributes: [.font: font, .paragraphStyle: paragraph]
