@@ -508,7 +508,10 @@ enum TiebaForumAPI {
 
   private static let v12UserAgent =
     "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/135.0.0.0 Mobile Safari/537.36 tieba/12.64.1.1"
-  private static let clientVersionV12 = "12.64.1.1"
+  /// 声明给服务端的客户端版本。**能力按版本号下发**：楼中楼图片在 < 22.9 的版本号下
+  /// 被服务端压成文本「[图片]」（2026-09-17 实测：22.8 = 文本、22.9 = 真图带 cdnSrc），
+  /// 所以从 JS 期的 12.64.1.1 升到 22.9.1.0；HTTP UA 不参与该门控，保持原串。
+  private static let clientVersion = "22.9.1.0"
   private static let deviceModel = "SM-G9910"
 
   /// 非 private：TiebaThreadAPI 的 pbPage 复用同一份身份参数。
@@ -518,7 +521,7 @@ enum TiebaForumAPI {
     let cuid = cuidValue()
     var common = Tieba_CommonRequest()
     common.clientType = 2
-    common.clientVersion = clientVersionV12
+    common.clientVersion = clientVersion
     common.clientID = clientId
     common.phoneImei = clientId
     common.cuid = cuid
@@ -555,7 +558,7 @@ enum TiebaForumAPI {
     common.startScheme = ""
     common.startType = 1
     common.nawsGameVer = "1038000"
-    common.userAgent = "tieba/\(clientVersionV12)"
+    common.userAgent = "tieba/\(clientVersion)"
     common.zID = ""
     return common
   }
