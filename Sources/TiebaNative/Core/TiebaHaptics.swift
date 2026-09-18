@@ -27,25 +27,36 @@ enum TiebaHapticSceneEntry {
 
 /// AHAP 字典构造。时间参数仍按**毫秒**书写（与旧 JS 契约一致），进字典时 /1000
 /// 转秒；强度/锋利度就是 AHAP 参数原值，不再经中间表示。
+///
+/// 两级结构：`event(...)` 出**事件本体**（EventType/Time/EventParameters），
+/// `pattern(...)` 把一串本体包成 `{Event: 本体}` 定义并加上 Version，成为整条
+/// pattern——即 TiebaHapticSceneEntry.pattern 持有的那个字典。
 private enum Ahap {
-  /// 瞬态（t）：即时的单点触觉。
+  /// 瞬态（t）**事件本体**：即时的单点触觉。
   static func transient(at timeMs: Double, intensity: Double, sharpness: Double) -> [CHHapticPattern.Key: Any] {
-    pattern([event(.hapticTransient, at: timeMs, durationMs: 0, intensity: intensity, sharpness: sharpness)])
+    event(.hapticTransient, at: timeMs, durationMs: 0, intensity: intensity, sharpness: sharpness)
   }
 
-  /// 连续段（c）：有持续时间的纹理。
+  /// 连续段（c）**事件本体**：有持续时间的纹理。
   static func continuous(
     at timeMs: Double,
     durationMs: Double,
     intensity: Double,
     sharpness: Double
   ) -> [CHHapticPattern.Key: Any] {
-    pattern([event(.hapticContinuous, at: timeMs, durationMs: durationMs, intensity: intensity, sharpness: sharpness)])
+    event(.hapticContinuous, at: timeMs, durationMs: durationMs, intensity: intensity, sharpness: sharpness)
   }
 
   /// 一整条 pattern（AHAP 顶层：Version + Pattern）。
+  ///
+  /// ⚠️ Pattern 数组的元素必须是**事件定义** `{Event: 事件本体}`（CHHapticPatternKey
+  /// Event 文档："Indicates the beginning of a haptic event definition"）。直接放
+  /// 事件本体，CHHapticPattern(dictionary:) 抛 -4814 InvalidPatternDictionary，
+  /// 而 playPattern 把错误吞掉 ⇒ **整张场景表静默失效、全 App 一处都不振**
+  /// （2026-09-17 实测确证；旧 JS 走 tickle 的类型化 events 接口，原生改手写
+  /// AHAP 字典时丢了这层包装，属迁移期丢的能力）。
   static func pattern(_ events: [[CHHapticPattern.Key: Any]]) -> [CHHapticPattern.Key: Any] {
-    [.version: 1.0, .pattern: events]
+    [.version: 1.0, .pattern: events.map { body in [CHHapticPattern.Key.event: body] }]
   }
 
   private static func event(
@@ -160,7 +171,7 @@ enum TiebaHaptics {
   static func playTransient(intensity: Double, sharpness: Double) {
     onMain {
       guard isEnabled else { return }
-      playPattern(Ahap.transient(at: 0, intensity: intensity, sharpness: sharpness))
+      playPattern(Ahap.pattern([Ahap.transient(at: 0, intensity: intensity, sharpness: sharpness)]))
     }
   }
 
@@ -253,10 +264,10 @@ enum TiebaHaptics {
   /// （本仓纪律：需要瞬态与带曲线的连续段并存时分两次调用）。
   nonisolated(unsafe) private static let sceneTable: [String: TiebaHapticSceneEntry] = [
     // 清脆轻点（对应旧 Light 手感）
-    "press": .pattern(Ahap.transient(at: 0, intensity: 0.7, sharpness: 0.6)),
+    "press": .pattern(Ahap.pattern([Ahap.transient(at: 0, intensity: 0.7, sharpness: 0.6)])),
     // 锋利小 click（selection 质感）
-    "toggle": .pattern(Ahap.transient(at: 0, intensity: 0.5, sharpness: 1.0)),
-    "segment": .pattern(Ahap.transient(at: 0, intensity: 0.55, sharpness: 0.85)),
+    "toggle": .pattern(Ahap.pattern([Ahap.transient(at: 0, intensity: 0.5, sharpness: 1.0)])),
+    "segment": .pattern(Ahap.pattern([Ahap.transient(at: 0, intensity: 0.55, sharpness: 0.85)])),
     // 点赞 pop：重击 + 70ms 短嗡尾（情绪峰值，明显重于按压）
     "like": .pattern(Ahap.pattern([
       Ahap.transient(at: 0, intensity: 1.0, sharpness: 0.8),
@@ -268,9 +279,9 @@ enum TiebaHaptics {
       Ahap.transient(at: 90, intensity: 1.0, sharpness: 0.35),
     ])),
     // 浮层展开：柔和短纹理
-    "sheet-present": .pattern(Ahap.continuous(at: 0, durationMs: 90, intensity: 0.3, sharpness: 0.25)),
+    "sheet-present": .pattern(Ahap.pattern([Ahap.continuous(at: 0, durationMs: 90, intensity: 0.3, sharpness: 0.25)])),
     // 长按菜单开启：低锋利度软提示
-    "long-press": .pattern(Ahap.continuous(at: 0, durationMs: 60, intensity: 0.3, sharpness: 0.2)),
+    "long-press": .pattern(Ahap.pattern([Ahap.continuous(at: 0, durationMs: 60, intensity: 0.3, sharpness: 0.2)])),
     // 破坏性确认：沉闷重击两拍（警示节奏）
     "destructive": .pattern(Ahap.pattern([
       Ahap.transient(at: 0, intensity: 1.0, sharpness: 0.25),
@@ -298,7 +309,7 @@ enum TiebaHaptics {
   /// 力度档位缩放叠加（与内置波形走同一条缩放路径）。
   nonisolated(unsafe) private static let waveformTable: [String: [CHHapticPattern.Key: Any]] = [
     // 只振一下：单次清脆轻点（用户诉求「选择只震动一次」的通用解）
-    "single": Ahap.transient(at: 0, intensity: 0.7, sharpness: 0.6),
+    "single": Ahap.pattern([Ahap.transient(at: 0, intensity: 0.7, sharpness: 0.6)]),
     // 双脉冲：两下快而轻（确认节奏，比内置多拍模式收敛）
     "double": Ahap.pattern([
       Ahap.transient(at: 0, intensity: 0.7, sharpness: 0.6),
@@ -311,7 +322,7 @@ enum TiebaHaptics {
       Ahap.transient(at: 160, intensity: 1.0, sharpness: 1.0),
     ]),
     // 轻柔：单次低强度柔冲击（不想被打扰的场合）
-    "soft": Ahap.transient(at: 0, intensity: 0.3, sharpness: 0.25),
+    "soft": Ahap.pattern([Ahap.transient(at: 0, intensity: 0.3, sharpness: 0.25)]),
   ]
 
   /// 力度档位 → 全事件 intensity 缩放系数（上限钳在 1）。
@@ -356,14 +367,16 @@ enum TiebaHaptics {
     _ pattern: [CHHapticPattern.Key: Any],
     factor: Double
   ) -> [CHHapticPattern.Key: Any] {
-    guard let events = pattern[.pattern] as? [[CHHapticPattern.Key: Any]] else { return pattern }
+    guard let definitions = pattern[.pattern] as? [[CHHapticPattern.Key: Any]] else { return pattern }
     var copy = pattern
-    copy[.pattern] = events.map { event -> [CHHapticPattern.Key: Any] in
-      guard let parameters = event[.eventParameters] as? [[CHHapticPattern.Key: Any]] else {
-        return event
-      }
-      var scaledEvent = event
-      scaledEvent[.eventParameters] = parameters.map { parameter -> [CHHapticPattern.Key: Any] in
+    // 逐条拆 {Event: 本体} 定义、缩放再包回：包装丢了整条 pattern 就废（同样静默）。
+    copy[.pattern] = definitions.map { definition -> [CHHapticPattern.Key: Any] in
+      guard
+        let body = definition[.event] as? [CHHapticPattern.Key: Any],
+        let parameters = body[.eventParameters] as? [[CHHapticPattern.Key: Any]]
+      else { return definition }
+      var scaledBody = body
+      scaledBody[.eventParameters] = parameters.map { parameter -> [CHHapticPattern.Key: Any] in
         guard
           (parameter[.parameterID] as? String) == CHHapticEvent.ParameterID.hapticIntensity.rawValue,
           let value = parameter[.parameterValue] as? NSNumber
@@ -372,7 +385,7 @@ enum TiebaHaptics {
         scaled[.parameterValue] = max(0.05, min(1, value.doubleValue * factor))
         return scaled
       }
-      return scaledEvent
+      return [CHHapticPattern.Key.event: scaledBody]
     }
     return copy
   }

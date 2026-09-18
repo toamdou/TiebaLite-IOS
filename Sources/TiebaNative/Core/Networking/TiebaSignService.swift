@@ -312,17 +312,28 @@ final class TiebaSignService {
     Task { await TiebaLiveActivityManager.shared.update(activityId: id, state: LiveActivityKitAttributes.ContentState(raw: state)) }
   }
 
+  /// 收尾：先把灵动岛改成完成态并**弹一条通知**（用户要的"签到完成提醒"），
+  /// 再按系统默认策略结束（结束后仍短暂留在锁屏/灵动岛，用户点得到）。
+  /// 通知文案与页内 pill 同源（成功数/失败数/经验），不另造一套措辞。
   private func finishDisplay(activityId: String?, success: Int, fail: Int, exp: Int) {
     guard let activityId else { return }
     let done = success + fail
     let state = activityState(
       done: done, total: max(done, 1), name: "", success: success, fail: fail, exp: exp, signing: false
     )
+    var body = done == 0 ? "今天所有关注的吧都已签到过了" : "成功 \(success) 个吧"
+    if fail > 0 { body += "，失败 \(fail) 个" }
+    if exp > 0 { body += "，+\(exp) 经验" }
+    let alert = TiebaLiveActivityAlert(
+      title: done == 0 ? "无需签到" : "签到完成",
+      body: body
+    )
     Task {
       await TiebaLiveActivityManager.shared.end(
         activityId: activityId,
         state: LiveActivityKitAttributes.ContentState(raw: state),
-        dismissalPolicy: .default
+        dismissalPolicy: .default,
+        alert: alert
       )
     }
   }

@@ -965,9 +965,12 @@ final class TiebaThreadFloatingBar: UIView {
     setNeedsLayout()
   }
 
-  /// 滚动自动隐藏（原 useFloatingBarAutoHide 的上下阈值 ±0.3）：速度直接用系统
-  /// pan 手势的 velocity，不再自采集 60ms 偏移差（拖拽期与手指抬起后的动量期都由
-  /// UIKit 维护该值）。
+  /// 滚动自动隐藏（原 useFloatingBarAutoHide 的上下阈值 ±0.3）。
+  ///
+  /// ⚠️ 方向按**手指**判，而 pan 手势的 velocity 与 contentOffset 增量符号相反：
+  /// 手指上滑（翻看后面的楼）⇒ velocity.y < 0，此时收起；手指下滑（往回翻）⇒
+  /// velocity.y > 0，此时露出。旧 JS 判的是 contentOffset 增量（上滑为正），
+  /// 原生照抄阈值时用了 pan 速度却没翻符号，方向正好是反的（2026-09-17 修）。
   func handleScroll(_ scrollView: UIScrollView) {
     let y = scrollView.contentOffset.y
     let threshold = max(scrollView.adjustedContentInset.top, 0) + 10
@@ -976,9 +979,9 @@ final class TiebaThreadFloatingBar: UIView {
       return
     }
     let velocity = scrollView.panGestureRecognizer.velocity(in: scrollView).y
-    if velocity > 0.3, !barHidden {
+    if velocity < -0.3, !barHidden {
       setBarHidden(true)
-    } else if velocity < -0.3, barHidden {
+    } else if velocity > 0.3, barHidden {
       setBarHidden(false)
     }
   }

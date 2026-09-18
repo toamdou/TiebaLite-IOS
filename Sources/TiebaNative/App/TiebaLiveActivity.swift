@@ -16,6 +16,12 @@ struct TiebaLiveActivityPayload: Sendable {
   }
 }
 
+/// 结束时的锁屏/灵动岛通知（AlertConfiguration 值类型：标题 + 正文 + 声音）。
+struct TiebaLiveActivityAlert: Sendable {
+  let title: String
+  let body: String
+}
+
 /// Live Activity 结束时的撤除策略。原 JS 侧传 "immediate"/"default" 字符串，
 /// 字符串在类型上无处可查（写错的串静默落成 .default），这里封闭成枚举。
 enum TiebaLiveActivityDismissalPolicy: Sendable {
@@ -82,7 +88,8 @@ final class TiebaLiveActivityManager {
   func end(
     activityId: String,
     state: LiveActivityKitAttributes.ContentState,
-    dismissalPolicy: TiebaLiveActivityDismissalPolicy
+    dismissalPolicy: TiebaLiveActivityDismissalPolicy,
+    alert: TiebaLiveActivityAlert? = nil
   ) async {
     guard let handle = cachedOrLiveActivity(activityId) else { return }
     let content = ActivityContent(
@@ -90,6 +97,18 @@ final class TiebaLiveActivityManager {
       staleDate: nil,
       relevanceScore: 0
     )
+    // 弹通知只能走 update 的 alertConfiguration（end 没有这个参数）：先带告警
+    // 更新一次，再按策略结束。只 end 的话灵动岛只是静静改文案，用户看不到"弹出"。
+    if let alert {
+      await handle.activity.update(
+        content,
+        alertConfiguration: AlertConfiguration(
+          title: LocalizedStringResource(stringLiteral: alert.title),
+          body: LocalizedStringResource(stringLiteral: alert.body),
+          sound: .default
+        )
+      )
+    }
     await handle.activity.end(content, dismissalPolicy: Self.endPolicy(dismissalPolicy))
     activities.removeValue(forKey: activityId)
   }

@@ -27,6 +27,7 @@ public final class TiebaNotFoundViewController: UIViewController, TiebaNativeScr
     button.cornerStyle = .capsule
     config.button = button
     config.buttonProperties.primaryAction = UIAction { _ in
+      TiebaSceneHaptics.fire("press")
       // ⚠️ 不能 replace('/')：原生路由表按路径段解析，'/' 没有对应条目，会再次
       // 落回本页（无限套娃）。显式切 tab 0——selectTab 先把栈收敛回根屏，本页
       // 随即被 pop。（与旧页面 router.selectTab(0) 走的是同一条原生入口。）

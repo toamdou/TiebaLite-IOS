@@ -281,7 +281,10 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
       var button = UIButton.Configuration.borderedProminent()
       button.title = "重试"
       config.button = button
-      config.buttonProperties.primaryAction = UIAction { [weak self] _ in self?.reload() }
+      config.buttonProperties.primaryAction = UIAction { [weak self] _ in
+        TiebaSceneHaptics.fire("press")
+        self?.reload()
+      }
       stateView.configuration = config
     }
     stateView.isHidden = showsLoadingSkeleton

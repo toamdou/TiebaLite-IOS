@@ -26,7 +26,11 @@ enum TiebaContentUnavailable {
     var button = UIButton.Configuration.borderedProminent()
     button.title = "重试"
     config.button = button
-    config.buttonProperties.primaryAction = UIAction { _ in onRetry() }
+    // 原 JS Button 默认 haptic=true（ErrorState 的重试钮也走它）。
+    config.buttonProperties.primaryAction = UIAction { _ in
+      TiebaSceneHaptics.fire("press")
+      onRetry()
+    }
     return config
   }
 
@@ -49,7 +53,10 @@ enum TiebaContentUnavailable {
       if let buttonImage { button.image = UIImage(systemName: buttonImage) }
       config.button = button
       if let onButton {
-        config.buttonProperties.primaryAction = UIAction { _ in onButton() }
+        config.buttonProperties.primaryAction = UIAction { _ in
+          TiebaSceneHaptics.fire("press")
+          onButton()
+        }
       }
     }
     return config
