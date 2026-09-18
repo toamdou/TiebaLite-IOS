@@ -15,4 +15,17 @@ enum TiebaRoutePath {
   static func segment(_ raw: String) -> String {
     raw.addingPercentEncoding(withAllowedCharacters: segmentAllowed) ?? raw
   }
+
+  /// 表单体编码（application/x-www-form-urlencoded）：按 key 排序后
+  /// `k=v&k=v`。三类调用方（门面 postForm / 社交签名 POST / 关注列表抓取）原先
+  /// 各写一份同样的链，收敛到这里。
+  ///
+  /// 排序是刻意的：签名（TiebaSigner.signParams）内部自己排一次，但请求体也排
+  /// 一次让同参数的两次请求字节一致，便于对照取证。
+  static func formBody(_ fields: [String: String]) -> String {
+    fields
+      .sorted { $0.key < $1.key }
+      .map { "\($0.key)=\(segment($0.value))" }
+      .joined(separator: "&")
+  }
 }

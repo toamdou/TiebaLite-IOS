@@ -365,13 +365,7 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     TiebaSceneHaptics.fire("press")
     let url = threadURL(postId: post.id)
     let content = threadTitle.isEmpty ? url : "\(threadTitle)\n\(url)"
-    let controller = UIActivityViewController(activityItems: [content], applicationActivities: nil)
-    if let popover = controller.popoverPresentationController {
-      popover.sourceView = view
-      popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.maxY - 44, width: 1, height: 1)
-      popover.permittedArrowDirections = []
-    }
-    presenterViewController.present(controller, animated: true)
+    TiebaShareSheet.present(text: content, from: presenterViewController)
   }
 
   private func threadURL(postId: String) -> String {

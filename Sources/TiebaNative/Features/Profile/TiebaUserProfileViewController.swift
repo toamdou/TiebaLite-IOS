@@ -245,19 +245,14 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
   /// 吧头像补齐：userPost 接口不下发吧头像（行内 `forumAvatar` 恒空），与浏览记录 /
   /// 我的收藏同一做法——按 forumId 优先、退 `n:<吧名>` 走全站缓存，未命中现拉。
   private func ensureForumAvatars(seq: Int, tab: String) {
-    var seen = Set<String>()
-    var pending: [(key: String, name: String)] = []
-    for row in rows {
-      let forumName = TiebaSimpleRowParser.string(row["forumName"]) ?? ""
-      guard
-        let key = TiebaForumAvatarCache.key(
-          forumId: TiebaSimpleRowParser.string(row["forumId"]) ?? "",
-          forumName: forumName
-        ),
-        seen.insert(key).inserted
-      else { continue }
-      pending.append((key: key, name: forumName))
-    }
+    let pending = TiebaForumAvatarCache.entries(
+      from: rows.map {
+        (
+          forumId: TiebaSimpleRowParser.string($0["forumId"]) ?? "",
+          forumName: TiebaSimpleRowParser.string($0["forumName"]) ?? ""
+        )
+      }
+    )
     guard !pending.isEmpty else { return }
     TiebaForumAvatarCache.shared.ensure(entries: pending) { [weak self] in
       // 旧页后到不覆盖新页：页序号/分段变过就当本次回调没发生（同 loadList 守卫）。
@@ -583,16 +578,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
     TiebaSceneHaptics.fire("press")
     let url = "https://tieba.baidu.com/p/\(id)"
     let title = TiebaSimpleRowParser.string(row["title"]) ?? ""
-    let controller = UIActivityViewController(
-      activityItems: [title.isEmpty ? url : "\(title)\n\(url)"],
-      applicationActivities: nil
-    )
-    if let popover = controller.popoverPresentationController {
-      popover.sourceView = view
-      popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.maxY - 44, width: 1, height: 1)
-      popover.permittedArrowDirections = []
-    }
-    present(controller, animated: true)
+    TiebaShareSheet.present(text: title.isEmpty ? url : "\(title)\n\(url)", from: self)
   }
 
   /// 点赞：乐观翻转 + 失败回滚（镜像表防连点）。

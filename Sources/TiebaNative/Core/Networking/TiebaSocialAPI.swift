@@ -170,10 +170,7 @@ enum TiebaSocialAPI {
     params.merge(stParams()) { _, new in new }
     params.merge(fields) { _, new in new }
     params["sign"] = TiebaSigner.signParams(params)
-    let body = params
-      .sorted { $0.key < $1.key }
-      .map { "\($0.key)=\(TiebaRoutePath.segment($0.value))" }
-      .joined(separator: "&")
+    let body = TiebaRoutePath.formBody(params)
 
     let snapshot = TiebaBackgroundSnapshot.shared
     var headers: [String: String] = [

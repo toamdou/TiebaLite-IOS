@@ -1331,15 +1331,10 @@ public nonisolated final class TiebaRowMetrics: @unchecked Sendable {
     let rows: [TiebaFeedRowModel]
     /// 与 rows 同下标的原始行字典：下一次 prepare 的逐行复用判据。
     let raws: [[String: Any]]
-    let order: UInt64
   }
 
-  /// 整页上限：至少保留几页（上一页 + 当前页 + 预取页）。
-  private let maxPages = 8
-  /// 保护 pages / orderSeed。
-  private let lock = NSLock()
-  private var pages: [PageKey: Page] = [:]
-  private var orderSeed: UInt64 = 0
+  /// 整页缓存（LRU + 在显页跳过）：四族度量缓存共用 TiebaPageStore。
+  private let pages = TiebaPageStore<PageKey, Page>(pinKey: { $0.pageKey })
 
   private init() {
     // 系统内容尺寸档（动态字体）变化 → 已测高度全部失效（UIFontMetrics 随之变）。
@@ -1355,9 +1350,7 @@ public nonisolated final class TiebaRowMetrics: @unchecked Sendable {
 
   /// 丢弃全部缓存（外观/字号等全局度量变化时用）。锁内 O(页数)。
   private func invalidateAll() {
-    lock.withLock {
-      pages.removeAll(keepingCapacity: false)
-    }
+    pages.removeAll()
   }
 
   // MARK: - 公共契约
@@ -1368,7 +1361,7 @@ public nonisolated final class TiebaRowMetrics: @unchecked Sendable {
     guard !pageKey.isEmpty, !rows.isEmpty, containerWidth > 0 else { return }
     let width = TiebaLayout.quantize(containerWidth)
     // 旧页快照（同页同宽才命中）作逐行复用判据；锁内只取引用，O(1)。
-    let previous = lock.withLock { pages[PageKey(pageKey: pageKey, width: width)] }
+    let previous = pages.value(forKey: PageKey(pageKey: pageKey, width: width))
     publish(
       pageKey: pageKey,
       width: width,
@@ -1380,48 +1373,37 @@ public nonisolated final class TiebaRowMetrics: @unchecked Sendable {
   /// 页内行数（按显式宽度取页；未测量/未知 → 0）。
   public func feedRowCount(pageKey: String, containerWidth: CGFloat) -> Int {
     let width = TiebaLayout.quantize(containerWidth)
-    return lock.withLock {
-      pages[PageKey(pageKey: pageKey, width: width)]?.rows.count ?? 0
-    }
+    return pages.value(forKey: PageKey(pageKey: pageKey, width: width))?.rows.count ?? 0
   }
 
   /// 页内行数（该页最新一次 prepare 的宽度条目）。
   public func feedRowCount(pageKey: String) -> Int {
-    lock.withLock { newestPage(pageKey: pageKey)?.rows.count ?? 0 }
+    newestPage(pageKey: pageKey)?.rows.count ?? 0
   }
 
   /// 取行模型（与测量时同一实例；越界/未知 → nil）。高度/模型查询必须显式传
   /// 宽度：拿错宽度条目会按旧帧计划绘制（与 TiebaKindListView 的高度闸门同判据）。
   public func feedRow(pageKey: String, containerWidth: CGFloat, index: Int) -> TiebaFeedRowModel? {
     let width = TiebaLayout.quantize(containerWidth)
-    return lock.withLock {
-      guard let page = pages[PageKey(pageKey: pageKey, width: width)],
-            page.rows.indices.contains(index) else { return nil }
-      return page.rows[index]
-    }
+    guard let page = pages.value(forKey: PageKey(pageKey: pageKey, width: width)),
+          page.rows.indices.contains(index) else { return nil }
+    return page.rows[index]
   }
 
   /// 行视图查询（Fabric 只给 (pageKey, index) 两个 prop，不下发行宽）：取该页
   /// 最新一次 prepare 的宽度条目。列表侧高度/预取查询走显式宽度重载。
   public func feedRow(pageKey: String, index: Int) -> TiebaFeedRowModel? {
-    lock.withLock {
-      guard let page = newestPage(pageKey: pageKey),
-            page.rows.indices.contains(index) else { return nil }
-      return page.rows[index]
-    }
+    guard let page = newestPage(pageKey: pageKey),
+          page.rows.indices.contains(index) else { return nil }
+    return page.rows[index]
   }
 
   // MARK: - 内部
 
-  /// 该 pageKey 最新一次发布（order 最大）的页；无 → nil（锁内调用，≤maxPages）。
+  /// 该 pageKey 最新一次发布（order 最大）的页；无 → nil。
+  /// 行视图只拿得到 (pageKey, index)，不知道宽度，所以按 pageKey 找最新。
   private func newestPage(pageKey: String) -> Page? {
-    var newest: Page?
-    for (key, page) in pages where key.pageKey == pageKey {
-      if newest == nil || page.order > newest!.order {
-        newest = page
-      }
-    }
-    return newest
+    pages.newest { $0.pageKey == pageKey }
   }
 
   /// 整页解析 + TextKit 测量：行字典与上次完全相同的行直接复用旧模型（点赞/
@@ -1460,23 +1442,7 @@ public nonisolated final class TiebaRowMetrics: @unchecked Sendable {
     rows: [TiebaFeedRowModel],
     raws: [[String: Any]]
   ) {
-    lock.withLock {
-      orderSeed &+= 1
-      pages[PageKey(pageKey: pageKey, width: width)] =
-        Page(rows: rows, raws: raws, order: orderSeed)
-      guard pages.count > maxPages else { return }
-      // 整页淘汰：最旧 order 先出（不逐行淘汰，避免半个页面的高度缺失）；
-      // **在显页跳过**——度量被挤掉的行会画成"有高度没内容"的空白条
-      //（见 TiebaRowPagePins）。
-      let pinned = TiebaRowPagePins.shared.snapshot()
-      var overflow = pages.count - maxPages
-      for entry in pages.sorted(by: { $0.value.order < $1.value.order }) {
-        guard overflow > 0 else { break }
-        guard !pinned.contains(entry.key.pageKey) else { continue }
-        pages.removeValue(forKey: entry.key)
-        overflow -= 1
-      }
-    }
+    pages.publish(Page(rows: rows, raws: raws), forKey: PageKey(pageKey: pageKey, width: width))
   }
 }
 

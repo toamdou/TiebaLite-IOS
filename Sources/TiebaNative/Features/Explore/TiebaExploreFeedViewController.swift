@@ -467,16 +467,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     TiebaSceneHaptics.fire("press")
     let url = "https://tieba.baidu.com/p/\(id)"
     let title = value(thread, "title")
-    let controller = UIActivityViewController(
-      activityItems: [title.isEmpty ? url : "\(title)\n\(url)"],
-      applicationActivities: nil
-    )
-    if let popover = controller.popoverPresentationController {
-      popover.sourceView = view
-      popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.maxY - 44, width: 1, height: 1)
-      popover.permittedArrowDirections = []
-    }
-    present(controller, animated: true)
+    TiebaShareSheet.present(text: title.isEmpty ? url : "\(title)\n\(url)", from: self)
   }
 
   /// 点赞：乐观翻转 + 失败回滚（与帖子页/话题页同一竞态策略，镜像表防连点）。

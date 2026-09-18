@@ -247,9 +247,7 @@ enum TiebaFollowedForums {
       "res_num": String(pageSize),
       "tbs": TiebaBackgroundSnapshot.shared.tbs,
     ]
-    let body = fields
-      .map { "\($0.key)=\(TiebaRoutePath.segment($0.value))" }
-      .joined(separator: "&")
+    let body = TiebaRoutePath.formBody(fields)
     guard let url = components.url else { throw TiebaForumAPIError.invalidURL }
     let snapshot = TiebaBackgroundSnapshot.shared
     var cookies: [String] = []

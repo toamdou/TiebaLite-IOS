@@ -32,6 +32,27 @@ struct TiebaShareError: LocalizedError {
 
 @MainActor
 enum TiebaShareSheet {
+  /// 分享纯文本（帖子链接/吧链接/主页链接）。
+  ///
+  /// 收编原先散在 8 个页面里的同一段：构造 UIActivityViewController + iPad
+  /// popover 锚点（`(midX, maxY - 44)`、无箭头）+ present。那段连锚点数值都是
+  /// 逐字复制的，改一处必漏七处。
+  /// - Returns: false = 宿主不在窗口上（调用方自己决定提示文案）。
+  @discardableResult
+  static func present(
+    text: String,
+    dialogTitle: String? = nil,
+    from presenter: UIViewController,
+    sourceRect: CGRect? = nil
+  ) -> Bool {
+    guard presenter.view.tiebaIsOnScreen, !text.isEmpty else { return false }
+    let controller = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+    controller.title = dialogTitle
+    applyPopover(to: controller, presenter: presenter, sourceRect: sourceRect)
+    presenter.present(controller, animated: true)
+    return true
+  }
+
   /// 呈现系统分享面板。
   /// - Parameters:
   ///   - fileURL: 本地文件 URL（分享的就是这个文件本身）。
@@ -54,21 +75,27 @@ enum TiebaShareSheet {
     let controller = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
     controller.title = dialogTitle
     controller.completionWithItemsHandler = { _, _, _, _ in completion?() }
-    if let popover = controller.popoverPresentationController {
-      // iPad：必须给锚点，否则 present 崩溃；无箭头居中展开（查看器既有形态）。
-      // 旧包把锚点放在 (midX, maxY) 且不限制箭头方向，这里统一成查看器那套，
-      // 避免同一 App 两处分享面板形态不同。
-      popover.sourceView = presenter.view
-      popover.sourceRect = sourceRect ?? CGRect(
-        x: presenter.view.bounds.midX,
-        y: presenter.view.bounds.maxY - 44,
-        width: 1,
-        height: 1
-      )
-      popover.permittedArrowDirections = []
-    }
+    applyPopover(to: controller, presenter: presenter, sourceRect: sourceRect)
     presenter.present(controller, animated: true)
     return true
+  }
+
+  /// iPad 锚点（两份 present 共用；无箭头居中展开，避免同一 App 两种面板形态）。
+  private static func applyPopover(
+    to controller: UIActivityViewController,
+    presenter: UIViewController,
+    sourceRect: CGRect?
+  ) {
+    guard let popover = controller.popoverPresentationController else { return }
+    // iPad：必须给锚点，否则 present 崩溃；无箭头居中展开（查看器既有形态）。
+    popover.sourceView = presenter.view
+    popover.sourceRect = sourceRect ?? CGRect(
+      x: presenter.view.bounds.midX,
+      y: presenter.view.bounds.maxY - 44,
+      width: 1,
+      height: 1
+    )
+    popover.permittedArrowDirections = []
   }
 
   /// JS 门面入口（TiebaNative.sharePresent）：文件已由 JS 侧落盘，直接分享。

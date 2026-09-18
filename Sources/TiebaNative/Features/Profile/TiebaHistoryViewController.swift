@@ -304,14 +304,9 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
 
   /// 吧头像补齐（全站统一缓存；拉到新头像后原位重推行）。
   private func ensureAvatars() {
-    var seen = Set<String>()
-    var pending: [(key: String, name: String)] = []
-    for entry in entries {
-      guard let key = TiebaForumAvatarCache.key(forumId: entry.forumId, forumName: entry.forumName),
-        seen.insert(key).inserted
-      else { continue }
-      pending.append((key: key, name: entry.forumName))
-    }
+    let pending = TiebaForumAvatarCache.entries(
+      from: entries.map { (forumId: $0.forumId, forumName: $0.forumName) }
+    )
     guard !pending.isEmpty else { return }
     TiebaForumAvatarCache.shared.ensure(entries: pending) { [weak self] in
       guard let self, !self.entries.isEmpty else { return }

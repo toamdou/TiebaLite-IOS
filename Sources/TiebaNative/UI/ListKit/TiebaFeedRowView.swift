@@ -71,7 +71,8 @@ import NukeExtensions
 
 /// 动画令牌（Reanimated 的 damping/stiffness/mass 与 CASpringAnimation 是同一
 /// 套物理模型，可直接照搬；restDisplacement/restSpeed 默认 0.001 两处一致）。
-/// 引用点：TweetCard LikeButton（pop / numPop）与 CollapseRow / EntranceRow。
+/// 引用点：TweetCard LikeButton（pop / numPop）与 CollapseRow。
+/// （EntranceRow 的时长/级联/位移已收进 TiebaEntrance，与其余三个行族共用一份。）
 private nonisolated enum TiebaFeedRowMotion {
   /// LikeButton pop：withSpring(1.35, {damping:12, stiffness:380, mass:0.6})
   static let likePop = TiebaSpringParams(mass: 0.6, stiffness: 380, damping: 12)
@@ -81,11 +82,6 @@ private nonisolated enum TiebaFeedRowMotion {
   static let countBump = TiebaSpringParams(mass: 0.5, stiffness: 320, damping: 11)
   /// CollapseRow：280ms + EASE_OUT cubic-bezier(0.32,0.72,0,1)
   static let collapseDuration: CFTimeInterval = 0.28
-  /// EntranceRow：220ms 时长（DURATION.enter）/ 35ms 级联（DURATION.stagger）
-  static let entranceDuration: CFTimeInterval = 0.22
-  static let entranceStagger: CFTimeInterval = 0.035
-  static let entranceStaggerLimit = 10
-  static let entranceOffset: CGFloat = 12
   /// nonisolated(unsafe)：CAMediaTimingFunction 不是 Sendable，但它是 Core
   /// Animation 的**不可变值对象**——由控制点构造后没有任何 setter，Apple 自家
   /// 的 kCAMediaTimingFunctionEaseIn/EaseOut 就是进程级共享常量；这里只被本文件
@@ -768,24 +764,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   /// min(index, 9) × 35ms、220ms、EASE_OUT。只由列表在首批页面上屏时调用一次；
   /// Reduce Motion 时直接静态（与 EntranceRow 的 reduceMotion 分支同语义）。
   public func playEntranceAnimation(index: Int) {
-    guard !UIAccessibility.isReduceMotionEnabled else { return }
-    let delay = CFTimeInterval(min(max(index, 0), TiebaFeedRowMotion.entranceStaggerLimit - 1))
-      * TiebaFeedRowMotion.entranceStagger
-    let group = CAAnimationGroup()
-    let opacity = CABasicAnimation(keyPath: "opacity")
-    opacity.fromValue = 0
-    opacity.toValue = 1
-    let translation = CABasicAnimation(keyPath: "transform.translation.y")
-    translation.fromValue = TiebaFeedRowMotion.entranceOffset
-    translation.toValue = 0
-    group.animations = [opacity, translation]
-    group.duration = TiebaFeedRowMotion.entranceDuration
-    group.beginTime = CACurrentMediaTime() + delay
-    group.fillMode = .backwards
-    group.timingFunction = TiebaFeedRowMotion.easeOut
-    layer.opacity = 1
-    layer.transform = CATransform3DIdentity
-    layer.add(group, forKey: "tieba.entrance")
+    TiebaEntrance.play(on: self, index: index)
   }
 
   /// 折叠退场时长（只读暴露，别在两处各写一个 0.28）。删数据现在由

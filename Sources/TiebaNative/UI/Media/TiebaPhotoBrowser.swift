@@ -60,8 +60,6 @@
 //  4. 长图页下拉不退出：长图阅读模式 zoomScale > minimumZoomScale 被框架
 //     下拉关闭守卫判定为"已缩放"，需点关闭按钮退出（旧查看器长图页同样只在
 //     贴顶/贴底才移交退出）。
-//  5. dismiss/scrollTo 两个 public 入口当前无调用方（旧桥注册已删），
-//     保留给原生宿主。
 //
 //  历史缺口（已闭合）：转场矩形不再依赖 JS measureInWindow（列表 cell 原生
 //  convert）；多图带按下第几张不再丢（行视图 mediaHit + 内部 scroll offset）；
@@ -137,22 +135,6 @@ public enum TiebaPhotoBrowser {
       )
     }
     return true
-  }
-
-  /// 关闭查看器（Zoom 转场 → 缩回源缩略图）。
-  /// 宿主可按需调用（当前无调用方，见文件头缺口 5）。
-  public static func dismiss(animated: Bool) {
-    onMain {
-      activeSession?.dismiss(animated: animated)
-    }
-  }
-
-  /// 程序化翻页（越界忽略；循环模式下框架自动就近映射真实索引）。
-  /// - Note: 同 dismiss，仅供 photoBrowserScrollTo 注册引用，随注册删除。
-  public static func scrollTo(index: Int, animated: Bool) {
-    onMain {
-      activeSession?.browser?.scrollToPage(at: index, animated: animated)
-    }
   }
 
   // MARK: 内部

@@ -130,10 +130,7 @@ final class TiebaNativeClient: Sendable {
     if includeSign {
       body["sign"] = TiebaSigner.signParams(body)
     }
-    let encoded = body
-      .sorted { $0.key < $1.key }
-      .map { "\($0.key)=\(TiebaRoutePath.segment($0.value))" }
-      .joined(separator: "&")
+    let encoded = TiebaRoutePath.formBody(body)
     guard let data = encoded.data(using: .utf8), let url = URL(string: urlString) else {
       throw TiebaClientError.invalidUrl
     }

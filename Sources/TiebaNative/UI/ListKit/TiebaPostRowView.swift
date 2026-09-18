@@ -918,23 +918,10 @@ final class TiebaPostRowView: UIView {
     imageBadge.isHidden = true
   }
 
+  /// 首屏入场：参数与其余三族共用 TiebaEntrance（原各抄一份时位移是 10pt、
+  /// 级联钳到 1.2s，与 JS EntranceRow 的 12pt/min(index,9) 不一致）。
   func playEntrance(index: Int) {
-    guard !UIAccessibility.isReduceMotionEnabled else {
-      alpha = 1
-      transform = .identity
-      return
-    }
-    alpha = 0
-    transform = CGAffineTransform(translationX: 0, y: 10)
-    let delay = 0.035 * Double(index)
-    UIView.animate(
-      withDuration: 0.22,
-      delay: min(delay, 1.2),
-      options: [.curveEaseOut, .allowUserInteraction]
-    ) {
-      self.alpha = 1
-      self.transform = .identity
-    }
+    TiebaEntrance.play(on: self, index: index)
   }
 
   // MARK: 子视图装配

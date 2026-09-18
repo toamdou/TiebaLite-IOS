@@ -257,6 +257,9 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     sortConfig.image = UIImage(systemName: "arrow.up.arrow.down")
     sortConfig.imagePadding = 6
     sortConfig.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0)
+    // 标题恒单行（SDK：非 WordWrapping/CharWrapping 的模式会把标题限制成单行）。
+    // 万一真被挤到放不下，宁可截断也不换行——「按回/复时间」两行是错的样子。
+    sortConfig.titleLineBreakMode = .byTruncatingTail
     sortButton.configuration = sortConfig
     sortButton.showsMenuAsPrimaryAction = true
     sortRow.axis = .horizontal
@@ -302,9 +305,15 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
   }
 
   /// 行内撑开用（横向 stack 里吸收剩余宽度的空视图）。
+  /// 横向吸收器：把行的富余宽度全吃掉，让前面的控件保持自然宽。hugging 压到 1
+  /// （同下方 tailSpacer 的纵向口径）——默认 .defaultLow(250) 与 UIButton 自身的
+  /// hugging 同值，栈的分配就成了并列优先级的模糊局，按钮可能被压窄；而
+  /// UIButton.Configuration 的 titleLineBreakMode 默认是 WordWrapping（SDK 原文：
+  /// "WordWrapping and CharWrapping both allow for multi-line text"）⇒ 一被压窄
+  /// 就换行，中文就是"按回 / 复时间"（用户 2026-09-18 报）。
   private func makeSpacer() -> UIView {
     let spacer = UIView()
-    spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    spacer.setContentHuggingPriority(UILayoutPriority(1), for: .horizontal)
     spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     return spacer
   }
@@ -434,6 +443,8 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
       chipConfig.imagePadding = 6
       chipConfig.cornerStyle = .capsule
       chipConfig.buttonSize = .small
+      // 同排序按钮：分类名也不许换行（默认 WordWrapping，被挤就折行）。
+      chipConfig.titleLineBreakMode = .byTruncatingTail
       chipConfig.baseForegroundColor = palette.base.primary
       chipConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
         var out = incoming

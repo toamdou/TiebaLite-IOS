@@ -172,16 +172,14 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
   }
 
   private func ensureAvatars() {
-    var seen = Set<String>()
-    var pending: [(key: String, name: String)] = []
-    for row in rows {
-      let forumId = TiebaSimpleRowParser.string(row["forumId"]) ?? ""
-      let forumName = TiebaSimpleRowParser.string(row["forumName"]) ?? ""
-      guard let key = TiebaForumAvatarCache.key(forumId: forumId, forumName: forumName),
-        seen.insert(key).inserted
-      else { continue }
-      pending.append((key: key, name: forumName))
-    }
+    let pending = TiebaForumAvatarCache.entries(
+      from: rows.map {
+        (
+          forumId: TiebaSimpleRowParser.string($0["forumId"]) ?? "",
+          forumName: TiebaSimpleRowParser.string($0["forumName"]) ?? ""
+        )
+      }
+    )
     guard !pending.isEmpty else { return }
     TiebaForumAvatarCache.shared.ensure(entries: pending) { [weak self] in
       guard let self, !self.rows.isEmpty else { return }

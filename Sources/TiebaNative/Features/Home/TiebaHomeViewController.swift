@@ -791,21 +791,11 @@ final class TiebaHomeForumCell: UICollectionViewCell {
     accessibilityLabel = "\(forum.displayName)吧"
   }
 
-  /// 首屏入场（原 EntranceRow）：220ms fade + 12pt 上移，35ms 级联。
+  /// 首屏入场（原 EntranceRow）：参数与其余三族共用 TiebaEntrance。
   func playEntrance(index: Int) {
     guard !playedEntrance else { return }
     playedEntrance = true
-    alpha = 0
-    transform = CGAffineTransform(translationX: 0, y: 12)
-    UIView.animate(
-      withDuration: 0.22,
-      delay: min(Double(index), 10) * 0.035,
-      options: [.curveEaseOut],
-      animations: {
-        self.alpha = 1
-        self.transform = .identity
-      }
-    )
+    TiebaEntrance.play(on: self, index: index)
   }
 
   override func prepareForReuse() {

@@ -515,6 +515,24 @@ final class TiebaForumAvatarCache: @unchecked Sendable {
     return name.isEmpty ? nil : "n:\(name)"
   }
 
+  /// (forumId, forumName) 行序列 → 去重后的补齐清单（无键/空名跳过）。
+  ///
+  /// 三个页面（收藏 / 用户主页 / 浏览记录）原先各抄一份同样的循环，也各自要记得
+  /// 「按 key 去重」这条；收敛到这里，调用方只剩"给行、收回调"。
+  static func entries(
+    from forums: [(forumId: String, forumName: String)]
+  ) -> [(key: String, name: String)] {
+    var seen = Set<String>()
+    var pending: [(key: String, name: String)] = []
+    for forum in forums {
+      guard let key = key(forumId: forum.forumId, forumName: forum.forumName),
+        !forum.forumName.isEmpty, seen.insert(key).inserted
+      else { continue }
+      pending.append((key: key, name: forum.forumName))
+    }
+    return pending
+  }
+
   func cached(key: String) -> String {
     lock.withLock {
       loadDiskLocked()

@@ -232,13 +232,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
 
   private func shareForum() {
     let text = "\(forumName)吧\n\(TiebaForumLink.forum(forumName))"
-    let controller = UIActivityViewController(activityItems: [text], applicationActivities: nil)
-    if let popover = controller.popoverPresentationController {
-      popover.sourceView = view
-      popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.maxY - 44, width: 1, height: 1)
-      popover.permittedArrowDirections = []
-    }
-    presenterViewController.present(controller, animated: true)
+    TiebaShareSheet.present(text: text, from: presenterViewController)
   }
 
   private var presenterViewController: UIViewController { parent ?? self }
@@ -685,16 +679,10 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     TiebaSceneHaptics.fire("press")
     let url = "https://tieba.baidu.com/p/\(id)"
     let title = TiebaSimpleRowParser.string(row["title"]) ?? ""
-    let controller = UIActivityViewController(
-      activityItems: [title.isEmpty ? url : "\(title)\n\(url)"],
-      applicationActivities: nil
+    TiebaShareSheet.present(
+      text: title.isEmpty ? url : "\(title)\n\(url)",
+      from: presenterViewController
     )
-    if let popover = controller.popoverPresentationController {
-      popover.sourceView = view
-      popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.maxY - 44, width: 1, height: 1)
-      popover.permittedArrowDirections = []
-    }
-    presenterViewController.present(controller, animated: true)
   }
 
   /// 点赞：乐观翻转 + 失败回滚（原 useFeedCardActions 的三桶更新收成本页）。

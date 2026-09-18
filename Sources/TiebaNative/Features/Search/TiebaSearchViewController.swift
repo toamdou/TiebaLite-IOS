@@ -703,16 +703,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private func shareThread(_ hit: TiebaSearchAPI.ThreadHit) {
     let url = "https://tieba.baidu.com/p/\(hit.id)"
     let title = TiebaSimpleRowParser.string(hit.row["title"]) ?? ""
-    let controller = UIActivityViewController(
-      activityItems: [title.isEmpty ? url : "\(title)\n\(url)"],
-      applicationActivities: nil
-    )
-    if let popover = controller.popoverPresentationController {
-      popover.sourceView = view
-      popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.maxY - 44, width: 1, height: 1)
-      popover.permittedArrowDirections = []
-    }
-    present(controller, animated: true)
+    TiebaShareSheet.present(text: title.isEmpty ? url : "\(title)\n\(url)", from: self)
   }
 
   private func toggleLike(_ hit: TiebaSearchAPI.ThreadHit, index: Int) {

@@ -770,7 +770,6 @@ public nonisolated final class TiebaSimpleRowMetrics: @unchecked Sendable {
 
   private struct Page {
     let rows: [TiebaSimpleRowModel]
-    let order: UInt64
   }
 
   /// prepareRows 的入参快照盒（字典来自 JS 桥，投递后调用方不再触碰）。
@@ -778,10 +777,8 @@ public nonisolated final class TiebaSimpleRowMetrics: @unchecked Sendable {
     let rows: [[String: Any]]
   }
 
-  private let maxPages = 8
-  private let lock = NSLock()
-  private var pages: [PageKey: Page] = [:]
-  private var orderSeed: UInt64 = 0
+  /// 整页缓存（LRU + 在显页跳过）：四族度量缓存共用 TiebaPageStore。
+  private let pages = TiebaPageStore<PageKey, Page>(pinKey: { $0.pageKey })
   private let queue = DispatchQueue(
     label: "com.tiebalite.app.simple-row-metrics",
     qos: .userInitiated
@@ -812,25 +809,21 @@ public nonisolated final class TiebaSimpleRowMetrics: @unchecked Sendable {
 
   public func rowCount(pageKey: String, containerWidth: CGFloat) -> Int {
     let width = TiebaSimpleRowMetrics.quantize(containerWidth)
-    return lock.withLock { pages[PageKey(pageKey: pageKey, width: width)]?.rows.count ?? 0 }
+    return pages.value(forKey: PageKey(pageKey: pageKey, width: width))?.rows.count ?? 0
   }
 
   public func rowHeight(pageKey: String, containerWidth: CGFloat, index: Int) -> CGFloat? {
     let width = TiebaSimpleRowMetrics.quantize(containerWidth)
-    return lock.withLock {
-      guard let page = pages[PageKey(pageKey: pageKey, width: width)],
-            index >= 0, index < page.rows.count else { return nil }
-      return page.rows[index].measuredHeight
-    }
+    guard let page = pages.value(forKey: PageKey(pageKey: pageKey, width: width)),
+          index >= 0, index < page.rows.count else { return nil }
+    return page.rows[index].measuredHeight
   }
 
   public func row(pageKey: String, containerWidth: CGFloat, index: Int) -> TiebaSimpleRowModel? {
     let width = TiebaSimpleRowMetrics.quantize(containerWidth)
-    return lock.withLock {
-      guard let page = pages[PageKey(pageKey: pageKey, width: width)],
-            index >= 0, index < page.rows.count else { return nil }
-      return page.rows[index]
-    }
+    guard let page = pages.value(forKey: PageKey(pageKey: pageKey, width: width)),
+          index >= 0, index < page.rows.count else { return nil }
+    return page.rows[index]
   }
 
   // MARK: - 内部
@@ -850,20 +843,7 @@ public nonisolated final class TiebaSimpleRowMetrics: @unchecked Sendable {
   }
 
   private func publish(pageKey: String, width: CGFloat, rows: [TiebaSimpleRowModel]) {
-    lock.withLock {
-      orderSeed &+= 1
-      pages[PageKey(pageKey: pageKey, width: width)] = Page(rows: rows, order: orderSeed)
-      guard pages.count > maxPages else { return }
-      // 在显页跳过（同 TiebaRowPagePins：正在显示的页被挤掉 = 行内容静默留白）。
-      let pinned = TiebaRowPagePins.shared.snapshot()
-      var overflow = pages.count - maxPages
-      for entry in pages.sorted(by: { $0.value.order < $1.value.order }) {
-        guard overflow > 0 else { break }
-        guard !pinned.contains(entry.key.pageKey) else { continue }
-        pages.removeValue(forKey: entry.key)
-        overflow -= 1
-      }
-    }
+    pages.publish(Page(rows: rows), forKey: PageKey(pageKey: pageKey, width: width))
   }
 }
 
@@ -928,25 +908,9 @@ public final class TiebaSimpleRowView: UIView {
     resetContent()
   }
 
-  /// 首屏入场（EntranceRow 的原生等价）：220ms fade + 12pt 上移，35ms 级联
-  /// （上限 10 行）。Reduce Motion 只做 220ms 淡入（与 TiebaFeedRowView 同）。
+  /// 首屏入场：参数与其余三族共用 TiebaEntrance。
   public func playEntranceAnimation(index: Int) {
-    if UIAccessibility.isReduceMotionEnabled {
-      alpha = 0
-      UIView.animate(withDuration: 0.22) { self.alpha = 1 }
-      return
-    }
-    let delay = min(Double(max(index, 0)), 10) * 0.035
-    alpha = 0
-    transform = CGAffineTransform(translationX: 0, y: 12)
-    UIView.animate(
-      withDuration: 0.22,
-      delay: delay,
-      options: [.curveEaseOut, .allowUserInteraction]
-    ) {
-      self.alpha = 1
-      self.transform = .identity
-    }
+    TiebaEntrance.play(on: self, index: index)
   }
 
   // MARK: 子视图

@@ -542,10 +542,13 @@ final class TiebaPostRowModel: @unchecked Sendable {
     self.nameText = post.displayName.isEmpty ? "吧友" : post.displayName
     self.levelShortText =
       preferences.showLevelBadge && post.authorLevel > 0 ? "Lv.\(post.authorLevel)" : nil
-    let title = post.authorLevelName.trimmingCharacters(in: .whitespacesAndNewlines)
+    // 头衔（User.level_name，随作者下发）：只在开关打开且徽标在时接在 Lv 后面。
+    // ⚠️ 变量名不许叫 title —— 本 init 有个 title 参数（主贴卡的帖名），
+    // 撞名会把卡片标题顶成头衔（2026-09-18 用户复报的"主贴卡标题变成等级标记"）。
+    let levelTitle = post.authorLevelName.trimmingCharacters(in: .whitespacesAndNewlines)
     self.levelText =
-      preferences.showLevelTitle && !title.isEmpty && self.levelShortText != nil
-      ? "\(self.levelShortText ?? "") \(title)"
+      preferences.showLevelTitle && !levelTitle.isEmpty && self.levelShortText != nil
+      ? "\(self.levelShortText ?? "") \(levelTitle)"
       : self.levelShortText
     self.levelColor = TiebaPostRowLayout.levelColor(post.authorLevel)
     self.metaText = TiebaPostRowLayout.metaText(
@@ -629,53 +632,36 @@ final class TiebaPostRowMetrics: @unchecked Sendable {
 
   private struct Page {
     var models: [TiebaPostRowModel]
-    var order: UInt64
   }
 
-  private let lock = NSLock()
-  private var pages: [String: Page] = [:]
-  private var orderSeed: UInt64 = 0
-  private let maxPages = 8
+  /// 整页缓存（LRU + 在显页跳过）：四族度量缓存共用 TiebaPageStore。
+  private let pages = TiebaPageStore<String, Page>(pinKey: { $0 })
 
   private init() {}
 
   /// 整页发布（调用方在后台队列执行；返回后 row/rowCount 立即可查）。
   func prepare(pageKey: String, models: [TiebaPostRowModel]) {
     guard !pageKey.isEmpty else { return }
-    lock.withLock {
-      orderSeed &+= 1
-      pages[pageKey] = Page(models: models, order: orderSeed)
-      guard pages.count > maxPages else { return }
-      // 在显页跳过（同 TiebaRowPagePins：正在显示的页被挤掉 = 行内容静默留白）。
-      let pinned = TiebaRowPagePins.shared.snapshot()
-      var overflow = pages.count - maxPages
-      for entry in pages.sorted(by: { $0.value.order < $1.value.order }) {
-        guard overflow > 0 else { break }
-        guard !pinned.contains(entry.key) else { continue }
-        pages.removeValue(forKey: entry.key)
-        overflow -= 1
-      }
-    }
+    pages.publish(Page(models: models), forKey: pageKey)
   }
 
   func row(pageKey: String, index: Int) -> TiebaPostRowModel? {
-    lock.withLock {
-      guard let page = pages[pageKey], page.models.indices.contains(index) else { return nil }
-      return page.models[index]
+    guard let page = pages.value(forKey: pageKey), page.models.indices.contains(index) else {
+      return nil
     }
+    return page.models[index]
   }
 
   /// 单行替换（点赞等只重建本行；行数不变，调用方随后 setPage 重配可见行）。
   func replace(pageKey: String, index: Int, model: TiebaPostRowModel) {
-    lock.withLock {
-      guard var page = pages[pageKey], page.models.indices.contains(index) else { return }
+    pages.mutate(pageKey) { page in
+      guard page.models.indices.contains(index) else { return }
       page.models[index] = model
-      pages[pageKey] = page
     }
   }
 
   func rowCount(pageKey: String) -> Int {
-    lock.withLock { pages[pageKey]?.models.count ?? 0 }
+    pages.value(forKey: pageKey)?.models.count ?? 0
   }
 }
 

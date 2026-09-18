@@ -360,13 +360,7 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
     let url = "https://tieba.baidu.com/p/\(id)"
     let title = value(index, "title")
     let text = title.isEmpty ? url : "\(title)\n\(url)"
-    let controller = UIActivityViewController(activityItems: [text], applicationActivities: nil)
-    if let popover = controller.popoverPresentationController {
-      popover.sourceView = view
-      popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.maxY - 44, width: 1, height: 1)
-      popover.permittedArrowDirections = []
-    }
-    present(controller, animated: true)
+    TiebaShareSheet.present(text: text, from: self)
   }
 
   /// 点赞：乐观翻转 + 失败回滚（与 useFeedCardActions 同一竞态策略，镜像表防连点）。

@@ -9,7 +9,7 @@ final class TiebaThreadKnownPostView: UIView {
   private let titleLabel = UILabel()
   private let authorLabel = UILabel()
   private let abstractLabel = UILabel()
-  private let imageView = UIImageView()
+  private let imageView = TiebaKnownPostImageView()
 
   private let snapshot: TiebaThreadSnapshot
   private var palette: TiebaFeedRowPalette = .default
@@ -47,11 +47,6 @@ final class TiebaThreadKnownPostView: UIView {
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    loadImageIfNeeded()
-  }
 
   func applyPalette(_ palette: TiebaFeedRowPalette) {
     self.palette = palette
@@ -132,6 +127,10 @@ final class TiebaThreadKnownPostView: UIView {
 
     if snapshot.imageURL != nil, imageAspect > 0 {
       imageView.contentMode = .scaleAspectFill
+      // 取图时机交给自己：卡片（card）/栈都是本视图的子孙，在本视图的
+      // layoutSubviews 里读 imageView.bounds 还是 0（约束逐层下推），图片永远
+      // 取不到——用户报的"占位卡里没有图片"。自己布局完再取，尺寸必然成立。
+      imageView.onLayout = { [weak self] in self?.loadImageIfNeeded() }
       // 圆角在图片管线里烘焙进像素（见 TiebaNuke.displayProcessor）：本层不再
       // clipsToBounds，省掉每帧一次离屏合成；cornerRadius 只服务占位底色。
       imageView.layer.cornerRadius = 10
@@ -175,7 +174,8 @@ final class TiebaThreadKnownPostView: UIView {
   }
 
   /// 首图按"视图最终尺寸"取图（下采样 + 烘焙圆角都在管线里）：宽度只有布局后
-  /// 才知道，所以放在 layoutSubviews；宽度变化（旋屏/分屏）按新尺寸重取。
+  /// 才知道，所以由图片视图**自身**布局结束时触发（见 TiebaKnownPostImageView）。
+  /// 宽度变化（旋屏/分屏）按新尺寸重取。
   private func loadImageIfNeeded() {
     guard let url = snapshot.imageURL, imageAspect > 0 else { return }
     let width = imageView.bounds.width
@@ -195,5 +195,18 @@ final class TiebaThreadKnownPostView: UIView {
       ),
       into: imageView
     )
+  }
+}
+
+/// 取图必须在**自身**布局之后：显示档处理器的位图按视图最终尺寸裁切、圆角也烘焙
+/// 在像素里（见 TiebaNuke.displayProcessor），尺寸错了整张图就错。已知主贴卡的
+/// 图片是 card → stack → imageView 的第三层，外层视图的 layoutSubviews 触发时
+/// 它还没拿到 frame，所以由它自己布局结束时回调。
+private final class TiebaKnownPostImageView: UIImageView {
+  var onLayout: (() -> Void)?
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    onLayout?()
   }
 }

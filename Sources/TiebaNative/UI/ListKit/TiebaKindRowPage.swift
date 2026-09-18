@@ -114,6 +114,84 @@ public nonisolated final class TiebaRowPagePins: @unchecked Sendable {
   func snapshot() -> Set<String> { lock.withLock { keys } }
 }
 
+/// 页级缓存（键控 + 整页 LRU 淘汰）——四族度量缓存的唯一实现：
+/// 行度量（TiebaRowMetrics）/ 帖行度量（TiebaPostRowMetrics）/ 通用行度量
+/// （TiebaSimpleRowMetrics）/ 页记录（TiebaKindRowPages）。
+///
+/// 四条纪律原先在四个文件里各抄一遍（连注释都近似），任何一份漏掉 pinned 判断
+/// 都会复现"点进帖子退回来只剩一张卡"的静默留白，所以收敛到一处：
+///   - 整页淘汰，不逐行（半个页面的高度缺失比多留几页更糟）；
+///   - **在显页跳过**（用户正在看的页被挤掉 = 行内容静默留白，见 TiebaRowPagePins）；
+///   - 全部 pinned 时允许暂时超上限（宁可多留，不可删在显页）；
+///   - maxPages = 8（上一页 + 当前页 + 预取页）。
+///
+/// Value 由调用方定形（行模型数组 / 页记录 / 原始字典都行），order 由本类维护。
+/// @unchecked Sendable：值只在 lock 内读写；nonisolated 供后台测量队列调用。
+public nonisolated final class TiebaPageStore<Key: Hashable, Value>: @unchecked Sendable {
+  /// key → 在显页键（TiebaRowPagePins 里的字符串形式）；多数调用方就是键本身。
+  private let pinKey: @Sendable (Key) -> String
+  private let maxPages: Int
+  private let lock = NSLock()
+  private var pages: [Key: (value: Value, order: UInt64)] = [:]
+  private var orderSeed: UInt64 = 0
+
+  public init(maxPages: Int = 8, pinKey: @escaping @Sendable (Key) -> String) {
+    self.maxPages = maxPages
+    self.pinKey = pinKey
+  }
+
+  /// 发布一页（覆盖同键）并做一次整页淘汰。
+  func publish(_ value: Value, forKey key: Key) {
+    lock.withLock {
+      orderSeed &+= 1
+      pages[key] = (value, orderSeed)
+      guard pages.count > maxPages else { return }
+      let pinned = TiebaRowPagePins.shared.snapshot()
+      var overflow = pages.count - maxPages
+      for entry in pages.sorted(by: { $0.value.order < $1.value.order }) {
+        guard overflow > 0 else { break }
+        guard !pinned.contains(pinKey(entry.key)) else { continue }
+        pages.removeValue(forKey: entry.key)
+        overflow -= 1
+      }
+    }
+  }
+
+  func value(forKey key: Key) -> Value? {
+    lock.withLock { pages[key]?.value }
+  }
+
+  /// 匹配（同 pageKey 可能有多条不同宽度的键）里**最新发布**的那条；无 → nil。
+  /// 行视图查询用：它只拿得到 (pageKey, index)，不知道宽度。
+  func newest(where matches: @Sendable (Key) -> Bool) -> Value? {
+    lock.withLock {
+      var newest: (value: Value, order: UInt64)?
+      for (key, entry) in pages where matches(key) {
+        if newest == nil || entry.order > newest!.order { newest = entry }
+      }
+      return newest?.value
+    }
+  }
+
+  /// 就地改一页（如单行替换）。块内改的是副本；返回 false = 键不存在（不改动）。
+  @discardableResult
+  func mutate(_ key: Key, _ body: (inout Value) -> Void) -> Bool {
+    lock.withLock {
+      guard var entry = pages[key] else { return false }
+      body(&entry.value)
+      // order 保持不变：就地改内容不算"最近使用"（同旧实现用 var Page 直接写回）。
+      pages[key] = entry
+      return true
+    }
+  }
+
+  func removeAll() {
+    lock.withLock { pages.removeAll() }
+  }
+
+  var count: Int { lock.withLock { pages.count } }
+}
+
 // MARK: - 页记录缓存 + 两族测量路由
 
 public nonisolated final class TiebaKindRowPages: @unchecked Sendable {
@@ -121,7 +199,6 @@ public nonisolated final class TiebaKindRowPages: @unchecked Sendable {
 
   private struct Entry {
     let page: TiebaKindRowPage
-    let order: UInt64
   }
 
   /// prepareBlocking 的入参快照盒：行字典非 Sendable，投递后调用方不再持有/改写
@@ -130,11 +207,8 @@ public nonisolated final class TiebaKindRowPages: @unchecked Sendable {
     let rows: [[String: Any]]
   }
 
-  /// 整页上限：与两族度量缓存的 maxPages 同值（上一页 + 当前页 + 预取页）。
-  private let maxPages = 8
-  private let lock = NSLock()
-  private var pages: [String: Entry] = [:]
-  private var orderSeed: UInt64 = 0
+  /// 整页缓存（LRU + 在显页跳过）：与其余三族度量缓存共用 TiebaPageStore。
+  private let pages = TiebaPageStore<String, Entry>(pinKey: { $0 })
 
   private init() {}
 
@@ -179,13 +253,13 @@ public nonisolated final class TiebaKindRowPages: @unchecked Sendable {
   /// 页内行数（页记录未发布 → 0）。行数来自页记录本身：行高缺失（被 LRU 淘汰）
   /// 时列表仍要画出等量占位行，不能靠度量缓存的行数。
   public func rowCount(pageKey: String) -> Int {
-    lock.withLock { pages[pageKey]?.page.count ?? 0 }
+    pages.value(forKey: pageKey)?.page.count ?? 0
   }
 
   /// 页存活行数 = 各度量族完成度的最小值（任一族被淘汰/换了宽度 → 小于行数）；
   /// 调用方据此重推当前页（liveRowCount < rowCount = 度量不在，别画等量兜底行）。
   public func liveRowCount(pageKey: String, containerWidth: CGFloat) -> Int {
-    guard let page = lock.withLock({ pages[pageKey]?.page }) else { return 0 }
+    guard let page = pages.value(forKey: pageKey)?.page else { return 0 }
     let width = TiebaKindRowPages.quantize(containerWidth)
     var counts: [Int] = []
     if !page.simpleIndices.isEmpty {
@@ -215,30 +289,16 @@ public nonisolated final class TiebaKindRowPages: @unchecked Sendable {
   }
 
   public func kind(pageKey: String, index: Int) -> TiebaKindRowKind? {
-    lock.withLock { pages[pageKey]?.page.kind(at: index) }
+    pages.value(forKey: pageKey)?.page.kind(at: index)
   }
 
   public func subIndex(pageKey: String, index: Int) -> Int? {
-    lock.withLock { pages[pageKey]?.page.subIndex(at: index) }
+    pages.value(forKey: pageKey)?.page.subIndex(at: index)
   }
 
   // MARK: - 内部
 
   private func publish(_ page: TiebaKindRowPage) {
-    lock.withLock {
-      orderSeed &+= 1
-      pages[page.pageKey] = Entry(page: page, order: orderSeed)
-      guard pages.count > maxPages else { return }
-      // 整页淘汰：最旧 order 先出（与两族度量缓存的淘汰纪律一致），**在显页跳过**
-      // ——正在显示的页被挤掉就是行内容静默留白（见 TiebaRowPagePins）。
-      let pinned = TiebaRowPagePins.shared.snapshot()
-      var overflow = pages.count - maxPages
-      for entry in pages.sorted(by: { $0.value.order < $1.value.order }) {
-        guard overflow > 0 else { break }
-        guard !pinned.contains(entry.key) else { continue }
-        pages.removeValue(forKey: entry.key)
-        overflow -= 1
-      }
-    }
+    pages.publish(Entry(page: page), forKey: page.pageKey)
   }
 }

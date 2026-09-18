@@ -492,6 +492,11 @@ final class TiebaSkeletonList: UIView {
     stack.axis = .vertical
     stack.alignment = .fill
     stack.isLayoutMarginsRelativeArrangement = true
+    // 顶部留白由 contentInsets 一处承担，不让栈再叠一份安全区边距：骨架挂在全屏
+    // 列表顶部，栈的 margins 会被自动抬高一份 safeArea.top ⇒ 首个块（帖子页的已知
+    // 主贴卡）比真实内容低约 59pt，首包落地时整块往上跳一次（用户 2026-09-18 报的
+    // "卡片离顶栏一段空白、加载完突然位移"）。同 80a47e6 修的三处页头栈。
+    stack.insetsLayoutMarginsFromSafeArea = false
     stack.translatesAutoresizingMaskIntoConstraints = false
     addSubview(stack)
     // 只钉上/左右：高度由内容撑出（钉底会让 .fill 分布拉伸最后一个单元）
