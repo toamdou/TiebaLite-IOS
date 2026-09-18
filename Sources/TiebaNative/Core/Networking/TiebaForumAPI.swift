@@ -399,6 +399,7 @@ enum TiebaForumAPI {
     path: String,
     cmd: String,
     extraHeaders: [String: String] = [:],
+    clientVersion: String = clientVersion,
     makeRequest: (Tieba_CommonRequest) -> R
   ) async throws -> Data {
     let snapshot = TiebaBackgroundSnapshot.shared
@@ -424,7 +425,7 @@ enum TiebaForumAPI {
       "c3_aid": cuid,
       "client_type": "2",
     ].merging(extraHeaders) { _, new in new }
-    let protoData = try makeRequest(commonRequest()).serializedData()
+    let protoData = try makeRequest(commonRequest(clientVersion: clientVersion)).serializedData()
     // 只读通道的有限重试（本文件调用点全是读：frsPage/pbPage/个人主页/信息流/
     // 吧详情/吧规/吧务/成员/黑名单）：切网瞬间、地铁里的一次抖动不再直接把页面
     // 打成"加载失败"。写接口走 postForm + 签名，**绝不能**重试（非幂等）。
@@ -508,20 +509,28 @@ enum TiebaForumAPI {
 
   private static let v12UserAgent =
     "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/135.0.0.0 Mobile Safari/537.36 tieba/12.64.1.1"
-  /// 声明给服务端的客户端版本。**能力按版本号下发**：楼中楼图片在 < 22.9 的版本号下
-  /// 被服务端压成文本「[图片]」（2026-09-17 实测：22.8 = 文本、22.9 = 真图带 cdnSrc），
-  /// 所以从 JS 期的 12.64.1.1 升到 22.9.1.0；HTTP UA 不参与该门控，保持原串。
+  /// 声明给服务端的客户端版本。**能力按版本号下发，且各端点门控方向相反**：
+  ///  - 楼中楼图片在 < 22.9 下被服务端压成文本「[图片]」（2026-09-17 实测：22.8 = 文本、
+  ///    22.9 = 真图带 cdnSrc）⇒ pbPage / pbFloor **必须** ≥ 22.9；
+  ///  - 吧帖子列表（frsPage）反过来：声明 ≥ 20.0 时服务端对部分吧（实测 deepseek、steam）
+  ///    返回的 FrsPageResponseData **完全不含 thread_list(#7)**（百度/程序员/原神等正常），
+  ///    列表因此空屏 ⇒ frsPage **必须** 12.64.1.1（2026-09-18 逐版本实探：12.41/12.64 有
+  ///    thread_list，20.0 起归零）。
+  /// 所以版本号按调用方给，不再是单一全局常量。HTTP UA 不参与门控。
   private static let clientVersion = "22.9.1.0"
+  /// frsPage 专用：被证实能拿到 thread_list 的版本（JS 期一路沿用的值）。
+  static let forumListClientVersion = "12.64.1.1"
   private static let deviceModel = "SM-G9910"
 
   /// 非 private：TiebaThreadAPI 的 pbPage 复用同一份身份参数。
-  static func commonRequest() -> Tieba_CommonRequest {
+  /// `version` 默认 22.9.1.0（楼中楼图片档）；只有 frsPage 显式传旧版本号。
+  static func commonRequest(clientVersion version: String = clientVersion) -> Tieba_CommonRequest {
     let now = Int64(Date().timeIntervalSince1970 * 1000)
     let clientId = clientIdValue()
     let cuid = cuidValue()
     var common = Tieba_CommonRequest()
     common.clientType = 2
-    common.clientVersion = clientVersion
+    common.clientVersion = version
     common.clientID = clientId
     common.phoneImei = clientId
     common.cuid = cuid
@@ -558,7 +567,7 @@ enum TiebaForumAPI {
     common.startScheme = ""
     common.startType = 1
     common.nawsGameVer = "1038000"
-    common.userAgent = "tieba/\(clientVersion)"
+    common.userAgent = "tieba/\(version)"
     common.zID = ""
     return common
   }

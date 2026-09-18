@@ -65,7 +65,11 @@ enum TiebaForumFeedAPI {
     let data = try await TiebaForumAPI.protoPost(
       path: "/c/f/frs/page",
       cmd: "301001&format=protobuf",
-      extraHeaders: ["forum_name": encodedKw]
+      extraHeaders: ["forum_name": encodedKw],
+      // ⚠️ 必须用旧版本号：声明 ≥ 20.0 时服务端对部分吧（deepseek/steam 等）返回的
+      // 响应**不含 thread_list**，列表整屏空白（2026-09-18 逐版本实探，见
+      // TiebaForumAPI.forumListClientVersion 的注释）。
+      clientVersion: TiebaForumAPI.forumListClientVersion
     ) { common in
       var request = Tieba_FrsPage_FrsPageRequestData()
       request.common = common

@@ -26,13 +26,22 @@ enum TiebaThreadActionAPI {
   }
 
   /// 收藏 / 取消收藏（原 JS addStore / removeStore；fid=null 与 user_id 逐字段一致）。
+  /// ⚠️ addstore **必须带 tbs**：Kotlin 权威实现是 `(data, tbs, stoken)`，JS 期漏了 tbs
+  /// （其注释自陈"常返回伪成功：error_code=0 但收藏未入库"就是缺 tbs 的表现），原生照抄
+  /// 后服务端直接回错、表现成"点收藏永远失败"（2026-09-18 修）。与 rmstore 同一取法。
   static func setStore(threadId: String, firstPostId: String, store: Bool) async throws {
     guard !threadId.isEmpty else { throw TiebaForumAPIError.invalidResponse }
+    let snapshot = TiebaBackgroundSnapshot.shared
     if store {
+      guard !snapshot.tbs.isEmpty else {
+        throw TiebaViewModelError(code: 400, message: "缺少 tbs，无法执行此操作，请刷新页面后重试")
+      }
       let data = "[{\"tid\":\"\(threadId)\",\"pid\":\"\(firstPostId.isEmpty ? "0" : firstPostId)\",\"status\":1}]"
-      _ = try await TiebaSocialAPI.signedPost(path: "/c/c/post/addstore", fields: ["data": data])
+      _ = try await TiebaSocialAPI.signedPost(
+        path: "/c/c/post/addstore",
+        fields: ["data": data, "tbs": snapshot.tbs]
+      )
     } else {
-      let snapshot = TiebaBackgroundSnapshot.shared
       guard !snapshot.tbs.isEmpty else {
         throw TiebaViewModelError(code: 400, message: "缺少 tbs，无法执行此操作，请刷新页面后重试")
       }

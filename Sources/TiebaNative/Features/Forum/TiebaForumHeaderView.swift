@@ -177,9 +177,15 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     configureCapsuleButton(followedChip, filled: false)
     configureCapsuleButton(signButton, filled: true)
     configureCapsuleButton(signedChip, filled: false)
-    followedChip.isUserInteractionEnabled = false
+    // 「已关注」可点 = 取消关注（走同一个 .follow 动作，页面按 card.isLike 分派；
+    // 用户报的"点已关注无法取消关注"就是这里原先被禁用且没挂 action）。
+    // 「已签到」保持不可点：签到是单向的，没有可撤销的动作。
     signedChip.isUserInteractionEnabled = false
     followButton.addAction(
+      UIAction { [weak self] _ in self?.onAction?(.forum(.follow), [:]) },
+      for: .touchUpInside
+    )
+    followedChip.addAction(
       UIAction { [weak self] _ in self?.onAction?(.forum(.follow), [:]) },
       for: .touchUpInside
     )

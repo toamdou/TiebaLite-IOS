@@ -528,7 +528,14 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
         pill.showResult(success: true, text: wasCollected ? "已取消收藏" : "已收藏")
       } catch {
         TiebaSceneHaptics.fire("action-fail")
-        pill.showResult(success: false, text: wasCollected ? "取消收藏失败" : "收藏失败")
+        // 透出服务端文案（TiebaForumAPIError.api 的 message 就是 error_msg）：
+        // 只说"收藏失败"时无法定位（用户报的永远失败就是这么黑箱了）。
+        let detail = (error as? LocalizedError)?.errorDescription
+        let fallback = wasCollected ? "取消收藏失败" : "收藏失败"
+        pill.showResult(
+          success: false,
+          text: (detail?.isEmpty == false ? detail! : fallback)
+        )
       }
     }
   }
