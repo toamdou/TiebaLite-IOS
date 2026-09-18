@@ -524,7 +524,7 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     // UIViewController.view 在 Swift 里是隐式解包可选：显式标注类型避免
     // `host.view.window` 被推成 Optional 链。
     let hostView: UIView = host.view
-    guard hostView.window != nil else { return false }
+    guard hostView.tiebaIsOnScreen else { return false }
 
     let browser = TiebaPhotoBrowserViewController()
     browser.delegate = self
@@ -1123,7 +1123,7 @@ final class TiebaPhotoBrowserActionController {
   /// （share 的 completion）本来就是 @MainActor 闭包，这里把隔离显式写进签名。
   @MainActor
   private func presentShareSheet(data: Data, sourceURL: URL) {
-    guard let presenter, presenter.view.window != nil else { return }
+    guard let presenter, presenter.view.tiebaIsOnScreen else { return }
     do {
       let fileURL = try Self.writeTemporaryFile(data: data, sourceURL: sourceURL)
       // 呈现收敛到 TiebaShareSheet（与 JS 门面 sharePresent 同一份实现）：
@@ -1158,7 +1158,7 @@ final class TiebaPhotoBrowserActionController {
   // MARK: 提示
 
   private func presentAlert(title: String, message: String) {
-    guard let presenter, presenter.view.window != nil,
+    guard let presenter, presenter.view.tiebaIsOnScreen,
           presenter.presentedViewController == nil else { return }
     let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "好", style: .default))

@@ -608,7 +608,7 @@ final class TiebaSkeletonList: UIView {
 
   /// 窗口 + 全祖先链都未 hidden 才算可见（宿主可能隐藏的是外层容器）。
   private var hasVisibleHierarchy: Bool {
-    guard window != nil else { return false }
+    guard tiebaIsOnScreen else { return false }
     var node: UIView? = self
     while let current = node {
       if current.isHidden { return false }

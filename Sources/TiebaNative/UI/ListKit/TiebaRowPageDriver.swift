@@ -24,8 +24,9 @@ public final class TiebaRowPageDriver {
   /// 当前页键（fresh 发布时 = "\(keyPrefix)-\(pageSeq)"；未发布 = ""）。
   public private(set) var pageKey = ""
 
-  /// 上次"缺页自愈重推"的时刻（节流用）。
-  private var lastRepublishAt: CFTimeInterval = 0
+  /// 上次"缺页自愈重推"的节流状态。自适应：反复缺页时退避（重推是整页后台测量），
+  /// 屏不在窗上时直接按最大间隔合并——用户看不见时晚一点补没有代价。
+  private var republishThrottle = TiebaAdaptiveThrottle()
 
   public init(list: TiebaKindListContentView, keyPrefix: String) {
     self.list = list
@@ -44,8 +45,7 @@ public final class TiebaRowPageDriver {
     guard !pageKey.isEmpty, let makeRows = lastMakeRows else { return }
     // 单调时钟（本文件只 import Foundation，不引 QuartzCore）。
     let now = ProcessInfo.processInfo.systemUptime
-    guard now - lastRepublishAt >= 0.5 else { return }
-    lastRepublishAt = now
+    guard republishThrottle.shouldPass(now: now, inactive: list.isOffScreen) else { return }
     publish(fresh: false, makeRows: makeRows)
   }
 
@@ -82,8 +82,11 @@ public final class TiebaRowPageDriver {
     let key = pageKey
     let width = lastWidth
     let box = RowsBox(rows: rows)
+    // 屏在窗上（含首屏加载期）用 userInitiated；已上过屏但现在离屏（被 push 盖住）
+    // 降到 utility——测出来也是给离屏的那一屏用，不该和滚动抢 CPU。
+    let offscreen = list.isOffScreen
     Task { @MainActor [weak self] in
-      await Task.detached(priority: .userInitiated) {
+      await Task.detached(priority: offscreen ? .utility : .userInitiated) {
         TiebaKindRowPages.shared.prepareBlocking(
           pageKey: key,
           rows: box.rows,

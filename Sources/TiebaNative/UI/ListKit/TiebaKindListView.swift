@@ -1,7 +1,7 @@
 // ============================================================
 // TiebaLite — 通用行列表（TiebaKindListView）
 //
-// 纯 UIView：UICollectionView + CompositionalLayout（帧由测量缓存逐个给出）+
+// 纯 UIView：UICollectionView + TiebaRowListLayout（拉取式，帧由测量缓存逐个给出）+
 // DiffableDataSource（CellRegistration 分派 simple/feed/post）；事件经 onListEvent 外传。
 // 行宽契约 = TiebaLayout.quantize(列表宽 - 2×horizontalInset)，行种类路由见 TiebaKindRowPages。
 // ============================================================
@@ -407,7 +407,7 @@ private final class TiebaKindFooterView: UICollectionReusableView {
 
 // MARK: - 列表 view body（纯 UIView）
 
-/// 通用行列表的实体：UICollectionView + CompositionalLayout（custom group，
+/// 通用行列表的实体：UICollectionView + TiebaRowListLayout（拉取式，
 /// 帧由测量缓存逐个给出）+ DiffableDataSource。事件经 `onListEvent` 闭包外传。
 public final class TiebaKindListContentView: UIView {
   // MARK: 接口（纯 Swift）
@@ -431,8 +431,16 @@ public final class TiebaKindListContentView: UIView {
   /// 用户看到的就是"列表突然一片空白"（机制见 TiebaRowPagePins）。
   var onPageDataMissing: (() -> Void)?
 
-  /// 自愈通知节流：一屏几十行同时发现缺页只通知一次。
-  private var lastPageMissingNotifyAt: CFTimeInterval = 0
+  /// 自愈通知节流：一屏几十行同时发现缺页只通知一次；反复失败则退避（见
+  /// TiebaAdaptiveThrottle），离屏时直接按最大间隔合并。
+  private var pageMissingThrottle = TiebaAdaptiveThrottle()
+
+  /// 曾上过屏：首屏加载早于挂窗（那时 window == nil），降档判据要靠它把"还没上屏"
+  /// 和"已被盖住/离屏"分开——前者正是用户正等的那一屏，不能降。
+  private var hasBeenOnScreen = false
+
+  /// 真正离屏（曾上屏且现在不在窗上）：后台活可降档。
+  var isOffScreen: Bool { hasBeenOnScreen && !tiebaIsOnScreen }
 
   /// 滚动头 spec（TiebaKindListHeaderFactory 的输入；nil = 无页头）。
   /// 内容等值时忽略（Fabric 每次 commit 都可能是新字典，不能按引用重建视图）。
@@ -538,8 +546,8 @@ public final class TiebaKindListContentView: UIView {
       TiebaRowPagePins.shared.unpin(previousKey)
       syncPagePin()
     }
-    // 行高数组是"要不要换新 layout 对象"的判据（见 refreshGeometry），先留旧值再清缓存。
-    let previousHeights = isSamePage ? frameHeightCache?.heights : nil
+    // 拉取式布局按需取帧（见 TiebaRowListLayout）：行高变了只需作废缓存 + 失效布局，
+    // 不再有"构建期快照"要重建。
     frameHeightCache = nil
     if !isSamePage {
       // 换页后可见区间即便与旧页数值相同（都 0…7）也必须重发，否则懒回填
@@ -551,7 +559,7 @@ public final class TiebaKindListContentView: UIView {
     // 占位行（行高走兜底），不能靠度量缓存的行数。
     let count = TiebaKindRowPages.shared.rowCount(pageKey: pageKey)
     if isSamePage, count == itemCount {
-      refreshGeometry(previousHeights: previousHeights, count: count)
+      refreshGeometry()
       reconfigureVisibleItems()
       return
     }
@@ -570,36 +578,27 @@ public final class TiebaKindListContentView: UIView {
     }
     if isSamePage {
       dataSource.apply(snapshot, animatingDifferences: false)
-      // 同页重推（展开/点赞/回填）没有别的失效来源，行高数组变了必须自己换布局对象。
-      refreshGeometry(previousHeights: previousHeights, count: count)
+      // 同页重推（展开/点赞/回填）：行数/行高变了，失效布局即可——拉取式布局会在
+      // 下一次 prepare 重新取帧，可见区间没变的行连属性对象都不用重建。
+      refreshGeometry()
     } else {
       dataSource.applySnapshotUsingReloadData(snapshot)
-      // 换页键 = 整页 reload：reload 本身就会让布局重跑 section provider，别再叠一次
-      // 换 layout 对象（每翻一页都换一次 = 整页属性重建 + 可见 cell 全量重配，正好
-      // 落在用户滚到底触发加载的那一刻）。
-      collectionView.collectionViewLayout.invalidateLayout()
+      // 换页键 = 整页更换：apply 完只需失效，不再整只换布局对象。
+      refreshGeometry()
     }
     setNeedsLayout()
   }
 
-  /// 按新行高数组刷新集合视图几何。行高变了必须**换新 layout 对象**：组合布局的
-  /// custom group 帧与组高是构建期快照，只 invalidateLayout() 时行高会停在旧值
-  ///（用户报的「点显示更多没反应、内容没变、按钮却消失」）。没变才走轻量 invalidate。
-  private func refreshGeometry(previousHeights: [CGFloat]?, count: Int) {
-    let width = itemWidth
-    guard width > 0, count > 0 else { return }
-    let heights = frameHeights(width: width, count: count)
-    var changed = true
-    if let previousHeights, previousHeights.count == heights.count {
-      changed = (0..<heights.count).contains { previousHeights[$0] != heights[$0] }
-    }
-    guard changed else {
+  /// 按当前几何失效布局。行高/行数变化都走这里：布局是拉取式的（TiebaRowListLayout），
+  /// 下一次布局趟会用新的帧高数组重建**受影响的部分**，纯追加时前缀行的属性原样留用。
+  /// 旧实现是组合布局的 `.custom` 组帧=构建期快照，必须整只换 layout 对象（= 整页属性
+  /// 重建 + 可见 cell 全量重配，且正好落在"滚到底加载下一页"那一刻）。
+  private func refreshGeometry() {
+    if let layout = collectionView.collectionViewLayout as? TiebaRowListLayout {
+      layout.invalidateAndRebuild()
+    } else {
       collectionView.collectionViewLayout.invalidateLayout()
-      return
     }
-    let offset = collectionView.contentOffset
-    collectionView.setCollectionViewLayout(makeLayout(), animated: false)
-    collectionView.contentOffset = offset
   }
 
   public func scrollToTop(animated: Bool) {
@@ -614,7 +613,7 @@ public final class TiebaKindListContentView: UIView {
   /// 保活当前页——仅当挂在窗口上（= 确实在显示）。首次布局前 setPage 很常见，
   /// 那时 window == nil，"还没显示"的页没有保住的理由。
   private func syncPagePin() {
-    if window != nil {
+    if tiebaIsOnScreen {
       TiebaRowPagePins.shared.pin(pageKey)
     } else {
       TiebaRowPagePins.shared.unpin(pageKey)
@@ -622,12 +621,11 @@ public final class TiebaKindListContentView: UIView {
   }
 
   /// 发现当前页数据缺失（页记录或某行度量被整页 LRU 挤掉）：请宿主用同一页键
-  /// 重推。节流 0.5s——重推是一次后台整页测量，不能被逐行通知打成风暴。
+  /// 重推。重推是一次后台整页测量，不能被逐行通知打成风暴——按自适应间隔合并。
   private func notifyPageDataMissing() {
     guard onPageDataMissing != nil else { return }
     let now = ProcessInfo.processInfo.systemUptime
-    guard now - lastPageMissingNotifyAt >= 0.5 else { return }
-    lastPageMissingNotifyAt = now
+    guard pageMissingThrottle.shouldPass(now: now, inactive: isOffScreen) else { return }
     onPageDataMissing?()
   }
 
@@ -889,6 +887,7 @@ public final class TiebaKindListContentView: UIView {
 
   public override func didMoveToWindow() {
     super.didMoveToWindow()
+    if tiebaIsOnScreen { hasBeenOnScreen = true }
     updatePrefetcherPause()
     // 挂窗 = 开始显示 → 保活当前页；离窗（被 push 的帖子页盖住、或整页销毁）
     // = 交还给 LRU。返回这一屏时列表不会重推，靠的正是这层保活 + 缺页自愈。
@@ -898,7 +897,7 @@ public final class TiebaKindListContentView: UIView {
   private func updatePrefetcherPause() {
     // 离屏 ∥ 查看器打开：两个条件合成一处（否则"打开查看器 → 列表离屏 → 关
     // 查看器"会把离屏的那次暂停覆盖成运行态）。
-    prefetcher.isPaused = isBrowserPresented || window == nil
+    prefetcher.isPaused = isBrowserPresented || !tiebaIsOnScreen
   }
 
   /// 行宽变化后按新宽度复查页内行数；与当前 itemCount 不一致即重建快照。
@@ -1091,92 +1090,42 @@ public final class TiebaKindListContentView: UIView {
     }
   }
 
-  // MARK: 布局（CompositionalLayout）
+  // MARK: 布局（拉取式 TiebaRowListLayout）
 
-  private func makeLayout() -> UICollectionViewCompositionalLayout {
-    let configuration = UICollectionViewCompositionalLayoutConfiguration()
-    configuration.scrollDirection = .vertical
-    configuration.interSectionSpacing = 0
-    return UICollectionViewCompositionalLayout(sectionProvider: { [weak self] sectionIndex, _ in
-      self?.makeSection(index: sectionIndex) ?? TiebaKindListContentView.emptySection()
-    }, configuration: configuration)
+  private func makeLayout() -> TiebaRowListLayout {
+    let layout = TiebaRowListLayout()
+    // 几何来源是闭包（现取）而非快照：prepare 时读到的行数与数据源一致，追加后
+    // 只重建新增尾部的属性，前缀行留用。
+    layout.geometryProvider = { [weak self] in
+      guard let self else { return TiebaRowListLayoutInput() }
+      return self.makeGeometry()
+    }
+    return layout
   }
 
-  private func makeSection(index sectionIndex: Int) -> NSCollectionLayoutSection {
-    guard sectionIndex < collectionView.numberOfSections else {
-      return TiebaKindListContentView.emptySection()
-    }
+  /// 行数与数据源同源（`numberOfItems` 在无 section 时会抛，先判段数）。
+  private var currentItemCount: Int {
+    collectionView.numberOfSections > 0 ? collectionView.numberOfItems(inSection: 0) : 0
+  }
+
+  private func makeGeometry() -> TiebaRowListLayoutInput {
+    let width = itemWidth
+    let count = currentItemCount
+    let containerWidth = collectionView.bounds.width
+    guard count > 0, width > 0, containerWidth > 0 else { return TiebaRowListLayoutInput() }
     // 行宽来源与 itemWidth / frameHeight 完全同一处（collectionView.bounds.width）
     // ——两边算法必须逐位一致，否则高度查询的宽度闸门拒绝命中，整列表退回兜底高。
-    let itemWidth = self.itemWidth
-    let count = collectionView.numberOfItems(inSection: sectionIndex)
-    guard count > 0, itemWidth > 0 else {
-      return TiebaKindListContentView.emptySection()
-    }
-    let inset = horizontalInset
-    var frames: [NSCollectionLayoutGroupCustomItem] = []
-    frames.reserveCapacity(count)
-    // 内容内白统一由滚动视图的 contentInset.top 承担（见 applyContentInset），
-    // 组内不再留白：行坐标从 0 起算。
-    let heights = frameHeights(width: itemWidth, count: count)
-    var y: CGFloat = 0
-    for index in 0..<count {
-      let height = heights[index]
-      frames.append(
-        NSCollectionLayoutGroupCustomItem(
-          frame: CGRect(x: inset, y: y, width: itemWidth, height: height)
-        )
-      )
-      y += height
-    }
-    let size = NSCollectionLayoutSize(
-      widthDimension: .fractionalWidth(1),
-      heightDimension: .absolute(y)
-    )
-    let group = NSCollectionLayoutGroup.custom(layoutSize: size) { _ in frames }
-    let section = NSCollectionLayoutSection(group: group)
-    section.contentInsets = .zero
-    section.interGroupSpacing = 0
-    var supplementaryItems: [NSCollectionLayoutBoundarySupplementaryItem] = []
-    // 滚动头：页头视图按列表宽自适应高度（粘在 section 顶部，不悬浮——随内容滚走）。
-    let headerHeight = headerTotalHeight(width: collectionView.bounds.width)
-    if headerHeight > 0 {
-      supplementaryItems.append(
-        NSCollectionLayoutBoundarySupplementaryItem(
-          layoutSize: NSCollectionLayoutSize(
-            widthDimension: .fractionalWidth(1),
-            heightDimension: .absolute(headerHeight)
-          ),
-          elementKind: TiebaKindListHeaderHostView.elementKind,
-          alignment: .top
-        )
-      )
-    }
-    let footerHeight = TiebaKindFooterView.height(for: footerState)
-    if footerHeight > 0 {
-      supplementaryItems.append(
-        NSCollectionLayoutBoundarySupplementaryItem(
-          layoutSize: NSCollectionLayoutSize(
-            widthDimension: .fractionalWidth(1),
-            heightDimension: .absolute(footerHeight)
-          ),
-          elementKind: TiebaKindFooterView.elementKind,
-          alignment: .bottom
-        )
-      )
-    }
-    section.boundarySupplementaryItems = supplementaryItems
-    return section
+    var input = TiebaRowListLayoutInput()
+    input.heights = frameHeights(width: width, count: count)
+    input.itemWidth = width
+    input.horizontalInset = horizontalInset
+    input.containerWidth = containerWidth
+    // 页头在内容顶（随内容滚走，不吸附）；内白由滚动视图 contentInset.top 承担。
+    input.headerHeight = headerTotalHeight(width: containerWidth)
+    input.footerHeight = TiebaKindFooterView.height(for: footerState)
+    return input
   }
 
-  private static func emptySection() -> NSCollectionLayoutSection {
-    let size = NSCollectionLayoutSize(
-      widthDimension: .fractionalWidth(1),
-      heightDimension: .absolute(1)
-    )
-    let group = NSCollectionLayoutGroup.custom(layoutSize: size) { _ in [] }
-    return NSCollectionLayoutSection(group: group)
-  }
 
   // MARK: 快照辅助
 
@@ -1507,7 +1456,7 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
 
   /// 放闸后补预取：只取当前可见窗口（预取窗口由 UIKit 在后续滚动中自然补齐）。
   private func prefetchVisibleWindow() {
-    guard !pageKey.isEmpty, window != nil else { return }
+    guard !pageKey.isEmpty, tiebaIsOnScreen else { return }
     let paths = collectionView.indexPathsForVisibleItems
     guard !paths.isEmpty else { return }
     let requests = prefetchRequests(for: paths)

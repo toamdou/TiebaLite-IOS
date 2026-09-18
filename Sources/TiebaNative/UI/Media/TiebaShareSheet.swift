@@ -50,7 +50,7 @@ enum TiebaShareSheet {
     sourceRect: CGRect? = nil,
     completion: (() -> Void)? = nil
   ) -> Bool {
-    guard presenter.view.window != nil else { return false }
+    guard presenter.view.tiebaIsOnScreen else { return false }
     let controller = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
     controller.title = dialogTitle
     controller.completionWithItemsHandler = { _, _, _, _ in completion?() }

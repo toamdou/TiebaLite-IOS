@@ -542,7 +542,7 @@ extension TiebaFeedRowMediaItemView: UIContextMenuInteractionDelegate {
   /// 两个协议名都给：旧名自 iOS 16 起标废弃，但 UIKitCore 里新旧选择器都还在被
   /// 引用（真机上只实现其中一个都可能不被调），两个入口落到同一份实现。
   private func tiebaHighlightPreview() -> UITargetedPreview? {
-    guard window != nil else { return nil }
+    guard tiebaIsOnScreen else { return nil }
     return UITargetedPreview(view: self)
   }
 
@@ -639,6 +639,62 @@ private final class TiebaFeedRowActionView: UIControl {
   /// 点赞 pop / 计数跳动的动画载体（RN 的两层 Animated.View）。
   var iconLayer: CALayer { iconView.layer }
   var labelLayer: CALayer { label.layer }
+}
+
+// MARK: - 静态文字画布
+
+/// 卡片静态文字画布：把卡内多段静态文字画进**同一张** backing store，省掉每段文字
+/// 一个可见 CALayer 的绘制/合成与一份独立 backing store。
+///
+/// 绘制仍走 `UILabel.drawText(in:)`——即 label 自己的渲染实现，所以换行、尾部截断、
+/// 垂直居中都与原实现逐像素一致（不自己拼 TextKit：那才是"文字错位/换行不同"这类
+/// 只有肉眼才看得见的偏差的来源）。
+///
+/// 被画的 label 挂在**隐藏宿主**里（见 `labelHost`）：它们仍在视图树上，能拿到窗口
+/// trait，深色/浅色动态色按当前外观正确解析；宿主整体 isHidden，所以 UIKit 不会画第二遍，
+/// 也不为它们分配 backing store。label 的 isHidden 因此只承担"这一段要不要显示"的语义，
+/// 与配置代码（configure / resetBlockVisibility）完全一致，无需改动。
+///
+/// 坐标系：画布与 labelHost 同在 cardView 的 (0,0) 且同尺寸，而 `place()` 写的正是
+/// cardView 局部坐标，所以 `label.frame` 直接就是画布坐标，零换算。引用卡三个文字
+/// 也走同一条路——它们以前挂在 quoteCard 里却仍按 cardView 空间摆放（`place()` 只减
+/// cardMargin），等于少减了一次父原点、整组右移 `contentX - 2×cardMarginH`。纳入画布后
+/// 这个偏差自然消失。
+private final class TiebaFeedRowTextCanvas: UIView {
+  private struct Run {
+    let label: UILabel
+    let frame: CGRect
+  }
+
+  private var runs: [Run] = []
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    isOpaque = false
+    backgroundColor = .clear
+    isUserInteractionEnabled = false
+    isAccessibilityElement = false
+    accessibilityElementsHidden = true
+  }
+
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) is not supported")
+  }
+
+  /// 收集本轮要画的文字。frame 取自 label 自己——与本行 `place()` 写进去的是同一个值
+  /// （卡片坐标），画布与 label 宿主同在 (0,0)、同尺寸，所以零换算。
+  func update(labels: [UILabel]) {
+    runs = labels
+      .filter { !$0.isHidden }
+      .map { Run(label: $0, frame: $0.frame) }
+    setNeedsDisplay()
+  }
+
+  override func draw(_ rect: CGRect) {
+    for run in runs where run.frame.intersects(rect) {
+      run.label.drawText(in: run.frame)
+    }
+  }
 }
 
 // MARK: - 行视图
@@ -826,6 +882,11 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   // MARK: - 子视图
 
   private let cardView = UIView()
+  /// 卡内静态文字合画到这一张画布（见 TiebaFeedRowTextCanvas）。
+  private let textCanvas = TiebaFeedRowTextCanvas()
+  /// 被画文字的宿主：整体隐藏（不给它们分配 backing store、不让 UIKit 画第二遍），
+  /// 只为让 label 留在视图树上、从窗口继承正确的 trait（动态色按深/浅色解析）。
+  private let labelHost = UIView()
   private let avatarContainer = UIView()
   private let avatarInitialLabel = UILabel()
   private let avatarView = UIImageView()
@@ -887,14 +948,40 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     avatarContainer.addSubview(avatarInitialLabel)
     avatarView.contentMode = .scaleAspectFill
     avatarContainer.addSubview(avatarView)
+    // 静态文字的 label 全部挂在这个隐藏宿主里（见 TiebaFeedRowTextCanvas）：
+    // 留在视图树上才能从窗口继承 trait（动态色才按深/浅色解析），但整体隐藏，
+    // 既不参与绘制也不分配 backing store。真实绘制由 textCanvas 统一完成。
+    labelHost.isHidden = true
+    labelHost.isUserInteractionEnabled = false
+    labelHost.addSubview(displayNameLabel)
+    labelHost.addSubview(metaLabel)
+    labelHost.addSubview(ipLabel)
+    labelHost.addSubview(titleLabel)
+    labelHost.addSubview(abstractLabel)
+    labelHost.addSubview(showMoreLabel)
+    labelHost.addSubview(quoteForumLabel)
+    labelHost.addSubview(quoteTitleLabel)
+    labelHost.addSubview(quoteContentLabel)
     cardView.addSubview(avatarContainer)
 
     configureStaticLabel(displayNameLabel)
     configureStaticLabel(metaLabel)
     configureStaticLabel(ipLabel)
-    cardView.addSubview(displayNameLabel)
-    cardView.addSubview(metaLabel)
-    cardView.addSubview(ipLabel)
+
+    // 转发引用帖：卡片本体（底 + 描边）先挂，让引用文字压在上面。
+    quoteCard.isHidden = true
+    quoteCard.layer.cornerRadius = 12 // Radius.input
+    quoteCard.layer.cornerCurve = .continuous
+    quoteCard.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
+    quoteCard.layer.borderColor = palette.separator.cgColor
+    configureStaticLabel(quoteForumLabel)
+    configureMultilineLabel(quoteTitleLabel)
+    configureMultilineLabel(quoteContentLabel)
+    cardView.addSubview(quoteCard)
+    // 画布只画文字、背景透明：压在引用卡底之上（引用文字才看得见），又在菜单钮/
+    // 图片/徽章/操作栏之下（那些之后才挂，且都是不透明的实内容）。
+    cardView.addSubview(textCanvas)
+    cardView.addSubview(labelHost)
 
     // 右上角菜单钮（TweetCard closeButton 的 UIKit 直译）：26×26 圆形、
     // xmark 13 bold、textTertiary；无菜单项的行（menuOptions 空）保持隐藏。
@@ -907,9 +994,6 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     configureMultilineLabel(titleLabel)
     configureMultilineLabel(abstractLabel)
     configureStaticLabel(showMoreLabel)
-    cardView.addSubview(titleLabel)
-    cardView.addSubview(abstractLabel)
-    cardView.addSubview(showMoreLabel)
 
     // 媒体
     singleMediaView.isHidden = true
@@ -931,20 +1015,6 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     stripCountLabel.clipsToBounds = true
     stripCountLabel.isHidden = true
     cardView.addSubview(stripCountLabel)
-
-    // 转发引用帖
-    quoteCard.isHidden = true
-    quoteCard.layer.cornerRadius = 12 // Radius.input
-    quoteCard.layer.cornerCurve = .continuous
-    quoteCard.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
-    quoteCard.layer.borderColor = palette.separator.cgColor
-    configureStaticLabel(quoteForumLabel)
-    configureMultilineLabel(quoteTitleLabel)
-    configureMultilineLabel(quoteContentLabel)
-    quoteCard.addSubview(quoteForumLabel)
-    quoteCard.addSubview(quoteTitleLabel)
-    quoteCard.addSubview(quoteContentLabel)
-    cardView.addSubview(quoteCard)
 
     // 吧名徽章
     chipView.isHidden = true
@@ -1598,7 +1668,11 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   public override func layoutSubviews() {
     super.layoutSubviews()
-    guard let model else { return }
+    guard let model else {
+      // 模型被清掉（换行 / 页还没测完）：画布必须一起清空，否则会留着上一行的文字。
+      textCanvas.update(labels: [])
+      return
+    }
     // 同一个模型 + 同一尺寸 ⇒ 帧计划没变，四十来个 frame 不必再摆一遍（配置、图片
     // 到达、系统多次布局都会把 layoutSubviews 叫醒）；换行/换宽度/换模型都会换 token。
     let token = PlacedToken(model: ObjectIdentifier(model), size: bounds.size)
@@ -1622,6 +1696,10 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     }
 
     cardView.frame = plan.cardFrame
+    // 画布与 label 宿主铺满卡片、同在 (0,0)：label 的 frame（place() 写的卡片坐标）
+    // 就是画布坐标，绘制时零换算。
+    textCanvas.frame = cardView.bounds
+    labelHost.frame = cardView.bounds
     place(avatarContainer, plan.avatarFrame)
     avatarContainer.layer.cornerRadius = avatarContainer.bounds.width / 2
     avatarInitialLabel.frame = avatarContainer.bounds
@@ -1694,6 +1772,14 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
         labelFrame: label.offsetBy(dx: -button.minX, dy: -button.minY)
       )
     }
+
+    // 静态文字一次性交给画布。frame 上面已由 place() 写好，这里只决定"画哪些"：
+    // 未显示的段由 update 按 isHidden 过滤（isHidden 就是配置代码的显示语义）。
+    textCanvas.update(labels: [
+      displayNameLabel, metaLabel, ipLabel,
+      titleLabel, abstractLabel, showMoreLabel,
+      quoteForumLabel, quoteTitleLabel, quoteContentLabel,
+    ])
   }
 
   /// 行坐标 → 卡片坐标。
@@ -1811,6 +1897,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   /// 外观档变化时重解析 CGColor（由 styleRegistration 触发；换色板时也直接调）。
   private func refreshDynamicLayerColors() {
+    // 画布里的文字可能带动态色：帧没变时 layoutSubviews 会被 placedToken 短路，
+    // 必须在这里显式请求重绘，否则深色切换后仍留浅色字形。
+    textCanvas.setNeedsDisplay()
     cardView.layer.borderColor = palette.borderCard
       .resolvedColor(with: traitCollection).cgColor
     quoteCard.layer.borderColor = palette.separator

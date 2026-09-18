@@ -1510,7 +1510,7 @@ extension TiebaPostRowView: UIContextMenuInteractionDelegate {
   /// 两个协议名都给（旧名 iOS 16 起标废弃，但 UIKitCore 里新旧选择器都还在被
   /// 引用，真机上只实现一个可能不被调），两个入口落到同一份实现。
   private func tiebaHighlightPreview(_ interaction: UIContextMenuInteraction) -> UITargetedPreview? {
-    guard let view = interaction.view as? UIImageView, view.window != nil else { return nil }
+    guard let view = interaction.view as? UIImageView, view.tiebaIsOnScreen else { return nil }
     return UITargetedPreview(view: view)
   }
 
