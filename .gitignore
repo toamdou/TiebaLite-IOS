@@ -38,5 +38,10 @@ Signing/*.mobileprovision
 *.md
 !README.md
 
-# 第三方文档抓取（Nuke 官方文档离线副本，非本项目文档）
+# 第三方文档抓取（官方文档离线副本，非本项目文档；Tools/crawl-docs.py 可复跑）
 docs/nuke/
+docs/iglistkit/
+docs/alamofire/
+docs/jxsegmentedview/
+docs/swiftyjson/
+docs/texture/

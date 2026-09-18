@@ -13,7 +13,7 @@ swift_library(
 )
 
 # rules_apple does not substitute MARKETING_VERSION / CURRENT_PROJECT_VERSION (the Xcode build
-# resolves them from the project); these must equal the app's Info.plist values (2.0.0 / 2),
+# resolves them from the project); these must equal the app's Info.plist values (2.1 / 2),
 # since rules_apple rejects a child bundle whose version differs from its parent.
 expand_template(
     name = "info_plist",
@@ -21,7 +21,7 @@ expand_template(
     substitutions = {
         "$(CURRENT_PROJECT_VERSION)": "2",
         "$(EXECUTABLE_NAME)": "TiebaLiveActivity",
-        "$(MARKETING_VERSION)": "2.0.0",
+        "$(MARKETING_VERSION)": "2.1",
     },
     template = "Info.plist",
 )
