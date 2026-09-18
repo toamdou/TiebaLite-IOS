@@ -113,6 +113,11 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     root.spacing = 0
     root.isLayoutMarginsRelativeArrangement = true
     root.layoutMargins = UIEdgeInsets(top: 0, left: 10, bottom: 2, right: 10)
+    // 关键：页头挂在全屏列表顶部，"安全区顶部"那段空白由 contentInset.top 承担。
+    // 不关这个开关，栈的 layoutMargins.top(0) 会被自动抬进安全区（实测 +59pt），
+    // 测量趟与布局趟拿到的安全区不同就出现幻影高度差——差额被 .fill 栈分给某一行，
+    // 表现成"排序按钮/等级进度条上下多出一片空白"（用户 2026-09-18 报）。
+    root.insetsLayoutMarginsFromSafeArea = false
     root.translatesAutoresizingMaskIntoConstraints = false
     addSubview(root)
     NSLayoutConstraint.activate([
@@ -210,6 +215,7 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     levelRow.addArrangedSubview(levelLabel)
     levelRow.isLayoutMarginsRelativeArrangement = true
     levelRow.layoutMargins = UIEdgeInsets(top: 12, left: 0, bottom: 0, right: 0)
+    levelRow.insetsLayoutMarginsFromSafeArea = false
     cardStack.addArrangedSubview(levelRow)
 
     introLabel.font = .systemFont(ofSize: 13, weight: .regular)

@@ -167,6 +167,10 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
     segmentSlot.addSubview(segment)
     segment.translatesAutoresizingMaskIntoConstraints = false
 
+    // 页头在全屏列表顶部：顶部留白由 contentInset.top 承担。这些行是绝对约束到
+    // self 锚点的，自身不参与安全区边距，但显式关掉免得将来改成边距式布局时复发
+    //（与 TiebaForumHeaderView 同款根因，2026-09-18）。
+    insetsLayoutMarginsFromSafeArea = false
     for subview in [titleRow, introLabel, metaRow, statsRow, segmentSlot] {
       subview.translatesAutoresizingMaskIntoConstraints = false
       addSubview(subview)

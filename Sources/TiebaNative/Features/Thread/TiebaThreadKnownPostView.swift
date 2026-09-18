@@ -80,6 +80,9 @@ final class TiebaThreadKnownPostView: UIView {
     stack.directionalLayoutMargins = NSDirectionalEdgeInsets(
       top: 16, leading: 16, bottom: 16, trailing: 16
     )
+    // 占位卡挂在全屏列表顶部，顶部留白由 contentInset.top 承担，不让栈再吃
+    // 安全区边距（否则测量/布局两趟差一份安全区高，卡片会被撑开一片空白）。
+    stack.insetsLayoutMarginsFromSafeArea = false
     stack.translatesAutoresizingMaskIntoConstraints = false
     card.addSubview(stack)
 
