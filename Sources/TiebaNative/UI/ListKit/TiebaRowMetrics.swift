@@ -1598,19 +1598,28 @@ private nonisolated enum TiebaFeedRowParser {
     let startOfThen = calendar.startOfDay(for: date)
     if let yesterday = calendar.date(byAdding: .day, value: -1, to: startOfToday),
        calendar.isDate(startOfThen, inSameDayAs: yesterday) {
-      return "昨天 \(timeFormatter("HH:mm").string(from: date))"
+      return "昨天 \(clockFormatter.string(from: date))"
     }
     if diff < 7 * day { return "\(Int(diff / day))天前" }
-    return timeFormatter("yyyy-MM-dd").string(from: date)
+    return dayOnlyFormatter.string(from: date)
   }
 
   /// JS absoluteTime（src/utils/index.ts:81）。
   static func absoluteTime(ms: Double) -> String {
     guard ms > 0, ms >= 946_684_800_000 else { return "" }
-    return timeFormatter("yyyy-MM-dd HH:mm").string(from: Date(timeIntervalSince1970: ms / 1000))
+    return absoluteTimeFormatter.string(from: Date(timeIntervalSince1970: ms / 1000))
   }
 
-  /// 测量是串行队列，formatter 不做跨线程共享；地区/历法固定，避免佛历等脏输出。
+  // 三个格式化档按需缓存（与 TiebaPostRowMetrics 同款）。
+  // DateFormatter 的构造要解析 locale/历法/时区，是重对象；而行模型是**逐行**构造的，
+  // 现建现用等于每页几十次纯浪费（且测量跑在 .userInitiated 的后台任务上，与滚动抢 CPU）。
+  // 线程安全依据（SDK 原文）：NSDateFormatter.h:158 "On iOS 7 and later NSDateFormatter is
+  // thread safe"，且该类型标了 NS_SWIFT_SENDABLE —— 建好后只调 string(from:)、不再改动。
+  // 地区/历法固定，避免佛历等脏输出。
+  private static let clockFormatter = timeFormatter("HH:mm")
+  private static let dayOnlyFormatter = timeFormatter("yyyy-MM-dd")
+  private static let absoluteTimeFormatter = timeFormatter("yyyy-MM-dd HH:mm")
+
   private static func timeFormatter(_ format: String) -> DateFormatter {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
