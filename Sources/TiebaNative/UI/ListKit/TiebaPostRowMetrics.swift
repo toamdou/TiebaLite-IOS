@@ -673,6 +673,9 @@ final class TiebaPostRowMetrics: @unchecked Sendable {
 // MARK: - 布局常量
 
 enum TiebaPostRowLayout {
+  /// 左右边距（用户 2026-09-19："帖子卡片与屏幕两边的距离太大" ⇒ 16 收紧到 10）。
+  /// 这个值同时是已知主贴占位卡的边距（TiebaThreadKnownPostView 引它），两边必须同值，
+  /// 否则首包落地换卡时会横向跳一次。
   static let cardMarginH: CGFloat = 10
   static let cardMarginV: CGFloat = 4
   static let cardPadding: CGFloat = 16

@@ -48,4 +48,11 @@ enum TiebaThreadSnapshots {
     cached = nil
     return snapshot
   }
+
+  /// 只读探查（**不消费**）：转场层用它判断"这次跳帖是不是点卡片进来的"。
+  /// 是 → 才为这一跳打开 Hero；否则走系统原生 push（见 TiebaNavigator 的 heroArmed 说明）。
+  static func peek(id: String) -> TiebaThreadSnapshot? {
+    guard let snapshot = cached, snapshot.id == id else { return nil }
+    return snapshot
+  }
 }

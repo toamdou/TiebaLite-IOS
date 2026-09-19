@@ -95,16 +95,9 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     let nav = TiebaRootNavigationController(rootViewController: tab)
     nav.delegate = self
     nav.setNavigationBarHidden(true, animated: false)
-    // Hero 接管导航委托（插叙式魔改转场，见 Vendor/Hero）。
-    // ⚠️ 顺序不能反：Hero 启用时把现有 delegate 存进 previousNavigationDelegate 并
-    // 在自己实现里转发 willShow/didShow——本仓顶栏系统（TiebaChrome 的转场完成重扫）
-    // 正是靠 didShow 驱动，所以必须先设本仓 delegate 再启用 Hero，转发链才成立。
-    nav.hero.isEnabled = true
-    // ⚠️ 必须是 .auto，不能写 .selectBy(presenting: .none, dismissing: .none)：
-    // .auto 的语义在 DefaultAnimationPreprocessor 第三段判定——**有配对视图 → .none**
-    // （纯魔改，不掺系统整页位移），**没有配对 → .push**（深链/收藏页进帖保持原样）。
-    // 而 .selectBy 在第二段就解析成 .none，直接命中末尾的 `if case .none { return }`，
-    // 未配对时会退化成瞬间跳转（连 push 都没了）。
+    // Hero 默认关闭，只在"点卡片进帖"那一跳临时开（见 armHero）。
+    // ⚠️ 开启会把现有 delegate 存进 previousNavigationDelegate 并转发 willShow/didShow，
+    // 而本仓顶栏系统靠 didShow 驱动 ⇒ 必须先设本仓 delegate 再开 Hero（本行之上已设）。
     nav.hero.navigationAnimationType = .auto
     rootNav = nav
     window.rootViewController = nav
@@ -193,6 +186,23 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     return true
   }
 
+  /// 只有"点信息流/吧页卡片进帖"这一跳开 Hero；其余跳转（进吧、进设置…）走系统原生 push。
+  /// 判据 = 这一刻有没有该帖的快照（只在列表点卡片时写入）——用 peek 只读，消费权归帖子页。
+  ///
+  /// 为什么按跳开关：Hero 在没有配对视图时会回落成它自己的 push（整页位移 + 给整棵视图树
+  /// 拍快照），明显慢于系统原生（用户实测"进吧/进设置过渡很卡"）。**返回一律系统原生**：
+  /// 转场结束即关（见 didShow），所以 pop 不会走 Hero。
+  private func armHero(for route: TiebaRoute) {
+    guard let rootNav else { return }
+    MainActor.assumeIsolated {
+      var fromCard = false
+      if case .thread(let id, _, _, let fromFavorites) = route, !fromFavorites {
+        fromCard = TiebaThreadSnapshots.peek(id: id) != nil
+      }
+      rootNav.hero.isEnabled = fromCard
+    }
+  }
+
   private func pushRoute(_ route: TiebaRoute, mode: TiebaNavigationMode) {
     guard let rootNav else { return }
     // 连点去重：同一路由 450ms 内只认一次（原 RN 侧靠 Pressable 的按压态挡，
@@ -202,6 +212,8 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     if sig == lastPushSignature, now - lastPushAt < 0.45 { return }
     lastPushSignature = sig
     lastPushAt = now
+
+    armHero(for: route)
 
     let host = makeHost(route: route, eager: true)
     let entry = TiebaRouteTable.entry(named: route.name)
@@ -556,6 +568,11 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     // 2026-09-13 改为走这个公开回调）：push/pop 动画期间 RunLoop 处于 tracking
     // 模式，动画结束后新 bar 已建成但还没被处理（"进帖子页无效果"的 timing 缺口）。
     _ = TiebaChrome.forceNavBarLiquidGlass()
+    // 转场一结束就关 Hero：这样"进入"用魔改，**返回与后续跳转全走系统原生**
+    //（Hero 只在 push 那一刻被读，pop 时已关 ⇒ 系统 push/pop 动画）。
+    MainActor.assumeIsolated {
+      if rootNav?.hero.isEnabled == true { rootNav?.hero.isEnabled = false }
+    }
   }
 }
 

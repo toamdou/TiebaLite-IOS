@@ -656,10 +656,14 @@ private final class TiebaFeedRowActionView: UIControl {
 /// 正是按 maxLines 量出来的，配 `.truncatesLastVisibleLine` 即在末行加省略号
 ///（`NSStringDrawingContext.maximumNumberOfLines` 是私有属性，SDK 头文件里没有，不采用）。
 ///
-/// 坐标系：画布与 plan 的 frame 同属 cardView 局部坐标，零换算。引用卡的三个文字也走
-/// 同一条路——它们以前挂在 quoteCard 里却仍按 cardView 空间摆放（`place()` 只减
-/// cardMargin），等于少减了一次父原点、整组右移 `contentX - 2×cardMarginH`。纳入画布后
-/// 这个偏差自然消失。
+/// 坐标系（**容易写错，务必按这条来**）：plan 里所有 frame 都是**行坐标**——它的
+/// `cardX = cardMarginH`、`cardY = cardMarginV`，即行内容的左上角加了卡片外边距。
+/// 而画布是 `cardView` 的子视图，原点是卡片左上角 ⇒ 画布坐标 = 行坐标 − (cardMarginH,
+/// cardMarginV)。所以喂给画布的每一段 frame 都要过 `cardRect()`（子视图走 `place()` 是同
+/// 一条转换）。
+/// ⚠️ 这里曾写成"画布与 plan 的 frame 同属 cardView 局部坐标、零换算"，照它做就漏掉转换，
+/// 整组文字右下各偏 (16, 4)：名字压到头像下沿、标题右端顶出画布被提前截断（而截断是绘制
+/// 期才知道的，测量期判不出截断 ⇒「显示更多」不出现）。
 private final class TiebaFeedRowTextCanvas: UIView {
   /// 一段要画的文字：**已完全解析**的属性串（字体/颜色/行高都烘进属性里）+ 绘制矩形。
   ///
@@ -1113,6 +1117,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     avatarInitialLabel.font = .systemFont(ofSize: 44 * 0.38, weight: .semibold)
     avatarInitialLabel.textColor = .white
     avatarContainer.addSubview(avatarInitialLabel)
+    // 图片层必须真的挂上：首字色块在下、头像图在上（图片命中即盖住首字）。
+    // 这一行在"9 个 UILabel 改直接绘制"那轮被误删 ⇒ 头像永远是首字色块、图片不显示。
+    avatarContainer.addSubview(avatarView)
     avatarView.contentMode = .scaleAspectFill
     cardView.addSubview(avatarContainer)
 
@@ -1315,9 +1322,14 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     let fonts = model.geometry.fonts
     let plan = model.plan
     var runs: [TiebaFeedRowTextCanvas.Run] = []
+    // plan 的 frame 是**行坐标**（含 cardMarginH/cardMarginV 偏移，见 TiebaRowLayout 的
+    // cardX = cardMarginH），而画布是 cardView 的子视图、坐标原点是卡片左上角。
+    // 所以每一段都要过 cardRect 转换——子视图走 place() 是同一条转换。
+    // 此前这里直接透传行坐标，整组文字右下各偏 (16, 4)：名字压在头像下沿、标题右端
+    // 顶出画布被提前截断，而截断是绘制期才知道的，测量期判不出「显示更多」。
     func add(_ attributed: NSAttributedString?, _ frame: CGRect?) {
-      guard let attributed, attributed.length > 0, let frame else { return }
-      runs.append(.init(attributed: attributed, frame: frame))
+      guard let attributed, attributed.length > 0, let rect = cardRect(frame) else { return }
+      runs.append(.init(attributed: attributed, frame: rect))
     }
     // 昵称 / IP：纯文本按当前色板着色（换主题即变）。
     add(
