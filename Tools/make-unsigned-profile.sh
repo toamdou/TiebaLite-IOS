@@ -28,6 +28,16 @@ PLIST
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$TMP/key.pem" -out "$TMP/cert.pem" \
   -days 3650 -subj "/CN=BuildPlaceholder" 2>/dev/null
 mkdir -p Signing
+# 已有真实描述文件时不覆盖（占位件 ~2.2KB；真实件含证书链，明显更大）。
+# 原先无条件覆写，把本地调试用的真描述文件冲掉过一次（2026-09-19）。
+if [ "${1:-}" != "--force" ]; then
+  for OUT in "${OUTS[@]}"; do
+    if [ -f "$OUT" ] && [ "$(wc -c < "$OUT" | tr -d ' ')" -gt 4096 ]; then
+      echo "keep $OUT ($(wc -c < "$OUT" | tr -d ' ') bytes: looks real; pass --force to overwrite)"
+      exit 0
+    fi
+  done
+fi
 for OUT in "${OUTS[@]}"; do
   openssl smime -sign -in "$TMP/profile.plist" -signer "$TMP/cert.pem" -inkey "$TMP/key.pem" \
     -nodetach -outform der -out "$OUT" 2>/dev/null

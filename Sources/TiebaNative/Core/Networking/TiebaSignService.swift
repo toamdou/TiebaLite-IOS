@@ -11,11 +11,13 @@ import UserNotifications
 nonisolated enum TiebaSignAPI {
   static func msign(forumIds: [String], timeout: Double = 25) async throws -> [[String: Any]] {
     let snapshot = TiebaBackgroundSnapshot.shared
+    // 缺失会向 /c/s/login 续期（对齐原 JS requireTbs）。
+    let tbs = try await TiebaSession.requireTbs()
     let response = try await TiebaNativeClient.shared.postForm(
       urlString: "https://c.tieba.baidu.com/c/c/forum/msign",
       fields: [
         "forum_ids": forumIds.joined(separator: ","),
-        "tbs": snapshot.tbs,
+        "tbs": tbs,
         "authsid": "null",
         "stoken": snapshot.stoken,
         "user_id": snapshot.uid,
@@ -103,7 +105,7 @@ final class TiebaSignService {
   func start(presenter: UIViewController) {
     guard !isSigning else { return }
     let snapshot = TiebaBackgroundSnapshot.shared
-    guard !snapshot.tbs.isEmpty else {
+    guard !snapshot.bduss.isEmpty else {
       TiebaSceneHaptics.fire("action-fail")
       Self.toast("未登录或登录信息已过期，请重新登录", on: presenter)
       return
@@ -284,7 +286,7 @@ final class TiebaSignService {
   private func signOne(_ forum: TiebaForumInfo) async throws -> SignOutcome {
     let result = try await TiebaForumFeedAPI.sign(
       forumName: forum.forumName,
-      tbs: TiebaBackgroundSnapshot.shared.tbs,
+      tbs: try await TiebaSession.requireTbs(),
       forumId: forum.forumId
     )
     var outcome = SignOutcome()

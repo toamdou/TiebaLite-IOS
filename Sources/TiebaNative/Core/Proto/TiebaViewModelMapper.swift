@@ -35,10 +35,15 @@
 import Foundation
 
 /// 与 TS TiebaApiError 对齐的原生错误（桥接层转回 JS 的 TiebaApiError）。
-public struct TiebaViewModelError: Error, Equatable {
+/// ⚠️ 必须实现 LocalizedError：调用方普遍按 `(error as? LocalizedError)?.errorDescription`
+/// 取文案；只 conforms to Error 时 message 拿不出来、界面只剩兜底文案
+///（2026-09-19 用户报"收藏失败"查不到真因就是这个）。
+public struct TiebaViewModelError: Error, LocalizedError, Equatable {
   /// 与 TiebaApiError.code / errorCode 同值（TS 构造时二者传同一个数）。
   public let code: Double
   public let message: String
+
+  public var errorDescription: String? { message }
 }
 
 /// proto → view-model 纯映射层。所有函数无状态、无 IO、只依赖 Foundation。

@@ -554,7 +554,28 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     } else {
       wantHidden = false
     }
-    navigationController.setNavigationBarHidden(wantHidden, animated: false)
+    // 返回（pop）到无栏页时**延到转场结束再隐栏**：立刻隐会让 UIKit 把栏内容与目标页的
+    // 空 item 交叉淡入，表现为"返回按钮与标题全没了、只剩栏背景"（且转场期间离场页还在
+    // 屏幕上，看起来就是它丢了顶栏）。push 仍立即生效——新页首帧不能闪栏。
+    if wantHidden, isPopTransition(of: viewController, in: navigationController) {
+      navigationController.transitionCoordinator?.animate(alongsideTransition: nil) { context in
+        // 手势取消（右滑中途松手回原页）时不能隐——那一页是要栏的。
+        guard !context.isCancelled else { return }
+        navigationController.setNavigationBarHidden(true, animated: false)
+      }
+    } else {
+      navigationController.setNavigationBarHidden(wantHidden, animated: false)
+    }
+  }
+
+  /// 本次 willShow 是不是"返回"：转场来源页在开始时就已出栈 ⇒ pop；仍在栈内 ⇒ push。
+  private func isPopTransition(
+    of viewController: UIViewController,
+    in navigationController: UINavigationController
+  ) -> Bool {
+    guard let from = navigationController.transitionCoordinator?.viewController(forKey: .from)
+    else { return false }
+    return !navigationController.viewControllers.contains(from)
   }
 
   public func navigationController(

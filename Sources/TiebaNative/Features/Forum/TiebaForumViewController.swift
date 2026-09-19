@@ -767,9 +767,10 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       return
     }
     guard let card else { return }
-    let tbs = card.tbs.isEmpty ? TiebaBackgroundSnapshot.shared.tbs : card.tbs
     TiebaSceneHaptics.fire("favorite")
     Task { @MainActor in
+      // 卡片带的 tbs 优先；否则现取（缺失会向 /c/s/login 续期，对齐原 JS requireTbs）
+      let tbs = card.tbs.isEmpty ? ((try? await TiebaSession.requireTbs()) ?? "") : card.tbs
       do {
         if card.isLike {
           try await TiebaForumFeedAPI.unlike(forumId: card.forumId, forumName: self.forumName, tbs: tbs)
@@ -815,8 +816,9 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       return
     }
     TiebaSceneHaptics.fire("action-success")
-    let tbs = card.tbs.isEmpty ? TiebaBackgroundSnapshot.shared.tbs : card.tbs
     Task { @MainActor in
+      // 卡片带的 tbs 优先；否则现取（缺失会向 /c/s/login 续期，对齐原 JS requireTbs）
+      let tbs = card.tbs.isEmpty ? ((try? await TiebaSession.requireTbs()) ?? "") : card.tbs
       do {
         let result = try await TiebaForumFeedAPI.sign(
           forumName: self.forumName,

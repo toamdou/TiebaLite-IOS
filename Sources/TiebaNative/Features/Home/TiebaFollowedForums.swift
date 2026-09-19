@@ -170,8 +170,8 @@ enum TiebaFollowedForums {
 
   /// 取关（原 unfavolike）：写接口，需 tbs。
   static func unfollow(forumId: String, forumName: String) async throws {
-    let tbs = TiebaBackgroundSnapshot.shared.tbs
-    guard !tbs.isEmpty else { throw TiebaForumAPIError.api(code: 0, message: "缺少 tbs，无法取消关注") }
+    // 缺失会向 /c/s/login 续期（对齐原 JS requireTbs；原实现只抛错 ⇒ 冷启动后取关必失败）
+    let tbs = try await TiebaSession.requireTbs()
     let response = try await TiebaNativeClient.shared.postForm(
       urlString: "https://c.tieba.baidu.com/c/c/forum/unfavolike",
       fields: ["fid": forumId, "kw": forumName, "tbs": tbs],

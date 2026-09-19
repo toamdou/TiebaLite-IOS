@@ -9,44 +9,36 @@ enum TiebaThreadActionAPI {
   static func setAgree(threadId: String, postId: String, agree: Bool, objType: Int = 3) async throws {
     guard !threadId.isEmpty, !postId.isEmpty else { throw TiebaForumAPIError.invalidResponse }
     let snapshot = TiebaBackgroundSnapshot.shared
-    // 与 JS requireTbs 同文案：JS 会先向 /c/s/login 续期，原生不复制那条路径。
-    guard !snapshot.tbs.isEmpty else {
-      throw TiebaViewModelError(code: 400, message: "缺少 tbs，无法执行此操作，请刷新页面后重试")
-    }
+    // tbs 缺失就续期（TiebaSession.requireTbs → /c/s/login，与原 JS requireTbs 逐路径一致；
+    // 续期失败才抛"缺少 tbs"）。
     var fields: [String: String] = [
       "thread_id": threadId,
       "post_id": postId,
       "agree_type": "2",
       "obj_type": String(objType),
       "op_type": agree ? "0" : "1",
-      "tbs": snapshot.tbs,
+      "tbs": try await TiebaSession.requireTbs(),
     ]
     if !snapshot.stoken.isEmpty { fields["stoken"] = snapshot.stoken }
     _ = try await TiebaSocialAPI.signedPost(path: "/c/c/agree/opAgree", fields: fields)
   }
 
   /// 收藏 / 取消收藏（原 JS addStore / removeStore；fid=null 与 user_id 逐字段一致）。
-  /// ⚠️ addstore **必须带 tbs**：Kotlin 权威实现是 `(data, tbs, stoken)`，JS 期漏了 tbs
-  /// （其注释自陈"常返回伪成功：error_code=0 但收藏未入库"就是缺 tbs 的表现），原生照抄
-  /// 后服务端直接回错、表现成"点收藏永远失败"（2026-09-18 修）。与 rmstore 同一取法。
+  /// addstore 带 tbs（Kotlin 权威 `(data, tbs, stoken)`；JS 期漏了它，其注释自陈的
+  /// "伪成功"即缺 tbs 的表现）。tbs 缺失一律走续期，见 requireTbs 的说明。
   static func setStore(threadId: String, firstPostId: String, store: Bool) async throws {
     guard !threadId.isEmpty else { throw TiebaForumAPIError.invalidResponse }
     let snapshot = TiebaBackgroundSnapshot.shared
+    let tbs = try await TiebaSession.requireTbs()
     if store {
-      guard !snapshot.tbs.isEmpty else {
-        throw TiebaViewModelError(code: 400, message: "缺少 tbs，无法执行此操作，请刷新页面后重试")
-      }
       let data = "[{\"tid\":\"\(threadId)\",\"pid\":\"\(firstPostId.isEmpty ? "0" : firstPostId)\",\"status\":1}]"
       _ = try await TiebaSocialAPI.signedPost(
         path: "/c/c/post/addstore",
-        fields: ["data": data, "tbs": snapshot.tbs]
+        fields: ["data": data, "tbs": tbs]
       )
     } else {
-      guard !snapshot.tbs.isEmpty else {
-        throw TiebaViewModelError(code: 400, message: "缺少 tbs，无法执行此操作，请刷新页面后重试")
-      }
       _ = try await TiebaSocialAPI.signedPost(path: "/c/c/post/rmstore", fields: [
-        "tid": threadId, "fid": "null", "tbs": snapshot.tbs, "user_id": snapshot.uid,
+        "tid": threadId, "fid": "null", "tbs": tbs, "user_id": snapshot.uid,
       ])
     }
   }
@@ -58,20 +50,17 @@ enum TiebaThreadActionAPI {
     forumName: String,
     postId: String?
   ) async throws {
-    let snapshot = TiebaBackgroundSnapshot.shared
-    guard !snapshot.tbs.isEmpty else {
-      throw TiebaViewModelError(code: 400, message: "缺少 tbs，无法执行此操作，请刷新页面后重试")
-    }
+    let tbs = try await TiebaSession.requireTbs()
     if let postId, !postId.isEmpty {
       _ = try await TiebaSocialAPI.signedPost(path: "/c/c/bawu/delpost", fields: [
         "fid": forumId, "word": forumName, "z": threadId, "pid": postId,
         "isfloor": "1", "src": "1", "is_vipdel": "0", "delete_my_post": "1",
-        "tbs": snapshot.tbs,
+        "tbs": tbs,
       ])
     } else {
       _ = try await TiebaSocialAPI.signedPost(path: "/c/c/bawu/delthread", fields: [
         "fid": forumId, "word": forumName, "z": threadId,
-        "src": "1", "is_vipdel": "0", "delete_my_thread": "1", "tbs": snapshot.tbs,
+        "src": "1", "is_vipdel": "0", "delete_my_thread": "1", "tbs": tbs,
       ])
     }
   }
@@ -84,14 +73,10 @@ enum TiebaThreadActionAPI {
     postId: String
   ) async throws {
     guard !threadId.isEmpty, !postId.isEmpty else { throw TiebaForumAPIError.invalidResponse }
-    let snapshot = TiebaBackgroundSnapshot.shared
-    guard !snapshot.tbs.isEmpty else {
-      throw TiebaViewModelError(code: 400, message: "缺少 tbs，无法执行此操作，请刷新页面后重试")
-    }
     _ = try await TiebaSocialAPI.signedPost(path: "/c/c/bawu/delpost", fields: [
       "fid": forumId, "word": forumName, "z": threadId, "pid": postId,
       "isfloor": "0", "src": "1", "is_vipdel": "0", "delete_my_post": "1",
-      "tbs": snapshot.tbs,
+      "tbs": try await TiebaSession.requireTbs(),
     ])
   }
 }
