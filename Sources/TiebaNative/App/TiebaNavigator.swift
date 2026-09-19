@@ -546,36 +546,7 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     willShow viewController: UIViewController,
     animated: Bool
   ) {
-    let wantHidden: Bool
-    if viewController is TiebaMainTabBarController {
-      wantHidden = true
-    } else if let host = viewController as? TiebaRouteHostViewController {
-      wantHidden = (TiebaRouteTable.entry(named: host.route.name)?.chrome ?? .standard) == .hidden
-    } else {
-      wantHidden = false
-    }
-    // 返回（pop）到无栏页时**延到转场结束再隐栏**：立刻隐会让 UIKit 把栏内容与目标页的
-    // 空 item 交叉淡入，表现为"返回按钮与标题全没了、只剩栏背景"（且转场期间离场页还在
-    // 屏幕上，看起来就是它丢了顶栏）。push 仍立即生效——新页首帧不能闪栏。
-    if wantHidden, isPopTransition(of: viewController, in: navigationController) {
-      navigationController.transitionCoordinator?.animate(alongsideTransition: nil) { context in
-        // 手势取消（右滑中途松手回原页）时不能隐——那一页是要栏的。
-        guard !context.isCancelled else { return }
-        navigationController.setNavigationBarHidden(true, animated: false)
-      }
-    } else {
-      navigationController.setNavigationBarHidden(wantHidden, animated: false)
-    }
-  }
-
-  /// 本次 willShow 是不是"返回"：转场来源页在开始时就已出栈 ⇒ pop；仍在栈内 ⇒ push。
-  private func isPopTransition(
-    of viewController: UIViewController,
-    in navigationController: UINavigationController
-  ) -> Bool {
-    guard let from = navigationController.transitionCoordinator?.viewController(forKey: .from)
-    else { return false }
-    return !navigationController.viewControllers.contains(from)
+    applyBarVisibility(shouldHideBar(in: viewController), to: navigationController)
   }
 
   public func navigationController(
@@ -583,6 +554,9 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     didShow viewController: UIViewController,
     animated: Bool
   ) {
+    // 转场落定后按**实际栈顶**再校一次：右滑中途松手（转场取消）时栈顶仍是原页，
+    // willShow 已按目标页隐过栏，这里把栏还给仍在上面的那一屏。
+    applyBarVisibility(shouldHideBar(in: viewController), to: navigationController)
     // 滚动视图的跟踪关联由各宿主 VC 自己在 viewDidLayoutSubviews 里做
     // （setContentScrollView 是子 VC 的职责，容器没有替它设的 API）。
     // 转场完成即重扫（原来监听未公开的 UINavigationControllerDidShowNotification，
@@ -593,6 +567,29 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     //（Hero 只在 push 那一刻被读，pop 时已关 ⇒ 系统 push/pop 动画）。
     MainActor.assumeIsolated {
       if rootNav?.hero.isEnabled == true { rootNav?.hero.isEnabled = false }
+    }
+  }
+
+  /// 该屏是否无栏（tab 根屏 / webview / thread/[id]/more）。
+  private func shouldHideBar(in viewController: UIViewController) -> Bool {
+    if viewController is TiebaMainTabBarController { return true }
+    if let host = viewController as? TiebaRouteHostViewController {
+      return (TiebaRouteTable.entry(named: host.route.name)?.chrome ?? .standard) == .hidden
+    }
+    return false
+  }
+
+  /// 立即落定栏的可见性（**含返回，不许延到转场结束**），并把 alpha 一起归零/还原。
+  ///
+  /// ⚠️ 为什么不能延后隐：栏的可见性会进入目标页的安全区。返回过程里目标页若按"有栏"
+  /// 布局，它顶部的 picker 就被顶下去，转场结束栏一隐再弹回原位（用户 2026-09-19 报的
+  /// "picker 被顶下来然后瞬间位移"）。立即隐 ⇒ 目标页从第一帧就是正确布局。
+  /// ⚠️ 为什么还要动 alpha：交互式转场里 UIKit 会把隐栏推迟落地、只留一个栏背景在屏上
+  ///（用户报的"返回按钮没了、只剩顶栏背景"）。归零 alpha 消掉这个中间态。
+  private func applyBarVisibility(_ hidden: Bool, to navigationController: UINavigationController) {
+    navigationController.navigationBar.alpha = hidden ? 0 : 1
+    if navigationController.isNavigationBarHidden != hidden {
+      navigationController.setNavigationBarHidden(hidden, animated: false)
     }
   }
 }
