@@ -64,7 +64,7 @@ public extension HeroExtension where Base: UIViewController {
   // TODO: can be moved to internal later (will still be accessible via IB)
   var modalAnimationTypeString: String? {
     get { return config.modalAnimation.label }
-    set { config.modalAnimation = newValue?.parseOne() ?? .auto }
+    set { config.modalAnimation = newValue?.parseOne() as HeroDefaultAnimationType? ?? .auto }
   }
 
   // TODO: can be moved to internal later (will still be accessible via IB)
@@ -154,7 +154,7 @@ public extension HeroExtension where Base: UINavigationController {
 
   var navigationAnimationTypeString: String? {
     get { return config.navigationAnimation.label }
-    set { config.navigationAnimation = newValue?.parseOne() ?? .auto }
+    set { config.navigationAnimation = newValue?.parseOne() as HeroDefaultAnimationType? ?? .auto }
   }
 }
 
@@ -193,7 +193,7 @@ public extension HeroExtension where Base: UITabBarController {
 
   var tabBarAnimationTypeString: String? {
     get { return config.tabBarAnimation.label }
-    set { config.tabBarAnimation = newValue?.parseOne() ?? .auto }
+    set { config.tabBarAnimation = newValue?.parseOne() as HeroDefaultAnimationType? ?? .auto }
   }
 }
 
