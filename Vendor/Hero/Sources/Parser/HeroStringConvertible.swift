@@ -48,6 +48,10 @@ extension String {
   }
 
   func parseOne<T: HeroStringConvertible>() -> T? {
-    return parse()?.last
+    // TiebaLite patch: 显式标注 parse 的泛型实参。上游写法 `parse()?.last` 靠返回类型
+    // 反推 T，Xcode 26（CI 的 macos-26）推不出来，报 "generic parameter 'T' could not
+    // be inferred"；Xcode 27 能推，所以本地一直没暴露。语义完全一致。
+    let parsed: [T]? = parse()
+    return parsed?.last
   }
 }
