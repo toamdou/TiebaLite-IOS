@@ -766,6 +766,9 @@ final class TiebaPostRowView: UIView {
     applyPalette(model.palette)
     let plan = model.plan
 
+    // 进帖转场的目标端配对（只有主贴卡带 id）：首包落地后这张卡接替占位卡，
+    // 没有它的话"返回上一级"的缩回动画就找不到目标（见 TiebaHeroTransition）。
+    TiebaHeroTransition.mark(cardView, threadId: model.heroThreadId ?? "")
     cardView.frame = plan.cardFrame
     cardView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
     cardView.layer.cornerCurve = .continuous
@@ -1082,6 +1085,7 @@ final class TiebaPostRowView: UIView {
       guard index < shownCount else {
         view.isHidden = true
         view.image = nil
+        TiebaHeroTransition.clear(view)
         continue
       }
       view.isHidden = false
@@ -1089,6 +1093,13 @@ final class TiebaPostRowView: UIView {
         ? CGRect(origin: .zero, size: frame.size)
         : (plan.imageItemFrames.indices.contains(index) ? plan.imageItemFrames[index] : .zero)
       view.tag = index
+      // 进帖转场：主贴卡的第 1 张图与列表源图配对（其余不配，避免撞 id）。
+      // 返回时它也是缩回目标——列表那边配对 id 由行模型驱动，两侧一致。
+      if index == 0, let heroThreadId = model.heroThreadId {
+        TiebaHeroTransition.markImage(view, threadId: heroThreadId)
+      } else {
+        TiebaHeroTransition.clear(view)
+      }
       let image = model.images[index]
       view.backgroundColor = model.palette.placeholder
       if model.preferences.imageLoadType == "all_no" {

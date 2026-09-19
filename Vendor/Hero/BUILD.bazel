@@ -1,0 +1,16 @@
+# Hero 1.6.4, vendored from upstream tag 1.6.4 (MIT, see LICENSE).
+# 本地补丁只有两处（见下），都是 Swift 6 语言模式所需的 nonisolated(unsafe) 断言：
+#   - Sources/Extensions/CAMediaTimingFunction+Hero.swift（静态时序曲线常量）
+#   - Sources/Animator/HeroCoreAnimationViewContext.swift（CALayer.add swizzle 的收集表）
+# 上游没有 podspec/BUILD，本文件就是 Bazel 路径；Debug Plugin 目录（HeroDebugView /
+# HeroDebugPlugin）已删除——那是可选的调试浮层，且其中 static var 未过 Swift 6。
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+swift_library(
+    name = "Hero",
+    srcs = glob(["Sources/**/*.swift"]),
+    features = ["swift.enable_v6"],
+    module_name = "Hero",
+)

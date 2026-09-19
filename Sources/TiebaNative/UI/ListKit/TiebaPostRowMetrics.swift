@@ -385,6 +385,9 @@ struct TiebaPostMediaPlaceholder: Sendable {
 final class TiebaPostRowModel: @unchecked Sendable {
   let pageKey: String
   let index: Int
+  /// 进帖转场的配对来源（只有主贴卡有值；由帖子页按 threadId 传入）。
+  /// 存 threadId 而不是拼好的 id：卡片与图片两条配对线都从它派生。
+  let heroThreadId: String?
   let post: TiebaThreadPost
   let isMain: Bool
   let isLz: Bool
@@ -495,7 +498,8 @@ final class TiebaPostRowModel: @unchecked Sendable {
     palette: TiebaFeedRowPalette,
     forumName: String,
     containerWidth: CGFloat,
-    title: String = ""
+    title: String = "",
+    heroThreadId: String? = nil
   ) {
     self.pageKey = pageKey
     self.index = index
@@ -510,6 +514,7 @@ final class TiebaPostRowModel: @unchecked Sendable {
     self.palette = palette
     self.containerWidth = TiebaLayout.quantize(containerWidth)
     self.forumName = forumName
+    self.heroThreadId = heroThreadId
     self.images = post.images
     self.imagesHidden = preferences.hideMedia
     self.video = preferences.hideMedia || preferences.blockVideo ? nil : TiebaPostRowText.video(post)

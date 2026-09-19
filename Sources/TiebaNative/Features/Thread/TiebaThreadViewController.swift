@@ -22,6 +22,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private let fromFavorites: Bool
   private let knownSnapshot: TiebaThreadSnapshot?
   private var knownPostView: TiebaThreadKnownPostView?
+  /// 下拉关闭（Hero 交互式转场）。只在"从列表点进来"时装：有源卡片才缩得回去。
+  private var pullDownDismiss: TiebaHeroPullDownDismiss?
   private var seeLz: Bool
   private var reverse: Bool
   private var isCollected: Bool
@@ -89,10 +91,19 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       knownPostView = known
     }
     configureSharedList()
+    // 转场期给整页轻微压暗（Hero 的 beginWith overlay）：让放大的卡片从背景里浮出来。
+    // 只在本页是"配对目标"（有快照 = 从列表点进来的）时加——深链直达没有源卡片，
+    // 压暗只会让首帧凭空暗一下。
+    if knownSnapshot != nil {
+      TiebaHeroTransition.markBackdrop(view)
+    }
     // 有已知主贴卡时不放入场动画：那张卡就是列表里被点的那一行，首包落地应当是
     // 「原地换内容」，而不是行从下往上滑 10pt（用户报的"加载完突然往上瞬移"）。
     if knownSnapshot != nil { list.entranceAnimationEnabled = false }
-    list.onScroll = { [weak self] scrollView in self?.handleScroll(scrollView) }
+    list.onScroll = { [weak self] scrollView in
+      self?.handleScroll(scrollView)
+      self?.installPullDownIfNeeded(scrollView)
+    }
     floatingBar.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(floatingBar)
     NSLayoutConstraint.activate([
@@ -110,6 +121,13 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     showShortcut = TiebaPreferenceSnapshot.bool("showShortcutInThread", default: true)
     floatingBar.isHidden = !showShortcut
     reload()
+  }
+
+  /// 下拉关闭只装一次，且只在"从列表点进来"（有快照）时装——深链直达没有源卡片，
+  /// 缩回动画没有落点，装了只会变成整页淡出，不是想要的观感。
+  private func installPullDownIfNeeded(_ scrollView: UIScrollView) {
+    guard knownSnapshot != nil, pullDownDismiss == nil else { return }
+    pullDownDismiss = TiebaHeroPullDownDismiss(viewController: self, scrollView: scrollView)
   }
 
   /// 偏好/主题可能在本屏离开期间被改（设置页）：每次出现现读。
@@ -354,6 +372,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     let forumName = thread?.forumName ?? ""
     let threadTitle = thread?.title ?? ""
     let mainId = mainPost?.id
+    // 进帖转场的配对 id 在跨域之前算好（detached 块里不读 self）。
+    let heroThreadId = threadId
     let toolbar = toolbarModel()
     let preferences = TiebaPostPreferences.load()
     let blockFilter = TiebaPostBlockFilter.load()
@@ -384,7 +404,10 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
             palette: palette,
             forumName: forumName,
             containerWidth: width,
-            title: threadTitle
+            title: threadTitle,
+            // 进帖转场的目标端：只有主贴卡参与配对（回复卡不配对，避免与
+            // 列表里的行抢同一个 id）。
+            heroThreadId: isMain ? heroThreadId : nil
           ))
           kept.append(post)
         }

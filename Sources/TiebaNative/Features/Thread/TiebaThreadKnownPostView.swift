@@ -61,6 +61,14 @@ final class TiebaThreadKnownPostView: UIView {
   // MARK: - 装配
 
   private func build() {
+    // 进帖转场的目标端配对：占位卡是首帧就存在的那张卡，Hero 让它从被点的
+    // 信息流卡片位置放大过来（id 与源端同源，见 TiebaHeroTransition）。
+    TiebaHeroTransition.mark(card, threadId: snapshot.id)
+    // 首图单独配对（与卡片嵌套：Hero 取快照前会把两者都置 alpha 0，不会双影）。
+    // 无图时 snapshot.imageURL 为 nil，此时不配对，图片飞行自然缺席。
+    if snapshot.imageURL != nil {
+      TiebaHeroTransition.markImage(imageView, threadId: snapshot.id)
+    }
     card.layer.cornerRadius = TiebaPostRowLayout.cardRadius
     card.layer.cornerCurve = .continuous
     card.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)

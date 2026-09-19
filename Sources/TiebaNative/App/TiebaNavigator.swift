@@ -1,3 +1,4 @@
+import Hero
 import Nuke
 import NukeExtensions
 import UIKit
@@ -94,6 +95,17 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     let nav = TiebaRootNavigationController(rootViewController: tab)
     nav.delegate = self
     nav.setNavigationBarHidden(true, animated: false)
+    // Hero 接管导航委托（插叙式魔改转场，见 Vendor/Hero）。
+    // ⚠️ 顺序不能反：Hero 启用时把现有 delegate 存进 previousNavigationDelegate 并
+    // 在自己实现里转发 willShow/didShow——本仓顶栏系统（TiebaChrome 的转场完成重扫）
+    // 正是靠 didShow 驱动，所以必须先设本仓 delegate 再启用 Hero，转发链才成立。
+    nav.hero.isEnabled = true
+    // ⚠️ 必须是 .auto，不能写 .selectBy(presenting: .none, dismissing: .none)：
+    // .auto 的语义在 DefaultAnimationPreprocessor 第三段判定——**有配对视图 → .none**
+    // （纯魔改，不掺系统整页位移），**没有配对 → .push**（深链/收藏页进帖保持原样）。
+    // 而 .selectBy 在第二段就解析成 .none，直接命中末尾的 `if case .none { return }`，
+    // 未配对时会退化成瞬间跳转（连 push 都没了）。
+    nav.hero.navigationAnimationType = .auto
     rootNav = nav
     window.rootViewController = nav
     return nav

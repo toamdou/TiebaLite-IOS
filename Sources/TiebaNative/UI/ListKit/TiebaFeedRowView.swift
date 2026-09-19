@@ -297,6 +297,9 @@ private final class TiebaFeedRowBadgeView: UIView {
 
 private final class TiebaFeedRowMediaItemView: UIView {
   private let imageView = UIImageView()
+
+  /// 进帖转场的图片配对用（同模块内部）：媒体项不持有 threadId，由行视图下发 id。
+  var heroImageView: UIView { imageView }
   private let longBadge = TiebaFeedRowBadgeView(text: "长图", systemImage: "arrow.down")
   private let gifBadge = TiebaFeedRowBadgeView(text: "GIF", systemImage: nil)
   private let moreOverlay = UIView()
@@ -356,6 +359,7 @@ private final class TiebaFeedRowMediaItemView: UIView {
   }
 
   func prepareForReuse() {
+    TiebaHeroTransition.clear(imageView)
     cancelRequest(for: imageView)
     imageView.image = nil
     longBadge.isHidden = true
@@ -1421,6 +1425,10 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   private func configureCard(with model: TiebaFeedRowModel) {
     cardView.isHidden = false
+    // 进帖转场的源端配对（Hero 魔改转场）：id 由本行自己的 threadId 决定，
+    // cell 复用换行时随之更新，不留残留（见 TiebaHeroTransition）。
+    TiebaHeroTransition.mark(cardView, threadId: model.threadId)
+    menuButton.isHidden = model.menuOptions.isEmpty
     bannerView.isHidden = true
     menuButton.isHidden = model.menuOptions.isEmpty
     menuButton.configure(tint: palette.textTertiary)
@@ -1460,7 +1468,12 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   }
 
   private func configureMedia(with model: TiebaFeedRowModel) {
-    guard model.showsMedia else { return }
+    // 无媒体（或设置里隐藏了媒体）：清掉上一行的图片配对，否则复用后残留旧 id。
+    guard model.showsMedia else {
+      TiebaHeroTransition.clear(singleMediaView.heroImageView)
+      for item in stripItems { TiebaHeroTransition.clear(item.heroImageView) }
+      return
+    }
     let scale = max(traitCollection.displayScale, 1)
     let isSameRow = isSameRowReconfigure
     let mediaMenuHandler: (Int, String) -> Void = { [weak self] index, action in
@@ -1509,6 +1522,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
           onPreviewCommit: mediaOpenHandler
         )
       }
+      // 进帖转场：图片带只配第 1 张（用户点卡片时看到的就是它），其余清掉避免撞 id。
+      TiebaHeroTransition.markImage(stripItems.first?.heroImageView, threadId: model.threadId)
+      for item in stripItems.dropFirst() { TiebaHeroTransition.clear(item.heroImageView) }
       // 图片请求整段一次做完（只解可见 + 2 格，其余随横滑补，见 extendStripLoadWindow）。
       if !isSameRow {
         stripLoadedIndexes.removeAll(keepingCapacity: true)
@@ -1530,6 +1546,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
         onMenuAction: mediaMenuHandler,
         onPreviewCommit: mediaOpenHandler
       )
+      // 进帖转场：单图即首图。
+      TiebaHeroTransition.markImage(singleMediaView.heroImageView, threadId: model.threadId)
       if !isSameRow {
         let height = model.singleMediaHeight ?? 0
         singleMediaView.load(
