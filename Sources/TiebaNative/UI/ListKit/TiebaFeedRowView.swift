@@ -640,7 +640,8 @@ private final class TiebaFeedRowActionView: UIControl {
 // MARK: - 静态文字画布
 
 /// 卡片静态文字画布：把卡内多段静态文字画进**同一张** backing store，省掉每段文字
-/// 一个可见 CALayer 的绘制/合成与一份独立 backing store。
+/// 一个可见 CALayer 的绘制/合成与一份独立 backing store；并按行身份缓存位图，使
+/// **来回滚动同一行不必重光栅化**（cell 复用会把画布换给别的行，否则每次复用都要重画）。
 ///
 /// 绘制仍走 `UILabel.drawText(in:)`——即 label 自己的渲染实现，所以换行、尾部截断、
 /// 垂直居中都与原实现逐像素一致（不自己拼 TextKit：那才是"文字错位/换行不同"这类
@@ -662,7 +663,38 @@ private final class TiebaFeedRowTextCanvas: UIView {
     let frame: CGRect
   }
 
+  /// 弱引用盒：缓存**不持有**模型，否则会把已被整页 LRU 淘汰的行钉在内存里
+  ///（模型的 NSAttributedString 才是大头）。
+  private final class ModelRef {
+    weak var value: AnyObject?
+    init(_ value: AnyObject) { self.value = value }
+  }
+
+  /// 一张缓存位图 + 它的**精确**身份。查找用逐字段比对而非哈希：身份是对象引用 +
+  /// 值比较的混合，逐字段比对更直接。
+  private struct Entry {
+    let model: ModelRef
+    let palette: TiebaFeedRowPalette
+    let size: CGSize
+    let scale: CGFloat
+    let style: UIUserInterfaceStyle
+    let image: CGImage
+    let bytes: Int
+    var lastUsed: UInt64
+  }
+
+  /// 位图预算。典型卡片（370×220pt @3x）约 2.9MB/张，24MB ≈ 8 张 ≈ 一屏多一点，
+  /// 覆盖"往回滚一屏"的命中需求。调大能覆盖滚更远，代价是常驻内存线性增长。
+  private static let byteBudget = 24 * 1024 * 1024
+  /// 单张位图上限：展开后的长文卡可以到一千多 pt 高（十几 MB），存它会把预算挤空、
+  /// 还把别的卡挤掉。这类卡仍然一次画好，只是不进缓存（它本来也不常被来回滚）。
+  private static let maxEntryBytes = 8 * 1024 * 1024
+  private static var entries: [Entry] = []
+  private static var useClock: UInt64 = 0
+
   private var runs: [Run] = []
+  private var bakedModel: AnyObject?
+  private var bakedPalette: TiebaFeedRowPalette?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -677,19 +709,144 @@ private final class TiebaFeedRowTextCanvas: UIView {
     fatalError("init(coder:) is not supported")
   }
 
-  /// 收集本轮要画的文字。frame 取自 label 自己——与本行 `place()` 写进去的是同一个值
-  /// （卡片坐标），画布与 label 宿主同在 (0,0)、同尺寸，所以零换算。
-  func update(labels: [UILabel]) {
-    runs = labels
-      .filter { !$0.isHidden }
-      .map { Run(label: $0, frame: $0.frame) }
-    setNeedsDisplay()
+  /// 收集本轮要画的文字，并按 (模型, 色板, 尺寸, 缩放, 深浅档) 取或烘位图。
+  /// frame 取自 label 自己——与本行 `place()` 写进去的是同一个值（卡片坐标）。
+  func update(labels: [UILabel], model: AnyObject, palette: TiebaFeedRowPalette) {
+    runs = labels.map { Run(label: $0, frame: $0.frame) }.filter { !$0.label.isHidden }
+    bakedModel = model
+    bakedPalette = palette
+    applyBitmap()
   }
 
-  override func draw(_ rect: CGRect) {
-    for run in runs where run.frame.intersects(rect) {
-      run.label.drawText(in: run.frame)
+  /// 清空（无模型 / 置顶横幅行：卡片整体隐藏，内容不该留着上一行的位图）。
+  func clear() {
+    runs = []
+    bakedModel = nil
+    bakedPalette = nil
+    setContents(nil)
+  }
+
+  /// 外观档或色板变化时由宿主调用：整表作废。
+  /// **不在这里重烘**——`applyPalette` 是"先刷 layer 色、后 configure 文案色"，
+  /// 此刻 label 上可能还是旧色，重烘会把旧色位图存进新键。宿主清掉 placedToken 后
+  /// 必然走一次完整布局，由 `update` 用配色完成的 label 重烘。
+  static func invalidateCache() {
+    entries.removeAll()
+  }
+
+  // MARK: 位图
+
+  private var scaleForDisplay: CGFloat { max(traitCollection.displayScale, 1) }
+
+  private func applyBitmap() {
+    guard let model = bakedModel, let palette = bakedPalette else {
+      setContents(nil)
+      return
     }
+    let size = bounds.size
+    guard !runs.isEmpty, size.width > 1, size.height > 1 else {
+      setContents(nil)
+      return
+    }
+    let scale = scaleForDisplay
+    let style = traitCollection.userInterfaceStyle
+
+    if let index = Self.indexOfHit(
+      model: model, palette: palette, size: size, scale: scale, style: style
+    ) {
+      Self.useClock &+= 1
+      Self.entries[index].lastUsed = Self.useClock
+      setContents(Self.entries[index].image)
+      return
+    }
+    guard let image = makeBitmap(size: size, scale: scale) else {
+      setContents(nil)
+      return
+    }
+    let bytes = Int(size.width * scale) * Int(size.height * scale) * 4
+    // 超长卡只画不存（见 maxEntryBytes）。
+    if bytes <= Self.maxEntryBytes {
+      Self.store(
+        Entry(
+          model: ModelRef(model),
+          palette: palette,
+          size: size,
+          scale: scale,
+          style: style,
+          image: image,
+          bytes: bytes,
+          lastUsed: Self.useClock
+        )
+      )
+    }
+    setContents(image)
+  }
+
+  /// 逐字段精确比对；顺带把模型已释放（弱引用空）的条目清出去。
+  private static func indexOfHit(
+    model: AnyObject,
+    palette: TiebaFeedRowPalette,
+    size: CGSize,
+    scale: CGFloat,
+    style: UIUserInterfaceStyle
+  ) -> Int? {
+    var hit: Int?
+    var index = entries.count - 1
+    while index >= 0 {
+      if entries[index].model.value == nil {
+        entries.remove(at: index)   // 模型已释放：这条缓存永远不可能再命中
+      } else if hit == nil,
+        entries[index].model.value === model,
+        entries[index].size == size,
+        entries[index].scale == scale,
+        entries[index].style == style,
+        entries[index].palette == palette {
+        hit = index
+      }
+      index -= 1
+    }
+    return hit
+  }
+
+  /// 存入并按预算淘汰最久未用的一张（绝不动刚存进来的这张）。
+  private static func store(_ entry: Entry) {
+    useClock &+= 1
+    var fresh = entry
+    fresh.lastUsed = useClock
+    entries.append(fresh)
+    var total = entries.reduce(0) { $0 + $1.bytes }
+    while total > byteBudget, entries.count > 1 {
+      var oldest = 0
+      for index in entries.indices where entries[index].lastUsed < entries[oldest].lastUsed {
+        oldest = index
+      }
+      guard entries[oldest].lastUsed != useClock else { break }
+      total -= entries[oldest].bytes
+      entries.remove(at: oldest)
+    }
+  }
+
+  private func makeBitmap(size: CGSize, scale: CGFloat) -> CGImage? {
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = scale
+    format.opaque = false
+    let canvas = CGRect(origin: .zero, size: size)
+    let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+      for run in self.runs where run.frame.intersects(canvas) {
+        run.label.drawText(in: run.frame)
+      }
+    }
+    return image.cgImage
+  }
+
+  /// 直接写 `layer.contents`（不走 draw(_:)）。必须关掉隐式动画：cell 复用换位图时
+  /// 否则会看到一次淡入过渡。
+  private func setContents(_ image: CGImage?) {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    layer.contents = image
+    layer.contentsScale = scaleForDisplay
+    CATransaction.commit()
   }
 }
 
@@ -833,6 +990,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   private struct PlacedToken: Equatable {
     let model: ObjectIdentifier
     let size: CGSize
+    /// 位图按显示缩放烘焙：缩放档变了必须重摆一次（否则会留着低档的模糊位图）。
+    /// 帧计划本身与缩放无关，这里带上它只为驱动画布重烘。
+    let scale: CGFloat
   }
   private var placedToken: PlacedToken?
   private var applying = false
@@ -1649,12 +1809,16 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     super.layoutSubviews()
     guard let model else {
       // 模型被清掉（换行 / 页还没测完）：画布必须一起清空，否则会留着上一行的文字。
-      textCanvas.update(labels: [])
+      textCanvas.clear()
       return
     }
     // 同一个模型 + 同一尺寸 ⇒ 帧计划没变，四十来个 frame 不必再摆一遍（配置、图片
     // 到达、系统多次布局都会把 layoutSubviews 叫醒）；换行/换宽度/换模型都会换 token。
-    let token = PlacedToken(model: ObjectIdentifier(model), size: bounds.size)
+    let token = PlacedToken(
+      model: ObjectIdentifier(model),
+      size: bounds.size,
+      scale: max(traitCollection.displayScale, 1)
+    )
     if placedToken == token { return }
     placedToken = token
     // 帧计划在测量期已算好（模型不可变），布局期只摆 frame。
@@ -1671,6 +1835,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
       placeBanner(bannerIconView, plan.bannerIconFrame, in: plan.cardFrame)
       placeBanner(bannerBadgeLabel, plan.bannerBadgeFrame, in: plan.cardFrame)
       placeBanner(bannerTextLabel, plan.bannerTextFrame, in: plan.cardFrame)
+      // 置顶横幅不用卡片画布（cardView 整体隐藏）：清掉，免得复用上来时残留上一行的位图。
+      textCanvas.clear()
       return
     }
 
@@ -1754,11 +1920,16 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
     // 静态文字一次性交给画布。frame 上面已由 place() 写好，这里只决定"画哪些"：
     // 未显示的段由 update 按 isHidden 过滤（isHidden 就是配置代码的显示语义）。
-    textCanvas.update(labels: [
-      displayNameLabel, metaLabel, ipLabel,
-      titleLabel, abstractLabel, showMoreLabel,
-      quoteForumLabel, quoteTitleLabel, quoteContentLabel,
-    ])
+    // 传模型身份 + 色板：画布据此取缓存位图，命中则完全跳过光栅化。
+    textCanvas.update(
+      labels: [
+        displayNameLabel, metaLabel, ipLabel,
+        titleLabel, abstractLabel, showMoreLabel,
+        quoteForumLabel, quoteTitleLabel, quoteContentLabel,
+      ],
+      model: model,
+      palette: palette
+    )
   }
 
   /// 行坐标 → 卡片坐标。
@@ -1876,9 +2047,12 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   /// 外观档变化时重解析 CGColor（由 styleRegistration 触发；换色板时也直接调）。
   private func refreshDynamicLayerColors() {
-    // 画布里的文字可能带动态色：帧没变时 layoutSubviews 会被 placedToken 短路，
-    // 必须在这里显式请求重绘，否则深色切换后仍留浅色字形。
-    textCanvas.setNeedsDisplay()
+    // 画布位图里烘的是具体颜色：深浅档一变，旧位图必须整表作废，否则深色下仍贴浅色字形。
+    // 同时清 placedToken 强制下一次布局重摆——**不在这里就地重烘**：调用方（applyPalette /
+    // trait 回调）此刻还没 configure，label 上可能仍是旧色，重烘会把旧色存进新键。
+    TiebaFeedRowTextCanvas.invalidateCache()
+    placedToken = nil
+    setNeedsLayout()
     cardView.layer.borderColor = palette.borderCard
       .resolvedColor(with: traitCollection).cgColor
     quoteCard.layer.borderColor = palette.separator
