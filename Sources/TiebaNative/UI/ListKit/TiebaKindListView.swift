@@ -146,6 +146,9 @@ final class TiebaKindListFeedCell: UICollectionViewCell {
     rowView.palette = palette
   }
 
+  /// 首图已解好的位图（列表→详情快照用，见 TiebaFeedRowView.loadedThumbnailImage）。
+  var loadedThumbnailImage: UIImage? { rowView.loadedThumbnailImage }
+
   func playEntrance(index: Int) {
     rowView.playEntranceAnimation(index: index)
   }
@@ -1153,7 +1156,12 @@ public final class TiebaKindListContentView: UIView {
       // 列表→详情已知数据快照（原 TweetCard 的 setThreadSnapshot）：帖子页首帧
       // 就能画出已加载过的标题/作者/摘要/首图，不必等首包。点任何一块都写，
       // 一次性消费 + 同 id 才命中，写多无害。
-      TiebaThreadSnapshots.set(TiebaThreadSnapshot(row: row))
+      var snapshot = TiebaThreadSnapshot(row: row)
+      // 顺手把列表里已经解好的首图位图带上：占位卡按卡片宽取图（与列表文本列宽不同，
+      // Nuke 缓存键也不同），不带它的话进帖会先显示一片灰再跳图。
+      snapshot.thumbnailImage =
+        (collectionView.cellForItem(at: indexPath) as? TiebaKindListFeedCell)?.loadedThumbnailImage
+      TiebaThreadSnapshots.set(snapshot)
       let hit = TiebaFeedRowInteraction.tapRegion(for: point, row: row)
       if hit.region == "media", !row.media.isEmpty {
         if let cell = collectionView.cellForItem(at: indexPath) as? TiebaKindListFeedCell,

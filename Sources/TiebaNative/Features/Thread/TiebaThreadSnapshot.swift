@@ -15,6 +15,10 @@ struct TiebaThreadSnapshot {
   var imageURL: URL?
   var imageWidth = 0.0
   var imageHeight = 0.0
+  /// 列表里**已经解好并显示中**的缩略图位图。占位卡的图按卡片宽取图（与列表行
+  /// 文本列宽不同 ⇒ Nuke 缓存键不同），重新下载解码期间若没有它就只剩灰底
+  ///（用户 2026-09-19 报的"明明缩略图已加载好，进帖一片灰"）。
+  var thumbnailImage: UIImage?
 }
 
 extension TiebaThreadSnapshot {

@@ -330,12 +330,36 @@ final class TiebaSignService {
       title: done == 0 ? "无需签到" : "签到完成",
       body: body
     )
+    // 弹出提示分两条通道，按前后台二选一（都走会重复弹）：
+    //   - 前台：ActivityKit 的 alertConfiguration **只在 App 不在前台时展示**，
+    //     而一键签到几乎总在前台跑完 ⇒ 只靠它用户什么也看不到、要下拉通知中心
+    //     才知道结果（用户 2026-09-19 报）。前台改用本地通知，横幅照常弹。
+    //   - 后台/锁屏：交回 ActivityKit 的 alert（灵动岛/锁屏原生形态）。
+    let inForeground = UIApplication.shared.applicationState == .active
+    if inForeground {
+      Task { @MainActor in
+        // 没授权就不投递（投了也是静默丢弃），此时灵动岛仍会更新到完成态。
+        var status = await TiebaNotificationCenter.shared.permissionStatus()
+        if status == .notDetermined {
+          status = await TiebaNotificationCenter.shared.requestPermission()
+        }
+        guard TiebaForegroundNotifier.allowsDelivery(status) else { return }
+        TiebaNotificationCenter.shared.deliver(
+          identifier: "sign-complete-\(Int(Date().timeIntervalSince1970))",
+          title: alert.title,
+          body: alert.body,
+          playSound: true,
+          dataType: "sign_complete",
+          deepLink: "tiebalite://settings/oksign"
+        )
+      }
+    }
     Task {
       await TiebaLiveActivityManager.shared.end(
         activityId: activityId,
         state: LiveActivityKitAttributes.ContentState(raw: state),
         dismissalPolicy: .default,
-        alert: alert
+        alert: inForeground ? nil : alert
       )
     }
   }

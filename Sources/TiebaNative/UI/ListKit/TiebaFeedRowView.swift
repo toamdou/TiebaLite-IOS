@@ -300,6 +300,8 @@ private final class TiebaFeedRowMediaItemView: UIView {
 
   /// 进帖转场的图片配对用（同模块内部）：媒体项不持有 threadId，由行视图下发 id。
   var heroImageView: UIView { imageView }
+  /// 当前已解好的位图（列表→详情快照把它带给占位卡，避免进帖先显示灰底）。
+  var loadedImage: UIImage? { imageView.image }
   private let longBadge = TiebaFeedRowBadgeView(text: "长图", systemImage: "arrow.down")
   private let gifBadge = TiebaFeedRowBadgeView(text: "GIF", systemImage: nil)
   private let moreOverlay = UIView()
@@ -1935,6 +1937,13 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
       dx: -TiebaFeedRowLayout.cardMarginH,
       dy: -TiebaFeedRowLayout.cardMarginV
     )
+  }
+
+  /// 首图已解好的位图（无媒体/未加载 → nil）。列表侧写快照时取走，供详情页占位卡
+  /// 立刻顶上，避免"缩略图明明已显示、进帖却先是一片灰"。
+  var loadedThumbnailImage: UIImage? {
+    if !singleMediaView.isHidden, let image = singleMediaView.loadedImage { return image }
+    return stripItems.first { !$0.isHidden }?.loadedImage
   }
 
   // MARK: - 媒体命中查询（列表侧点击分发用；本视图仍不装任何手势）

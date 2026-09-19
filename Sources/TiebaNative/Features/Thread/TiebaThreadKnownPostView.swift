@@ -135,6 +135,10 @@ final class TiebaThreadKnownPostView: UIView {
 
     if snapshot.imageURL != nil, imageAspect > 0 {
       imageView.contentMode = .scaleAspectFill
+      // 列表已解好的位图先顶上：占位卡的图按卡片内容宽取（与列表行文本列宽不同 ⇒
+      // Nuke 缓存键不同），先用它兜住，等按本卡尺寸的新图解码完再替换——否则这段
+      // 时间就是一片灰（用户 2026-09-19 报的"缩略图明明加载好了，进帖一片灰"）。
+      imageView.image = snapshot.thumbnailImage
       // 取图时机交给自己：卡片（card）/栈都是本视图的子孙，在本视图的
       // layoutSubviews 里读 imageView.bounds 还是 0（约束逐层下推），图片永远
       // 取不到——用户报的"占位卡里没有图片"。自己布局完再取，尺寸必然成立。
