@@ -643,23 +643,27 @@ private final class TiebaFeedRowActionView: UIControl {
 /// 一个可见 CALayer 的绘制/合成与一份独立 backing store；并按行身份缓存位图，使
 /// **来回滚动同一行不必重光栅化**（cell 复用会把画布换给别的行，否则每次复用都要重画）。
 ///
-/// 绘制仍走 `UILabel.drawText(in:)`——即 label 自己的渲染实现，所以换行、尾部截断、
-/// 垂直居中都与原实现逐像素一致（不自己拼 TextKit：那才是"文字错位/换行不同"这类
-/// 只有肉眼才看得见的偏差的来源）。
+/// 绘制走 `NSAttributedString.draw(with:options:context:)`——与 `UILabel` 底层同一套
+/// 排版（图形/字体/行高都在属性串里），但**不需要 UIView 参与**。相比上一版把 9 段文字
+/// 交给 9 个隐藏 label：每行少 9 个视图对象、少 9 次 trait 传播；而且该原语不绑主线程，
+/// 是后续异步化的前置（本次仍在主线程调用）。
 ///
-/// 被画的 label 挂在**隐藏宿主**里（见 `labelHost`）：它们仍在视图树上，能拿到窗口
-/// trait，深色/浅色动态色按当前外观正确解析；宿主整体 isHidden，所以 UIKit 不会画第二遍，
-/// 也不为它们分配 backing store。label 的 isHidden 因此只承担"这一段要不要显示"的语义，
-/// 与配置代码（configure / resetBlockVisibility）完全一致，无需改动。
+/// 行数限制由 frame 高度承担，不用 `numberOfLines`：折叠态 title/abstract 的 frame 高度
+/// 正是按 maxLines 量出来的，配 `.truncatesLastVisibleLine` 即在末行加省略号
+///（`NSStringDrawingContext.maximumNumberOfLines` 是私有属性，SDK 头文件里没有，不采用）。
 ///
-/// 坐标系：画布与 labelHost 同在 cardView 的 (0,0) 且同尺寸，而 `place()` 写的正是
-/// cardView 局部坐标，所以 `label.frame` 直接就是画布坐标，零换算。引用卡三个文字
-/// 也走同一条路——它们以前挂在 quoteCard 里却仍按 cardView 空间摆放（`place()` 只减
+/// 坐标系：画布与 plan 的 frame 同属 cardView 局部坐标，零换算。引用卡的三个文字也走
+/// 同一条路——它们以前挂在 quoteCard 里却仍按 cardView 空间摆放（`place()` 只减
 /// cardMargin），等于少减了一次父原点、整组右移 `contentX - 2×cardMarginH`。纳入画布后
 /// 这个偏差自然消失。
 private final class TiebaFeedRowTextCanvas: UIView {
-  private struct Run {
-    let label: UILabel
+  /// 一段要画的文字：**已完全解析**的属性串（字体/颜色/行高都烘进属性里）+ 绘制矩形。
+  ///
+  /// 不持有 UILabel：绘制走 `NSAttributedString.draw(with:options:context:)`——与
+  /// `UILabel` 底层同一套排版，但不需要 UIView 参与。这带来两件事：每行少 9 个视图对象，
+  /// 且该原语不绑主线程（异步化的前置，本次仍在主线程调用）。
+  struct Run {
+    let attributed: NSAttributedString
     let frame: CGRect
   }
 
@@ -710,9 +714,9 @@ private final class TiebaFeedRowTextCanvas: UIView {
   }
 
   /// 收集本轮要画的文字，并按 (模型, 色板, 尺寸, 缩放, 深浅档) 取或烘位图。
-  /// frame 取自 label 自己——与本行 `place()` 写进去的是同一个值（卡片坐标）。
-  func update(labels: [UILabel], model: AnyObject, palette: TiebaFeedRowPalette) {
-    runs = labels.map { Run(label: $0, frame: $0.frame) }.filter { !$0.label.isHidden }
+  /// frame 已在 plan 里算好（卡片坐标），画布与 labelHost 同在 (0,0) 同尺寸，零换算。
+  func update(runs: [Run], model: AnyObject, palette: TiebaFeedRowPalette) {
+    self.runs = runs
     bakedModel = model
     bakedPalette = palette
     applyBitmap()
@@ -728,8 +732,8 @@ private final class TiebaFeedRowTextCanvas: UIView {
 
   /// 外观档或色板变化时由宿主调用：整表作废。
   /// **不在这里重烘**——`applyPalette` 是"先刷 layer 色、后 configure 文案色"，
-  /// 此刻 label 上可能还是旧色，重烘会把旧色位图存进新键。宿主清掉 placedToken 后
-  /// 必然走一次完整布局，由 `update` 用配色完成的 label 重烘。
+  /// 此刻属性串可能还是旧色，重烘会把旧色位图存进新键。宿主清掉 placedToken 后
+  /// 必然走一次完整布局，由 `update` 用配色完成的 runs 重烘。
   static func invalidateCache() {
     entries.removeAll()
   }
@@ -831,12 +835,44 @@ private final class TiebaFeedRowTextCanvas: UIView {
     format.scale = scale
     format.opaque = false
     let canvas = CGRect(origin: .zero, size: size)
+    let runs = self.runs
     let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
-      for run in self.runs where run.frame.intersects(canvas) {
-        run.label.drawText(in: run.frame)
+      for run in runs where run.frame.intersects(canvas) {
+        Self.draw(run)
       }
     }
     return image.cgImage
+  }
+
+  /// 画一段文字。
+  ///
+  /// 两个必须复刻 UILabel 的细节：
+  /// 1. **垂直居中**。UILabel 把文字在 bounds 内居中；直接绘制是顶部对齐。名字行这类
+  ///    "frame 比文字自然高"的段（20pt frame / 15pt 字体 ≈ 17.9pt 自然高）不补偏移，
+  ///    整行字会上移约 1pt —— 属于肉眼能看出的"字没对齐"。
+  /// 2. **行数由 frame 高度天然限制**。`NSStringDrawingContext.maximumNumberOfLines` 是
+  ///    私有属性（SDK 头文件里没有），所以不靠它：折叠态的 title/abstract frame 高度
+  ///    正是按 maxLines 量出来的，配 `.truncatesLastVisibleLine` 就会在最后一行加省略号。
+  private static func draw(_ run: Run) {
+    let attributed = run.attributed
+    let frame = run.frame
+    guard attributed.length > 0, frame.width > 0, frame.height > 0 else { return }
+    let natural = attributed.boundingRect(
+      with: CGSize(width: frame.width, height: .greatestFiniteMagnitude),
+      options: [.usesLineFragmentOrigin],
+      context: nil
+    ).height
+    let inset = max((frame.height - natural) / 2, 0)
+    attributed.draw(
+      with: CGRect(
+        x: frame.minX,
+        y: frame.minY + inset,
+        width: frame.width,
+        height: frame.height - inset
+      ),
+      options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+      context: nil
+    )
   }
 
   /// 直接写 `layer.contents`（不走 draw(_:)）。必须关掉隐式动画：cell 复用换位图时
@@ -1023,29 +1059,17 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   private let cardView = UIView()
   /// 卡内静态文字合画到这一张画布（见 TiebaFeedRowTextCanvas）。
   private let textCanvas = TiebaFeedRowTextCanvas()
-  /// 被画文字的宿主：整体隐藏（不给它们分配 backing store、不让 UIKit 画第二遍），
-  /// 只为让 label 留在视图树上、从窗口继承正确的 trait（动态色按深/浅色解析）。
-  private let labelHost = UIView()
+  /// 本轮要画的 9 段静态文字（configure 时按模型+色板生成，layout 时交给画布）。
+  private var runs: [TiebaFeedRowTextCanvas.Run] = []
   private let avatarContainer = UIView()
   private let avatarInitialLabel = UILabel()
   private let avatarView = UIImageView()
-  private let displayNameLabel = UILabel()
-  /// 名字行尾部元信息 =「@昵称 + 时间」一个 label（模型把 4pt 段间空隙烘进 kern，
-  /// 见 TiebaFeedRowModel.metaAttributed）：少一个 label、少一次文本布局。
-  private let metaLabel = UILabel()
-  private let ipLabel = UILabel()
   /// 右上角 26×26 菜单钮（TweetCard styles.closeButton：xmark 13 bold + textTertiary）。
   private let menuButton = TiebaFeedRowMenuButton(frame: .zero)
-  private let titleLabel = UILabel()
-  private let abstractLabel = UILabel()
-  private let showMoreLabel = UILabel()
   private let singleMediaView = TiebaFeedRowMediaItemView()
   private let stripScrollView = UIScrollView()
   private let stripCountLabel = UILabel()
   private let quoteCard = UIView()
-  private let quoteForumLabel = UILabel()
-  private let quoteTitleLabel = UILabel()
-  private let quoteContentLabel = UILabel()
   private let chipView = UIView()
   private let chipAvatarView = UIImageView()
   private let chipInitialLabel = UILabel()
@@ -1086,26 +1110,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     avatarInitialLabel.textColor = .white
     avatarContainer.addSubview(avatarInitialLabel)
     avatarView.contentMode = .scaleAspectFill
-    avatarContainer.addSubview(avatarView)
-    // 静态文字的 label 全部挂在这个隐藏宿主里（见 TiebaFeedRowTextCanvas）：
-    // 留在视图树上才能从窗口继承 trait（动态色才按深/浅色解析），但整体隐藏，
-    // 既不参与绘制也不分配 backing store。真实绘制由 textCanvas 统一完成。
-    labelHost.isHidden = true
-    labelHost.isUserInteractionEnabled = false
-    labelHost.addSubview(displayNameLabel)
-    labelHost.addSubview(metaLabel)
-    labelHost.addSubview(ipLabel)
-    labelHost.addSubview(titleLabel)
-    labelHost.addSubview(abstractLabel)
-    labelHost.addSubview(showMoreLabel)
-    labelHost.addSubview(quoteForumLabel)
-    labelHost.addSubview(quoteTitleLabel)
-    labelHost.addSubview(quoteContentLabel)
     cardView.addSubview(avatarContainer)
-
-    configureStaticLabel(displayNameLabel)
-    configureStaticLabel(metaLabel)
-    configureStaticLabel(ipLabel)
 
     // 转发引用帖：卡片本体（底 + 描边）先挂，让引用文字压在上面。
     quoteCard.isHidden = true
@@ -1113,14 +1118,10 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     quoteCard.layer.cornerCurve = .continuous
     quoteCard.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     quoteCard.layer.borderColor = palette.separator.cgColor
-    configureStaticLabel(quoteForumLabel)
-    configureMultilineLabel(quoteTitleLabel)
-    configureMultilineLabel(quoteContentLabel)
     cardView.addSubview(quoteCard)
     // 画布只画文字、背景透明：压在引用卡底之上（引用文字才看得见），又在菜单钮/
     // 图片/徽章/操作栏之下（那些之后才挂，且都是不透明的实内容）。
     cardView.addSubview(textCanvas)
-    cardView.addSubview(labelHost)
 
     // 右上角菜单钮（TweetCard closeButton 的 UIKit 直译）：26×26 圆形、
     // xmark 13 bold、textTertiary；无菜单项的行（menuOptions 空）保持隐藏。
@@ -1128,11 +1129,6 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     menuButton.configure(tint: palette.textTertiary)
     menuButton.addTarget(self, action: #selector(handleMenuButtonTap), for: .touchUpInside)
     cardView.addSubview(menuButton)
-
-    // 正文
-    configureMultilineLabel(titleLabel)
-    configureMultilineLabel(abstractLabel)
-    configureStaticLabel(showMoreLabel)
 
     // 媒体
     singleMediaView.isHidden = true
@@ -1168,7 +1164,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     chipInitialLabel.textColor = palette.onChip
     chipView.addSubview(chipInitialLabel)
     chipView.addSubview(chipAvatarView)
-    configureStaticLabel(chipLabel)
+    chipLabel.isHidden = true
+    chipLabel.lineBreakMode = .byTruncatingTail
+    chipLabel.numberOfLines = 1
     cardView.addSubview(chipView)
     chipView.addSubview(chipLabel)
 
@@ -1287,12 +1285,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   /// 块级可见性复位（不动图片与横滑带的在途任务/滚动位置）：
   /// configure 只负责"显示"，消失的块必须由这里先清掉，同行重配才不会留残影。
+  /// 卡内静态文字随画布一起清（画布缓存在 layoutSubviews 里按模型重建）。
   private func resetBlockVisibility() {
-    for label in allTextLabels {
-      label.text = nil
-      label.attributedText = nil
-      label.isHidden = true
-    }
+    runs = []
     cardView.isHidden = true
     bannerView.isHidden = true
     quoteCard.isHidden = true
@@ -1306,25 +1301,68 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     }
   }
 
-  private var allTextLabels: [UILabel] {
-    [
-      displayNameLabel, metaLabel, ipLabel,
-      titleLabel, abstractLabel, showMoreLabel,
-      quoteForumLabel, quoteTitleLabel, quoteContentLabel, chipLabel,
-      bannerBadgeLabel, bannerTextLabel,
-    ]
-  }
+  // MARK: - 卡内静态文字（画布输入）
 
-  private func configureStaticLabel(_ label: UILabel) {
-    label.isHidden = true
-    label.lineBreakMode = .byTruncatingTail
-    label.numberOfLines = 1
-  }
-
-  private func configureMultilineLabel(_ label: UILabel) {
-    label.isHidden = true
-    label.lineBreakMode = .byTruncatingTail
-    label.numberOfLines = 0
+  /// 9 段静态文字：字体/颜色/行高全部在此解析成属性串，交给画布一次性绘制。
+  /// 原来是 9 个 UILabel（各自 numberOfLines / textColor / attributedText），
+  /// 现在只按 plan 的 frame 产出绘制项——**不建任何视图**。
+  /// 行数限制由 frame 高度天然承担（见 TiebaFeedRowTextCanvas.draw）。
+  private func makeRuns(model: TiebaFeedRowModel) -> [TiebaFeedRowTextCanvas.Run] {
+    let fonts = model.geometry.fonts
+    let plan = model.plan
+    var runs: [TiebaFeedRowTextCanvas.Run] = []
+    func add(_ attributed: NSAttributedString?, _ frame: CGRect?) {
+      guard let attributed, attributed.length > 0, let frame else { return }
+      runs.append(.init(attributed: attributed, frame: frame))
+    }
+    // 昵称 / IP：纯文本按当前色板着色（换主题即变）。
+    add(
+      NSMutableAttributedString(
+        string: model.displayName,
+        attributes: [.font: fonts.displayName, .foregroundColor: palette.text]
+      ),
+      plan.displayNameFrame
+    )
+    // 元信息（@昵称 + 时间）是一个串：色按当前色板统一覆盖（模型侧只写语义色）。
+    if let meta = model.metaAttributed {
+      let colored = NSMutableAttributedString(attributedString: meta)
+      colored.addAttribute(
+        .foregroundColor,
+        value: palette.textSecondary,
+        range: NSRange(location: 0, length: colored.length)
+      )
+      add(colored, plan.metaFrame)
+    }
+    if let ip = model.ipText, !ip.isEmpty {
+      add(
+        NSMutableAttributedString(
+          string: ip,
+          attributes: [.font: fonts.ip, .foregroundColor: palette.textSecondary]
+        ),
+        plan.ipFrame
+      )
+    }
+    // 正文：attributed 已在测量期构建（含行高），这里只补「精品」前缀色。
+    if let title = model.titleAttributed {
+      add(titleAttributed(title, prefix: model.titlePrefix), plan.titleFrame)
+    }
+    add(model.abstractAttributed, plan.abstractFrame)
+    if model.isCollapsible && !model.expanded, !model.showMoreText.isEmpty {
+      add(
+        NSMutableAttributedString(
+          string: model.showMoreText,
+          attributes: [.font: fonts.showMore, .foregroundColor: palette.primary]
+        ),
+        plan.showMoreTextFrame
+      )
+    }
+    // 引用帖三段：仅当引用卡显示时画（卡片隐藏时其文字也不该出现）。
+    if !quoteCard.isHidden {
+      add(model.quoteForumAttributed, plan.quoteForumFrame)
+      add(model.quoteTitleAttributed, plan.quoteTitleFrame)
+      add(model.quoteContentAttributed, plan.quoteContentFrame)
+    }
+    return runs
   }
 
   // MARK: - 主题重刷
@@ -1386,7 +1424,6 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     bannerView.isHidden = true
     menuButton.isHidden = model.menuOptions.isEmpty
     menuButton.configure(tint: palette.textTertiary)
-    let fonts = model.geometry.fonts
 
     // 头像：首字色块在下、图片在上（图片命中即盖住首字，无需回调切显隐）。
     avatarInitialLabel.text = String(model.avatarInitial.prefix(2)).uppercased()
@@ -1399,41 +1436,12 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
       )
     }
 
-    setText(displayNameLabel, model.displayName, font: fonts.displayName, color: palette.text)
-    // 元信息串：色按当前色板统一覆盖（模型侧只写语义色，换主题即变）。
-    if let attributed = model.metaAttributed {
-      let colored = NSMutableAttributedString(attributedString: attributed)
-      colored.addAttribute(
-        .foregroundColor,
-        value: palette.textSecondary,
-        range: NSRange(location: 0, length: colored.length)
-      )
-      metaLabel.attributedText = colored
-      metaLabel.isHidden = false
-    }
-    setText(ipLabel, model.ipText, font: fonts.ip, color: palette.textSecondary)
-
-    // 正文：attributed 已由测量期构建，这里零重建；「精品」前缀按主题色板补色
-    //（模型不写前缀色，否则换主题改不动）。
-    if let attributed = model.titleAttributed {
-      titleLabel.attributedText = titleAttributed(attributed, prefix: model.titlePrefix)
-      titleLabel.numberOfLines = model.titleLineLimit == 0 ? 0 : model.titleLineLimit
-      titleLabel.isHidden = false
-    }
-    if let attributed = model.abstractAttributed {
-      abstractLabel.attributedText = attributed
-      abstractLabel.numberOfLines = model.abstractLineLimit == 0 ? 0 : model.abstractLineLimit
-      abstractLabel.isHidden = false
-    }
-    if model.isCollapsible && !model.expanded {
-      showMoreLabel.text = model.showMoreText
-      showMoreLabel.font = fonts.showMore
-      showMoreLabel.textColor = palette.primary
-      showMoreLabel.isHidden = false
-    }
+    // 引用卡显隐必须先定：它决定引用帖三段文字进不进画布（见 makeRuns）。
+    configureQuote(with: model)
+    // 卡内 9 段静态文字（原 9 个 UILabel）→ 绘制项。
+    runs = makeRuns(model: model)
 
     configureMedia(with: model)
-    configureQuote(with: model)
     configureChip(with: model)
     configureActions(with: model)
   }
@@ -1532,26 +1540,12 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     }
   }
 
+  /// 引用帖：只决定卡片底的显隐。三段文字由 makeRuns 按同一判据产出（见该处）。
   private func configureQuote(with model: TiebaFeedRowModel) {
     guard model.quoteForumText != nil || model.quoteTitleText != nil || model.quoteContentText != nil else {
       return
     }
     quoteCard.isHidden = false
-    if let attributed = model.quoteForumAttributed {
-      quoteForumLabel.attributedText = attributed
-      quoteForumLabel.numberOfLines = 1
-      quoteForumLabel.isHidden = false
-    }
-    if let attributed = model.quoteTitleAttributed {
-      quoteTitleLabel.attributedText = attributed
-      quoteTitleLabel.numberOfLines = 1
-      quoteTitleLabel.isHidden = false
-    }
-    if let attributed = model.quoteContentAttributed {
-      quoteContentLabel.attributedText = attributed
-      quoteContentLabel.numberOfLines = 2
-      quoteContentLabel.isHidden = false
-    }
   }
 
   private func configureChip(with model: TiebaFeedRowModel) {
@@ -1600,14 +1594,6 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     if shouldBumpCount {
       playLikeCountBump()
     }
-  }
-
-  private func setText(_ label: UILabel, _ text: String?, font: UIFont, color: UIColor) {
-    guard let text, !text.isEmpty else { return }
-    label.text = text
-    label.font = font
-    label.textColor = color
-    label.isHidden = false
   }
 
   /// 标题串：「精品」前缀段按当前色板的 warning 补色（模型只存文案，换主题即变）。
@@ -1844,19 +1830,11 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     // 画布与 label 宿主铺满卡片、同在 (0,0)：label 的 frame（place() 写的卡片坐标）
     // 就是画布坐标，绘制时零换算。
     textCanvas.frame = cardView.bounds
-    labelHost.frame = cardView.bounds
     place(avatarContainer, plan.avatarFrame)
     avatarContainer.layer.cornerRadius = avatarContainer.bounds.width / 2
     avatarInitialLabel.frame = avatarContainer.bounds
     avatarView.frame = avatarContainer.bounds
-    place(displayNameLabel, plan.displayNameFrame)
-    place(metaLabel, plan.metaFrame)
-    place(ipLabel, plan.ipFrame)
     place(menuButton, plan.menuButtonFrame)
-    place(titleLabel, plan.titleFrame)
-    place(abstractLabel, plan.abstractFrame)
-    // 文本按文本矩形摆放；plan.showMoreFrame 是命中矩形（外扩 6pt hitSlop）。
-    place(showMoreLabel, plan.showMoreTextFrame)
 
     if let mediaFrame = cardRect(plan.mediaFrame) {
       singleMediaView.frame = mediaFrame
@@ -1881,9 +1859,6 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     stripFrames = plan.mediaItemFrames
 
     place(quoteCard, plan.quoteFrame)
-    place(quoteForumLabel, plan.quoteForumFrame)
-    place(quoteTitleLabel, plan.quoteTitleFrame)
-    place(quoteContentLabel, plan.quoteContentFrame)
     place(chipView, plan.chipFrame)
     // ⚠️ 吧头像/首字/吧名都是 chipView 的子视图，而 plan 里这三个矩形与 chipFrame
     // 同在**卡片坐标系**：直接 place 会把整组内容右移一个 chipFrame.minX，chipView
@@ -1918,18 +1893,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
       )
     }
 
-    // 静态文字一次性交给画布。frame 上面已由 place() 写好，这里只决定"画哪些"：
-    // 未显示的段由 update 按 isHidden 过滤（isHidden 就是配置代码的显示语义）。
+    // 静态文字一次性交给画布（runs 已在 configure 时按模型+色板生成）。
     // 传模型身份 + 色板：画布据此取缓存位图，命中则完全跳过光栅化。
-    textCanvas.update(
-      labels: [
-        displayNameLabel, metaLabel, ipLabel,
-        titleLabel, abstractLabel, showMoreLabel,
-        quoteForumLabel, quoteTitleLabel, quoteContentLabel,
-      ],
-      model: model,
-      palette: palette
-    )
+    textCanvas.update(runs: runs, model: model, palette: palette)
   }
 
   /// 行坐标 → 卡片坐标。
