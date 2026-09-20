@@ -69,6 +69,11 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   private var lastPushSignature: String?
   private var lastPushAt: CFTimeInterval = 0
 
+  /// iPad tab chrome 的形态记忆：当前是否在根屏，以及进二级页前侧边栏是否已被
+  /// 用户自己折起来（返回时按这个还原，不强制展开）。
+  private var tabChromeAtRoot = true
+  private var sidebarHiddenBeforePush = false
+
   private override init() {
     super.init()
   }
@@ -560,6 +565,7 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     animated: Bool
   ) {
     applyBarVisibility(shouldHideBar(in: viewController), to: navigationController)
+    syncIPadTabChrome(for: navigationController)
   }
 
   public func navigationController(
@@ -570,6 +576,7 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     // 转场落定后按**实际栈顶**再校一次：右滑中途松手（转场取消）时栈顶仍是原页，
     // willShow 已按目标页隐过栏，这里把栏还给仍在上面的那一屏。
     applyBarVisibility(shouldHideBar(in: viewController), to: navigationController)
+    syncIPadTabChrome(for: navigationController)
     // 滚动视图的跟踪关联由各宿主 VC 自己在 viewDidLayoutSubviews 里做
     // （setContentScrollView 是子 VC 的职责，容器没有替它设的 API）。
     // 转场完成即重扫（原来监听未公开的 UINavigationControllerDidShowNotification，
@@ -587,6 +594,24 @@ extension TiebaNavigator: UINavigationControllerDelegate {
   private func shouldHideBar(in viewController: UIViewController) -> Bool {
     guard let host = viewController as? TiebaRouteHostViewController else { return false }
     return (TiebaRouteTable.entry(named: host.route.name)?.chrome ?? .standard) == .hidden
+  }
+
+  /// iPad 的 tab chrome（侧边栏 + 折叠后顶部的 tab 横幅）只属于 tab 根屏：压进吧页、
+  /// 帖子页等二级页后整套收起，宽度全给内容，返回走栏内返回箭头；回到根屏再还原
+  /// （还原的是用户当时的折叠状态，不是强制展开）。手机没有侧边栏，不动。
+  private func syncIPadTabChrome(for navigationController: UINavigationController) {
+    guard let tabBar, tabBar.traitCollection.userInterfaceIdiom == .pad else { return }
+    let atRoot = navigationController.viewControllers.count <= 1
+    guard atRoot != tabChromeAtRoot else { return }
+    tabChromeAtRoot = atRoot
+    if atRoot {
+      tabBar.sidebar.isHidden = sidebarHiddenBeforePush
+      tabBar.setTabBarHidden(false, animated: false)
+    } else {
+      sidebarHiddenBeforePush = tabBar.sidebar.isHidden
+      tabBar.sidebar.isHidden = true
+      tabBar.setTabBarHidden(true, animated: false)
+    }
   }
 
   /// 立即落定栏的可见性（**含返回，不许延到转场结束**），并把 alpha 一起归零/还原。
