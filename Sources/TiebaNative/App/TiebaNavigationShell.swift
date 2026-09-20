@@ -130,7 +130,6 @@ public final class TiebaMainTabBarController: UITabBarController {
       ? .automatic
       : (tabBarMinimizeEnabled ? .onScrollDown : .never)
     guard regular else { return }
-    sidebar.preferredLayout = .tile
     // 默认展开：用户要的是"可折叠"，不是"默认折叠"。
     sidebar.isHidden = false
     if #available(iOS 27.0, *) {
@@ -271,9 +270,12 @@ public final class TiebaRouteHostViewController: UIViewController {
     self.content = content
     content.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(content)
+    // 左右让到安全区：iPad 侧边栏展开时系统把侧边栏宽度记进安全区，内容随之
+    // 右移收窄、不被压在侧边栏下面（UIKit 文档对 overlap 形态的原文要求）。
+    // 手机与 iPad 全屏左右安全区都是 0，逐位不变；上下仍贴边（内容要从栏下滚过）。
     NSLayoutConstraint.activate([
-      content.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-      content.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+      content.leadingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.leadingAnchor),
+      content.trailingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.trailingAnchor),
       content.topAnchor.constraint(equalTo: root.topAnchor),
       content.bottomAnchor.constraint(equalTo: root.bottomAnchor)
     ])
