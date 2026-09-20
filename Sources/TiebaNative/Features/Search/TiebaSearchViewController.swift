@@ -148,6 +148,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
       pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
       pill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82),
+      pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
     ])
     list.isHidden = true
     stateView.isHidden = true
@@ -176,8 +177,12 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     // 页键发布保留本页实现（reveal 需要 setPage 完成回调，driver 无该钩子）；
-    // 宽度量化仍走全仓唯一实现。
-    lastWidth = TiebaLayout.quantize(list.bounds.width)
+    // 宽度量化仍走全仓唯一实现。行宽契约 = 列表宽 − 2×horizontalInset（内缩含居中留白）。
+    let width = TiebaLayout.quantize(list.bounds.width - list.horizontalInset * 2)
+    // 宽度变化（旋转/分屏）必须按新宽度重测重推：行高按精确宽度键控，旧宽度的度量
+    // 会被宽度闸门拒绝、整列表退回兜底高。
+    if width != lastWidth, lastWidth > 0 { needsPublish = true }
+    lastWidth = width
     // 转场未结束时只记账（见 viewDidAppear）：transitionCoordinator 非 nil 期间
     // 布局每次变化都会走这里，就地 publish 会把测量压进推入动画。
     if lastWidth > 0, transitionCoordinator == nil, needsPublish {

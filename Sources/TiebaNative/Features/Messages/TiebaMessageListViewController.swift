@@ -59,6 +59,7 @@ final class TiebaMessageListViewController: UIViewController {
       pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
       pill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82),
+      pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
     ])
     load()
   }
@@ -66,7 +67,8 @@ final class TiebaMessageListViewController: UIViewController {
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     applyInsets()
-    driver.updateWidth(list.bounds.width)
+    // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
+    driver.updateWidth(list.bounds.width - list.horizontalInset * 2)
   }
 
   override func viewSafeAreaInsetsDidChange() {
@@ -238,7 +240,8 @@ final class TiebaMessageListViewController: UIViewController {
     guard !driver.pageKey.isEmpty, !visibleItems.isEmpty, list.bounds.width > 0 else { return }
     let live = TiebaKindRowPages.shared.liveRowCount(
       pageKey: driver.pageKey,
-      containerWidth: TiebaLayout.quantize(list.bounds.width)
+      // 宽度口径 = 行宽契约（与 driver 推页同一式；内缩含内容列居中留白）。
+      containerWidth: TiebaLayout.quantize(list.bounds.width - list.horizontalInset * 2)
     )
     guard live < visibleItems.count else { return }
     publish(fresh: false)

@@ -162,10 +162,21 @@
 	<false/>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleDefault</string>
+	<!-- iPad 走全方向（含横屏）；iPhone 保持竖屏：手机横屏下本 App 的单列列表
+	     只剩 ~360pt 高，且与既有交互（右滑返回、浮动胶囊）都没为此调过。
+	     ~ipad 键缺省时 iPad 会退回全方向，这里显式声明，避免 App Store 的
+	     iPad 多任务校验（UIRequiresFullScreen=false 时要求四向齐全）失败。 -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIUserInterfaceStyle</key>
 	<string>Automatic</string>
