@@ -74,8 +74,13 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     applyInsets()
-    lastWidth = TiebaLayout.quantize(list.bounds.width)
-    if needsPublish, lastWidth > 0 {
+    // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
+    let width = TiebaLayout.quantize(list.bounds.width - list.horizontalInset * 2)
+    // 宽度变化（旋转/分屏）必须按新宽度重测重推：行高按精确宽度键控，旧宽度的度量
+    // 会被宽度闸门拒绝、整列表退回兜底高。
+    let resized = width != lastWidth && lastWidth > 0
+    lastWidth = width
+    if width > 0, resized || needsPublish {
       needsPublish = false
       publish(fresh: false)
     }
@@ -115,6 +120,7 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
       // 让开浮动胶囊（safeAreaBottom − 56），否则提示条会压在底栏上叠成一大块。
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -pillBottomInset),
       pill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82),
+      pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
     ])
   }
 

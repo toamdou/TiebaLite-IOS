@@ -10,7 +10,8 @@
 import UIKit
 
 /// 布局输入：单一 section；行左缘 = horizontalInset、宽 = itemWidth、高 = heights[i]；
-/// 页头在内容顶、页脚在最后一行之后，两者都随内容滚走（不吸附）。
+/// 页头在内容顶、页脚在最后一行之后，两者都随内容滚走（不吸附）且**与行同列**
+///（左缘 = horizontalInset、宽 = itemWidth；页头高按同一宽度测量）。
 struct TiebaRowListLayoutInput: Equatable {
   var heights: [CGFloat] = []
   var itemWidth: CGFloat = 0
@@ -106,9 +107,9 @@ final class TiebaRowListLayout: UICollectionViewLayout {
         with: IndexPath(item: 0, section: 0)
       )
       header.frame = CGRect(
-        x: 0,
+        x: input.horizontalInset,
         y: 0,
-        width: input.containerWidth,
+        width: input.itemWidth,
         height: input.headerHeight
       )
       headerAttributes = header
@@ -119,9 +120,9 @@ final class TiebaRowListLayout: UICollectionViewLayout {
         with: IndexPath(item: 0, section: 0)
       )
       footer.frame = CGRect(
-        x: 0,
+        x: input.horizontalInset,
         y: itemsBottom,
-        width: input.containerWidth,
+        width: input.itemWidth,
         height: input.footerHeight
       )
       footerAttributes = footer

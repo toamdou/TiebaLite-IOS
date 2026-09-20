@@ -101,10 +101,15 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     list.onScroll = { [weak self] scrollView in self?.handleScroll(scrollView) }
     floatingBar.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(floatingBar)
+    // 手机维持屏宽 72%（iPhone 375 → 270）；iPad 上 72% 会到 737pt（四个 184pt
+    // 空槽），故 72% 降为高位、再由浮动条上限收窄（360 ≈ 四个图标按钮的舒适宽）。
+    let barWidth = floatingBar.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.72)
+    barWidth.priority = .defaultHigh
     NSLayoutConstraint.activate([
       floatingBar.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       floatingBar.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -2),
-      floatingBar.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.72),
+      barWidth,
+      floatingBar.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
       floatingBar.heightAnchor.constraint(equalToConstant: 54),
     ])
     floatingBar.onAction = { [weak self] action in self?.handleBarAction(action) }

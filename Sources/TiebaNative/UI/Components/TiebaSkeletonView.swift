@@ -120,9 +120,13 @@ final class TiebaSkeletonCellView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    // thread 媒体块高 = round(内容列宽 × 0.75)（真实单图 4:3 钳制呈现）
+    // thread 媒体块高 = min(round(内容列宽 × 0.75), 单图上限)：上限取自
+    // TiebaFeedRowLayout.singleMediaHeight 的同一常量，否则首帧灰块比真图高、落地跳一次。
     if let mediaBlock, let mediaHeightConstraint, let container = mediaBlock.superview {
-      let height = (max(container.bounds.width, 0) * 0.75).rounded()
+      let height = min(
+        (max(container.bounds.width, 0) * 0.75).rounded(),
+        TiebaFeedRowLayout.mediaHeightMax
+      )
       if abs(mediaHeightConstraint.constant - height) > 0.5 {
         mediaHeightConstraint.constant = height
       }

@@ -100,6 +100,7 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
       pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
       pill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82),
+      pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
     ])
     list.isHidden = true
     stateView.isHidden = true
@@ -108,7 +109,8 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
-    driver.updateWidth(list.bounds.width)
+    // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
+    driver.updateWidth(list.bounds.width - list.horizontalInset * 2)
     list.contentInsetBottom = view.safeAreaInsets.bottom + 16
   }
 

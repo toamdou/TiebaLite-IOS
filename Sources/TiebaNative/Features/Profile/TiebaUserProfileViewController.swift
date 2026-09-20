@@ -77,6 +77,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
       skeletonView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
       pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+      pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
     ])
     reload()
   }
