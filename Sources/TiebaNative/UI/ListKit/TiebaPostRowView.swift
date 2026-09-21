@@ -696,8 +696,6 @@ final class TiebaPostRowView: UIView {
   private var assignedText: NSAttributedString?
 
   private let cardView = UIView()
-  /// 扁平形态（帖子页）楼层的顶部分隔发际线：卡片形态恒隐藏。
-  private let dividerView = UIView()
   private var avatarView: TiebaForumAvatarView?
   private let titleLabel = UILabel()
   private let nameLabel = UILabel()
@@ -779,15 +777,6 @@ final class TiebaPostRowView: UIView {
     cardView.layer.borderWidth =
       model.style == .flat ? 0 : 1 / max(traitCollection.displayScale, 1)
     cardView.layer.borderColor = model.palette.borderCard.cgColor
-    // 第 0 行是主贴（含工具栏），顶上不再画线；其余行画在自身顶部 = 与上一行之间那条。
-    dividerView.isHidden = model.style != .flat || model.index <= 0
-    dividerView.backgroundColor = model.palette.separator
-    dividerView.frame = CGRect(
-      x: plan.cardFrame.minX,
-      y: 0,
-      width: plan.cardFrame.width,
-      height: 1 / max(traitCollection.displayScale, 1)
-    )
 
     avatarControl.frame = plan.avatarFrame
     titleLabel.isHidden = plan.titleFrame == nil
@@ -911,7 +900,6 @@ final class TiebaPostRowView: UIView {
       toolbarView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     }
     toolbarView.layer.borderColor = palette.borderCard.cgColor
-    dividerView.backgroundColor = palette.separator
     toolbarReplyLabel.textColor = palette.text
     seeLzButton.tintColor = palette.primary
     sortButton.tintColor = palette.primary
@@ -952,8 +940,6 @@ final class TiebaPostRowView: UIView {
 
   private func buildSubviews() {
     addSubview(cardView)
-    addSubview(dividerView)
-    dividerView.isHidden = true
     // 主贴卡标题（卡顶第一块，见 TiebaPostRowPlan 的标题块）：行高/行数/截断都在
     // 段落样式里（makeAttributed），这里只管行数与颜色（颜色现取色板，与占位卡同款）。
     titleLabel.numberOfLines = TiebaPostRowLayout.titleLineLimit
