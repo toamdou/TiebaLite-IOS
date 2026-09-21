@@ -419,7 +419,7 @@ enum TiebaChrome {
   }
 
   /// 底边边缘效果一律显式关掉（用户 2026-09-14 报"底栏区域带模糊"要删；底栏是
-  /// 悬浮药丸玻璃，内容从它下面穿过就是系统原生观感）。
+  /// 悬浮药丸玻璃，内容从它下面穿过就是系统原生观感）。iOS 26 特有；17 无此层，跳过。
   ///
   /// effect 的 `hidden` 默认 false = 系统 automatic，所以要写才关得掉。判据用
   /// **effect 自身状态**而不是"写过没写过"的记账：这样即使它被 UIKit 重建复位，
@@ -435,17 +435,22 @@ enum TiebaChrome {
     var changed = false
     screen.forEachSubviewRecursively { view in
       guard let scroll = view as? UIScrollView else { return }
-      if hideEdgeEffect(scroll.bottomEdgeEffect) { changed = true }
+      if hideEdgeEffect(scroll) { changed = true }
     }
     return changed
   }
 
-  /// 幂等隐藏一个边缘效果（目标状态只有一个：hidden）。
+  /// 幂等隐藏一个滚动视图的底边边缘效果（目标状态只有一个：hidden）。
+  /// iOS 26 才有 UIScrollEdgeEffect；17 上根本没有这层模糊，直接返回 false（什么都没改）。
   @discardableResult
-  private static func hideEdgeEffect(_ effect: UIScrollEdgeEffect) -> Bool {
-    guard !effect.isHidden else { return false }
-    effect.isHidden = true
-    return true
+  private static func hideEdgeEffect(_ scroll: UIScrollView) -> Bool {
+    if #available(iOS 26.0, *) {
+      let effect = scroll.bottomEdgeEffect
+      guard !effect.isHidden else { return false }
+      effect.isHidden = true
+      return true
+    }
+    return false
   }
 
   @discardableResult

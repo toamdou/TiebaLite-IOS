@@ -1070,15 +1070,18 @@ final class TiebaThreadFloatingBar: UIView {
     return button
   }
 
-  /// 系统液态玻璃（.clear：JS 侧 glassEffectStyle="clear" 同材质；.regular 会厚
-  /// 一层、胶囊显大）。部署底线 iOS 26：UIGlassEffect 恒可用，无低版本分档。
+  /// 系统材质（.clear：JS 侧 glassEffectStyle="clear" 同材质；.regular 会厚
+  /// 一层、胶囊显大）。iOS 26 = 液态玻璃；17 退回经典超薄材质模糊（无 tint 可挂）。
   private static func makeEffect() -> UIVisualEffect {
-    let effect = UIGlassEffect(style: .clear)
-    effect.tintColor = UIColor { traits in
-      traits.userInterfaceStyle == .dark
-        ? UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.15)
-        : UIColor(white: 1, alpha: 0.15)
+    if #available(iOS 26.0, *) {
+      let effect = UIGlassEffect(style: .clear)
+      effect.tintColor = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+          ? UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.15)
+          : UIColor(white: 1, alpha: 0.15)
+      }
+      return effect
     }
-    return effect
+    return UIBlurEffect(style: .systemUltraThinMaterial)
   }
 }

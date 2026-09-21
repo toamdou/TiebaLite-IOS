@@ -19,12 +19,12 @@ swift_library(
     deps = ["//Sources/TiebaNative:TiebaNative"],
 )
 
-# App icon is an Xcode 26 Icon Composer document (see app_icons in //:App) and is passed as a
-# loose *.icon bundle: rules_apple rejects mixing *.icon with *.appiconset in the same target,
-# and Images.xcassets/AppIcon.appiconset is an empty placeholder, so it is excluded here.
+# 图标按部署底线二选一（rules_apple/actool.bzl 的硬规矩）：≥26 用 Icon Composer 的
+# *.icon 包，<26 必须用 *.appiconset（.icon 在低底线**不产出任何图标条目**，
+# CFBundleIconName 会悬空）。两者不许混用，底线 17 这条分支走 AppIcon.appiconset。
 filegroup(
     name = "app_icon",
-    srcs = glob(["expo.icon/**"]),
+    srcs = glob(["Images.xcassets/AppIcon.appiconset/**"]),
 )
 
 filegroup(

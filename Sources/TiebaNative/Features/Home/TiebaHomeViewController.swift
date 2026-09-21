@@ -169,7 +169,8 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     ])
 
     // 搜索入口：玻璃胶囊按钮，放大镜 + 占位文字左对齐铺满剩余宽度。
-    var search = UIButton.Configuration.glass()
+    // iOS 26 玻璃；17 退回经典 gray（其余属性逐项不变）。
+    var search: UIButton.Configuration = if #available(iOS 26.0, *) { .glass() } else { .gray() }
     search.image = UIImage(systemName: "magnifyingglass")
     search.title = "搜吧、搜贴、搜人"
     search.baseForegroundColor = .secondaryLabel
@@ -186,8 +187,8 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     }, for: .touchUpInside)
 
     for button in [signButton, sortButton] {
-      // 原 JS = clear 玻璃圆钮（部署底线 iOS 26，.glass() 恒可用）。
-      var config = UIButton.Configuration.glass()
+      // 原 JS = clear 玻璃圆钮：iOS 26 玻璃；17 退回经典 gray（圆钮/尺寸不变）。
+      var config: UIButton.Configuration = if #available(iOS 26.0, *) { .glass() } else { .gray() }
       config.cornerStyle = .capsule
       button.configuration = config
       button.translatesAutoresizingMaskIntoConstraints = false

@@ -1034,9 +1034,13 @@ final class TiebaPhotoBrowserActionController {
             self.releaseWhenIdle()
             switch result {
             case .success:
-              // 旧查看器 hapticForScene('action-success')。无 view 初始化已标待废弃
-              // （UIFeedbackGenerator.h:21）：改挂 pill（控制器持有、必在窗口内），档位/时序不变。
-              UINotificationFeedbackGenerator(view: self.pill).notificationOccurred(.success)
+              // 旧查看器 hapticForScene('action-success')。iOS 17.5+ 挂 pill（无 view 的
+              // 初始化已标待废弃）；17 用经典 init()，档位/时序不变。
+              if #available(iOS 17.5, *) {
+                UINotificationFeedbackGenerator(view: self.pill).notificationOccurred(.success)
+              } else {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+              }
               self.pill.showResult(success: true, text: "保存成功")
             case .failure(let error):
               self.pill.hide()
@@ -1078,9 +1082,13 @@ final class TiebaPhotoBrowserActionController {
     guard !isSharing else { return }
     isSharing = true
     retainWhileBusy()
-    // 旧查看器 hapticForScene('press')。init(style:) 已标待废弃
-    // （UIImpactFeedbackGenerator.h:38）：改挂 pill，档位/时序不变。
-    UIImpactFeedbackGenerator(style: .light, view: pill).impactOccurred()
+    // 旧查看器 hapticForScene('press')。iOS 17.5+ 挂 pill（无 view 的 init(style:) 已标
+    // 待废弃）；17 用经典 init(style:)，档位/时序不变。
+    if #available(iOS 17.5, *) {
+      UIImpactFeedbackGenerator(style: .light, view: pill).impactOccurred()
+    } else {
+      UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
     pill.show(text: "正在准备分享…", progress: 0)
     TiebaPhotoBrowserImageLoader.data(
       item.url,
@@ -1170,8 +1178,8 @@ final class TiebaPhotoBrowserActionController {
 
 /// 旧查看器底部"保存成功"药丸：rgba(28,28,30,.88) / 圆角 18 / 白 14pt medium /
 /// 阴影 / 2.2s 自动消失。这里加一个 3pt 确定进度条（保存/下载进度），
-/// 并进行中文案（"正在保存…"/"正在准备分享…"）；底走系统液态玻璃
-/// （部署底线 iOS 26，UIGlassEffect 恒可用，不再有低版本分档）。
+/// 并进行中文案（"正在保存…"/"正在准备分享…"）；底走系统材质
+/// （iOS 26 液态玻璃 / 17 经典深色模糊，见 makeBackdropEffect）。
 final class TiebaPhotoBrowserPillView: UIView {
   private static let horizontalPadding: CGFloat = 16
   private static let verticalPadding: CGFloat = 9
@@ -1180,12 +1188,20 @@ final class TiebaPhotoBrowserPillView: UIView {
   private static let progressHeight: CGFloat = 3
   private static let cornerRadius: CGFloat = 18
 
-  /// 玻璃底（部署底线 iOS 26，恒可用）。
-  private let glassBackground: UIVisualEffectView = {
-    let effect = UIGlassEffect(style: .regular)
-    effect.tintColor = UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.55)
-    return UIVisualEffectView(effect: effect)
-  }()
+  /// 玻璃底：iOS 26 = 液态玻璃 + 深色调；17 = 经典深色材质（UIBlurEffect 无
+  /// tintColor，故直接选深色变体，白字/白图标可读性不变）。
+  private let glassBackground = UIVisualEffectView(
+    effect: TiebaPhotoBrowserPillView.makeBackdropEffect()
+  )
+
+  private static func makeBackdropEffect() -> UIVisualEffect {
+    if #available(iOS 26.0, *) {
+      let effect = UIGlassEffect(style: .regular)
+      effect.tintColor = UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.55)
+      return effect
+    }
+    return UIBlurEffect(style: .systemThinMaterialDark)
+  }
 
   private let spinner = UIActivityIndicatorView(style: .medium)
   private let iconView = UIImageView()
@@ -1688,12 +1704,15 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
   private static let bottomPadding: CGFloat = 8
   private static let minimumTopPadding: CGFloat = 30
 
-  /// 顶栏底材质：系统液态玻璃（部署底线 iOS 26，恒可用）。
+  /// 顶栏底材质：iOS 26 = 液态玻璃 + 深色调（顶栏恒深色、保证白字/白图标可读）；
+  /// 17 = 经典深色 chrome 材质（UIBlurEffect 无 tintColor，故选深色变体）。
   private static func makeBarEffect() -> UIVisualEffect {
-    let effect = UIGlassEffect(style: .regular)
-    // 顶栏恒深色（查看器黑底），玻璃带深色调保证白字/白图标可读。
-    effect.tintColor = UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.4)
-    return effect
+    if #available(iOS 26.0, *) {
+      let effect = UIGlassEffect(style: .regular)
+      effect.tintColor = UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.4)
+      return effect
+    }
+    return UIBlurEffect(style: .systemChromeMaterialDark)
   }
 
   private let blur = UIVisualEffectView(effect: TiebaPhotoBrowserChromeOverlay.makeBarEffect())
@@ -1775,8 +1794,8 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
       systemName: symbol,
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: weight)
     )
-    // 系统液态玻璃圆钮（部署底线 iOS 26，恒可用）。
-    var config = UIButton.Configuration.glass()
+    // 系统液态玻璃圆钮（iOS 26）；17 退回经典 gray（不重建玻璃观感）。
+    var config: UIButton.Configuration = if #available(iOS 26.0, *) { .glass() } else { .gray() }
     config.image = image
     config.baseForegroundColor = .white
     config.cornerStyle = .capsule

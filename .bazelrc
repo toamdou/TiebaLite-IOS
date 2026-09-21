@@ -8,7 +8,7 @@
 # --config=debug / --config=release 与其他 config 自由叠加；不写则默认 Debug。
 
 build --apple_platform_type=ios
-build --ios_minimum_os=26.0
+build --ios_minimum_os=17.0
 build --verbose_failures
 
 # 编译模式：默认 Debug（模拟器与日常调试用），--config=release 切 opt。

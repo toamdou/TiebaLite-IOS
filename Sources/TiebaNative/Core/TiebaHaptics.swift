@@ -539,8 +539,9 @@ enum TiebaHaptics {
 
   /// 反馈生成器的宿主 view：无 view 的 init 已标待废弃
   ///（UIFeedbackGenerator.h:21 / UIImpactFeedbackGenerator.h:38），替代形要求绑定
-  /// 一个 view。取前台活跃场景的 keyWindow；无窗口（后台/启动中）没有可归属的 UI
-  /// 上下文，直接不发。assumeIsolated 依据：入口全经 onMain 收束，恒在主线程。
+  /// 一个 view（iOS 17.5+）。取前台活跃场景的 keyWindow；无窗口（后台/启动中）没有可
+  /// 归属的 UI 上下文，直接不发（<17.5 的经典 init 不需要 host，但门控照旧）。
+  /// assumeIsolated 依据：入口全经 onMain 收束，恒在主线程。
   private static var feedbackHostView: UIView? {
     MainActor.assumeIsolated {
       UIApplication.shared.connectedScenes
@@ -560,7 +561,13 @@ enum TiebaHaptics {
     default: feedbackStyle = .light
     }
     guard let host = feedbackHostView else { return }
-    let generator = UIImpactFeedbackGenerator(style: feedbackStyle, view: host)
+    // iOS 17.5+ 绑 view；17.0–17.4 用经典 init(style:)（同样先 prepare 再触发）。
+    let generator: UIImpactFeedbackGenerator
+    if #available(iOS 17.5, *) {
+      generator = UIImpactFeedbackGenerator(style: feedbackStyle, view: host)
+    } else {
+      generator = UIImpactFeedbackGenerator(style: feedbackStyle)
+    }
     generator.prepare()
     generator.impactOccurred()
   }
@@ -574,14 +581,26 @@ enum TiebaHaptics {
     default: return // 未知通知类型不反馈（TS 枚举约束内不会发生）
     }
     guard let host = feedbackHostView else { return }
-    let generator = UINotificationFeedbackGenerator(view: host)
+    // iOS 17.5+ 绑 view；17.0–17.4 用经典 init()（同样先 prepare 再触发）。
+    let generator: UINotificationFeedbackGenerator
+    if #available(iOS 17.5, *) {
+      generator = UINotificationFeedbackGenerator(view: host)
+    } else {
+      generator = UINotificationFeedbackGenerator()
+    }
     generator.prepare()
     generator.notificationOccurred(feedbackType)
   }
 
   private static func performSelection() {
     guard let host = feedbackHostView else { return }
-    let generator = UISelectionFeedbackGenerator(view: host)
+    // iOS 17.5+ 绑 view；17.0–17.4 用经典 init()（同样先 prepare 再触发）。
+    let generator: UISelectionFeedbackGenerator
+    if #available(iOS 17.5, *) {
+      generator = UISelectionFeedbackGenerator(view: host)
+    } else {
+      generator = UISelectionFeedbackGenerator()
+    }
     generator.prepare()
     generator.selectionChanged()
   }

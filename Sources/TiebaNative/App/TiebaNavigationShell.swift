@@ -122,6 +122,9 @@ public final class TiebaMainTabBarController: UITabBarController {
   /// （折叠按钮与快捷手势由系统提供，本仓不自造一套）。**底栏保留**：侧边栏
   /// 收起时它就是常规底栏，展开时两者是同一组 tab 的两种呈现，选中态由系统同步。
   func configureSidebar() {
+    // iOS 17 没有 tabs 模型、没有 mode、没有侧边栏：底栏就是系统默认形态，
+    // 这里什么都不用配（iPad 在 17 上也是底栏，与手机同形）。
+    guard #available(iOS 18.0, *) else { return }
     let regular = traitCollection.userInterfaceIdiom == .pad
       && traitCollection.horizontalSizeClass == .regular
     // 只在真要换形态时写 mode：赋值会重建 tab 模型，把侧边栏里刚拖好的顺序
@@ -130,9 +133,12 @@ public final class TiebaMainTabBarController: UITabBarController {
     let wanted: UITabBarController.Mode = regular ? .tabSidebar : .tabBar
     if mode != wanted { mode = wanted }
     // 下滑收纳属于底栏：iPad 侧边栏形态下没有这回事，交给系统。
-    tabBarMinimizeBehavior = regular
-      ? .automatic
-      : (tabBarMinimizeEnabled ? .onScrollDown : .never)
+    // iOS 26 之前没有这个能力，17 上该开关不生效（底栏常驻）。
+    if #available(iOS 26.0, *) {
+      tabBarMinimizeBehavior = regular
+        ? .automatic
+        : (tabBarMinimizeEnabled ? .onScrollDown : .never)
+    }
     guard regular else { return }
     // 只落一次默认展开。之后 sidebar.isHidden 归用户（系统折叠按钮）与
     // TiebaNavigator 的进二级页收起管——这里再写会把用户的折叠顶回去。
@@ -162,6 +168,7 @@ public final class TiebaMainTabBarController: UITabBarController {
     didSet {
       guard oldValue != tabBarMinimizeEnabled else { return }
       guard traitCollection.horizontalSizeClass != .regular else { return }
+      guard #available(iOS 26.0, *) else { return }
       tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
     }
   }
@@ -180,6 +187,7 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
     return true
   }
 
+  @available(iOS 18.0, *)
   public func tabBarController(
     _ tabBarController: UITabBarController,
     shouldSelectTab tab: UITab
@@ -191,6 +199,7 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
   /// 侧边栏编辑保存后落盘：顺序的唯一权威是根分组的实际排列（displayOrder 是
   /// 排好序的完整列表；displayOrderIdentifiers 只是输入侧的自定义记录，可能为空）。
   /// 冷启动由 TiebaNavigator.orderedForDisplay 读回归位。
+  @available(iOS 18.0, *)
   public func tabBarController(
     _ tabBarController: UITabBarController,
     displayOrderDidChangeFor group: UITabGroup
@@ -206,24 +215,41 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
   /// ⚠️ 序号按**标识**取（标识就是路由表里的 tab 名），不按屏幕上的位置：侧边栏
   /// 编辑保存后视觉顺序会变，而路由表索引（tabIndex / 角标 / 重按回调）必须恒定，
   /// 否则"消息"会被当成别的 tab。
+  @available(iOS 18.0, *)
   private func index(of tab: UITab) -> Int {
     TiebaRouteTable.tabNames.firstIndex(of: tab.identifier) ?? -1
   }
 
   /// 回调给的是 tab 承载的 VC——本仓每个 tab 挂一条自己的导航栈，
-  /// 所以要沿 parent 链上溯到那个栈。
+  /// 所以要沿 parent 链上溯到那个栈，再按**标识**取路由索引。
   private func index(of viewController: UIViewController) -> Int {
     var cursor: UIViewController? = viewController
     while let current = cursor {
-      if let tab = flatten(tabs).first(where: { ($0.viewController as? UIViewController) === current }) {
-        return index(of: tab)
+      if let name = tabIdentifier(of: current),
+        let index = TiebaRouteTable.tabNames.firstIndex(of: name)
+      {
+        return index
       }
       cursor = current.parent
     }
     return -1
   }
 
+  /// 承载该 VC 的底栏项的标识（= 路由表里的 tab 名）。iOS 18 取自 UITab；
+  /// 17 取自底栏项上的 accessibilityIdentifier（顺序被保存的顺序重排过，
+  /// 只有标识能可靠回归，位置不行）。
+  private func tabIdentifier(of viewController: UIViewController) -> String? {
+    if #available(iOS 18.0, *) {
+      return flatten(tabs).first {
+        ($0.viewController as? UIViewController) === viewController
+      }?.identifier
+    }
+    return viewControllers?.first { $0 === viewController }?
+      .tabBarItem.accessibilityIdentifier
+  }
+
   /// 展开根分组：屏幕上的 tab 项来自子 tab，序号以扁平顺序为准。
+  @available(iOS 18.0, *)
   private func flatten(_ list: [UITab]) -> [UITab] {
     list.flatMap { ($0 as? UITabGroup)?.children ?? [$0] }
   }
@@ -237,8 +263,7 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
     if index == state.lastTabIndex, now - state.lastTabAt < 0.05 { return }
     state.lastTabIndex = index
     state.lastTabAt = now
-    let selected = selectedTab == nil ? -1 : indexOfSelected
-    if index == selected {
+    if index == indexOfSelected {
       // 重按已选中 tab（回顶/刷新由各 tab 根屏的 tabReselected 受理），档位
       // 对齐原 JS handleTabReselect 的 'press'。
       TiebaSceneHaptics.fire("press")
@@ -250,9 +275,49 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
     }
   }
 
-  private var indexOfSelected: Int {
-    guard let sel = selectedTab else { return -1 }
-    return index(of: sel)
+  private var indexOfSelected: Int { selectedRouteIndex }
+
+  /// 当前选中 tab 的**路由索引**（与屏幕位置无关）。iOS 18 走 UITab 标识；
+  /// 17 走底栏项上的标识，取不到才回落位置。
+  var selectedRouteIndex: Int {
+    if #available(iOS 18.0, *) {
+      guard let sel = selectedTab else { return -1 }
+      return index(of: sel)
+    }
+    guard let vc = selectedViewController else { return -1 }
+    guard let name = vc.tabBarItem.accessibilityIdentifier,
+      let index = TiebaRouteTable.tabNames.firstIndex(of: name)
+    else { return selectedIndex }
+    return index
+  }
+
+  /// 程序化切 tab（深链 / 切 tab 路由）：按标识定位，不按屏幕位置。
+  func selectRoute(_ routeIndex: Int) {
+    guard routeIndex >= 0, routeIndex < TiebaRouteTable.tabNames.count else { return }
+    let name = TiebaRouteTable.tabNames[routeIndex]
+    if #available(iOS 18.0, *) {
+      if let tab = tabs.first(where: { $0.identifier == name }) { selectedTab = tab }
+    } else {
+      let position = viewControllers?.firstIndex {
+        $0.tabBarItem.accessibilityIdentifier == name
+      }
+      selectedIndex = position ?? routeIndex
+    }
+  }
+
+  /// 写底栏角标（按路由索引）。⚠️ 只写 tab 项自己的 badgeValue，不碰
+  /// bar 级 appearance：任何 appearance 写入都会让 UIKit 退出自动 Liquid Glass
+  /// 渲染管线，底栏退化成旧磨砂（v34 起的既有结论）。
+  func setBadge(_ text: String?, routeIndex: Int) {
+    guard routeIndex >= 0, routeIndex < TiebaRouteTable.tabNames.count else { return }
+    let name = TiebaRouteTable.tabNames[routeIndex]
+    if #available(iOS 18.0, *) {
+      tabs.first { $0.identifier == name }?.badgeValue = text
+    } else {
+      viewControllers?.first {
+        $0.tabBarItem.accessibilityIdentifier == name
+      }?.tabBarItem.badgeValue = text
+    }
   }
 
   /// 在视图树里找"主滚动视图"，返回面积最大的那个。
