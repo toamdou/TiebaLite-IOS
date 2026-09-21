@@ -390,6 +390,10 @@ enum TiebaThreadAPI {
     info.zanNum = Int(raw.agreeNum)
     info.hasAgree = raw.agree.hasAgree_p == 1
     info.createTimeMs = TiebaViewModelMapper.toMillis(Double(raw.createTime))
+    // 服务端实测从不回 first_post_id(40)（连查四帖皆缺）⇒ 这里实际总是兜底成**帖子
+    // id**。帖级写接口的 post_id 要的是首楼 post id，把帖子 id 发过去服务端按"楼层
+    // 不存在"回错（"点收藏永远失败"）。消费方必须先认这个兜底值：
+    // 见 TiebaThreadViewController.firstFloorPostId。
     info.firstPostId = String(raw.firstPostID != 0 ? raw.firstPostID : raw.id)
     return info
   }

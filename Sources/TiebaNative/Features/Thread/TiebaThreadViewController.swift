@@ -525,17 +525,28 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
 
   // MARK: - 动作
 
+  /// 帖级写操作的 post_id（帖级点赞 / 收藏的锚点）：**必须是首楼的 post id，不能是
+  /// 帖子 id**。`thread.firstPostId` 不可信——服务端不回 ThreadInfo.first_post_id(40)
+  /// 时映射层会拿**帖子 id** 顶上（TiebaThreadAPI 的兜底），拿它当 post_id 发出去
+  /// 服务端按"该楼层不存在"回错，表现就是"点收藏永远失败"（旧 JS/Kotlin 传的都是
+  /// 首楼 id：旧页 firstPostId = pinnedMainPost.id，Kotlin = 可见楼 id）。
+  private var firstFloorPostId: String {
+    if let id = mainPost?.id, !id.isEmpty { return id }
+    let fromThread = thread?.firstPostId ?? ""
+    // 与帖子 id 相同即可断定那是映射层的兜底值，不是真首楼 id。
+    return (fromThread.isEmpty || fromThread == threadId) ? "" : fromThread
+  }
+
   /// 收藏/取消（乐观态在服务端成功后再翻转；图片快照写收藏页缩略图 KV）。
   private func toggleCollect() {
     guard requireLogin(), runOnce("collect") else { return }
     let wasCollected = isCollected
-    let firstPostId = thread?.firstPostId ?? mainPost?.id ?? threadId
     Task { @MainActor in
       defer { finishOnce("collect") }
       do {
         try await TiebaThreadActionAPI.setStore(
           threadId: threadId,
-          firstPostId: firstPostId,
+          firstPostId: firstFloorPostId,
           store: !wasCollected
         )
         if wasCollected {
@@ -634,7 +645,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
         TiebaSceneHaptics.fire("like")
         try await TiebaThreadActionAPI.setAgree(
           threadId: threadId,
-          postId: thread.firstPostId.isEmpty ? threadId : thread.firstPostId,
+          // 拿不到首楼 id 时退回帖子 id（旧 JS 同判据 `firstPostId || id`；帖子页
+          // 几乎恒有 mainPost，这条只是兜底）。
+          postId: firstFloorPostId.isEmpty ? threadId : firstFloorPostId,
           agree: next,
           objType: 3
         )
