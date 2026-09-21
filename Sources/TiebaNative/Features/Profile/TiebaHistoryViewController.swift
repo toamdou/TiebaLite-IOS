@@ -86,7 +86,8 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     applyInsets()
-    driver.updateWidth(list.bounds.width)
+    // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
+    driver.updateWidth(list.bounds.width - list.horizontalInset * 2)
   }
 
   override func viewSafeAreaInsetsDidChange() {
@@ -157,9 +158,12 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
         guard seq == self.loadSeq else { return }
         self.entries = items
         self.isLoadingRows = false
-        self.skeletonView.isHidden = true
-        self.stateView.isHidden = true
-        self.list.isHidden = false
+        // 行还没测量落地时不让位（同吧页/楼中楼）：数据到手 ≠ 行能画。
+        self.list.revealWhenReady { [weak self] in
+          self?.skeletonView.isHidden = true
+          self?.stateView.isHidden = true
+          self?.list.isHidden = false
+        }
         self.list.endRefreshing()
         self.rebuildRows()
         self.publish(fresh: true)

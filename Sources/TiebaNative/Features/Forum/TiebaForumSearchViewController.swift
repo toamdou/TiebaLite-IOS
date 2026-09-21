@@ -100,6 +100,7 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
       pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
       pill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82),
+      pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
     ])
     list.isHidden = true
     stateView.isHidden = true
@@ -108,7 +109,8 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
-    driver.updateWidth(list.bounds.width)
+    // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
+    driver.updateWidth(list.bounds.width - list.horizontalInset * 2)
     list.contentInsetBottom = view.safeAreaInsets.bottom + 16
   }
 
@@ -230,8 +232,11 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
   }
 
   private func showList() {
-    stateView.isHidden = true
-    list.isHidden = false
+    // 数据到手 ≠ 行能画：整页测量在后台跑，提前让位就是状态视图先消失、正文空白。
+    list.revealWhenReady { [weak self] in
+      self?.stateView.isHidden = true
+      self?.list.isHidden = false
+    }
   }
 
   private func runSearch(reset: Bool) {

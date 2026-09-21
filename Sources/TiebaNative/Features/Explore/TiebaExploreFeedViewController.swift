@@ -93,6 +93,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
       pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
       pill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82),
+      pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
     ])
     if let seed = seedItems() {
       items = seed
@@ -107,7 +108,8 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     applyInsets()
-    driver.updateWidth(list.bounds.width)
+    // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
+    driver.updateWidth(list.bounds.width - list.horizontalInset * 2)
   }
 
   override func viewSafeAreaInsetsDidChange() {
@@ -198,8 +200,11 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   }
 
   private func showList() {
-    stateView.isHidden = true
-    list.isHidden = false
+    // 数据到手 ≠ 行能画：整页测量在后台跑，提前让位就是状态视图先消失、正文空白。
+    list.revealWhenReady { [weak self] in
+      self?.stateView.isHidden = true
+      self?.list.isHidden = false
+    }
   }
 
   // MARK: - 数据

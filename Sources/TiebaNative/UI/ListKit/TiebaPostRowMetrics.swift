@@ -1079,7 +1079,11 @@ struct TiebaPostRowPlan {
     // ── 视频 ──
     if let video = inputs.video {
       flushGap()
-      let height = contentW / CGFloat(max(video.aspect, 0.01))
+      // 竖版视频按宽高比在宽列上能到上千 pt 高：上限同单图（520），横版 16:9 远在其下。
+      let height = min(
+        contentW / CGFloat(max(video.aspect, 0.01)),
+        TiebaPostRowLayout.singleImageMaxHeight
+      )
       videoFrame = CGRect(x: contentX, y: y, width: contentW, height: max(height, 1))
       y += max(height, 1)
       gap = TiebaPostRowLayout.mediaGap

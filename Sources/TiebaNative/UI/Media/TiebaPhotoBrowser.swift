@@ -968,7 +968,7 @@ final class TiebaPhotoBrowserActionController {
   private var selfRetain: TiebaPhotoBrowserActionController?
 
   /// 把胶囊挂到宿主 view：底部居中，位置对齐旧查看器
-  /// bottom = max(insets.bottom,16)+96（相对屏幕底），最大宽 82%。
+  /// bottom = max(insets.bottom,16)+96（相对屏幕底），最大宽 min(宿主 82%, 浮动条上限)。
   func attach(to host: UIView) {
     pillHost = host
     pill.translatesAutoresizingMaskIntoConstraints = false
@@ -979,6 +979,7 @@ final class TiebaPhotoBrowserActionController {
       pill.centerXAnchor.constraint(equalTo: host.centerXAnchor),
       bottom,
       pill.widthAnchor.constraint(lessThanOrEqualTo: host.widthAnchor, multiplier: 0.82),
+      pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
       pill.widthAnchor.constraint(greaterThanOrEqualToConstant: 112),
     ])
     updatePillBottomInset(host.safeAreaInsets.bottom)
@@ -1419,6 +1420,8 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
   private var wantsLongFit = false
   private var longFitApplied = false
   private var isApplyingLongFit = false
+  /// 上次长图 fit 对应的容器尺寸（框架在尺寸变化时把缩放回位，长图要按新宽重做）
+  private var longFitBoundsSize: CGSize = .zero
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -1585,6 +1588,12 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
 
   override func layoutSubviews() {
     super.layoutSubviews()
+    // 旋转 / 分屏改宽后容器尺寸变了：框架把缩放回位到 fit，长图要按新宽重做 fit-width，
+    // 否则会退回长边铺满（1024pt 宽的页面上长图缩成一条）。
+    if bounds.size != longFitBoundsSize {
+      longFitBoundsSize = bounds.size
+      longFitApplied = false
+    }
     if wantsLongFit && !longFitApplied {
       applyLongImageFitIfNeeded()
     }

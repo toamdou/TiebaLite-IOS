@@ -120,9 +120,13 @@ final class TiebaSkeletonCellView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    // thread 媒体块高 = round(内容列宽 × 0.75)（真实单图 4:3 钳制呈现）
+    // thread 媒体块高 = min(round(内容列宽 × 0.75), 单图上限)：上限取自
+    // TiebaFeedRowLayout.singleMediaHeight 的同一常量，否则首帧灰块比真图高、落地跳一次。
     if let mediaBlock, let mediaHeightConstraint, let container = mediaBlock.superview {
-      let height = (max(container.bounds.width, 0) * 0.75).rounded()
+      let height = min(
+        (max(container.bounds.width, 0) * 0.75).rounded(),
+        TiebaFeedRowLayout.mediaHeightMax
+      )
       if abs(mediaHeightConstraint.constant - height) > 0.5 {
         mediaHeightConstraint.constant = height
       }
@@ -535,13 +539,29 @@ final class TiebaSkeletonList: UIView {
   // MARK: 组装
 
   private func applyInsets() {
+    // 左右用居中列内缩：骨架挂在全屏列表顶部，而真实行在 700pt 居中列里；两者
+    // 不一起收窄的话，帖子页的 Hero 目标卡（骨架 headerView）会按全宽配对，
+    // 表现为"卡片先放大到全屏、数据落地再闪回列内"。
+    let leading = TiebaLayout.columnInset(for: bounds.width, minimum: contentInsets.left)
+    let trailing = TiebaLayout.columnInset(for: bounds.width, minimum: contentInsets.right)
     stack.directionalLayoutMargins = NSDirectionalEdgeInsets(
       top: contentInsets.top,
-      leading: contentInsets.left,
+      leading: leading,
       bottom: contentInsets.bottom,
-      trailing: contentInsets.right
+      trailing: trailing
     )
   }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    // 宽度变化（旋转 / iPad 分屏）要重算列内缩。
+    if bounds.width != lastLaidOutWidth {
+      lastLaidOutWidth = bounds.width
+      applyInsets()
+    }
+  }
+
+  private var lastLaidOutWidth: CGFloat = 0
 
   private func rebuild() {
     isPulsing = false

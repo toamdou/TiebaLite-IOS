@@ -433,7 +433,27 @@ public final class TiebaKindListContentView: UIView {
   /// 没有它时这条路是**静默留白**——行内容查不到就不配置、cell 保持清空态，
   /// 用户看到的就是"列表突然一片空白"（机制见 TiebaRowPagePins）。
   var onPageDataMissing: (() -> Void)?
+  /// 让位请求：行还没落地就挂起（列表保持隐藏），等 `setPage` 落地再执行。
+  /// 页记录是后台测量的产物——**数据到手 ≠ 行能画**，提前让位就是页头/页脚先画出来、
+  /// 正文空白（吧页吧名片、楼中楼"只显示没有更多了"都是它）。各页 showList 一律走这里。
+  func revealWhenReady(_ reveal: @escaping () -> Void) {
+    guard hasRows else {
+      pendingReveal = reveal
+      return
+    }
+    pendingReveal = nil
+    reveal()
+  }
+  /// 当前页是否已有可画的行（页记录已落地且行数 > 0）。
+  private var hasRows: Bool { itemCount > 0 }
+  private var pendingReveal: (() -> Void)?
 
+  /// 页记录落地 → 补上被推迟的让位。
+  private func flushPendingReveal() {
+    guard hasRows, let reveal = pendingReveal else { return }
+    pendingReveal = nil
+    reveal()
+  }
   /// 自愈通知节流：一屏几十行同时发现缺页只通知一次；反复失败则退避（见
   /// TiebaAdaptiveThrottle），离屏时直接按最大间隔合并。
   private var pageMissingThrottle = TiebaAdaptiveThrottle()
@@ -466,13 +486,20 @@ public final class TiebaKindListContentView: UIView {
   /// 批次边界 = 首个布局趟的 willDisplay 走完，见 endEntranceBatch）。
   public var entranceAnimationEnabled: Bool = true
 
-  /// 行左右内缩（= RN contentContainerStyle.paddingHorizontal）。
-  public var horizontalInset: CGFloat = 0 {
-    didSet {
-      guard horizontalInset != oldValue else { return }
+  /// 行左右内缩（= RN contentContainerStyle.paddingHorizontal）。声明值只是**下限**：
+  /// 容器宽超出 TiebaLayout.maxContentWidth 时多出的宽度平分到左右、整列居中；读回值即
+  /// 生效值（行宽契约 = 列表宽 − 2×本值，host 在布局趟读到的必须是新列宽）。
+  public var horizontalInset: CGFloat {
+    get { TiebaLayout.columnInset(for: bounds.width, minimum: declaredHorizontalInset) }
+    set {
+      guard newValue != declaredHorizontalInset else { return }
+      declaredHorizontalInset = newValue
       collectionView.collectionViewLayout.invalidateLayout()
     }
   }
+
+  /// 内缩下限（调用方声明值；生效值见 horizontalInset 的 getter）。
+  private var declaredHorizontalInset: CGFloat = 0
 
   /// 行间距（ItemSeparatorComponent 的原生等价：加在非末行高度里）。
   public var separatorHeight: CGFloat = 0 {
@@ -564,6 +591,7 @@ public final class TiebaKindListContentView: UIView {
     if isSamePage, count == itemCount {
       refreshGeometry()
       reconfigureVisibleItems()
+      flushPendingReveal()
       return
     }
     reachEndArmed = true
@@ -590,6 +618,7 @@ public final class TiebaKindListContentView: UIView {
       refreshGeometry()
     }
     setNeedsLayout()
+    flushPendingReveal()
   }
 
   /// 按当前几何失效布局。行高/行数变化都走这里：布局是拉取式的（TiebaRowListLayout），
@@ -935,8 +964,9 @@ public final class TiebaKindListContentView: UIView {
 
   // MARK: 尺寸
 
-  /// 单行宽 = TiebaLayout.quantize(集合视图宽 - 2×horizontalInset)；调用方推页时
-  /// 的 containerWidth 必须按同一式算（各度量族的宽度闸门靠它命中）。
+  /// 单行宽 = TiebaLayout.quantize(集合视图宽 − 2×horizontalInset)；内缩已含居中留白，
+  /// 故等价于 min(宽 − 2×声明内缩, maxContentWidth)。调用方推页时的 containerWidth 必须
+  /// 按**同一式**算（= 列表宽 − 2×horizontalInset；各度量族的宽度闸门靠它命中）。
   private var itemWidth: CGFloat {
     TiebaLayout.quantize(max(collectionView.bounds.width - horizontalInset * 2, 0))
   }
@@ -1044,8 +1074,9 @@ public final class TiebaKindListContentView: UIView {
 
   private var hasHeader: Bool { headerContentView != nil }
 
-  /// 页头项高 = 页头自适应高（按列表全宽；顶部内白由 contentInset.top 承担）。0 = 不挂页头。
-  /// 缓存按宽度键控：宽度变化（旋转/分屏）时由 layoutSubviews 的 invalidate 重算。
+  /// 页头项高 = 页头在**内容列宽**下的自适应高（顶部内白由 contentInset.top 承担）。
+  /// 页头与行共用同一列（左缘 = horizontalInset、宽 = itemWidth），量多少就画多少；
+  /// 0 = 不挂页头。缓存按宽度键控：宽度变化（旋转/分屏）时由 layoutSubviews 的 invalidate 重算。
   private func headerTotalHeight(width: CGFloat) -> CGFloat {
     guard let headerContentView else { return 0 }
     if let cache = headerHeightCache, cache.width == width {
@@ -1124,7 +1155,8 @@ public final class TiebaKindListContentView: UIView {
     input.horizontalInset = horizontalInset
     input.containerWidth = containerWidth
     // 页头在内容顶（随内容滚走，不吸附）；内白由滚动视图 contentInset.top 承担。
-    input.headerHeight = headerTotalHeight(width: containerWidth)
+    // 页头按内容列宽测量（与 TiebaRowListLayout 落帧的宽同源），画的宽度就是量的宽度。
+    input.headerHeight = headerTotalHeight(width: width)
     input.footerHeight = TiebaKindFooterView.height(for: footerState)
     return input
   }

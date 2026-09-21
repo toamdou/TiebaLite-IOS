@@ -59,6 +59,7 @@ final class TiebaMessageListViewController: UIViewController {
       pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
       pill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82),
+      pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
     ])
     load()
   }
@@ -66,7 +67,8 @@ final class TiebaMessageListViewController: UIViewController {
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     applyInsets()
-    driver.updateWidth(list.bounds.width)
+    // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
+    driver.updateWidth(list.bounds.width - list.horizontalInset * 2)
   }
 
   override func viewSafeAreaInsetsDidChange() {
@@ -238,7 +240,8 @@ final class TiebaMessageListViewController: UIViewController {
     guard !driver.pageKey.isEmpty, !visibleItems.isEmpty, list.bounds.width > 0 else { return }
     let live = TiebaKindRowPages.shared.liveRowCount(
       pageKey: driver.pageKey,
-      containerWidth: TiebaLayout.quantize(list.bounds.width)
+      // 宽度口径 = 行宽契约（与 driver 推页同一式；内缩含内容列居中留白）。
+      containerWidth: TiebaLayout.quantize(list.bounds.width - list.horizontalInset * 2)
     )
     guard live < visibleItems.count else { return }
     publish(fresh: false)
@@ -273,8 +276,11 @@ final class TiebaMessageListViewController: UIViewController {
   }
 
   private func showList() {
-    stateView.isHidden = true
-    list.isHidden = false
+    // 数据到手 ≠ 行能画：整页测量在后台跑，提前让位就是状态视图先消失、正文空白。
+    list.revealWhenReady { [weak self] in
+      self?.stateView.isHidden = true
+      self?.list.isHidden = false
+    }
   }
 
   // MARK: - 事件

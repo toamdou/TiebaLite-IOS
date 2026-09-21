@@ -46,6 +46,8 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
       subview.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(subview)
     }
+    let undoFullWidth = undoBar.widthAnchor.constraint(equalTo: view.widthAnchor, constant: -24)
+    undoFullWidth.priority = .defaultHigh
     NSLayoutConstraint.activate([
       list.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       list.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -61,9 +63,14 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
       skeletonView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
       pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-      undoBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-      undoBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+      pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
+      // 撤销条：手机 = 屏宽 − 24（351pt，左右各 12）；iPad 由浮动上限收窄，
+      // 否则"已取消收藏 / 撤销"会被摊到屏宽两端。
+      undoBar.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+      undoBar.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 12),
+      undoBar.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
       undoBar.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+      undoFullWidth,
     ])
     reload()
   }
@@ -81,7 +88,8 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
     list.contentInsetBottom = view.safeAreaInsets.bottom + 24
     // 骨架与首行同起点（原 skeletonWrap paddingTop Spacing.sm）
     skeletonView.contentInsets = UIEdgeInsets(top: view.safeAreaInsets.top + 8, left: 0, bottom: 24, right: 0)
-    driver.updateWidth(list.bounds.width)
+    // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
+    driver.updateWidth(list.bounds.width - list.horizontalInset * 2)
   }
 
   // MARK: - 数据
@@ -111,9 +119,12 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
         rows = decorate(result.rows)
         page = 1
         hasMore = result.hasMore
-        stateView.isHidden = true
-        skeletonView.isHidden = true
-        list.isHidden = false
+        // 数据到手 ≠ 行能画：整页测量在后台跑，提前让位就是状态视图先消失、正文空白。
+        list.revealWhenReady { [weak self] in
+          self?.stateView.isHidden = true
+          self?.skeletonView.isHidden = true
+          self?.list.isHidden = false
+        }
         list.footerState = hasMore ? .more : .none
         publish(fresh: true)
         ensureAvatars()

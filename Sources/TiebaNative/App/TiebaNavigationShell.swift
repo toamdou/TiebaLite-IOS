@@ -1,22 +1,21 @@
 import UIKit
 
-// 原生导航壳：UINavigationController（根栈）+ UITabBarController（底栏）+
+// 原生导航壳：窗口根一条只做容器的 UINavigationController +
+// TiebaMainTabBarController（手机 = 底部 tab 栏，iPad = 可折叠侧边栏）+
 // 每屏一个宿主 VC。替掉 react-native-screens 的原生栈与 expo-router 的文件路由。
 //
-// 结构（与原 expo-router 的 _layout 完全同构，行为不变）：
-//   window.rootViewController = TiebaRootNavigationController
-//     └── [0] TiebaMainTabBarController          根栈最底屏（导航栏隐藏）
-//               ├── Tab0 关注    → TiebaRouteHostViewController(index)
-//               ├── Tab1 动态    → TiebaRouteHostViewController(explore)
-//               ├── Tab2 消息    → TiebaRouteHostViewController(notifications)
-//               └── Tab3 我的    → TiebaRouteHostViewController(profile)
-//     └── [n] TiebaRouteHostViewController(…)   压栈页，天然盖住底栏
+// 结构：
+//   window.rootViewController = TiebaRootNavigationController  ← 容器栈，自身不压栈
+//     └── [0] TiebaMainTabBarController
+//               ├── Tab0 关注 → TiebaRootNavigationController → 宿主(index)
+//               ├── Tab1 动态 → 同上 → …(explore)
+//               ├── Tab2 消息 → 同上 → …(notifications)
+//               └── Tab3 我的 → 同上 → …(profile)
 //
-// ⚠️ 只有**一个**栈：原 expo-router 的根 Stack 里 (tabs) 与 forum/[name]、
-// thread/[id] 是兄弟屏，所以进帖/进吧会盖住底栏。四个 tab 各自没有内部栈
-// （(tabs)/ 下只有四个屏，没有嵌套 _layout）。因此每个 tab 根屏必须挂在
-// 同一个 UITabBarController 下，压栈统一走根栈——不要给每个 tab 套一层
-// UINavigationController，那会变成"底栏常驻"的另一种交互。
+// ⚠️ 每个 tab 一条**自己的**导航栈（不再是"全 App 一条根栈、压栈页盖住底栏"）：
+// iPad 侧边栏形态下内容区只占侧边栏右侧，压栈页若盖住侧边栏就等于把导航入口
+// 一起盖掉。分栈后 push 只换内容区。代价是切 tab 不再共享堆栈——这是 iPad 的
+// 常规交互。外层容器栈恒定只有一个 VC，仅为保住 statusBarStyle 链路与顶栏扫描。
 
 /// 主题与状态栏配置：跟随应用内主题，而非系统外观。
 /// @unchecked Sendable：UIColor 事实上不可变；这个标记只是让"主线程 hop 里读
@@ -88,8 +87,18 @@ public final class TiebaMainTabBarController: UITabBarController {
     super.viewDidLoad()
     delegate = self
     applyTheme(theme)
+    // 分屏 / Slide Over 改宽度不会走 viewWillTransition，尺寸类别要单独观察。
+    registerForTraitChanges([UITraitHorizontalSizeClass.self]) { (self: Self, _: UITraitCollection) in
+      self.configureSidebar()
+    }
     // 底栏不发按压手势：底栏项的视图层级不是公开的 UIControl 保证（栏内 hitTest
     // 找不到 UIControl ⇒ 手势永远不发触觉）。底栏触觉由下面的 delegate 回调发。
+  }
+
+  public override func viewWillAppear(_ animated: Bool) {
+    super.viewWillAppear(animated)
+    // 入窗口后 trait 才准（viewDidLoad 时尺寸类别还是默认值），首次形态在这里落定。
+    configureSidebar()
   }
 
   func applyTheme(_ theme: TiebaChromeTheme) {
@@ -100,42 +109,123 @@ public final class TiebaMainTabBarController: UITabBarController {
     // appearance 写入都会让 UIKit 退出自动 Liquid Glass 渲染管线，底栏退化成
     // 旧磨砂（实心色带）。保持 appearance 原生态，由系统渲染真液态玻璃。
     // 只设 tintColor（选中态图标/文字的主色）。
-    // 下滑收纳 / 上滑恢复，动画由 UIKit 原生药丸收纳控制。
-    // 开关（设置→使用习惯→浏览）由原生设置页下发；关闭时 never = 底栏常驻。
-    tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
     // 深浅不在这里写：底栏控制器是 window 根 VC 的子级，窗口级 override
     // （TiebaChrome.setChromeDarkMode，应用主题 ≠ 系统外观的唯一决策点）
     // 覆盖整个窗口的 VC/视图树，bar 材质与 systemName 图标随之深浅。
+  }
+
+  /// 底栏 / 侧边栏的形态。按**设备类型**定：只有 iPad 用侧边栏，iPhone 永远是
+  /// 底栏——iPhone 横屏（Pro Max 一类）宽度也会到 regular，只按尺寸类别判会让
+  /// 手机跑起 iPad 的界面。iPad 分屏 / Slide Over 收窄到 compact 时同样退回底栏。
+  ///
+  /// iPad（regular 宽度）：`.tabSidebar`——侧边栏与顶栏两态共存，用户可折叠
+  /// （折叠按钮与快捷手势由系统提供，本仓不自造一套）。**底栏保留**：侧边栏
+  /// 收起时它就是常规底栏，展开时两者是同一组 tab 的两种呈现，选中态由系统同步。
+  func configureSidebar() {
+    let regular = traitCollection.userInterfaceIdiom == .pad
+      && traitCollection.horizontalSizeClass == .regular
+    // 只在真要换形态时写 mode：赋值会重建 tab 模型，把侧边栏里刚拖好的顺序
+    // （以及系统的自定义状态）一起打回默认——每次出现/旋转都写就是我们这边
+    // "编辑保存后顺序不变"的原因。
+    let wanted: UITabBarController.Mode = regular ? .tabSidebar : .tabBar
+    if mode != wanted { mode = wanted }
+    // 下滑收纳属于底栏：iPad 侧边栏形态下没有这回事，交给系统。
+    tabBarMinimizeBehavior = regular
+      ? .automatic
+      : (tabBarMinimizeEnabled ? .onScrollDown : .never)
+    guard regular else { return }
+    // 只落一次默认展开。之后 sidebar.isHidden 归用户（系统折叠按钮）与
+    // TiebaNavigator 的进二级页收起管——这里再写会把用户的折叠顶回去。
+    if !didApplyDefaultSidebar {
+      didApplyDefaultSidebar = true
+      sidebar.isHidden = false
+    }
+    // 不写 sidebar.preferredPlacement（iOS 27）：它只在"侧边栏与底栏互斥"的平台生效，
+    // iPadOS 两种放置都支持、头文件明说对它无效果；而它的声明在 SDK 26.5 里还没有
+    // （CI 的 Xcode 26.6），写了只会让 CI 编译不过。
+  }
+
+  private var didApplyDefaultSidebar = false
+
+  public override func viewWillTransition(
+    to size: CGSize,
+    with coordinator: UIViewControllerTransitionCoordinator
+  ) {
+    super.viewWillTransition(to: size, with: coordinator)
+    coordinator.animate { _ in } completion: { [weak self] _ in
+      MainActor.assumeIsolated { self?.configureSidebar() }
+    }
   }
 
   /// 底栏滚动收纳开关（设置→使用习惯→浏览，默认开）。
   var tabBarMinimizeEnabled: Bool = true {
     didSet {
       guard oldValue != tabBarMinimizeEnabled else { return }
+      guard traitCollection.horizontalSizeClass != .regular else { return }
       tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
     }
   }
 }
 
 extension TiebaMainTabBarController: UITabBarControllerDelegate {
-  public func tabBarController(
-    _ tabBarController: UITabBarController,
-    shouldSelect viewController: UIViewController
-  ) -> Bool {
-    handleTabSelection(viewControllers?.firstIndex(of: viewController) ?? -1)
-    return true
-  }
-
   /// iOS 18 起 UIKit 有两套「将要选中」回调：viewController 版与 UITab 版。
   /// 系统在真机上到底调哪一套（甚至是否两套都调）随版本与栏的配置方式而变，
   /// 只实现一套就可能一次都收不到 —— 「底栏点了没振动」的根因就在这（2026-09-15
   /// 用户复报）。两套都接、落到同一个处理函数，用 50ms 去重保证不双发。
   public func tabBarController(
     _ tabBarController: UITabBarController,
+    shouldSelect viewController: UIViewController
+  ) -> Bool {
+    handleTabSelection(index(of: viewController))
+    return true
+  }
+
+  public func tabBarController(
+    _ tabBarController: UITabBarController,
     shouldSelectTab tab: UITab
   ) -> Bool {
-    handleTabSelection(tab.viewController.flatMap { viewControllers?.firstIndex(of: $0) } ?? -1)
+    handleTabSelection(index(of: tab))
     return true
+  }
+
+  /// 侧边栏编辑保存后落盘：顺序的唯一权威是根分组的实际排列（displayOrder 是
+  /// 排好序的完整列表；displayOrderIdentifiers 只是输入侧的自定义记录，可能为空）。
+  /// 冷启动由 TiebaNavigator.orderedForDisplay 读回归位。
+  public func tabBarController(
+    _ tabBarController: UITabBarController,
+    displayOrderDidChangeFor group: UITabGroup
+  ) {
+    let order = group.displayOrder.map(\.identifier)
+    guard !order.isEmpty else { return }
+    TiebaNavigator.saveTabOrder(order)
+  }
+
+  /// UITab 与 UITabBarItem 两条回调都从 UITab 反查序号：tabs 一旦设置，
+  /// viewControllers 就不再是权威来源。
+  ///
+  /// ⚠️ 序号按**标识**取（标识就是路由表里的 tab 名），不按屏幕上的位置：侧边栏
+  /// 编辑保存后视觉顺序会变，而路由表索引（tabIndex / 角标 / 重按回调）必须恒定，
+  /// 否则"消息"会被当成别的 tab。
+  private func index(of tab: UITab) -> Int {
+    TiebaRouteTable.tabNames.firstIndex(of: tab.identifier) ?? -1
+  }
+
+  /// 回调给的是 tab 承载的 VC——本仓每个 tab 挂一条自己的导航栈，
+  /// 所以要沿 parent 链上溯到那个栈。
+  private func index(of viewController: UIViewController) -> Int {
+    var cursor: UIViewController? = viewController
+    while let current = cursor {
+      if let tab = flatten(tabs).first(where: { ($0.viewController as? UIViewController) === current }) {
+        return index(of: tab)
+      }
+      cursor = current.parent
+    }
+    return -1
+  }
+
+  /// 展开根分组：屏幕上的 tab 项来自子 tab，序号以扁平顺序为准。
+  private func flatten(_ list: [UITab]) -> [UITab] {
+    list.flatMap { ($0 as? UITabGroup)?.children ?? [$0] }
   }
 
   /// 底栏一次选中的全部动作（触觉 + 重按回调）。dedupWindow 内同一 tab 只处理一次：
@@ -147,16 +237,22 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
     if index == state.lastTabIndex, now - state.lastTabAt < 0.05 { return }
     state.lastTabIndex = index
     state.lastTabAt = now
-    if index == selectedIndex {
+    let selected = selectedTab == nil ? -1 : indexOfSelected
+    if index == selected {
       // 重按已选中 tab（回顶/刷新由各 tab 根屏的 tabReselected 受理），档位
       // 对齐原 JS handleTabReselect 的 'press'。
       TiebaSceneHaptics.fire("press")
       onReselect?(index)
     } else {
-      // 换 tab：档位对齐原 JS 底栏按钮的 'segment'。程序化 selectedIndex 赋值
+      // 换 tab：档位对齐原 JS 底栏按钮的 'segment'。程序化赋值 selectedTab
       // 不触发本回调，深链切 tab 不会误振。
       TiebaSceneHaptics.fire("segment")
     }
+  }
+
+  private var indexOfSelected: Int {
+    guard let sel = selectedTab else { return -1 }
+    return index(of: sel)
   }
 
   /// 在视图树里找"主滚动视图"，返回面积最大的那个。
@@ -205,9 +301,12 @@ public final class TiebaRouteHostViewController: UIViewController {
     self.content = content
     content.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(content)
+    // 左右让到安全区：iPad 侧边栏展开时系统把侧边栏宽度记进安全区，内容随之
+    // 右移收窄、不被压在侧边栏下面（UIKit 文档对 overlap 形态的原文要求）。
+    // 手机与 iPad 全屏左右安全区都是 0，逐位不变；上下仍贴边（内容要从栏下滚过）。
     NSLayoutConstraint.activate([
-      content.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-      content.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+      content.leadingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.leadingAnchor),
+      content.trailingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.trailingAnchor),
       content.topAnchor.constraint(equalTo: root.topAnchor),
       content.bottomAnchor.constraint(equalTo: root.bottomAnchor)
     ])
