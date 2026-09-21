@@ -119,9 +119,12 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
         rows = decorate(result.rows)
         page = 1
         hasMore = result.hasMore
-        stateView.isHidden = true
-        skeletonView.isHidden = true
-        list.isHidden = false
+        // 数据到手 ≠ 行能画：整页测量在后台跑，提前让位就是状态视图先消失、正文空白。
+        list.revealWhenReady { [weak self] in
+          self?.stateView.isHidden = true
+          self?.skeletonView.isHidden = true
+          self?.list.isHidden = false
+        }
         list.footerState = hasMore ? .more : .none
         publish(fresh: true)
         ensureAvatars()

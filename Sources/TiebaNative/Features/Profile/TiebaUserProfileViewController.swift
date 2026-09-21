@@ -138,9 +138,13 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
         isOwn = result.uid == TiebaBackgroundSnapshot.shared.uid
         // 回复 tab 只在本人主页存在：别人的主页被指到 replies 时回落贴子（旧页同判据）。
         if !isOwn, activeTab == "replies" { activeTab = "threads" }
-        stateView.isHidden = true
-        skeletonView.isHidden = true
-        list.isHidden = false
+        // 行还没测量落地时不让位：列表行由 loadList 另路发布，数据到手 ≠ 行能画，
+        // 这里提前让位就是页头先画出来、正文空白。
+        list.revealWhenReady { [weak self] in
+          self?.stateView.isHidden = true
+          self?.skeletonView.isHidden = true
+          self?.list.isHidden = false
+        }
         syncHeader()
         // 标题来自资料卡（路由表标题为空），到数据后让壳重刷一次。
         (parent as? TiebaRouteHostViewController)?.syncNativeScreenChrome()

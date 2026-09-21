@@ -275,8 +275,11 @@ final class TiebaBawuTeamViewController: UIViewController {
   private func showState(_ state: State) {
     switch state {
     case .content:
-      stateView.isHidden = true
-      list.isHidden = false
+      // 数据到手 ≠ 行能画：让位由列表在 setPage 落地时自己补（publish 紧随其后）。
+      list.revealWhenReady { [weak self] in
+        self?.stateView.isHidden = true
+        self?.list.isHidden = false
+      }
     case .loading:
       stateView.configuration = UIContentUnavailableConfiguration.loading()
       stateView.isHidden = false
