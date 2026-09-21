@@ -41,6 +41,8 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
   var skeletonVariant: TiebaSkeletonVariant { .row }
   /// 骨架是否走"取消卡片"形态（帖子页开，其余页保持卡片）。
   var skeletonFlat: Bool { false }
+  /// 页面底色是否改用行面色（取消卡片的页面＝是）。
+  var pageUsesRowSurface: Bool { false }
   var skeletonCount: Int { 8 }
   /// 骨架首行内白（原各页 SkeletonList paddingTop：帖子页 12 / 楼中楼 8）。
   var skeletonInsetTop: CGFloat { 8 }
@@ -161,18 +163,20 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
     )
   }
 
-  /// 页面底色 + 主题色板。楼层卡是白卡（palette.card）：页面底色必须用主题
-  /// background（JS colors.background #F2F2F7/黑）——.systemBackground 浅色下与
-  /// 卡片同白，楼层边界会糊成一片。
+  /// 页面底色 + 主题色板。卡片页底色必须用主题 background（JS colors.background
+  /// #F2F2F7/黑）——.systemBackground 浅色下与卡片同白，楼层边界会糊成一片。
+  /// 取消卡片的页面只剩裸楼层，灰底看着脏 ⇒ 那块底色改用行面色（白/深色行面）。
   func applyPalette() {
     skeletonView.isDark = TiebaNavigator.shared.chromeTheme.dark
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
     var palette = TiebaSimpleRowPalette.default
     let tint = TiebaNavigator.shared.chromeTheme.tint
     palette.base.primary = tint
     palette.base.chip = tint.withAlphaComponent(0.12)
     palette.base.onChip = tint
     list.palette = palette
+    view.backgroundColor = pageUsesRowSurface
+      ? palette.base.card
+      : TiebaNavigator.shared.chromeTheme.background
   }
 
   // MARK: - 列表事件（两页同款）
