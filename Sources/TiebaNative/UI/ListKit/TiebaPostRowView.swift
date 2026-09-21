@@ -696,6 +696,8 @@ final class TiebaPostRowView: UIView {
   private var assignedText: NSAttributedString?
 
   private let cardView = UIView()
+  /// 扁平形态（帖子页）楼层的顶部分隔发际线：卡片形态恒隐藏。
+  private let dividerView = UIView()
   private var avatarView: TiebaForumAvatarView?
   private let titleLabel = UILabel()
   private let nameLabel = UILabel()
@@ -770,11 +772,22 @@ final class TiebaPostRowView: UIView {
     // 没有它的话"返回上一级"的缩回动画就找不到目标（见 TiebaHeroTransition）。
     TiebaHeroTransition.mark(cardView, threadId: model.heroThreadId ?? "")
     cardView.frame = plan.cardFrame
-    cardView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
+    cardView.layer.cornerRadius = model.style.radius
     cardView.layer.cornerCurve = .continuous
-    cardView.backgroundColor = model.palette.card
-    cardView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
+    // 扁平形态：外壳全透明（页面底色透上来）、无描边，楼层之间靠一条发际线分层。
+    cardView.backgroundColor = model.style == .flat ? .clear : model.palette.card
+    cardView.layer.borderWidth =
+      model.style == .flat ? 0 : 1 / max(traitCollection.displayScale, 1)
     cardView.layer.borderColor = model.palette.borderCard.cgColor
+    // 第 0 行是主贴（含工具栏），顶上不再画线；其余行画在自身顶部 = 与上一行之间那条。
+    dividerView.isHidden = model.style != .flat || model.index <= 0
+    dividerView.backgroundColor = model.palette.separator
+    dividerView.frame = CGRect(
+      x: plan.cardFrame.minX,
+      y: 0,
+      width: plan.cardFrame.width,
+      height: 1 / max(traitCollection.displayScale, 1)
+    )
 
     avatarControl.frame = plan.avatarFrame
     titleLabel.isHidden = plan.titleFrame == nil
@@ -889,8 +902,16 @@ final class TiebaPostRowView: UIView {
     // 底色 = 主题 surfaceSecondary（原 JS replyToolbar 的 colors.surfaceSecondary，
     // 浅色下与页面底色同值）：只靠 hairline 描边成卡，不用 .systemFill —— 那块灰
     // 在浅色下是一整条"脏底"（用户实证）。
-    toolbarView.backgroundColor = TiebaSimpleRowPalette.default.surfaceSecondary
+    // 扁平形态（帖子页）工具栏不画壳：底色透出页面、描边归零；卡片形态维持原样。
+    if model?.style == .flat {
+      toolbarView.backgroundColor = .clear
+      toolbarView.layer.borderWidth = 0
+    } else {
+      toolbarView.backgroundColor = TiebaSimpleRowPalette.default.surfaceSecondary
+      toolbarView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
+    }
     toolbarView.layer.borderColor = palette.borderCard.cgColor
+    dividerView.backgroundColor = palette.separator
     toolbarReplyLabel.textColor = palette.text
     seeLzButton.tintColor = palette.primary
     sortButton.tintColor = palette.primary
@@ -931,6 +952,8 @@ final class TiebaPostRowView: UIView {
 
   private func buildSubviews() {
     addSubview(cardView)
+    addSubview(dividerView)
+    dividerView.isHidden = true
     // 主贴卡标题（卡顶第一块，见 TiebaPostRowPlan 的标题块）：行高/行数/截断都在
     // 段落样式里（makeAttributed），这里只管行数与颜色（颜色现取色板，与占位卡同款）。
     titleLabel.numberOfLines = TiebaPostRowLayout.titleLineLimit
@@ -1250,11 +1273,14 @@ final class TiebaPostRowView: UIView {
     seeLzButton.isHidden = false
     sortButton.isHidden = false
     toolbarView.frame = frame
-    toolbarView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
+    toolbarView.layer.cornerRadius = model.style.radius
     toolbarView.layer.cornerCurve = .continuous
     // glassCard 的 hairline 描边：浅色下工具栏底色贴近页面底色，没有描边整条看不出来。
-    toolbarView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
-    toolbarView.layer.borderColor = model.palette.borderCard.cgColor
+    // 扁平形态不画壳（底色/描边见 applyPalette），这里只管卡片形态。
+    if model.style != .flat {
+      toolbarView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
+      toolbarView.layer.borderColor = model.palette.borderCard.cgColor
+    }
     if let textFrame = plan.toolbarTextFrame {
       toolbarReplyLabel.frame = textFrame
       let reply = TiebaForumFormat.count(toolbar.replyNum)
