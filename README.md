@@ -2,12 +2,11 @@
 
 # 贴吧 Lite · TiebaLite for iOS
 
-**第三方百度贴吧 iOS 客户端** — 纯 Swift / UIKit（零 JS、零 RN）；iOS 26+ 走液态玻璃，
-**iOS 17/18 退回该系统年代的常规材质与底栏形态**（本分支 = 最低版本 17.0）
+**第三方百度贴吧 iOS 客户端** — 纯 Swift / UIKit（零 JS、零 RN）；最低 iOS 17，26+ 为液态玻璃形态、17–25 退回该系统年代的常规材质
 
 [![Build iOS Unsigned IPA](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml/badge.svg)](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml)
-![Version](https://img.shields.io/badge/version-2.0.0-208AEF)
-![Platform](https://img.shields.io/badge/platform-iOS%2016.4%2B-208AEF)
+![Version](https://img.shields.io/badge/version-2.1.1-208AEF)
+![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-208AEF)
 ![License](https://img.shields.io/badge/License-GPLv3-blue.svg)
 ![Stack](https://img.shields.io/badge/Swift%206%20%C2%B7%20UIKit-native-blue)
 
@@ -48,14 +47,14 @@
 **体验**
 
 - ✅ 深色模式（含 AMOLED 纯黑）
-- ✅ 顶栏 / 底栏与原生转场（iOS 26+ 为液态玻璃；17–25 为系统常规材质）
+- ✅ 液态玻璃顶栏 / 底栏与原生转场（iOS 26+）
 - ✅ 触感反馈
 - ✅ 图片查看器
 - ✅ 视频播放
 - ✅ 广告 / 直播内容过滤
 - ❓ 屏蔽：屏蔽词 / 屏蔽用户 / 屏蔽吧
 - ✅ 阅读字号、省流量模式、图片加载质量三档
-- ✅  App scheme 深链
+- ❓  App scheme 深链
 
 ### ❌ 未实现
 
@@ -92,9 +91,9 @@ Tools/                     占位描述文件生成、产物隐私清洗
 
 | 依赖 | 要求 |
 | --- | --- |
+| 最低 iOS | 17.0（26+ 出液态玻璃形态；17–25 出常规材质形态，见 Actions 的两种 IPA） |
 | macOS | 14+ |
 | Xcode | 26 或更高（开发环境为 Xcode 27 beta） |
-| 最低 iOS | 17.0（≥26 用 Icon Composer 图标，<26 用 AppIcon.appiconset） |
 | [Bazelisk](https://github.com/bazelbuild/bazelisk) | `brew install bazelisk`（版本由 `.bazelversion` 锁定） |
 | Apple ID | 免费个人 Apple ID 即可真机调试 |
 
@@ -129,7 +128,7 @@ bazel run //:xcodeproj && open xcodeproj.xcodeproj
 
 **两种触发方式：**
 
-1. **手动构建**：仓库页 → **Actions** → **Build iOS Unsigned IPA** → **Run workflow**（可选 Release / Debug）→ 结束后在本次运行页面的 Artifacts 下载 `TiebaLite-unsigned-*.ipa`；
+1. **手动构建**：仓库页 → **Actions** → **Build iOS Unsigned IPA** → **Run workflow**（可选 Release / Debug）→ 一次同时编译 `main` 与 `ios17` 两个分支，在本次运行页面下载两个 Artifact：`TiebaLite-<版本>.ipa`（**iOS 26+**）与 `TiebaLite-<版本>-IOS17.ipa`（**最低 iOS 17**，同一套功能）；
 2. **打 Tag 自动发 Release**：
 
 ## 📱 通过 SideStore / AltStore 安装
