@@ -73,8 +73,8 @@ private enum TiebaSkeletonMetrics {
 
 /// 单个骨架单元（对齐 Skeleton.tsx 的 SkeletonCell）。
 final class TiebaSkeletonCellView: UIView {
-  /// 取消卡片形态（帖子页）：外壳透明、无圆角无边距，与真行同尺同距。
-  private let flat: Bool
+  /// 外壳形态（与真行同一个枚举）：帖子页主贴卡 = .tinted、回复 = .flat。
+  private let style: TiebaPostRowStyle
 
   let variant: TiebaSkeletonVariant
   /// 呼吸动画宿主：每格只有这一个视图在动（整格数百个占位块一次 alpha 全变），
@@ -96,10 +96,10 @@ final class TiebaSkeletonCellView: UIView {
     placeholderColor: UIColor,
     cardColor: UIColor,
     borderColor: UIColor,
-    flat: Bool = false
+    style: TiebaPostRowStyle = .card
   ) {
     self.variant = variant
-    self.flat = flat
+    self.style = style
     self.placeholderColor = placeholderColor
     self.cardColor = cardColor
     self.borderColor = borderColor
@@ -159,10 +159,13 @@ final class TiebaSkeletonCellView: UIView {
   }
 
   /// 卡片面（背景 card + hairline 描边；layer 色随外观在 trait 变化时刷新）。
-  private func makeSurface(radius: CGFloat, flat: Bool = false) -> UIView {
+  private func makeSurface(radius: CGFloat) -> UIView {
     let view = UIView()
-    view.backgroundColor = flat ? .clear : cardColor
-    if flat { view.layer.borderWidth = 0 }
+    let shell = style != .flat
+    // 高亮外壳（帖子页主贴）用比页面深一档的灰：与真主贴卡同色。
+    view.backgroundColor = style == .tinted ? TiebaPostRowLayout.tintedShell
+      : (shell ? cardColor : .clear)
+    if !shell { view.layer.borderWidth = 0 }
     view.layer.cornerRadius = radius
     view.layer.cornerCurve = .continuous
     view.layer.borderWidth = TiebaSkeletonMetrics.hairline(for: traitCollection)
@@ -189,12 +192,13 @@ final class TiebaSkeletonCellView: UIView {
     surface.addSubview(inner)
     NSLayoutConstraint.activate([
       surface.leadingAnchor.constraint(
-        equalTo: leadingAnchor, constant: flat ? 0 : TiebaFeedRowLayout.cardMarginH),
+        equalTo: leadingAnchor, constant: style.marginH),
       surface.trailingAnchor.constraint(
-        equalTo: trailingAnchor, constant: flat ? 0 : -TiebaFeedRowLayout.cardMarginH),
-      surface.topAnchor.constraint(equalTo: topAnchor, constant: flat ? 0 : TiebaFeedRowLayout.cardMarginV),
-      surface.bottomAnchor.constraint(
-        equalTo: bottomAnchor, constant: flat ? 0 : -TiebaFeedRowLayout.cardMarginV),
+        equalTo: trailingAnchor, constant: -style.marginH),
+      surface.topAnchor.constraint(
+        equalTo: topAnchor,
+        constant: style.outerTop),
+      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -style.outerBottom),
       inner.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: TiebaFeedRowLayout.cardPaddingX),
       inner.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -TiebaFeedRowLayout.cardPaddingX),
       inner.topAnchor.constraint(equalTo: surface.topAnchor, constant: TiebaFeedRowLayout.cardPaddingTop),
@@ -302,17 +306,18 @@ final class TiebaSkeletonCellView: UIView {
   // MARK: post（PostCard 同形）
 
   private func buildPost() {
-    let surface = makeSurface(
-      radius: flat ? 0 : TiebaSkeletonMetrics.cardRadius, flat: flat)
+    let surface = makeSurface(radius: style.radius == 0 ? 0 : TiebaSkeletonMetrics.cardRadius)
     addSubview(surface)
     let inner = UIView()
     inner.translatesAutoresizingMaskIntoConstraints = false
     surface.addSubview(inner)
     NSLayoutConstraint.activate([
-      surface.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TiebaFeedRowLayout.cardMarginH),
-      surface.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -TiebaFeedRowLayout.cardMarginH),
-      surface.topAnchor.constraint(equalTo: topAnchor, constant: TiebaFeedRowLayout.cardMarginV),
-      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -TiebaFeedRowLayout.cardMarginV),
+      surface.leadingAnchor.constraint(equalTo: leadingAnchor, constant: style.marginH),
+      surface.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -style.marginH),
+      surface.topAnchor.constraint(
+        equalTo: topAnchor,
+        constant: style.outerTop),
+      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -style.outerBottom),
       inner.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: TiebaSkeletonMetrics.postPadding),
       inner.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -TiebaSkeletonMetrics.postPadding),
       inner.topAnchor.constraint(equalTo: surface.topAnchor, constant: TiebaSkeletonMetrics.postPadding),
@@ -450,8 +455,8 @@ final class TiebaSkeletonCellView: UIView {
 /// thread/post 行高自然撑出，card/row 缺省 232/88。
 final class TiebaSkeletonList: UIView {
   /// 形状（换值即重建，供搜索页按 tab 切换 thread/row）。
-  /// 取消卡片形态（帖子页）：外壳透明、无圆角、无边距，与真行同尺同距。
-  private let flat: Bool
+  /// 外壳形态（帖子页：主贴 .tinted、回复 .flat；其余页 .card）。
+  private let style: TiebaPostRowStyle
 
   var variant: TiebaSkeletonVariant = .thread { didSet { if variant != oldValue { rebuild() } } }
   /// 单元数量（默认 8）。
@@ -495,12 +500,12 @@ final class TiebaSkeletonList: UIView {
     variant: TiebaSkeletonVariant = .thread,
     count: Int = 8,
     itemHeight: CGFloat? = nil,
-    flat: Bool = false
+    style: TiebaPostRowStyle = .card
   ) {
     self.variant = variant
     self.count = count
     self.itemHeight = itemHeight
-    self.flat = flat
+    self.style = style
     super.init(frame: .zero)
     translatesAutoresizingMaskIntoConstraints = false
     // 顶对齐、自然高度：超出宿主的部分裁掉（不越过底栏/导航栏画出界）
@@ -592,6 +597,10 @@ final class TiebaSkeletonList: UIView {
     stack.spacing = variant.isNaturalHeight ? 0 : TiebaSkeletonMetrics.listGap
     let height = itemHeight ?? variant.defaultItemHeight
     for index in 0..<max(count, 0) {
+      // 主贴卡 + 平铺回复：有前置占位卡（已知主贴）时首格就是第一层回复；
+      // 没有前置卡时首格顶替主贴，得是主贴那种带壳的形态，否则落地会跳一下。
+      let cellStyle: TiebaPostRowStyle =
+        (!style.hasShell || (index == 0 && headerView == nil)) ? .card : style
       let cell = TiebaSkeletonCellView(
         variant: variant,
         // 真实信息流图文混排：骨架按半数带图交替，首格即含图片占位
@@ -599,7 +608,7 @@ final class TiebaSkeletonList: UIView {
         placeholderColor: placeholderColor,
         cardColor: cardColor,
         borderColor: borderColor,
-        flat: flat
+        style: cellStyle
       )
       if let height {
         cell.heightAnchor.constraint(equalToConstant: height).isActive = true
