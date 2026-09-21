@@ -50,9 +50,10 @@ final class TiebaThreadKnownPostView: UIView {
 
   func applyPalette(_ palette: TiebaFeedRowPalette) {
     self.palette = palette
-    // 与真行同形态（帖子页已取消卡片）：透明外壳，不做底色与描边。
-    card.backgroundColor = .clear
-    card.layer.borderColor = UIColor.clear.cgColor
+    // 与真主贴同形态：主贴是高亮卡片（回复才平铺），占位卡跟着用同一底色与描边，
+    // 首包落地换卡时才不闪。
+    card.backgroundColor = TiebaPostRowLayout.tintedShell
+    card.layer.borderColor = palette.borderCard.cgColor
     titleLabel.textColor = palette.text
     authorLabel.textColor = palette.textSecondary
     abstractLabel.textColor = palette.textSecondary
@@ -60,8 +61,6 @@ final class TiebaThreadKnownPostView: UIView {
   }
 
   // MARK: - 装配
-
-  private let flat = TiebaPostRowStyle.flat
 
   private func build() {
     // 进帖转场的目标端配对：占位卡是首帧就存在的那张卡，Hero 让它从被点的
@@ -72,9 +71,9 @@ final class TiebaThreadKnownPostView: UIView {
     if snapshot.imageURL != nil {
       TiebaHeroTransition.markImage(imageView, threadId: snapshot.id)
     }
-    card.layer.cornerRadius = 0
+    card.layer.cornerRadius = TiebaPostRowLayout.cardRadius
     card.layer.cornerCurve = .continuous
-    card.layer.borderWidth = 0
+    card.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     card.translatesAutoresizingMaskIntoConstraints = false
     addSubview(card)
 
@@ -174,9 +173,10 @@ final class TiebaThreadKnownPostView: UIView {
     }
 
     NSLayoutConstraint.activate([
-      // 左右边距与真实主贴行同值（帖子页已取消卡片 ⇒ 0）：否则换行瞬间会横向收放一次。
-      card.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 0),
-      card.trailingAnchor.constraint(equalTo: trailingAnchor, constant: 0),
+      // 左右边距与真实主贴卡同值（TiebaPostRowLayout.cardMarginH）：否则换卡瞬间
+      // 卡片会横向收放一次。
+      card.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TiebaPostRowLayout.cardMarginH),
+      card.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -TiebaPostRowLayout.cardMarginH),
       card.topAnchor.constraint(equalTo: topAnchor),
       // 底部 12 = SkeletonList 的 paddingTop（JS 两个块之间的间距）。
       card.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
