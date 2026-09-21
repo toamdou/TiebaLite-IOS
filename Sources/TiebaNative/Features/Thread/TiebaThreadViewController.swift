@@ -45,6 +45,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   override var skeletonVariant: TiebaSkeletonVariant { .post }
   /// 骨架与真行同形态：否则首屏先是卡片、数据落地方变成扁平，会跳一下。
   override var skeletonFlat: Bool { true }
+  /// 取消卡片后页面只剩裸楼层：底色随行面色（白/深色行面），楼层靠发际线分层。
+  override var pageUsesRowSurface: Bool { true }
   override var skeletonCount: Int { 5 }
   override var skeletonInsetTop: CGFloat { 12 }
   /// Toast.tsx 的 pill 停在 bottom = insets.bottom + 96。
