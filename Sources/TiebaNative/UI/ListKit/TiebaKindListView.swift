@@ -470,9 +470,7 @@ public final class TiebaKindListContentView: UIView {
   /// 容器宽超出 TiebaLayout.maxContentWidth 时多出的宽度平分到左右、整列居中；读回值即
   /// 生效值（行宽契约 = 列表宽 − 2×本值，host 在布局趟读到的必须是新列宽）。
   public var horizontalInset: CGFloat {
-    get {
-      max(declaredHorizontalInset, (bounds.width - TiebaLayout.maxContentWidth) / 2)
-    }
+    get { TiebaLayout.columnInset(for: bounds.width, minimum: declaredHorizontalInset) }
     set {
       guard newValue != declaredHorizontalInset else { return }
       declaredHorizontalInset = newValue

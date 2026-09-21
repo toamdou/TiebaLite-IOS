@@ -539,13 +539,29 @@ final class TiebaSkeletonList: UIView {
   // MARK: 组装
 
   private func applyInsets() {
+    // 左右用居中列内缩：骨架挂在全屏列表顶部，而真实行在 700pt 居中列里；两者
+    // 不一起收窄的话，帖子页的 Hero 目标卡（骨架 headerView）会按全宽配对，
+    // 表现为"卡片先放大到全屏、数据落地再闪回列内"。
+    let leading = TiebaLayout.columnInset(for: bounds.width, minimum: contentInsets.left)
+    let trailing = TiebaLayout.columnInset(for: bounds.width, minimum: contentInsets.right)
     stack.directionalLayoutMargins = NSDirectionalEdgeInsets(
       top: contentInsets.top,
-      leading: contentInsets.left,
+      leading: leading,
       bottom: contentInsets.bottom,
-      trailing: contentInsets.right
+      trailing: trailing
     )
   }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    // 宽度变化（旋转 / iPad 分屏）要重算列内缩。
+    if bounds.width != lastLaidOutWidth {
+      lastLaidOutWidth = bounds.width
+      applyInsets()
+    }
+  }
+
+  private var lastLaidOutWidth: CGFloat = 0
 
   private func rebuild() {
     isPulsing = false
