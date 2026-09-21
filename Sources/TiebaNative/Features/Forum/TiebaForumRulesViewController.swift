@@ -511,7 +511,7 @@ private final class TiebaRuleQuoteCell: UITableViewCell {
   }
 }
 
-/// 图片段（src 为空 = 原页面的「[图片]」占位；有宽高按比例，否则 180 兜底）。
+/// 图片段（src 为空 = 原页面的「[图片]」占位；有宽高按比例、高上限同单图，否则 180 兜底）。
 private final class TiebaRuleImageCell: UITableViewCell {
   static let reuseID = "TiebaRuleImageCell"
   private let ruleImageView = UIImageView()
@@ -536,6 +536,11 @@ private final class TiebaRuleImageCell: UITableViewCell {
     NSLayoutConstraint.activate([
       ruleImageView.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
       ruleImageView.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+      // 高度上限与单图同值（TiebaPostRowLayout.singleImageMaxHeight）：吧规表在 iPad
+      // 上不受内容列宽限制，一张 4:3 图能拉到上千 pt 高，一屏只放得下这一张。
+      ruleImageView.heightAnchor.constraint(
+        lessThanOrEqualToConstant: TiebaPostRowLayout.singleImageMaxHeight
+      ),
       ruleImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
       ruleImageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4),
       placeholder.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
@@ -573,6 +578,8 @@ private final class TiebaRuleImageCell: UITableViewCell {
       let ratio = ruleImageView.heightAnchor.constraint(
         equalTo: ruleImageView.widthAnchor, multiplier: height / width
       )
+      // 上限优先：自然高超过上限时本约束让位，否则与 init 里的硬上限冲突。
+      ratio.priority = .defaultHigh
       ratio.isActive = true
       aspectConstraint = ratio
     } else {

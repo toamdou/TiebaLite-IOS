@@ -51,7 +51,8 @@ final class TiebaBawuTeamViewController: UIViewController {
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     applyInsets()
-    driver.updateWidth(list.bounds.width)
+    // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
+    driver.updateWidth(list.bounds.width - list.horizontalInset * 2)
   }
 
   override func viewSafeAreaInsetsDidChange() {
@@ -274,8 +275,11 @@ final class TiebaBawuTeamViewController: UIViewController {
   private func showState(_ state: State) {
     switch state {
     case .content:
-      stateView.isHidden = true
-      list.isHidden = false
+      // 数据到手 ≠ 行能画：让位由列表在 setPage 落地时自己补（publish 紧随其后）。
+      list.revealWhenReady { [weak self] in
+        self?.stateView.isHidden = true
+        self?.list.isHidden = false
+      }
     case .loading:
       stateView.configuration = UIContentUnavailableConfiguration.loading()
       stateView.isHidden = false

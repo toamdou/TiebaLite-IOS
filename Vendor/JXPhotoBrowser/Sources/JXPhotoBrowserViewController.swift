@@ -146,6 +146,9 @@ open class JXPhotoBrowserViewController: UIViewController {
     /// 是否已滚动到初始位置（避免重复滚动）
     fileprivate var didScrollToInitial = false
     
+    /// 上一次布局的视图尺寸（旋转/分屏改宽时 itemSize 变化 → 需重新对齐当前页）
+    private var lastLayoutSize: CGSize = .zero
+    
     /// 交互手势
     private var panGesture: UIPanGestureRecognizer!
     
@@ -230,6 +233,12 @@ open class JXPhotoBrowserViewController: UIViewController {
             layout.invalidateLayout()
         }
         
+        let layoutSize = view.bounds.size
+        if layoutSize != lastLayoutSize {
+            lastLayoutSize = layoutSize
+            realignCurrentPageAfterBoundsChange()
+        }
+        
         scrollToInitialIndexIfNeeded()
         
         // 通知所有 Overlay 刷新数据（布局变化后更新位置和内容）
@@ -237,15 +246,25 @@ open class JXPhotoBrowserViewController: UIViewController {
         overlays.forEach { $0.reloadData(numberOfItems: count, pageIndex: pageIndex) }
     }
     
-    /// 是否允许自动旋转（固定为 false，不支持设备旋转）
-    open override var shouldAutorotate: Bool {
-        return false
+    /// itemSize 变化（旋转 / 分屏改宽）后按已记录的 pageIndex 重新对齐：此时
+    /// contentOffset 仍是旧页宽下的偏移（isPagingEnabled 不换算），不重新对齐
+    /// 会停在两页之间，且下次滚动把页码重算成错误值。
+    private func realignCurrentPageAfterBoundsChange() {
+        guard didScrollToInitial else { return }
+        let count = realCount
+        guard count > 0 else { return }
+        
+        collectionView.layoutIfNeeded()
+        let target = centeredVirtualIndex(for: pageIndex)
+        collectionView.scrollToItem(
+            at: IndexPath(item: target, section: 0),
+            at: scrollDirection.scrollPosition,
+            animated: false
+        )
     }
     
-    /// 支持的屏幕方向（固定为竖屏）
-    open override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        return .portrait
-    }
+    // 方向不在此处锁定：跟随宿主 App（iPhone 竖屏锁由 Info.plist 的
+    // UISupportedInterfaceOrientations 兜住，iPad 全方向时查看器随之旋转）。
     
     // MARK: - Private Methods
     
@@ -256,7 +275,8 @@ open class JXPhotoBrowserViewController: UIViewController {
             return viewSize
         }
         
-        return UIScreen.main.bounds.size
+        // 布局前退窗口尺寸：UIScreen.main 在 iPad 分屏/多场景下不是窗口尺寸（且已废弃）
+        return view.window?.bounds.size ?? .zero
     }
     
     @objc private func handlePanGesture(_ gesture: UIPanGestureRecognizer) {

@@ -19,6 +19,8 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   private let stateHeaderHost = UIView()
   private var stateHeader: TiebaForumHeaderView?
   private var stateHeaderHeight: NSLayoutConstraint?
+  /// 空态页头宽 = 内容列宽（与列表页头同列同宽，量多少画多少）。
+  private var stateHeaderWidth: NSLayoutConstraint?
 
   // FAB（原 GlassView + HdrPressable 的等价：iOS 26 起原生液态玻璃圆钮）
   private let fab = UIButton(type: .system)
@@ -88,14 +90,17 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     }
     let headerHeight = stateHeaderHost.heightAnchor.constraint(equalToConstant: 0)
     stateHeaderHeight = headerHeight
+    // 空态页头与列表里的页头同列：宿主居中且等于内容列宽（宽随布局趟改写）。
+    let headerWidth = stateHeaderHost.widthAnchor.constraint(equalToConstant: 0)
+    stateHeaderWidth = headerWidth
     NSLayoutConstraint.activate([
       list.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       list.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       list.topAnchor.constraint(equalTo: view.topAnchor),
       list.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-      stateHeaderHost.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      stateHeaderHost.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      stateHeaderHost.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       stateHeaderHost.topAnchor.constraint(equalTo: view.topAnchor),
+      headerWidth,
       headerHeight,
       stateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       stateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -108,6 +113,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       pill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
       pill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82),
+      pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
     ])
     setupFab()
     applyPreferences()
@@ -130,9 +136,14 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     applyInsets()
-    driver.updateWidth(list.bounds.width)
-    if let stateHeader, list.bounds.width > 0 {
-      let height = stateHeader.headerHeight(forWidth: view.bounds.width)
+    // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
+    let columnWidth = list.bounds.width - list.horizontalInset * 2
+    driver.updateWidth(columnWidth)
+    if let stateHeader, columnWidth > 0 {
+      if let stateHeaderWidth, abs(stateHeaderWidth.constant - columnWidth) > 0.5 {
+        stateHeaderWidth.constant = columnWidth
+      }
+      let height = stateHeader.headerHeight(forWidth: columnWidth)
       if let stateHeaderHeight, abs(stateHeaderHeight.constant - height) > 0.5 {
         stateHeaderHeight.constant = height
         view.layoutIfNeeded()
@@ -952,9 +963,13 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   }
 
   private func showList() {
-    stateView.isHidden = true
-    list.isHidden = false
-    removeStateHeader()
+    // 行还没测量落地时不让位：整页测量在后台跑，数据到手 ≠ 行能画；提前让位就是
+    // 吧名片（列表头）先画出来、下面正文一片空白（用户报的现象）。
+    list.revealWhenReady { [weak self] in
+      self?.stateView.isHidden = true
+      self?.list.isHidden = false
+      self?.removeStateHeader()
+    }
   }
 
   private func installStateHeader() {

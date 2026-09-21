@@ -6,7 +6,7 @@ import UIKit
 // 导航协调器：把类型化路由（TiebaRoute）翻译成 UIKit 的压栈/切 tab/上推，
 // 原 expo-router 的 router.push/back/replace 语义在这里。
 //
-// 状态只有一份：rootNav 的 viewControllers 就是当前导航栈，tabBar 就是底栏。
+// 状态只有一份：当前 tab 那条栈的 viewControllers 就是当前导航栈，tabBar 就是底栏。
 
 /// 底栏重复点击的**原生**受理面：tab 根屏已是原生 VC 时（不再有 JS 侧
 /// TAB_RESELECT 订阅），由壳直接回调，语义与 JS 的 tabReselect 分发一致。
@@ -37,9 +37,24 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   public static let shared = TiebaNavigator()
 
   private weak var window: UIWindow?
-  private var rootNav: TiebaRootNavigationController?
+  /// 每个 tab 一条自己的栈。iPad 侧边栏要求压栈页只占内容区、不能盖住侧边栏，
+  /// 所以压栈不再走"包住 tab 的那条根栈"。窗口根 VC 仍是一条只做容器的
+  /// TiebaRootNavigationController（不压栈），状态栏链路与栏扫描都不用改。
+  private var tabNavs: [Int: TiebaRootNavigationController] = [:]
   private var tabBar: TiebaMainTabBarController?
+  /// 四个 tab 的 UITab（**顺序 = 路由表声明顺序**，与屏幕上的排列无关）。索引一律走
+  /// 这里：侧边栏编辑会改视觉顺序，而 tabIndex / 角标 / 重按回调必须恒定。
+  private var tabItems: [UITab] = []
   private var theme: TiebaChromeTheme = .default
+
+  /// 当前选中的 tab。读 UIKit 的 selectedTab：用户点底栏/侧边栏与程序化切 tab
+  /// 都写这同一个属性，不必再自己记一份。
+  private var currentTabIndex: Int {
+    guard let sel = tabBar?.selectedTab else { return 0 }
+    return tabItems.firstIndex { $0 === sel } ?? 0
+  }
+
+  private var currentNav: TiebaRootNavigationController? { tabNavs[currentTabIndex] }
 
   /// 当前主题（宿主 VC 画底色要用，保证转场首帧不闪白）。
   var chromeTheme: TiebaChromeTheme { theme }
@@ -56,6 +71,11 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 当前 pending 的「去重」标记：防止同一路由被连点两次压两屏。
   private var lastPushSignature: String?
   private var lastPushAt: CFTimeInterval = 0
+
+  /// iPad tab chrome 的形态记忆：当前是否在根屏，以及进二级页前侧边栏是否已被
+  /// 用户自己折起来（返回时按这个还原，不强制展开）。
+  private var tabChromeAtRoot = true
+  private var sidebarHiddenBeforePush = false
 
   private override init() {
     super.init()
@@ -82,26 +102,56 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     }
     tabBar = tab
 
-    var tabVCS: [UIViewController] = []
+    // 四个 tab 各挂一条自己的导航栈。用 iOS 18 起的 UITab 描述（tabs 一旦设置，
+    // viewControllers 就不再驱动界面），才能拿到 mode = .tabSidebar 的侧边栏形态。
+    var items: [UITab] = []
     for (idx, route) in TiebaRouteTable.tabRoots.enumerated() {
       let host = makeHost(route: route, eager: false)
       tabRootHosts[idx] = host
-      host.tabBarItem = Self.makeTabBarItem(index: idx)
-      tabVCS.append(host)
+      let nav = TiebaRootNavigationController(rootViewController: host)
+      nav.delegate = self
+      nav.setNavigationBarHidden(true, animated: false)
+      // Hero 默认关闭，只在"点卡片进帖"那一跳临时开（见 armHero）。
+      // ⚠️ 开启会把现有 delegate 存进 previousNavigationDelegate 并转发 willShow/didShow，
+      // 而本仓顶栏系统靠 didShow 驱动 ⇒ 必须先设本仓 delegate 再开 Hero（本行之上已设）。
+      nav.hero.navigationAnimationType = .auto
+      tabNavs[idx] = nav
+      let spec = Self.tabSpec(index: idx)
+      let item = UITab(
+        title: spec.title,
+        image: UIImage(systemName: spec.normal),
+        identifier: TiebaRouteTable.tabNames[idx]
+      ) { _ in nav }
+      // 选中态实心变体是原 UITabBarItem 时代的既有观感，不能丢；但 `selectedImage`
+      // 的**声明**要 26.6+ 的 SDK 才有（CI 是 SDK 26.5，直接写编译不过），运行时
+      // 26.1+ 已支持 ⇒ 按 KVC 落值，缺这个键就跳过。
+      if #available(iOS 26.1, *), item.responds(to: NSSelectorFromString("setSelectedImage:")) {
+        item.setValue(UIImage(systemName: spec.selected), forKey: "selectedImage")
+      }
+      // 根 tab 的 automatic placement 解析成 .default（"可增可删"）——侧边栏 Edit
+      // 因此允许拖动却落不下来（用户实测"拖完保存顺序不变"）。.movable = 可移不可删，
+      // 正好是本 App 要的：四个 tab 是固定功能，只该排序。
+      item.preferredPlacement = .movable
+      items.append(item)
     }
-    tab.setViewControllers(tabVCS, animated: false)
+    tabItems = items
+    // 顺序按上次拖好的标识列表摆放：UIKit 自己的持久化存在系统库里、我们读不到也不可控，
+    // 所以顺序的唯一权威是本仓存的这份（见 saveTabOrder / displayOrderDidChangeFor）。
+    tab.tabs = Self.orderedForDisplay(items)
+    // ⚠️ 不要再试图设 allowsReordering：探针实测根级扁平 tab 的 `parent` 在
+    // 赋值后、willAppear、didAppear 三个时刻都是 nil（UIKit 的根分组不对外暴露，
+    // UITabSidebarItemRequest 也只给 tab/action），拿不到 UITabGroup 就没这个开关。
+    // 根 tab 的"可重排"由 preferredPlacement 决定（见上），顺序落盘见下方 saveTabOrder。
+    // 给系统侧的自定义状态一个稳定标识，别落到"系统默认"上（同一 App 只有一个
+    // tab bar controller，但显式声明后系统那侧的持久化范围才是确定的）。
+    tab.customizationIdentifier = "tieba-main-tabs"
+    tab.configureSidebar()
     tab.applyTheme(theme)
 
-    let nav = TiebaRootNavigationController(rootViewController: tab)
-    nav.delegate = self
-    nav.setNavigationBarHidden(true, animated: false)
-    // Hero 默认关闭，只在"点卡片进帖"那一跳临时开（见 armHero）。
-    // ⚠️ 开启会把现有 delegate 存进 previousNavigationDelegate 并转发 willShow/didShow，
-    // 而本仓顶栏系统靠 didShow 驱动 ⇒ 必须先设本仓 delegate 再开 Hero（本行之上已设）。
-    nav.hero.navigationAnimationType = .auto
-    rootNav = nav
-    window.rootViewController = nav
-    return nav
+    let shell = TiebaRootNavigationController(rootViewController: tab)
+    shell.setNavigationBarHidden(true, animated: false)
+    window.rootViewController = shell
+    return shell
   }
 
   /// RJ 侧下发主题（跟随应用内主题，不是系统外观）。
@@ -110,8 +160,10 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     tabBar?.applyTheme(theme)
     // 栏按钮色用 navTint 而不是 tint：默认主题下底栏选中是主色、返回箭头是
     // colors.text，两者本来就不是一个颜色（原 headerTint 的语义）。
-    rootNav?.navigationBar.tintColor = theme.navTint
-    rootNav?.view.backgroundColor = theme.background
+    for nav in tabNavs.values {
+      nav.navigationBar.tintColor = theme.navTint
+      nav.view.backgroundColor = theme.background
+    }
     // 已建好的宿主底色也要跟上：主题切换时在屏的页面转场首帧不该闪旧色。
     for host in liveHosts() {
       host.viewIfLoaded?.backgroundColor = theme.background
@@ -134,17 +186,17 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   }
 
   /// 底栏角标（未读数）。空串清除。
-  /// ⚠️ 只写 `tabBarItem.badgeValue`，不碰 `tabBar.standardAppearance`：任何
+  /// ⚠️ 只写 `UITab.badgeValue`，不碰 `tabBar.standardAppearance`：任何
   /// bar 级 appearance 写入都会让 UIKit 退出自动 Liquid Glass 渲染管线，
   /// 底栏退化成旧磨砂（实心色带）——v34 起的既有结论。
   public func setTabBadge(index: Int, text: String) {
-    guard let vcs = tabBar?.viewControllers, index >= 0, index < vcs.count else { return }
-    vcs[index].tabBarItem.badgeValue = text.isEmpty ? nil : text
+    guard index >= 0, index < tabItems.count else { return }
+    tabItems[index].badgeValue = text.isEmpty ? nil : text
   }
 
   /// 四个 tab 的图标/标签（与 NativeTabs.Trigger 的声明一致：systemImage 的
   /// 未选中/选中变体、10pt 半粗标签）。
-  private static func makeTabBarItem(index: Int) -> UITabBarItem {
+  private static func tabSpec(index: Int) -> (normal: String, selected: String, title: String) {
     let spec: (normal: String, selected: String, title: String)
     switch index {
     case 0: spec = ("house", "house.fill", "关注")
@@ -152,13 +204,35 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     case 2: spec = ("bell", "bell.fill", "消息")
     default: spec = ("person", "person.fill", "我的")
     }
-    let item = UITabBarItem(
-      title: spec.title,
-      image: UIImage(systemName: spec.normal),
-      selectedImage: UIImage(systemName: spec.selected)
-    )
-    item.accessibilityIdentifier = TiebaRouteTable.tabNames[index]
-    return item
+    return spec
+  }
+
+  /// 侧边栏编辑保存下来的 tab 顺序（Tab 标识以逗号相连）。空 = 还没改过，用声明顺序。
+  private static func savedTabOrder() -> [String] {
+    let raw = TiebaPreferences.string("tabOrder", default: "")
+    guard !raw.isEmpty else { return [] }
+    let known = Set(TiebaRouteTable.tabNames)
+    // 只认当前仍存在的 tab：版本升级删掉某个 tab 后，旧顺序里的死键不能进列表。
+    return raw.split(separator: ",").map(String.init).filter { known.contains($0) }
+  }
+
+  /// 按存下的顺序摆放：没记录的 tab 保持声明顺序跟在后面（新增 tab 不会被挤掉）。
+  private static func orderedForDisplay(_ items: [UITab]) -> [UITab] {
+    let saved = savedTabOrder()
+    guard !saved.isEmpty else { return items }
+    var rest = items
+    var ordered: [UITab] = []
+    for identifier in saved {
+      guard let index = rest.firstIndex(where: { $0.identifier == identifier }) else { continue }
+      ordered.append(rest.remove(at: index))
+    }
+    return ordered + rest
+  }
+
+  /// 编辑保存时落盘（UITabBarControllerDelegate 回调里调）。
+  static func saveTabOrder(_ identifiers: [String]) {
+    guard !identifiers.isEmpty else { return }
+    TiebaPreferences.set("tabOrder", string: identifiers.joined(separator: ","))
   }
 
   // MARK: - 指令
@@ -193,18 +267,18 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 拍快照），明显慢于系统原生（用户实测"进吧/进设置过渡很卡"）。**返回一律系统原生**：
   /// 转场结束即关（见 didShow），所以 pop 不会走 Hero。
   private func armHero(for route: TiebaRoute) {
-    guard let rootNav else { return }
+    guard let nav = currentNav else { return }
     MainActor.assumeIsolated {
       var fromCard = false
       if case .thread(let id, _, _, let fromFavorites) = route, !fromFavorites {
         fromCard = TiebaThreadSnapshots.peek(id: id) != nil
       }
-      rootNav.hero.isEnabled = fromCard
+      nav.hero.isEnabled = fromCard
     }
   }
 
   private func pushRoute(_ route: TiebaRoute, mode: TiebaNavigationMode) {
-    guard let rootNav else { return }
+    guard let nav = currentNav else { return }
     // 连点去重：同一路由 450ms 内只认一次（原 RN 侧靠 Pressable 的按压态挡，
     // 原生栏按钮没有那层，快速双击会压出两屏同样内容）。
     let sig = route.signature
@@ -222,16 +296,16 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     case .push:
       switch mode {
       case .replace:
-        var stack = rootNav.viewControllers
+        var stack = nav.viewControllers
         guard !stack.isEmpty else { return }
         stack[stack.count - 1] = host
-        rootNav.setViewControllers(stack, animated: true)
+        nav.setViewControllers(stack, animated: true)
         pruneHosts()
       case .root:
-        rootNav.setViewControllers([rootNav.viewControllers[0], host], animated: true)
+        nav.setViewControllers([nav.viewControllers[0], host], animated: true)
         pruneHosts()
       case .push:
-        rootNav.pushViewController(host, animated: true)
+        nav.pushViewController(host, animated: true)
       }
     case .sheet(let detents, let grabber, let cornerRadius):
       // 表单要自带导航栏才能显示标题与 headerRight（登录页有"登录帮助"按钮、
@@ -257,7 +331,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
         // 表单内的滑动不该把表单拖下去（登录页有可滚动内容）。
         sheet.prefersScrollingExpandsWhenScrolledToEdge = true
       }
-      let presenter = rootNav.topViewController ?? rootNav
+      let presenter = nav.topViewController ?? nav
       // 表单深浅不单独写：presented 不继承 presenter 的 override，但**继承窗口**
       // ——窗口级 override（TiebaChrome.setChromeDarkMode）明确覆盖该窗口内的
       // 所有 presentation（UIView.h: set on UIWindow "also affects presentations
@@ -269,14 +343,14 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 返回上一屏（栈深 > 1）。返回 false = 已在栈底（调用方决定是否切 tab）。
   @discardableResult
   public func goBack() -> Bool {
-    guard let rootNav else { return false }
-    if rootNav.presentedViewController != nil {
-      rootNav.dismiss(animated: true)
+    guard let nav = currentNav else { return false }
+    if nav.presentedViewController != nil {
+      nav.dismiss(animated: true)
       pruneHosts()
       return true
     }
-    if rootNav.viewControllers.count > 1 {
-      rootNav.popViewController(animated: true)
+    if nav.viewControllers.count > 1 {
+      nav.popViewController(animated: true)
       pruneHosts()
       return true
     }
@@ -285,48 +359,41 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
 
   /// 回到栈底（双击底栏 tab / 双击顶栏回顶时用）。
   public func popToRoot() {
-    guard let rootNav else { return }
-    if rootNav.presentedViewController != nil {
-      rootNav.dismiss(animated: true)
+    guard let nav = currentNav else { return }
+    if nav.presentedViewController != nil {
+      nav.dismiss(animated: true)
       return
     }
-    guard rootNav.viewControllers.count > 1 else { return }
+    guard nav.viewControllers.count > 1 else { return }
     // popToRootViewController 的 [UIViewController]? 是 non-Sendable：就算 discard，
     // 结果仍要从主 actor 方法"返回"到非隔离上下文，Swift 6.4 依旧判 RegionIsolation。
-    // 改经 @unchecked Sendable 的 self 读 rootNav（同一对象），在 assumeIsolated 内
+    // 改经 @unchecked Sendable 的 self 读当前栈（同一对象），在 assumeIsolated 内
     // 调用并就地丢弃结果——同 actor 调用，不产生跨域结果。
     MainActor.assumeIsolated {
-      _ = self.rootNav?.popToRootViewController(animated: true)
+      _ = self.currentNav?.popToRootViewController(animated: true)
       self.pruneHosts()
     }
   }
 
   /// 关掉当前上推的表单（登录页 / 更多）。
   public func dismissPresented(animated: Bool) {
-    rootNav?.presentedViewController?.dismiss(animated: animated)
+    currentNav?.presentedViewController?.dismiss(animated: animated)
     pruneHosts()
   }
 
   /// 能否返回（router.canGoBack）。
   public var canGoBack: Bool {
-    guard let rootNav else { return false }
-    if rootNav.presentedViewController != nil { return true }
-    return rootNav.viewControllers.count > 1
+    guard let nav = currentNav else { return false }
+    if nav.presentedViewController != nil { return true }
+    return nav.viewControllers.count > 1
   }
 
   public func selectTab(_ index: Int) {
-    guard let tabBar, let vcs = tabBar.viewControllers, index >= 0, index < vcs.count else { return }
-    // 切 tab 前先收敛栈：从"动态"里进过帖子页再点"关注"，应该回到根屏而不是
-    // 停在帖子页（expo-router 的 NativeTabs 同样是这个行为）。
-    if let rootNav, rootNav.viewControllers.count > 1 {
-      // 同 popToRoot：结果在 assumeIsolated 内就地丢弃，不经非隔离上下文返回。
-      MainActor.assumeIsolated {
-        _ = self.rootNav?.popToRootViewController(animated: false)
-        self.pruneHosts()
-      }
-    }
-    // 改 selectedIndex 就是切 tab 的全部动作；didSelect 那边已无事件要分发。
-    tabBar.selectedIndex = index
+    guard let tabBar, index >= 0, index < tabItems.count else { return }
+    // 每个 tab 一条自己的栈 ⇒ 切 tab 只换选中的那条，各 tab 保留自己的去处。
+    // （单栈时代这里要 pop 回根，否则会停在别的 tab 压出来的页上；分栈后那个
+    // 问题不存在了，这也就成了 iPad 的常规交互。）
+    tabBar.selectedTab = tabItems[index]
   }
 
   /// 让某个 tab 的列表回到顶部（双击底栏 tab）。切 tab 时底栏会把当前 tab
@@ -346,8 +413,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   }
 
   private func scrollableTabHost() -> TiebaRouteHostViewController? {
-    guard let idx = tabBar?.selectedIndex else { return nil }
-    return tabRootHosts[idx]
+    tabRootHosts[currentTabIndex]
   }
 
   // MARK: - 屏级配置
@@ -387,7 +453,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   }
 
   private func currentHost() -> TiebaRouteHostViewController? {
-    rootNav?.topViewController as? TiebaRouteHostViewController
+    currentNav?.topViewController as? TiebaRouteHostViewController
   }
 
   /// hostId → 宿主（弱值，宿主已释放即 nil）。
@@ -409,16 +475,17 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 弱值本身不持有 VC，这里只回收已出栈的 hostId 键，防止表随压栈无限增长。
   private func pruneHosts() {
     var kept = Set<Int>()
-    if let rootNav {
-      func collect(_ vc: UIViewController) {
-        if let host = vc as? TiebaRouteHostViewController { kept.insert(host.hostId) }
-      }
-      for vc in rootNav.viewControllers { collect(vc) }
-      var presented = rootNav.presentedViewController
+    func collect(_ vc: UIViewController) {
+      if let host = vc as? TiebaRouteHostViewController { kept.insert(host.hostId) }
+    }
+    // 四条 tab 栈都要扫：非当前 tab 停在页面上的宿主也必须留在表里。
+    for nav in tabNavs.values {
+      for vc in nav.viewControllers { collect(vc) }
+      var presented = nav.presentedViewController
       while let current = presented {
         collect(current)
-        if let nav = current as? UINavigationController {
-          for vc in nav.viewControllers { collect(vc) }
+        if let inner = current as? UINavigationController {
+          for vc in inner.viewControllers { collect(vc) }
         }
         presented = current.presentedViewController
       }
@@ -547,6 +614,7 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     animated: Bool
   ) {
     applyBarVisibility(shouldHideBar(in: viewController), to: navigationController)
+    syncIPadTabChrome(for: navigationController)
   }
 
   public func navigationController(
@@ -557,6 +625,7 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     // 转场落定后按**实际栈顶**再校一次：右滑中途松手（转场取消）时栈顶仍是原页，
     // willShow 已按目标页隐过栏，这里把栏还给仍在上面的那一屏。
     applyBarVisibility(shouldHideBar(in: viewController), to: navigationController)
+    syncIPadTabChrome(for: navigationController)
     // 滚动视图的跟踪关联由各宿主 VC 自己在 viewDidLayoutSubviews 里做
     // （setContentScrollView 是子 VC 的职责，容器没有替它设的 API）。
     // 转场完成即重扫（原来监听未公开的 UINavigationControllerDidShowNotification，
@@ -566,17 +635,32 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     // 转场一结束就关 Hero：这样"进入"用魔改，**返回与后续跳转全走系统原生**
     //（Hero 只在 push 那一刻被读，pop 时已关 ⇒ 系统 push/pop 动画）。
     MainActor.assumeIsolated {
-      if rootNav?.hero.isEnabled == true { rootNav?.hero.isEnabled = false }
+      if navigationController.hero.isEnabled { navigationController.hero.isEnabled = false }
     }
   }
 
   /// 该屏是否无栏（tab 根屏 / webview / thread/[id]/more）。
   private func shouldHideBar(in viewController: UIViewController) -> Bool {
-    if viewController is TiebaMainTabBarController { return true }
-    if let host = viewController as? TiebaRouteHostViewController {
-      return (TiebaRouteTable.entry(named: host.route.name)?.chrome ?? .standard) == .hidden
+    guard let host = viewController as? TiebaRouteHostViewController else { return false }
+    return (TiebaRouteTable.entry(named: host.route.name)?.chrome ?? .standard) == .hidden
+  }
+
+  /// iPad 的 tab chrome（侧边栏 + 折叠后顶部的 tab 横幅）只属于 tab 根屏：压进吧页、
+  /// 帖子页等二级页后整套收起，宽度全给内容，返回走栏内返回箭头；回到根屏再还原
+  /// （还原的是用户当时的折叠状态，不是强制展开）。手机没有侧边栏，不动。
+  private func syncIPadTabChrome(for navigationController: UINavigationController) {
+    guard let tabBar, tabBar.traitCollection.userInterfaceIdiom == .pad else { return }
+    let atRoot = navigationController.viewControllers.count <= 1
+    guard atRoot != tabChromeAtRoot else { return }
+    tabChromeAtRoot = atRoot
+    if atRoot {
+      tabBar.sidebar.isHidden = sidebarHiddenBeforePush
+      tabBar.setTabBarHidden(false, animated: false)
+    } else {
+      sidebarHiddenBeforePush = tabBar.sidebar.isHidden
+      tabBar.sidebar.isHidden = true
+      tabBar.setTabBarHidden(true, animated: false)
     }
-    return false
   }
 
   /// 立即落定栏的可见性（**含返回，不许延到转场结束**），并把 alpha 一起归零/还原。
