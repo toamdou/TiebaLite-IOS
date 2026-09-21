@@ -93,9 +93,9 @@ public enum TiebaNativeRouteTable {
       )
     // 帖子「更多」sheet（原 src/app/thread/[id]/more.tsx）：行来自路由参数；
     // 动作经 TiebaThreadMoreSignal 交给帖子页（见该文件）。
-    case .threadMore(let id, let canDelete, let seeLz, let reverse):
+    case .threadMore(let id, let canDelete, let seeLz, let sort):
       return TiebaThreadMoreViewController(
-        threadId: id, canDelete: canDelete, seeLz: seeLz, reverse: reverse
+        threadId: id, canDelete: canDelete, seeLz: seeLz, sort: sort
       )
     // 登录（原 src/app/login.tsx）：通行证 WKWebView + Cookie 提取 + 原生会话激活。
     case .login:

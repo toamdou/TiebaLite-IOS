@@ -23,7 +23,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private let knownSnapshot: TiebaThreadSnapshot?
   private var knownPostView: TiebaThreadKnownPostView?
   private var seeLz: Bool
-  private var reverse: Bool
+  /// 回复排序（三档：热门/正序/倒序）。默认热门——服务端三档里热门是"按热度看帖"
+  /// 最常用的入口，正/倒序是浏览顺序。
+  private var sort: TiebaThreadSort = .hot
   private var isCollected: Bool
 
   private let floatingBar = TiebaThreadFloatingBar()
@@ -43,9 +45,10 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private var showShortcut = true
 
   override var skeletonVariant: TiebaSkeletonVariant { .post }
-  /// 骨架与真行同形态：否则首屏先是卡片、数据落地方变成扁平，会跳一下。
-  override var skeletonFlat: Bool { true }
-  /// 取消卡片后页面只剩裸楼层：底色随行面色（白/深色行面），楼层靠发际线分层。
+  /// 骨架与真行同形态（主贴卡 + 平铺回复）：否则数据落地时会跳一下。
+  override var skeletonStyle: TiebaPostRowStyle { .flat }
+  /// 帖子页白底：主贴卡是比页面深一档的灰块，铺在灰色主题底上看不出深浅、主次就
+  /// 没了；白底 + 灰卡才是 iOS 列表的分层做法（回复是平铺的，直接铺在白底上）。
   override var pageUsesRowSurface: Bool { true }
   override var skeletonCount: Int { 5 }
   override var skeletonInsetTop: CGFloat { 12 }
@@ -64,7 +67,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     let collectSeeLz = TiebaPreferenceSnapshot.bool("collectSeeLz", default: true)
     let collectDescSort = TiebaPreferenceSnapshot.bool("collectDescSort", default: false)
     self.seeLz = seeLz || (fromFavorites && collectSeeLz)
-    self.reverse = fromFavorites && collectDescSort
+    self.sort = (fromFavorites && collectDescSort) ? .desc : .hot
     self.isCollected = fromFavorites
     super.init(nibName: nil, bundle: nil)
   }
@@ -192,7 +195,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           page: 1,
           postId: self.postId,
           seeLz: self.seeLz,
-          reverse: self.reverse
+          sort: self.sort
         )
         self.apply(page, replacing: true, generation: generation)
         if generation == self.loadGeneration, self.isUserRefresh {
@@ -228,7 +231,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           page: 1,
           postId: nil,
           seeLz: self.seeLz,
-          reverse: self.reverse
+          sort: self.sort
         )
         self.apply(page, replacing: true, generation: generation, keepMain: true)
       } catch {
@@ -257,7 +260,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           page: self.currentPage + 1,
           postId: nil,
           seeLz: self.seeLz,
-          reverse: self.reverse
+          sort: self.sort
         )
         guard generation == self.loadGeneration else { return }
         self.apply(page, replacing: false, generation: generation)
@@ -281,7 +284,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           page: page,
           postId: nil,
           seeLz: self.seeLz,
-          reverse: self.reverse
+          sort: self.sort
         )
         guard generation == self.loadGeneration else { return }
         self.apply(result, replacing: true, generation: generation)
@@ -401,8 +404,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
             palette: palette,
             forumName: forumName,
             containerWidth: width,
-            // 帖子页全面取消卡片：楼层靠发际线分层，横向留白全给内容。
-            style: .flat,
+            // 主贴是"高亮卡片"、回复是平铺（楼层线分层）：全平铺读不出主次，全卡片
+            // 又回到原样；主贴卡底色比白底页面深一档，一眼能看出楼主与回复流的分界。
+            style: isMain ? .tinted : .flat,
             title: threadTitle,
             // 进帖转场的目标端：只有主贴卡参与配对（回复卡不配对，避免与
             // 列表里的行抢同一个 id）。
@@ -426,7 +430,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       replyNum: thread?.replyNum ?? 0,
       pageLabel: totalPages > 0 ? "\(max(currentPage, 1))/\(totalPages)页" : nil,
       seeLz: seeLz,
-      reverse: reverse
+      sort: sort
     )
   }
 
@@ -469,7 +473,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       seeLz.toggle()
       reloadReplies()
     case .toggleSort:
-      reverse.toggle()
+      sort = sort.next
       reloadReplies()
     }
   }
@@ -494,7 +498,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           id: threadId,
           canDelete: thread?.authorId == TiebaBackgroundSnapshot.shared.uid,
           seeLz: seeLz,
-          reverse: reverse
+          sort: sort
         )
       )
     }
@@ -507,7 +511,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       TiebaSceneHaptics.fire("toggle")
       reloadReplies()
     case .sort:
-      reverse.toggle()
+      sort = sort.next
       TiebaSceneHaptics.fire("toggle")
       reloadReplies()
     case .jump:
@@ -938,9 +942,14 @@ final class TiebaThreadFloatingBar: UIView {
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    clipsToBounds = true
+    // 不自裁：胶囊的描边与阴影画在本层（圆角由 background 自己裁，子视图都在界内）。
+    clipsToBounds = false
     layer.cornerRadius = 27
     layer.cornerCurve = .continuous
+    layer.shadowColor = UIColor.black.cgColor
+    layer.shadowOpacity = 0.10
+    layer.shadowRadius = 8
+    layer.shadowOffset = CGSize(width: 0, height: 2)
     background.layer.cornerRadius = 27
     background.layer.cornerCurve = .continuous
     background.clipsToBounds = true
@@ -972,6 +981,15 @@ final class TiebaThreadFloatingBar: UIView {
 
   func configure(hasAgree: Bool, zanNum: Int, isCollected: Bool, palette: TiebaFeedRowPalette) {
     self.palette = palette
+    // 帖子页底色已改白：.clear 玻璃（浅色下 15% 白）铺在白底上等于看不见。液态玻璃
+    // 自己的做法是给边缘一道描边 + 一层浅阴影，胶囊就浮起来了（不改材质、不放底色）。
+    let scale = max(traitCollection.displayScale, 1)
+    layer.borderWidth = 1 / scale
+    layer.borderColor = UIColor { traits in
+      traits.userInterfaceStyle == .dark
+        ? UIColor.white.withAlphaComponent(0.16)
+        : UIColor.black.withAlphaComponent(0.12)
+    }.resolvedColor(with: traitCollection).cgColor
     agreeIcon.image = UIImage(
       systemName: hasAgree ? "heart.fill" : "heart",
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)

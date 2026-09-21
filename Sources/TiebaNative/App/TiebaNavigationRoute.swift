@@ -240,7 +240,7 @@ public enum TiebaRouteTable {
         id: params["id"] ?? "",
         canDelete: params["canDelete"] == "1",
         seeLz: params["seeLz"] == "1",
-        reverse: params["reverse"] == "1"
+        sort: TiebaThreadSort(rawValue: Int(params["sort"] ?? "") ?? TiebaThreadSort.hot.rawValue) ?? .hot
       )
     case "search/index": return .search(keyword: params["q"] ?? "")
     case "user/[uid]": return .user(uid: params["uid"] ?? "", tab: optionalTab(params["tab"]))
