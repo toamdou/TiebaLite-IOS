@@ -19,9 +19,9 @@ expand_template(
     name = "info_plist",
     out = "Info.bazel.plist",
     substitutions = {
-        "$(CURRENT_PROJECT_VERSION)": "2",
+        "$(CURRENT_PROJECT_VERSION)": "3",
         "$(EXECUTABLE_NAME)": "TiebaLiveActivity",
-        "$(MARKETING_VERSION)": "2.1",
+        "$(MARKETING_VERSION)": "2.1.1",
     },
     template = "Info.plist",
 )
