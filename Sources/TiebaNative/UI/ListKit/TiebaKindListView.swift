@@ -433,12 +433,27 @@ public final class TiebaKindListContentView: UIView {
   /// 没有它时这条路是**静默留白**——行内容查不到就不配置、cell 保持清空态，
   /// 用户看到的就是"列表突然一片空白"（机制见 TiebaRowPagePins）。
   var onPageDataMissing: (() -> Void)?
-  /// 整页落地回调（`setPage` 末尾）：宿主用它把"让位给列表"推迟到真有行可画之后。
-  /// 页记录是后台测量的产物，数据到手 ≠ 行能画；提前让位就是页头/页脚先出现、
-  /// 正文空白（见 TiebaPostListPageController.showList 的闸门）。
-  var onPageApplied: (() -> Void)?
+  /// 让位请求：行还没落地就挂起（列表保持隐藏），等 `setPage` 落地再执行。
+  /// 页记录是后台测量的产物——**数据到手 ≠ 行能画**，提前让位就是页头/页脚先画出来、
+  /// 正文空白（吧页吧名片、楼中楼"只显示没有更多了"都是它）。各页 showList 一律走这里。
+  func revealWhenReady(_ reveal: @escaping () -> Void) {
+    guard hasRows else {
+      pendingReveal = reveal
+      return
+    }
+    pendingReveal = nil
+    reveal()
+  }
   /// 当前页是否已有可画的行（页记录已落地且行数 > 0）。
-  var hasRows: Bool { itemCount > 0 }
+  private var hasRows: Bool { itemCount > 0 }
+  private var pendingReveal: (() -> Void)?
+
+  /// 页记录落地 → 补上被推迟的让位。
+  private func flushPendingReveal() {
+    guard hasRows, let reveal = pendingReveal else { return }
+    pendingReveal = nil
+    reveal()
+  }
   /// 自愈通知节流：一屏几十行同时发现缺页只通知一次；反复失败则退避（见
   /// TiebaAdaptiveThrottle），离屏时直接按最大间隔合并。
   private var pageMissingThrottle = TiebaAdaptiveThrottle()
@@ -576,7 +591,7 @@ public final class TiebaKindListContentView: UIView {
     if isSamePage, count == itemCount {
       refreshGeometry()
       reconfigureVisibleItems()
-      onPageApplied?()
+      flushPendingReveal()
       return
     }
     reachEndArmed = true
@@ -603,7 +618,7 @@ public final class TiebaKindListContentView: UIView {
       refreshGeometry()
     }
     setNeedsLayout()
-    onPageApplied?()
+    flushPendingReveal()
   }
 
   /// 按当前几何失效布局。行高/行数变化都走这里：布局是拉取式的（TiebaRowListLayout），

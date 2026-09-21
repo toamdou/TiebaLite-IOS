@@ -158,9 +158,12 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
         guard seq == self.loadSeq else { return }
         self.entries = items
         self.isLoadingRows = false
-        self.skeletonView.isHidden = true
-        self.stateView.isHidden = true
-        self.list.isHidden = false
+        // 行还没测量落地时不让位（同吧页/楼中楼）：数据到手 ≠ 行能画。
+        self.list.revealWhenReady { [weak self] in
+          self?.skeletonView.isHidden = true
+          self?.stateView.isHidden = true
+          self?.list.isHidden = false
+        }
         self.list.endRefreshing()
         self.rebuildRows()
         self.publish(fresh: true)

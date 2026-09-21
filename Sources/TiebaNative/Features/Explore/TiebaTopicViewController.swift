@@ -247,9 +247,12 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
   }
 
   private func showList() {
-    stateView.isHidden = true
-    list.isHidden = false
-    clearStateHeader()
+    // 数据到手 ≠ 行能画：整页测量在后台跑，提前让位就是状态视图先消失、正文空白。
+    list.revealWhenReady { [weak self] in
+      self?.stateView.isHidden = true
+      self?.list.isHidden = false
+      self?.clearStateHeader()
+    }
   }
 
   private func installStateHeader() {
