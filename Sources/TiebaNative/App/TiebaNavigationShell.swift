@@ -124,7 +124,11 @@ public final class TiebaMainTabBarController: UITabBarController {
   func configureSidebar() {
     let regular = traitCollection.userInterfaceIdiom == .pad
       && traitCollection.horizontalSizeClass == .regular
-    mode = regular ? .tabSidebar : .tabBar
+    // 只在真要换形态时写 mode：赋值会重建 tab 模型，把侧边栏里刚拖好的顺序
+    // （以及系统的自定义状态）一起打回默认——每次出现/旋转都写就是我们这边
+    // "编辑保存后顺序不变"的原因。
+    let wanted: UITabBarController.Mode = regular ? .tabSidebar : .tabBar
+    if mode != wanted { mode = wanted }
     // 下滑收纳属于底栏：iPad 侧边栏形态下没有这回事，交给系统。
     tabBarMinimizeBehavior = regular
       ? .automatic
@@ -184,10 +188,26 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
     return true
   }
 
+  /// 侧边栏编辑保存后落盘：顺序的唯一权威是根分组的实际排列（displayOrder 是
+  /// 排好序的完整列表；displayOrderIdentifiers 只是输入侧的自定义记录，可能为空）。
+  /// 冷启动由 TiebaNavigator.orderedForDisplay 读回归位。
+  public func tabBarController(
+    _ tabBarController: UITabBarController,
+    displayOrderDidChangeFor group: UITabGroup
+  ) {
+    let order = group.displayOrder.map(\.identifier)
+    guard !order.isEmpty else { return }
+    TiebaNavigator.saveTabOrder(order)
+  }
+
   /// UITab 与 UITabBarItem 两条回调都从 UITab 反查序号：tabs 一旦设置，
   /// viewControllers 就不再是权威来源。
+  ///
+  /// ⚠️ 序号按**标识**取（标识就是路由表里的 tab 名），不按屏幕上的位置：侧边栏
+  /// 编辑保存后视觉顺序会变，而路由表索引（tabIndex / 角标 / 重按回调）必须恒定，
+  /// 否则"消息"会被当成别的 tab。
   private func index(of tab: UITab) -> Int {
-    tabs.firstIndex { $0 === tab } ?? -1
+    TiebaRouteTable.tabNames.firstIndex(of: tab.identifier) ?? -1
   }
 
   /// 回调给的是 tab 承载的 VC——本仓每个 tab 挂一条自己的导航栈，
@@ -195,12 +215,17 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
   private func index(of viewController: UIViewController) -> Int {
     var cursor: UIViewController? = viewController
     while let current = cursor {
-      if let tab = tabs.first(where: { ($0.viewController as? UIViewController) === current }) {
+      if let tab = flatten(tabs).first(where: { ($0.viewController as? UIViewController) === current }) {
         return index(of: tab)
       }
       cursor = current.parent
     }
     return -1
+  }
+
+  /// 展开根分组：屏幕上的 tab 项来自子 tab，序号以扁平顺序为准。
+  private func flatten(_ list: [UITab]) -> [UITab] {
+    list.flatMap { ($0 as? UITabGroup)?.children ?? [$0] }
   }
 
   /// 底栏一次选中的全部动作（触觉 + 重按回调）。dedupWindow 内同一 tab 只处理一次：
