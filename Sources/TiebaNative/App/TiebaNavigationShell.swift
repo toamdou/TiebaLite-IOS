@@ -130,12 +130,18 @@ public final class TiebaMainTabBarController: UITabBarController {
       ? .automatic
       : (tabBarMinimizeEnabled ? .onScrollDown : .never)
     guard regular else { return }
-    // 默认展开：用户要的是"可折叠"，不是"默认折叠"。
-    sidebar.isHidden = false
+    // 只落一次默认展开。之后 sidebar.isHidden 归用户（系统折叠按钮）与
+    // TiebaNavigator 的进二级页收起管——这里再写会把用户的折叠顶回去。
+    if !didApplyDefaultSidebar {
+      didApplyDefaultSidebar = true
+      sidebar.isHidden = false
+    }
     if #available(iOS 27.0, *) {
       sidebar.preferredPlacement = .sidebar
     }
   }
+
+  private var didApplyDefaultSidebar = false
 
   public override func viewWillTransition(
     to size: CGSize,
