@@ -38,7 +38,7 @@ Signing/*.mobileprovision
 *.md
 !README.md
 
-# 第三方文档抓取（官方文档离线副本，非本项目文档；Tools/crawl-docs.py 可复跑）
+# 第三方文档离线副本（本地查阅用，本就不入库；抓取工具已删除）
 docs/nuke/
 docs/iglistkit/
 docs/alamofire/
