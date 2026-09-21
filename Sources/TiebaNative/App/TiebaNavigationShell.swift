@@ -140,9 +140,9 @@ public final class TiebaMainTabBarController: UITabBarController {
       didApplyDefaultSidebar = true
       sidebar.isHidden = false
     }
-    if #available(iOS 27.0, *) {
-      sidebar.preferredPlacement = .sidebar
-    }
+    // 不写 sidebar.preferredPlacement（iOS 27）：它只在"侧边栏与底栏互斥"的平台生效，
+    // iPadOS 两种放置都支持、头文件明说对它无效果；而它的声明在 SDK 26.5 里还没有
+    // （CI 的 Xcode 26.6），写了只会让 CI 编译不过。
   }
 
   private var didApplyDefaultSidebar = false

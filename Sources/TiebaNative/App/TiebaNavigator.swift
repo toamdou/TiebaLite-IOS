@@ -122,8 +122,12 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
         image: UIImage(systemName: spec.normal),
         identifier: TiebaRouteTable.tabNames[idx]
       ) { _ in nav }
-      // 选中态实心变体：26.1 才有这个属性，更早的系统由 UIKit 自己按选中态上色。
-      if #available(iOS 26.1, *) { item.selectedImage = UIImage(systemName: spec.selected) }
+      // 选中态实心变体是原 UITabBarItem 时代的既有观感，不能丢；但 `selectedImage`
+      // 的**声明**要 26.6+ 的 SDK 才有（CI 是 SDK 26.5，直接写编译不过），运行时
+      // 26.1+ 已支持 ⇒ 按 KVC 落值，缺这个键就跳过。
+      if #available(iOS 26.1, *), item.responds(to: NSSelectorFromString("setSelectedImage:")) {
+        item.setValue(UIImage(systemName: spec.selected), forKey: "selectedImage")
+      }
       // 根 tab 的 automatic placement 解析成 .default（"可增可删"）——侧边栏 Edit
       // 因此允许拖动却落不下来（用户实测"拖完保存顺序不变"）。.movable = 可移不可删，
       // 正好是本 App 要的：四个 tab 是固定功能，只该排序。
