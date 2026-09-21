@@ -1,7 +1,7 @@
 import UIKit
 
 /// 帖子「更多」sheet（原 src/app/thread/[id]/more.tsx）：行状态来自类型化路由参数
-///（canDelete / seeLz / reverse——旧 params 里的 title/forumId/forumName/isCollected
+///（canDelete / seeLz / sort——旧 params 里的 title/forumId/forumName/isCollected
 /// 本页从未读取，迁移时未保留）。
 ///
 /// 点行先收起 sheet；本页 viewDidDisappear（收起转场结束）时经 TiebaThreadMoreSignal
@@ -10,16 +10,16 @@ final class TiebaThreadMoreViewController: UIViewController {
   private let threadId: String
   private let canDelete: Bool
   private let seeLz: Bool
-  private let reverse: Bool
+  private let sort: TiebaThreadSort
   private let form = TiebaFormListView(frame: .zero)
   /// 选中动作暂存：等本页 viewDidDisappear（收起转场结束）再经 signal 发出。
   private var pendingAction: TiebaThreadMoreSignal.Action?
 
-  init(threadId: String, canDelete: Bool, seeLz: Bool, reverse: Bool) {
+  init(threadId: String, canDelete: Bool, seeLz: Bool, sort: TiebaThreadSort) {
     self.threadId = threadId
     self.canDelete = canDelete
     self.seeLz = seeLz
-    self.reverse = reverse
+    self.sort = sort
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -54,7 +54,8 @@ final class TiebaThreadMoreViewController: UIViewController {
       [
         "id": "sort",
         "kind": "link",
-        "title": reverse ? "按正序浏览" : "按倒序浏览",
+        // 与帖子页那颗药丸同语义：点一下切到下一档（热门 → 正序 → 倒序）。
+        "title": "切换排序（当前：\(sort.title)）",
         "icon": "arrow.up.arrow.down",
         "iconTint": "#AF52DE",
       ],

@@ -343,7 +343,7 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
       defer { backfillBusy.remove(threadId) }
       do {
         let page = try await TiebaThreadAPI.page(
-          threadId: threadId, page: 1, postId: nil, seeLz: false, reverse: false
+          threadId: threadId, page: 1, postId: nil, seeLz: false, sort: .asc
         )
         guard let thread = page.thread else { return }
         let images = (page.posts.first?.images ?? []).map { image -> [String: Any] in
