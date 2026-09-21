@@ -134,8 +134,10 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     // 顺序按上次拖好的标识列表摆放：UIKit 自己的持久化存在系统库里、我们读不到也不可控，
     // 所以顺序的唯一权威是本仓存的这份（见 saveTabOrder / displayOrderDidChangeFor）。
     tab.tabs = Self.orderedForDisplay(items)
-    // 可重排的开关挂在根分组上。扁平 tabs 时 UIKit 自己建那个根分组，取到就打开。
-    if let root = items.first?.parent { root.allowsReordering = true }
+    // ⚠️ 不要再试图设 allowsReordering：探针实测根级扁平 tab 的 `parent` 在
+    // 赋值后、willAppear、didAppear 三个时刻都是 nil（UIKit 的根分组不对外暴露，
+    // UITabSidebarItemRequest 也只给 tab/action），拿不到 UITabGroup 就没这个开关。
+    // 根 tab 的"可重排"由 preferredPlacement 决定（见上），顺序落盘见下方 saveTabOrder。
     // 给系统侧的自定义状态一个稳定标识，别落到"系统默认"上（同一 App 只有一个
     // tab bar controller，但显式声明后系统那侧的持久化范围才是确定的）。
     tab.customizationIdentifier = "tieba-main-tabs"
