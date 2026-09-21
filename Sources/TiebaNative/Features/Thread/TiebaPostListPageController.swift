@@ -11,7 +11,8 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
   let stateView = UIContentUnavailableView(configuration: .loading())
   let pill = TiebaPhotoBrowserPillView()
   /// 首屏骨架（形状/数量各页不同；首次访问时按子类覆写值创建）。
-  private(set) lazy var skeletonView = TiebaSkeletonList(variant: skeletonVariant, count: skeletonCount)
+  private(set) lazy var skeletonView = TiebaSkeletonList(
+    variant: skeletonVariant, count: skeletonCount, flat: skeletonFlat)
 
   // MARK: - 共享状态
 
@@ -38,6 +39,8 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
   // MARK: - 子类差异（覆写）
 
   var skeletonVariant: TiebaSkeletonVariant { .row }
+  /// 骨架是否走"取消卡片"形态（帖子页开，其余页保持卡片）。
+  var skeletonFlat: Bool { false }
   var skeletonCount: Int { 8 }
   /// 骨架首行内白（原各页 SkeletonList paddingTop：帖子页 12 / 楼中楼 8）。
   var skeletonInsetTop: CGFloat { 8 }
