@@ -26,20 +26,21 @@ enum TiebaThreadActionAPI {
   /// 收藏 / 取消收藏（原 JS addStore / removeStore；fid=null 与 user_id 逐字段一致）。
   /// addstore 带 tbs（Kotlin 权威 `(data, tbs, stoken)`；JS 期漏了它，其注释自陈的
   /// "伪成功"即缺 tbs 的表现）。tbs 缺失一律走续期，见 requireTbs 的说明。
+  /// stoken 两个分支都带（Kotlin 两个接口都有该 @Field）；非 stoken 用户本来就没有，
+  /// 缺失即不带，不阻断。
   static func setStore(threadId: String, firstPostId: String, store: Bool) async throws {
     guard !threadId.isEmpty else { throw TiebaForumAPIError.invalidResponse }
     let snapshot = TiebaBackgroundSnapshot.shared
     let tbs = try await TiebaSession.requireTbs()
     if store {
       let data = "[{\"tid\":\"\(threadId)\",\"pid\":\"\(firstPostId.isEmpty ? "0" : firstPostId)\",\"status\":1}]"
-      _ = try await TiebaSocialAPI.signedPost(
-        path: "/c/c/post/addstore",
-        fields: ["data": data, "tbs": tbs]
-      )
+      var fields = ["data": data, "tbs": tbs]
+      if !snapshot.stoken.isEmpty { fields["stoken"] = snapshot.stoken }
+      _ = try await TiebaSocialAPI.signedPost(path: "/c/c/post/addstore", fields: fields)
     } else {
-      _ = try await TiebaSocialAPI.signedPost(path: "/c/c/post/rmstore", fields: [
-        "tid": threadId, "fid": "null", "tbs": tbs, "user_id": snapshot.uid,
-      ])
+      var fields = ["tid": threadId, "fid": "null", "tbs": tbs, "user_id": snapshot.uid]
+      if !snapshot.stoken.isEmpty { fields["stoken"] = snapshot.stoken }
+      _ = try await TiebaSocialAPI.signedPost(path: "/c/c/post/rmstore", fields: fields)
     }
   }
 

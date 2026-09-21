@@ -357,10 +357,13 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
     }
     TiebaSceneHaptics.fire("action-success")
     // 撤销 = 重新收藏（旧页只做本地插回，服务端仍是取消态；这里补上真实回写）。
+    // post_id 拿不到就传空（服务端按 0 收）——传帖子 id 会被当"楼层不存在"（见
+    // TiebaThreadViewController.firstFloorPostId 的说明）。
     let postId = TiebaSimpleRowParser.string(pending.row["firstPostId"]) ?? ""
+    let safePostId = postId == tid ? "" : postId
     Task { @MainActor in
       do {
-        try await TiebaThreadActionAPI.setStore(threadId: tid, firstPostId: postId, store: true)
+        try await TiebaThreadActionAPI.setStore(threadId: tid, firstPostId: safePostId, store: true)
       } catch {
         pill.showResult(success: false, text: "恢复收藏失败")
       }
