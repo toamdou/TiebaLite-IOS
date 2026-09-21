@@ -398,6 +398,7 @@ final class TiebaPostRowModel: @unchecked Sendable {
   let blockFilter: TiebaPostBlockFilter
   let palette: TiebaFeedRowPalette
   let containerWidth: CGFloat
+  let style: TiebaPostRowStyle
   let measuredHeight: CGFloat
   let plan: TiebaPostRowPlan
 
@@ -498,6 +499,7 @@ final class TiebaPostRowModel: @unchecked Sendable {
     palette: TiebaFeedRowPalette,
     forumName: String,
     containerWidth: CGFloat,
+    style: TiebaPostRowStyle = .card,
     title: String = "",
     heroThreadId: String? = nil
   ) {
@@ -513,6 +515,7 @@ final class TiebaPostRowModel: @unchecked Sendable {
     self.blockFilter = blockFilter
     self.palette = palette
     self.containerWidth = TiebaLayout.quantize(containerWidth)
+    self.style = style
     self.forumName = forumName
     self.heroThreadId = heroThreadId
     self.images = post.images
@@ -574,6 +577,7 @@ final class TiebaPostRowModel: @unchecked Sendable {
     // plan 只依赖上面这些已就位的值（自身尚未初始化完，不能把 self 传出去）。
     let plan = TiebaPostRowPlan(TiebaPostRowPlanInputs(
       containerWidth: self.containerWidth,
+      style: self.style,
       isMain: isMain,
       post: post,
       titleText: self.titleText,
@@ -615,6 +619,7 @@ final class TiebaPostRowModel: @unchecked Sendable {
       palette: model.palette,
       forumName: model.forumName,
       containerWidth: model.containerWidth,
+      style: model.style,
       title: model.titleText?.string ?? ""
     )
   }
@@ -671,6 +676,19 @@ final class TiebaPostRowMetrics: @unchecked Sendable {
 }
 
 // MARK: - 布局常量
+
+/// 帖子行的外壳形态：信息流 / 吧页是卡片，帖子页统一取消卡片
+///（无底、无角、无边距，楼层之间一条发际线），把留给卡片的横向留白还给内容。
+enum TiebaPostRowStyle {
+  case card
+  case flat
+
+  var marginH: CGFloat { self == .card ? TiebaPostRowLayout.cardMarginH : 0 }
+  var marginV: CGFloat { self == .card ? TiebaPostRowLayout.cardMarginV : 0 }
+  var radius: CGFloat { self == .card ? TiebaPostRowLayout.cardRadius : 0 }
+  /// 内容内缩两种形态一致：只去掉外壳，内容列位置不动（否则正文宽度会跟着变）。
+  var padding: CGFloat { TiebaPostRowLayout.cardPadding }
+}
 
 enum TiebaPostRowLayout {
   /// 左右边距（用户 2026-09-19："帖子卡片与屏幕两边的距离太大" ⇒ 16 收紧到 10）。
@@ -843,6 +861,7 @@ enum TiebaPostTimeText {
 /// plan 的输入快照（模型 init 里在自身未初始化完时传递）。
 struct TiebaPostRowPlanInputs {
   var containerWidth: CGFloat
+  var style: TiebaPostRowStyle
   var isMain: Bool
   var post: TiebaThreadPost
   /// 帖子标题（只有主贴行用；楼中楼父卡不显示标题）。
@@ -901,13 +920,14 @@ struct TiebaPostRowPlan {
 
   init(_ inputs: TiebaPostRowPlanInputs) {
     let width = inputs.containerWidth
-    let cardW = max(width - TiebaPostRowLayout.cardMarginH * 2, 0)
-    let contentX = TiebaPostRowLayout.cardMarginH + TiebaPostRowLayout.cardPadding
-    let contentW = max(cardW - TiebaPostRowLayout.cardPadding * 2, 0)
+    let style = inputs.style
+    let cardW = max(width - style.marginH * 2, 0)
+    let contentX = style.marginH + style.padding
+    let contentW = max(cardW - style.padding * 2, 0)
 
-    var y = TiebaPostRowLayout.cardMarginV
+    var y = style.marginV
     let cardTop = y
-    y += TiebaPostRowLayout.cardPadding
+    y += style.padding
 
     // ── 标题（仅主贴卡）──
     // 卡片顶端第一块，下方留 authorBottom(12) —— 与已知主贴占位卡同尺同距
@@ -1145,13 +1165,13 @@ struct TiebaPostRowPlan {
         subPostsMoreFrame = CGRect(x: contentX, y: subY, width: moreWidth, height: ceil(moreFont.lineHeight))
         subY += subPostsMoreFrame?.height ?? 0
       }
-      subPostsFrame = CGRect(x: TiebaPostRowLayout.cardMarginH, y: y, width: cardW, height: max(subY - y, 0))
+      subPostsFrame = CGRect(x: style.marginH, y: y, width: cardW, height: max(subY - y, 0))
       y = subY
     }
 
-    let cardBottom = y + TiebaPostRowLayout.cardPadding
+    let cardBottom = y + style.padding
     cardFrame = CGRect(
-      x: TiebaPostRowLayout.cardMarginH,
+      x: style.marginH,
       y: cardTop,
       width: cardW,
       height: max(cardBottom - cardTop, 0)
@@ -1162,7 +1182,7 @@ struct TiebaPostRowPlan {
     if inputs.toolbar != nil {
       let toolbarY = cardFrame.maxY + 8
       toolbarFrame = CGRect(
-        x: TiebaPostRowLayout.cardMarginH,
+        x: style.marginH,
         y: toolbarY,
         width: cardW,
         height: TiebaPostRowLayout.toolbarHeight
@@ -1170,14 +1190,14 @@ struct TiebaPostRowPlan {
       let pillFont = TiebaPostRowLayout.pillFont
       let pillHeight: CGFloat = 30
       let pillY = toolbarY + (TiebaPostRowLayout.toolbarHeight - pillHeight) / 2
-      var pillX = TiebaPostRowLayout.cardMarginH + cardW - TiebaPostRowLayout.cardPadding
+      var pillX = style.marginH + cardW - style.padding
       let sortTitle = inputs.toolbar?.reverse == true ? "倒序" : "正序"
       let sortWidth = TiebaSimpleText.singleLineWidth(sortTitle, font: pillFont) + 28
       toolbarSortFrame = CGRect(x: pillX - sortWidth, y: pillY, width: sortWidth, height: pillHeight)
       pillX -= sortWidth + 8
       let seeLzWidth = TiebaSimpleText.singleLineWidth("只看楼主", font: pillFont) + 28
       toolbarSeeLzFrame = CGRect(x: pillX - seeLzWidth, y: pillY, width: seeLzWidth, height: pillHeight)
-      let textX = TiebaPostRowLayout.cardMarginH + TiebaPostRowLayout.cardPadding
+      let textX = style.marginH + style.padding
       toolbarTextFrame = CGRect(
         x: textX,
         y: toolbarY,
@@ -1186,6 +1206,6 @@ struct TiebaPostRowPlan {
       )
       bottom = toolbarY + TiebaPostRowLayout.toolbarHeight + 8
     }
-    rowHeight = bottom + TiebaPostRowLayout.cardMarginV
+    rowHeight = bottom + style.marginV
   }
 }

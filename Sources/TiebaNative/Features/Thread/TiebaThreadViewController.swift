@@ -43,6 +43,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private var showShortcut = true
 
   override var skeletonVariant: TiebaSkeletonVariant { .post }
+  /// 骨架与真行同形态：否则首屏先是卡片、数据落地方变成扁平，会跳一下。
+  override var skeletonFlat: Bool { true }
   override var skeletonCount: Int { 5 }
   override var skeletonInsetTop: CGFloat { 12 }
   /// Toast.tsx 的 pill 停在 bottom = insets.bottom + 96。
@@ -397,6 +399,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
             palette: palette,
             forumName: forumName,
             containerWidth: width,
+            // 帖子页全面取消卡片：楼层靠发际线分层，横向留白全给内容。
+            style: .flat,
             title: threadTitle,
             // 进帖转场的目标端：只有主贴卡参与配对（回复卡不配对，避免与
             // 列表里的行抢同一个 id）。
