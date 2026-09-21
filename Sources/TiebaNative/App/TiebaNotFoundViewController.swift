@@ -18,9 +18,9 @@ public final class TiebaNotFoundViewController: UIViewController, TiebaNativeScr
     config.secondaryText = "你访问的链接可能已失效或不存在"
 
     // 旧页面是 SwiftUI `.glassProminent` + `.capsule`，UIKit 对应 iOS 26 的
-    // Configuration.prominentGlass()（部署目标 26，无旧系统分支）。刻意不设 tintColor：
+    // Configuration.prominentGlass()（17 上退回经典 filled）。刻意不设 tintColor：
     // 资源目录无 AccentColor，旧页面 accent 就是系统默认蓝，设成应用主色反而会变。
-    var button = UIButton.Configuration.prominentGlass()
+    var button: UIButton.Configuration = if #available(iOS 26.0, *) { .prominentGlass() } else { .filled() }
     button.title = "返回首页"
     button.image = UIImage(systemName: "house")
     button.imagePadding = 6

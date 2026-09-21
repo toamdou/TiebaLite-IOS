@@ -384,10 +384,10 @@ private final class TiebaKindFooterView: UICollectionReusableView {
     }
   }
 
-  /// 「加载更多」按钮：系统液态玻璃配置（UIButtonConfiguration.glassButtonConfiguration，
-  /// iOS 26 起可用；部署目标 26 = 恒走此支）。
+  /// 「加载更多」按钮：系统玻璃配置（UIButtonConfiguration.glassButtonConfiguration，
+  /// iOS 26 起可用）；17 上退回经典 gray（其余属性逐项不变）。
   private static func moreConfiguration(palette: TiebaSimpleRowPalette) -> UIButton.Configuration {
-    var config = UIButton.Configuration.glass()
+    var config: UIButton.Configuration = if #available(iOS 26.0, *) { .glass() } else { .gray() }
     config.cornerStyle = .capsule
     config.baseForegroundColor = palette.base.primary
     config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in

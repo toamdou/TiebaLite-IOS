@@ -1671,8 +1671,8 @@ final class TiebaFormAvatarCell: TiebaFormBaseCell {
 // MARK: - 系统按钮行（prominentButton）
 
 /// Form 内的系统按钮（整行宽）：UIButton.Configuration 的玻璃配置
-/// （glassButtonConfiguration / prominentGlassButtonConfiguration，iOS 26 起可用）
-/// 与 plain；JS 的 borderedProminent/bordered/glass/plain 逐名对位。
+/// （glassButtonConfiguration / prominentGlassButtonConfiguration，iOS 26 起可用；
+/// 17 上退回 gray/filled）与 plain；JS 的 borderedProminent/bordered/glass/plain 逐名对位。
 final class TiebaFormActionCell: TiebaFormBaseCell {
   static let reuseID = "TiebaFormActionCell"
 
@@ -1698,12 +1698,13 @@ final class TiebaFormActionCell: TiebaFormBaseCell {
     var config: UIButton.Configuration
     switch row.buttonStyle {
     case "bordered":
-      config = .glass()
+      // iOS 26 玻璃；17 退回经典 gray（同为无边框浅底，不重建玻璃观感）。
+      config = if #available(iOS 26.0, *) { .glass() } else { .gray() }
     case "plain":
       config = .plain()
     default:
-      // borderedProminent / glass 都落系统玻璃主按钮（部署目标 26 恒可用）。
-      config = .prominentGlass()
+      // borderedProminent / glass：iOS 26 玻璃主按钮；17 退回经典 filled。
+      config = if #available(iOS 26.0, *) { .prominentGlass() } else { .filled() }
     }
     config.title = row.title
     config.image = TiebaFormSymbol.image(row.icon, pointSize: 17, weight: .regular)

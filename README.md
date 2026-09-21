@@ -2,7 +2,8 @@
 
 # 贴吧 Lite · TiebaLite for iOS
 
-**第三方百度贴吧 iOS 客户端** — 纯 Swift / UIKit（零 JS、零 RN），iOS 26 液态玻璃风格
+**第三方百度贴吧 iOS 客户端** — 纯 Swift / UIKit（零 JS、零 RN）；iOS 26+ 走液态玻璃，
+**iOS 17/18 退回该系统年代的常规材质与底栏形态**（本分支 = 最低版本 17.0）
 
 [![Build iOS Unsigned IPA](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml/badge.svg)](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml)
 ![Version](https://img.shields.io/badge/version-2.0.0-208AEF)
@@ -47,7 +48,7 @@
 **体验**
 
 - ✅ 深色模式（含 AMOLED 纯黑）
-- ✅ 液态玻璃顶栏 / 底栏与原生转场（iOS 26+）
+- ✅ 顶栏 / 底栏与原生转场（iOS 26+ 为液态玻璃；17–25 为系统常规材质）
 - ✅ 触感反馈
 - ✅ 图片查看器
 - ✅ 视频播放
@@ -93,6 +94,7 @@ Tools/                     占位描述文件生成、产物隐私清洗
 | --- | --- |
 | macOS | 14+ |
 | Xcode | 26 或更高（开发环境为 Xcode 27 beta） |
+| 最低 iOS | 17.0（≥26 用 Icon Composer 图标，<26 用 AppIcon.appiconset） |
 | [Bazelisk](https://github.com/bazelbuild/bazelisk) | `brew install bazelisk`（版本由 `.bazelversion` 锁定） |
 | Apple ID | 免费个人 Apple ID 即可真机调试 |
 

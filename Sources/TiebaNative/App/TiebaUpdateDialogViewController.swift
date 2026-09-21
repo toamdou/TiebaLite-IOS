@@ -24,7 +24,10 @@ import UIKit
 final class TiebaUpdateDialogViewController: UIViewController {
   private let service = TiebaUpdateService.shared
 
-  private let card = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+  // 卡片材质：iOS 26 走系统液态玻璃；17 退回经典超薄材质模糊（不重建玻璃观感）。
+  private let card = UIVisualEffectView(
+    effect: TiebaUpdateDialogViewController.makeCardEffect()
+  )
   private let stack = UIStackView()
   private let titleLabel = UILabel()
   private let metaLabel = UILabel()
@@ -39,6 +42,11 @@ final class TiebaUpdateDialogViewController: UIViewController {
   private var cardWidthConstraint: NSLayoutConstraint?
   /// 便签区高度的"内容高度"约束（750）：内容短时按内容撑、超长时被卡片上限压回可滚。
   private var notesHeightConstraint: NSLayoutConstraint?
+
+  /// 卡片材质：iOS 26 液态玻璃；17 退回经典超薄材质模糊（最接近的旧观感）。
+  private static func makeCardEffect() -> UIVisualEffect {
+    if #available(iOS 26.0, *) { UIGlassEffect(style: .regular) } else { UIBlurEffect(style: .systemUltraThinMaterial) }
+  }
 
   init() {
     super.init(nibName: nil, bundle: nil)
@@ -81,7 +89,7 @@ final class TiebaUpdateDialogViewController: UIViewController {
   // MARK: - 布局
 
   private func setUpCard() {
-    // 卡片材质：iOS 26 液态玻璃（部署目标即 26，恒可用；不手写不透明底/阴影）。
+    // 卡片材质：iOS 26 液态玻璃 / 17 超薄材质模糊（见 makeCardEffect；不手写不透明底/阴影）。
     card.layer.cornerRadius = 20
     card.layer.cornerCurve = .continuous
     card.clipsToBounds = true

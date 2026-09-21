@@ -1014,9 +1014,8 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   // MARK: - FAB
 
   private func setupFab() {
-    // 原 GlassView（clear 玻璃）的 UIKit 对位：系统液态玻璃圆钮
-    // （部署底线 iOS 26，.glass() 恒可用）。
-    var config: UIButton.Configuration = .glass()
+    // 原 GlassView（clear 玻璃）的 UIKit 对位：系统玻璃圆钮（iOS 26）；17 退回经典 gray。
+    var config: UIButton.Configuration = if #available(iOS 26.0, *) { .glass() } else { .gray() }
     config.cornerStyle = .capsule
     config.image = UIImage(
       systemName: fabFunction == "back_to_top" ? "arrow.up" : "arrow.clockwise",

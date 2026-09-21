@@ -47,7 +47,7 @@
 		<string>com.baidu.tieba</string>
 	</array>
 	<key>LSMinimumSystemVersion</key>
-	<string>12.0</string>
+	<string>17.0</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>

@@ -424,7 +424,7 @@ final class TiebaSignService {
 // MARK: - 结果 toast（玻璃 pill）
 
 /// 签到结果 toast：尺寸沿用旧查看器 pill（圆角 18 / 图标 18 / 2.2s 自动消失），
-/// 材质走系统玻璃（部署底线 iOS 26，UIGlassEffect 恒可用），不再手写深色底。
+/// 材质走系统材质（iOS 26 液态玻璃 / 17 经典超薄材质模糊），不再手写深色底。
 /// ⚠️ TiebaPhotoBrowser 里还有同名用途的旧 pill（那个文件不在本批改动范围）。
 private final class TiebaSignToastView: UIView {
   private static let horizontalPadding: CGFloat = 16
@@ -436,6 +436,11 @@ private final class TiebaSignToastView: UIView {
   private let label = UILabel()
   private var hideWorkItem: DispatchWorkItem?
 
+  /// 底材质：iOS 26 液态玻璃；17 退回经典超薄材质模糊（最接近的旧观感）。
+  private static func makeBackdropEffect() -> UIVisualEffect {
+    if #available(iOS 26.0, *) { UIGlassEffect(style: .regular) } else { UIBlurEffect(style: .systemUltraThinMaterial) }
+  }
+
   init() {
     super.init(frame: .zero)
     layer.cornerRadius = 18
@@ -445,7 +450,7 @@ private final class TiebaSignToastView: UIView {
     isHidden = true
     alpha = 0
 
-    let backdrop = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    let backdrop = UIVisualEffectView(effect: TiebaSignToastView.makeBackdropEffect())
     backdrop.translatesAutoresizingMaskIntoConstraints = false
     addSubview(backdrop)
 

@@ -376,13 +376,18 @@ private final class TiebaThreadStoreUndoBar: UIView {
   private let label = UILabel()
   private let button = UIButton(type: .system)
 
+  /// 底材质：iOS 26 液态玻璃；17 退回经典超薄材质模糊（不重建玻璃观感）。
+  private static func makeBackdropEffect() -> UIVisualEffect {
+    if #available(iOS 26.0, *) { UIGlassEffect() } else { UIBlurEffect(style: .systemUltraThinMaterial) }
+  }
+
   override init(frame: CGRect) {
     super.init(frame: frame)
     layer.cornerRadius = 20
     layer.cornerCurve = .continuous
     clipsToBounds = true
-    // 液态玻璃底（与同批 FAB 的 .glass() 同材质；部署底线 iOS 26，恒可用）。
-    let glass = UIVisualEffectView(effect: UIGlassEffect())
+    // 底材质与同批 FAB 的 .glass() 同源（iOS 26 玻璃 / 17 超薄材质模糊）。
+    let glass = UIVisualEffectView(effect: TiebaThreadStoreUndoBar.makeBackdropEffect())
     glass.translatesAutoresizingMaskIntoConstraints = false
     addSubview(glass)
     NSLayoutConstraint.activate([
