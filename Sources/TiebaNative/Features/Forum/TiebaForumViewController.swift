@@ -76,6 +76,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     list.isHidden = true
     list.onListEvent = { [weak self] event in self?.handleListEvent(event) }
     list.onScroll = { [weak self] scrollView in self?.handleScroll(scrollView) }
+    list.onPageApplied = { [weak self] in self?.flushPendingReveal() }
     stateView.isHidden = true
     stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
     // 吧页骨架：thread 卡片（原 forum/[name].tsx SkeletonList count={6} variant="thread"）
@@ -963,10 +964,26 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   }
 
   private func showList() {
+    // 行还没测量落地时不让位：整页测量在后台跑，数据到手 ≠ 行能画；提前让位就是
+    // 吧名片（列表头）先画出来、下面正文一片空白（用户报的现象）。等 setPage
+    // 落地再显（回调见 viewDidLoad 的 onPageApplied）。
+    guard list.hasRows else {
+      awaitingReveal = true
+      return
+    }
+    awaitingReveal = false
     stateView.isHidden = true
     list.isHidden = false
     removeStateHeader()
   }
+
+  /// 页记录落地 → 补上被推迟的让位。
+  private func flushPendingReveal() {
+    guard awaitingReveal else { return }
+    showList()
+  }
+
+  private var awaitingReveal = false
 
   private func installStateHeader() {
     if stateHeader == nil {

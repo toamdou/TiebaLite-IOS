@@ -42,13 +42,16 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// TiebaRootNavigationController（不压栈），状态栏链路与栏扫描都不用改。
   private var tabNavs: [Int: TiebaRootNavigationController] = [:]
   private var tabBar: TiebaMainTabBarController?
+  /// 四个 tab 的 UITab（**顺序 = 路由表声明顺序**，与屏幕上的排列无关）。索引一律走
+  /// 这里：侧边栏编辑会改视觉顺序，而 tabIndex / 角标 / 重按回调必须恒定。
+  private var tabItems: [UITab] = []
   private var theme: TiebaChromeTheme = .default
 
   /// 当前选中的 tab。读 UIKit 的 selectedTab：用户点底栏/侧边栏与程序化切 tab
   /// 都写这同一个属性，不必再自己记一份。
   private var currentTabIndex: Int {
-    guard let tabBar, let sel = tabBar.selectedTab else { return 0 }
-    return tabBar.tabs.firstIndex { $0 === sel } ?? 0
+    guard let sel = tabBar?.selectedTab else { return 0 }
+    return tabItems.firstIndex { $0 === sel } ?? 0
   }
 
   private var currentNav: TiebaRootNavigationController? { tabNavs[currentTabIndex] }
@@ -121,9 +124,21 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       ) { _ in nav }
       // 选中态实心变体：26.1 才有这个属性，更早的系统由 UIKit 自己按选中态上色。
       if #available(iOS 26.1, *) { item.selectedImage = UIImage(systemName: spec.selected) }
+      // 根 tab 的 automatic placement 解析成 .default（"可增可删"）——侧边栏 Edit
+      // 因此允许拖动却落不下来（用户实测"拖完保存顺序不变"）。.movable = 可移不可删，
+      // 正好是本 App 要的：四个 tab 是固定功能，只该排序。
+      item.preferredPlacement = .movable
       items.append(item)
     }
-    tab.tabs = items
+    tabItems = items
+    // 顺序按上次拖好的标识列表摆放：UIKit 自己的持久化存在系统库里、我们读不到也不可控，
+    // 所以顺序的唯一权威是本仓存的这份（见 saveTabOrder / displayOrderDidChangeFor）。
+    tab.tabs = Self.orderedForDisplay(items)
+    // 可重排的开关挂在根分组上。扁平 tabs 时 UIKit 自己建那个根分组，取到就打开。
+    if let root = items.first?.parent { root.allowsReordering = true }
+    // 给系统侧的自定义状态一个稳定标识，别落到"系统默认"上（同一 App 只有一个
+    // tab bar controller，但显式声明后系统那侧的持久化范围才是确定的）。
+    tab.customizationIdentifier = "tieba-main-tabs"
     tab.configureSidebar()
     tab.applyTheme(theme)
 
@@ -169,8 +184,8 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// bar 级 appearance 写入都会让 UIKit 退出自动 Liquid Glass 渲染管线，
   /// 底栏退化成旧磨砂（实心色带）——v34 起的既有结论。
   public func setTabBadge(index: Int, text: String) {
-    guard let items = tabBar?.tabs as [UITab]?, index >= 0, index < items.count else { return }
-    items[index].badgeValue = text.isEmpty ? nil : text
+    guard index >= 0, index < tabItems.count else { return }
+    tabItems[index].badgeValue = text.isEmpty ? nil : text
   }
 
   /// 四个 tab 的图标/标签（与 NativeTabs.Trigger 的声明一致：systemImage 的
@@ -184,6 +199,34 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     default: spec = ("person", "person.fill", "我的")
     }
     return spec
+  }
+
+  /// 侧边栏编辑保存下来的 tab 顺序（Tab 标识以逗号相连）。空 = 还没改过，用声明顺序。
+  private static func savedTabOrder() -> [String] {
+    let raw = TiebaPreferences.string("tabOrder", default: "")
+    guard !raw.isEmpty else { return [] }
+    let known = Set(TiebaRouteTable.tabNames)
+    // 只认当前仍存在的 tab：版本升级删掉某个 tab 后，旧顺序里的死键不能进列表。
+    return raw.split(separator: ",").map(String.init).filter { known.contains($0) }
+  }
+
+  /// 按存下的顺序摆放：没记录的 tab 保持声明顺序跟在后面（新增 tab 不会被挤掉）。
+  private static func orderedForDisplay(_ items: [UITab]) -> [UITab] {
+    let saved = savedTabOrder()
+    guard !saved.isEmpty else { return items }
+    var rest = items
+    var ordered: [UITab] = []
+    for identifier in saved {
+      guard let index = rest.firstIndex(where: { $0.identifier == identifier }) else { continue }
+      ordered.append(rest.remove(at: index))
+    }
+    return ordered + rest
+  }
+
+  /// 编辑保存时落盘（UITabBarControllerDelegate 回调里调）。
+  static func saveTabOrder(_ identifiers: [String]) {
+    guard !identifiers.isEmpty else { return }
+    TiebaPreferences.set("tabOrder", string: identifiers.joined(separator: ","))
   }
 
   // MARK: - 指令
@@ -340,11 +383,11 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   }
 
   public func selectTab(_ index: Int) {
-    guard let tabBar, let items = tabBar.tabs as [UITab]?, index >= 0, index < items.count else { return }
+    guard let tabBar, index >= 0, index < tabItems.count else { return }
     // 每个 tab 一条自己的栈 ⇒ 切 tab 只换选中的那条，各 tab 保留自己的去处。
     // （单栈时代这里要 pop 回根，否则会停在别的 tab 压出来的页上；分栈后那个
     // 问题不存在了，这也就成了 iPad 的常规交互。）
-    tabBar.selectedTab = items[index]
+    tabBar.selectedTab = tabItems[index]
   }
 
   /// 让某个 tab 的列表回到顶部（双击底栏 tab）。切 tab 时底栏会把当前 tab

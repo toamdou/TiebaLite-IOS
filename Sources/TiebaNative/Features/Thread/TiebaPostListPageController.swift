@@ -135,6 +135,7 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
     //（数据仍在 rowPosts 里）。不重推的后果是行取不到模型——TiebaPostRowView
     // 会直接 isHidden，整行消失，看起来就是"帖子突然空白"。
     list.onPageDataMissing = { [weak self] in self?.republishCurrentPage() }
+    list.onPageApplied = { [weak self] in self?.flushPendingReveal() }
   }
 
   /// 同页键重推（缺页自愈出口）。列表侧已按 0.5s 节流，这里再兜一道。
@@ -300,11 +301,27 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
   }
 
   func showList() {
+    // 行还没测量落地时不让位：整页测量在后台跑，数据到手 ≠ 行能画；提前让位就是
+    // 页头/页脚先画出来、正文一片空白（用户报的"楼中楼只显示没有更多了、等一会
+    // 才出内容"）。等 setPage 落地再显（回调见 configureSharedList）。
+    guard list.hasRows else {
+      awaitingReveal = true
+      return
+    }
+    awaitingReveal = false
     stateView.isHidden = true
     skeletonView.isHidden = true
     list.isHidden = false
     applyChromeVisibility()
   }
+
+  /// 页记录落地 → 补上被推迟的让位。
+  private func flushPendingReveal() {
+    guard awaitingReveal else { return }
+    showList()
+  }
+
+  private var awaitingReveal = false
 
   // MARK: - 顶栏双击回顶（设置-浏览可关）
 
