@@ -45,10 +45,6 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private var showShortcut = true
 
   override var skeletonVariant: TiebaSkeletonVariant { .post }
-  /// 骨架与真行同形态（回复是描边白卡）：否则数据落地时会跳一下。
-  override var skeletonStyle: TiebaPostRowStyle { .outlined }
-  /// 全页白底（用户 2026-09-21：灰背景一律改白），楼层是浮在上面的白卡。
-  override var pageUsesPostSurface: Bool { true }
   override var skeletonCount: Int { 5 }
   override var skeletonInsetTop: CGFloat { 12 }
   /// Toast.tsx 的 pill 停在 bottom = insets.bottom + 96。
@@ -145,9 +141,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     knownPostView?.applyPalette(list.palette.base)
   }
 
-  /// 已知主贴占位的落位与真实主贴卡对齐：真实卡 = 内容顶 + 卡外边距 cardMarginV(4)，
-  /// 骨架的默认内白是 +12 —— 不对齐的话首包落地时整块会跳一次（用户实证"刚开始位置
-  /// 在正确位置靠下，加载完突然往上顺移"）。
+  /// 已知主贴卡的落位与真实主贴卡对齐：真实卡 = 内容顶 + 行内 cardMarginV(4)，
+  /// 骨架的默认内白是 +12 —— 不对齐的话首包落地时整块会往上跳一次（用户实证
+  /// "刚开始位置在正确位置靠下，加载完突然往上顺移"）。
   override func applyBaseInsets() {
     super.applyBaseInsets()
     guard knownPostView != nil else { return }
@@ -403,9 +399,6 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
             palette: palette,
             forumName: forumName,
             containerWidth: width,
-            // 主贴是唯一带阴影的顶层块，回复是白卡 + 一道淡黑线描边（不叠阴影：
-            // 每张卡都带阴影就是用户说的"阴影太多了"）。
-            style: isMain ? .elevated : .outlined,
             title: threadTitle,
             // 进帖转场的目标端：只有主贴卡参与配对（回复卡不配对，避免与
             // 列表里的行抢同一个 id）。
@@ -954,14 +947,9 @@ final class TiebaThreadFloatingBar: UIView {
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    // 不自裁：胶囊的描边与阴影画在本层（圆角由 background 自己裁，子视图都在界内）。
-    clipsToBounds = false
+    clipsToBounds = true
     layer.cornerRadius = 27
     layer.cornerCurve = .continuous
-    layer.shadowColor = UIColor.black.cgColor
-    layer.shadowOpacity = 0.10
-    layer.shadowRadius = 8
-    layer.shadowOffset = CGSize(width: 0, height: 2)
     background.layer.cornerRadius = 27
     background.layer.cornerCurve = .continuous
     background.clipsToBounds = true
@@ -993,15 +981,6 @@ final class TiebaThreadFloatingBar: UIView {
 
   func configure(hasAgree: Bool, zanNum: Int, isCollected: Bool, palette: TiebaFeedRowPalette) {
     self.palette = palette
-    // 帖子页底色已改白：.clear 玻璃（浅色下 15% 白）铺在白底上等于看不见。液态玻璃
-    // 自己的做法是给边缘一道描边 + 一层浅阴影，胶囊就浮起来了（不改材质、不放底色）。
-    let scale = max(traitCollection.displayScale, 1)
-    layer.borderWidth = 1 / scale
-    layer.borderColor = UIColor { traits in
-      traits.userInterfaceStyle == .dark
-        ? UIColor.white.withAlphaComponent(0.16)
-        : UIColor.black.withAlphaComponent(0.12)
-    }.resolvedColor(with: traitCollection).cgColor
     agreeIcon.image = UIImage(
       systemName: hasAgree ? "heart.fill" : "heart",
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)

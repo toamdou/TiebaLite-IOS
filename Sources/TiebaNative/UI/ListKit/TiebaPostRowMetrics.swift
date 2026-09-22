@@ -398,7 +398,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
   let blockFilter: TiebaPostBlockFilter
   let palette: TiebaFeedRowPalette
   let containerWidth: CGFloat
-  let style: TiebaPostRowStyle
   let measuredHeight: CGFloat
   let plan: TiebaPostRowPlan
 
@@ -499,7 +498,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
     palette: TiebaFeedRowPalette,
     forumName: String,
     containerWidth: CGFloat,
-    style: TiebaPostRowStyle = .card,
     title: String = "",
     heroThreadId: String? = nil
   ) {
@@ -515,7 +513,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
     self.blockFilter = blockFilter
     self.palette = palette
     self.containerWidth = TiebaLayout.quantize(containerWidth)
-    self.style = style
     self.forumName = forumName
     self.heroThreadId = heroThreadId
     self.images = post.images
@@ -577,7 +574,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
     // plan 只依赖上面这些已就位的值（自身尚未初始化完，不能把 self 传出去）。
     let plan = TiebaPostRowPlan(TiebaPostRowPlanInputs(
       containerWidth: self.containerWidth,
-      style: self.style,
       isMain: isMain,
       post: post,
       titleText: self.titleText,
@@ -619,7 +615,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
       palette: model.palette,
       forumName: model.forumName,
       containerWidth: model.containerWidth,
-      style: model.style,
       title: model.titleText?.string ?? ""
     )
   }
@@ -701,40 +696,6 @@ final class TiebaPostRowMetrics: @unchecked Sendable {
 
 // MARK: - 布局常量
 
-/// 行外壳四形态，按"这一行在页面里是什么角色"选：
-/// - 灰底页（信息流 / 吧页）只有 .card；
-/// - 白底页（帖子 / 楼中楼）分三层：顶层块 .elevated（一张卡带阴影）、
-///   回复 .outlined（白卡 + 一道淡描边，**不叠阴影**）、裸行 .flat（无壳，
-///   行间一条很细的淡黑线）。
-enum TiebaPostRowStyle {
-  /// 灰底页的卡：白底 + 主题 borderCard 描边。
-  case card
-  /// 白底页的回复卡：白底 + 淡描边（白底上 6% 的黑几乎看不见，故用更明显一档的淡线）。
-  case outlined
-  /// 白底页的顶层块（主贴 / 楼中楼父楼）：白底 + 一层柔和阴影浮起来，不描边。
-  case elevated
-  /// 白底页的裸行（楼中楼回复）：无壳，靠行间那条很细的淡黑线分隔。
-  case flat
-
-  var hasShell: Bool { self != .flat }
-  var marginH: CGFloat { hasShell ? TiebaPostRowLayout.cardMarginH : 0 }
-  var marginV: CGFloat { hasShell ? TiebaPostRowLayout.cardMarginV : 0 }
-  var radius: CGFloat { hasShell ? TiebaPostRowLayout.cardRadius : 0 }
-  var padding: CGFloat { TiebaPostRowLayout.cardPadding }
-  var hasBorder: Bool { self == .card || self == .outlined }
-  var hasShadow: Bool { self == .elevated }
-  var hasFloorSeparator: Bool { self == .flat }
-  /// 行外的上下留白：裸行要留出与淡黑线的距离，卡片留卡间距。
-  var outerTop: CGFloat { self == .flat ? TiebaPostRowLayout.floorGap : TiebaPostRowLayout.cardMarginV }
-  var outerBottom: CGFloat {
-    self == .flat ? TiebaPostRowLayout.floorGap : TiebaPostRowLayout.cardMarginV
-  }
-  /// 描边色：灰底页用主题 borderCard（6% 黑在灰底上看得见），白底页用那条淡黑线。
-  func borderColor(_ palette: TiebaFeedRowPalette) -> UIColor {
-    self == .card ? palette.borderCard : TiebaPostRowLayout.fineLine
-  }
-}
-
 enum TiebaPostRowLayout {
   /// 左右边距（用户 2026-09-19："帖子卡片与屏幕两边的距离太大" ⇒ 16 收紧到 10）。
   /// 这个值同时是已知主贴占位卡的边距（TiebaThreadKnownPostView 引它），两边必须同值，
@@ -743,25 +704,6 @@ enum TiebaPostRowLayout {
   static let cardMarginV: CGFloat = 4
   static let cardPadding: CGFloat = 16
   static let cardRadius: CGFloat = 16
-  /// 帖子 / 楼中楼两页的页面底色：浅色纯白、深色纯黑——卡片本身是白 / 深灰，页面压到
-  /// 极值，卡片的阴影才浮得出来（页面与卡片同色时卡就糊进背景里了）。
-  static let postPageSurface = UIColor { traits in
-    traits.userInterfaceStyle == .dark ? .black : .white
-  }
-  /// 白底页的淡黑线：**很细很细**的一道（线宽 1 物理像素，见 fineLineWidth），
-  /// 用作裸行之间的分隔线与白底回复卡的描边（用户 2026-09-21："用很细很细的淡黑线
-  /// 隔开"）。深色端反转成淡白，否则黑线落在黑页面上等于没画。
-  static let fineLine = UIColor { traits in
-    traits.userInterfaceStyle == .dark
-      ? UIColor(white: 1, alpha: 0.18)
-      : UIColor(white: 0, alpha: 0.15)
-  }
-  /// 淡黑线的线宽：1 物理像素（1/scale）。1pt 在 2x/3x 屏上是 2–3 像素，就不是"很细"了。
-  static func fineLineWidth(_ displayScale: CGFloat) -> CGFloat {
-    1 / max(displayScale, 1)
-  }
-  /// 裸行上下各留的空白（淡黑线居中于两行之间）。
-  static let floorGap: CGFloat = 14
   static let avatarSide: CGFloat = 36
   static let avatarSideMain: CGFloat = 40
   static let avatarGap: CGFloat = 10
@@ -778,13 +720,7 @@ enum TiebaPostRowLayout {
   static let maxImages = 9
   static let audioHeight: CGFloat = 52
   static let subPostTop: CGFloat = 10
-  /// 卡内相邻两条预览之间的间距（刻意压小：用户要求"间隔不明显"）。
-  static let subPostGap: CGFloat = 7
-  /// 楼中楼预览的容器内缩与圆角（卡片内再嵌一层白卡 + 阴影，无描边）。
-  static let subPostBoxPadding: CGFloat = 10
-  static let subPostBoxRadius: CGFloat = 12
-  /// 卡内工具栏与上方内容之间的间距（其余留白由 toolbarHeight 自带的 12pt 内距给）。
-  static let toolbarGap: CGFloat = 4
+  static let subPostDividerGap: CGFloat = 8
   /// 主贴回复工具栏（ThreadHeader.replyToolbar：paddingVertical 12×2 + 药丸 30）。
   static let toolbarHeight: CGFloat = 54
 
@@ -931,7 +867,6 @@ enum TiebaPostTimeText {
 /// plan 的输入快照（模型 init 里在自身未初始化完时传递）。
 struct TiebaPostRowPlanInputs {
   var containerWidth: CGFloat
-  var style: TiebaPostRowStyle
   var isMain: Bool
   var post: TiebaThreadPost
   /// 帖子标题（只有主贴行用；楼中楼父卡不显示标题）。
@@ -979,6 +914,7 @@ struct TiebaPostRowPlan {
   var videoPlaceholderFrame: CGRect?
   var audioFrame: CGRect?
   var subPostsFrame: CGRect?
+  var subPostDividerFrames: [CGRect] = []
   var subPostNameFrames: [CGRect] = []
   var subPostTextFrames: [CGRect] = []
   var subPostsMoreFrame: CGRect?
@@ -989,15 +925,13 @@ struct TiebaPostRowPlan {
 
   init(_ inputs: TiebaPostRowPlanInputs) {
     let width = inputs.containerWidth
-    let style = inputs.style
-    let cardW = max(width - style.marginH * 2, 0)
-    let contentX = style.marginH + style.padding
-    let contentW = max(cardW - style.padding * 2, 0)
+    let cardW = max(width - TiebaPostRowLayout.cardMarginH * 2, 0)
+    let contentX = TiebaPostRowLayout.cardMarginH + TiebaPostRowLayout.cardPadding
+    let contentW = max(cardW - TiebaPostRowLayout.cardPadding * 2, 0)
 
-    // 行外留白：裸行留出与淡黑线的距离，卡片留卡间距（见 TiebaPostRowStyle）。
-    var y = style.outerTop
+    var y = TiebaPostRowLayout.cardMarginV
     let cardTop = y
-    y += style.padding
+    y += TiebaPostRowLayout.cardPadding
 
     // ── 标题（仅主贴卡）──
     // 卡片顶端第一块，下方留 authorBottom(12) —— 与已知主贴占位卡同尺同距
@@ -1192,32 +1126,29 @@ struct TiebaPostRowPlan {
       gap = TiebaPostRowLayout.mediaGap
     }
 
-    // ── 楼中楼预览（整块收进一张浅灰小卡）──
-    // 楼层之间是整幅发际线；预览之间再画同款线就分不清哪个是"另一层楼"了，所以
-    // 预览与「查看全部」一起放进卡里：卡本身就充当它与楼层正文的分界。
+    // ── 楼中楼预览 ──
     let subPosts = inputs.post.subPosts
     if !subPosts.isEmpty || inputs.post.subPostNum > 0 {
       flushGap()
       y += TiebaPostRowLayout.subPostTop
-      let inner = TiebaPostRowLayout.subPostBoxPadding
-      let boxX = contentX
-      let boxW = contentW
-      let boxTop = y
-      let innerX = boxX + inner
-      let innerW = max(boxW - inner * 2, 0)
-      var subY = boxTop + inner
+      var subY = y + TiebaPostRowLayout.subPostTop
       for (idx, sub) in subPosts.enumerated() {
-        // 预览之间**不画线**、只留一段不明显的间距（用户 2026-09-21：卡内不同预览
-        // 之间的间隔要不明显）——每条预览都以「名字：」开头，本就分得清。
-        if idx > 0 { subY += TiebaPostRowLayout.subPostGap }
+        if idx > 0 {
+          // 分隔线上下各 subPostDividerGap：原来把 2×gap 全放在线**之下**，线就贴在
+          // 上一条正文的最后一笔上（用户 2026-09-15 报"每条文字离底线太近"）。
+          // 总间距仍是 2×gap，线以下的内容位置一字不动。
+          subY += TiebaPostRowLayout.subPostDividerGap
+          subPostDividerFrames.append(CGRect(x: contentX, y: subY, width: contentW, height: inputs.hairline))
+          subY += TiebaPostRowLayout.subPostDividerGap
+        }
         let nameFont = TiebaPostRowLayout.subPostNameFont
         let name = "\(sub.displayName)："
-        let nameWidth = min(TiebaSimpleText.singleLineWidth(name, font: nameFont), innerW)
+        let nameWidth = min(TiebaSimpleText.singleLineWidth(name, font: nameFont), contentW)
         // 名字与正文同一行盒（名字在左、正文在右，首行基线重合）。
         let nameLine = TiebaPostRowLayout.subPostLineHeight(inputs.fontScale)
-        subPostNameFrames.append(CGRect(x: innerX, y: subY, width: nameWidth, height: nameLine))
-        let textX = innerX + nameWidth + 6
-        let textW = max(innerW - nameWidth - 6, 0)
+        subPostNameFrames.append(CGRect(x: contentX, y: subY, width: nameWidth, height: nameLine))
+        let textX = contentX + nameWidth + 6
+        let textW = max(contentW - nameWidth - 6, 0)
         let attributed = inputs.subPostTexts.indices.contains(idx) ? inputs.subPostTexts[idx] : nil
         let height = attributed.map { TiebaSimpleText.measureHeight($0, width: textW, maxLines: 2) } ?? 0
         subPostTextFrames.append(CGRect(x: textX, y: subY, width: textW, height: height))
@@ -1234,22 +1165,28 @@ struct TiebaPostRowPlan {
       if let moreText {
         subY += 8
         let moreFont = TiebaPostRowLayout.moreFont
-        let moreWidth = min(TiebaSimpleText.singleLineWidth(moreText, font: moreFont), innerW)
-        subPostsMoreFrame = CGRect(x: innerX, y: subY, width: moreWidth, height: ceil(moreFont.lineHeight))
+        let moreWidth = min(TiebaSimpleText.singleLineWidth(moreText, font: moreFont), contentW)
+        subPostsMoreFrame = CGRect(x: contentX, y: subY, width: moreWidth, height: ceil(moreFont.lineHeight))
         subY += subPostsMoreFrame?.height ?? 0
       }
-      subPostsFrame = CGRect(x: boxX, y: boxTop, width: boxW, height: max(subY + inner - boxTop, 0))
-      y = subPostsFrame?.maxY ?? subY
+      subPostsFrame = CGRect(x: TiebaPostRowLayout.cardMarginH, y: y, width: cardW, height: max(subY - y, 0))
+      y = subY
     }
 
-    // ── 回复数 / 只看楼主 / 排序：在主贴卡**内部**的最后一行 ──
-    // 原先是卡外一条独立底板的灰条（用户 2026-09-21 报"那一栏灰得很突兀"），收进卡里
-    // 与主贴读成一块，卡外也不再留一条悬空白。
-    var bottom: CGFloat
+    let cardBottom = y + TiebaPostRowLayout.cardPadding
+    cardFrame = CGRect(
+      x: TiebaPostRowLayout.cardMarginH,
+      y: cardTop,
+      width: cardW,
+      height: max(cardBottom - cardTop, 0)
+    )
+
+    // ── 主贴回复工具栏（卡外独立一块）──
+    var bottom = cardFrame.maxY
     if inputs.toolbar != nil {
-      let toolbarY = y + TiebaPostRowLayout.toolbarGap
+      let toolbarY = cardFrame.maxY + 8
       toolbarFrame = CGRect(
-        x: style.marginH,
+        x: TiebaPostRowLayout.cardMarginH,
         y: toolbarY,
         width: cardW,
         height: TiebaPostRowLayout.toolbarHeight
@@ -1257,31 +1194,22 @@ struct TiebaPostRowPlan {
       let pillFont = TiebaPostRowLayout.pillFont
       let pillHeight: CGFloat = 30
       let pillY = toolbarY + (TiebaPostRowLayout.toolbarHeight - pillHeight) / 2
-      var pillX = style.marginH + cardW - style.padding
+      var pillX = TiebaPostRowLayout.cardMarginH + cardW - TiebaPostRowLayout.cardPadding
       let sortTitle = inputs.toolbar?.sort.title ?? ""
       let sortWidth = TiebaSimpleText.singleLineWidth(sortTitle, font: pillFont) + 28
       toolbarSortFrame = CGRect(x: pillX - sortWidth, y: pillY, width: sortWidth, height: pillHeight)
       pillX -= sortWidth + 8
       let seeLzWidth = TiebaSimpleText.singleLineWidth("只看楼主", font: pillFont) + 28
       toolbarSeeLzFrame = CGRect(x: pillX - seeLzWidth, y: pillY, width: seeLzWidth, height: pillHeight)
-      let textX = style.marginH + style.padding
+      let textX = TiebaPostRowLayout.cardMarginH + TiebaPostRowLayout.cardPadding
       toolbarTextFrame = CGRect(
         x: textX,
         y: toolbarY,
         width: max((toolbarSeeLzFrame?.minX ?? pillX) - textX - 8, 0),
         height: TiebaPostRowLayout.toolbarHeight
       )
-      // 工具栏那一条自带上下 12pt 内距（toolbarHeight = 12 + 30 + 12），下沿即卡底。
-      bottom = toolbarY + TiebaPostRowLayout.toolbarHeight
-    } else {
-      bottom = y + style.padding
+      bottom = toolbarY + TiebaPostRowLayout.toolbarHeight + 8
     }
-    cardFrame = CGRect(
-      x: style.marginH,
-      y: cardTop,
-      width: cardW,
-      height: max(bottom - cardTop, 0)
-    )
-    rowHeight = bottom + style.outerBottom
+    rowHeight = bottom + TiebaPostRowLayout.cardMarginV
   }
 }

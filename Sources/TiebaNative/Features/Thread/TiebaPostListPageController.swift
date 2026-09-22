@@ -11,8 +11,7 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
   let stateView = UIContentUnavailableView(configuration: .loading())
   let pill = TiebaPhotoBrowserPillView()
   /// 首屏骨架（形状/数量各页不同；首次访问时按子类覆写值创建）。
-  private(set) lazy var skeletonView = TiebaSkeletonList(
-    variant: skeletonVariant, count: skeletonCount, style: skeletonStyle)
+  private(set) lazy var skeletonView = TiebaSkeletonList(variant: skeletonVariant, count: skeletonCount)
 
   // MARK: - 共享状态
 
@@ -39,10 +38,6 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
   // MARK: - 子类差异（覆写）
 
   var skeletonVariant: TiebaSkeletonVariant { .row }
-  /// 骨架外壳形态（帖子 / 楼中楼两页覆写成 .elevated；其余页保持卡片）。
-  var skeletonStyle: TiebaPostRowStyle { .card }
-  /// 页面底色是否改用帖子页底色（浅色纯白 / 深色纯黑；帖子与楼中楼两页为是）。
-  var pageUsesPostSurface: Bool { false }
   var skeletonCount: Int { 8 }
   /// 骨架首行内白（原各页 SkeletonList paddingTop：帖子页 12 / 楼中楼 8）。
   var skeletonInsetTop: CGFloat { 8 }
@@ -163,21 +158,18 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
     )
   }
 
-  /// 页面底色 + 主题色板。卡片页底色必须用主题 background（JS colors.background
-  /// #F2F2F7/黑）——.systemBackground 浅色下与卡片同白，楼层边界会糊成一片。
-  /// 帖子 / 楼中楼两页反过来要**极值底色**（浅色纯白、深色纯黑）：这两页的楼层是白卡
-  /// ——同一档灰的话卡与页面糊成一片，阴影也就浮不起来了。
+  /// 页面底色 + 主题色板。楼层卡是白卡（palette.card）：页面底色必须用主题
+  /// background（JS colors.background #F2F2F7/黑）——.systemBackground 浅色下与
+  /// 卡片同白，楼层边界会糊成一片。
   func applyPalette() {
     skeletonView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
     var palette = TiebaSimpleRowPalette.default
     let tint = TiebaNavigator.shared.chromeTheme.tint
     palette.base.primary = tint
     palette.base.chip = tint.withAlphaComponent(0.12)
     palette.base.onChip = tint
     list.palette = palette
-    view.backgroundColor = pageUsesPostSurface
-      ? TiebaPostRowLayout.postPageSurface
-      : TiebaNavigator.shared.chromeTheme.background
   }
 
   // MARK: - 列表事件（两页同款）
