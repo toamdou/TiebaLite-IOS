@@ -73,7 +73,7 @@ private enum TiebaSkeletonMetrics {
 
 /// 单个骨架单元（对齐 Skeleton.tsx 的 SkeletonCell）。
 final class TiebaSkeletonCellView: UIView {
-  /// 外壳形态（与真行同一个枚举）：帖子页主贴卡 = .tinted、回复 = .flat。
+  /// 外壳形态（与真行同一个枚举）：帖子页全平铺 = .flat，其余页 = .card。
   private let style: TiebaPostRowStyle
 
   let variant: TiebaSkeletonVariant
@@ -162,9 +162,8 @@ final class TiebaSkeletonCellView: UIView {
   private func makeSurface(radius: CGFloat) -> UIView {
     let view = UIView()
     let shell = style != .flat
-    // 高亮外壳（帖子页主贴）用比页面深一档的灰：与真主贴卡同色。
-    view.backgroundColor = style == .tinted ? TiebaPostRowLayout.tintedShell
-      : (shell ? cardColor : .clear)
+    // 平铺形态（帖子页）不画壳：底色透出白页，占位块自己就是形状。
+    view.backgroundColor = shell ? cardColor : .clear
     if !shell { view.layer.borderWidth = 0 }
     view.layer.cornerRadius = radius
     view.layer.cornerCurve = .continuous
@@ -455,7 +454,7 @@ final class TiebaSkeletonCellView: UIView {
 /// thread/post 行高自然撑出，card/row 缺省 232/88。
 final class TiebaSkeletonList: UIView {
   /// 形状（换值即重建，供搜索页按 tab 切换 thread/row）。
-  /// 外壳形态（帖子页：主贴 .tinted、回复 .flat；其余页 .card）。
+  /// 外壳形态（帖子页全平铺 = .flat；其余页 .card）。
   private let style: TiebaPostRowStyle
 
   var variant: TiebaSkeletonVariant = .thread { didSet { if variant != oldValue { rebuild() } } }
@@ -597,10 +596,6 @@ final class TiebaSkeletonList: UIView {
     stack.spacing = variant.isNaturalHeight ? 0 : TiebaSkeletonMetrics.listGap
     let height = itemHeight ?? variant.defaultItemHeight
     for index in 0..<max(count, 0) {
-      // 主贴卡 + 平铺回复：有前置占位卡（已知主贴）时首格就是第一层回复；
-      // 没有前置卡时首格顶替主贴，得是主贴那种带壳的形态，否则落地会跳一下。
-      let cellStyle: TiebaPostRowStyle =
-        (!style.hasShell || (index == 0 && headerView == nil)) ? .card : style
       let cell = TiebaSkeletonCellView(
         variant: variant,
         // 真实信息流图文混排：骨架按半数带图交替，首格即含图片占位
@@ -608,7 +603,7 @@ final class TiebaSkeletonList: UIView {
         placeholderColor: placeholderColor,
         cardColor: cardColor,
         borderColor: borderColor,
-        style: cellStyle
+        style: style
       )
       if let height {
         cell.heightAnchor.constraint(equalToConstant: height).isActive = true

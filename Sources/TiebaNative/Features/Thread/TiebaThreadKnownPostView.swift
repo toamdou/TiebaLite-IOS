@@ -50,14 +50,26 @@ final class TiebaThreadKnownPostView: UIView {
 
   func applyPalette(_ palette: TiebaFeedRowPalette) {
     self.palette = palette
-    // 与真主贴同形态：主贴是高亮卡片（回复才平铺），占位卡跟着用同一底色与描边，
-    // 首包落地换卡时才不闪。
-    card.backgroundColor = TiebaPostRowLayout.tintedShell
-    card.layer.borderColor = palette.borderCard.cgColor
+    // 与真主贴同形态（浮在白页上的白卡）：同底色、同阴影、不描边，换卡时零位移。
+    card.backgroundColor = palette.card
+    card.layer.borderColor = UIColor.clear.cgColor
+    card.layer.shadowColor = UIColor.black.cgColor
+    card.layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0.45 : 0.10
+    card.layer.shadowRadius = 8
+    card.layer.shadowOffset = CGSize(width: 0, height: 2)
     titleLabel.textColor = palette.text
     authorLabel.textColor = palette.textSecondary
     abstractLabel.textColor = palette.textSecondary
     imageView.backgroundColor = palette.placeholder
+  }
+
+  /// 阴影轮廓要按卡的**实际尺寸**重算（applyPalette 时卡的 frame 还是零）。
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    card.layer.shadowPath = UIBezierPath(
+      roundedRect: card.bounds.insetBy(dx: 1, dy: 1),
+      cornerRadius: TiebaPostRowLayout.cardRadius
+    ).cgPath
   }
 
   // MARK: - 装配
@@ -73,7 +85,7 @@ final class TiebaThreadKnownPostView: UIView {
     }
     card.layer.cornerRadius = TiebaPostRowLayout.cardRadius
     card.layer.cornerCurve = .continuous
-    card.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
+    card.layer.borderWidth = 0
     card.translatesAutoresizingMaskIntoConstraints = false
     addSubview(card)
 
@@ -173,7 +185,7 @@ final class TiebaThreadKnownPostView: UIView {
     }
 
     NSLayoutConstraint.activate([
-      // 左右边距与真实主贴卡同值（TiebaPostRowLayout.cardMarginH）：否则换卡瞬间
+      // 左右边距与真实主贴卡同值（TiebaPostRowLayout.cardMarginH）：否则换行瞬间
       // 卡片会横向收放一次。
       card.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TiebaPostRowLayout.cardMarginH),
       card.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -TiebaPostRowLayout.cardMarginH),

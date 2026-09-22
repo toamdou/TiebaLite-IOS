@@ -45,10 +45,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private var showShortcut = true
 
   override var skeletonVariant: TiebaSkeletonVariant { .post }
-  /// 骨架与真行同形态（主贴卡 + 平铺回复）：否则数据落地时会跳一下。
+  /// 骨架与真行同形态（全平铺）：否则数据落地时会跳一下。
   override var skeletonStyle: TiebaPostRowStyle { .flat }
-  /// 帖子页白底：主贴卡是比页面深一档的灰块，铺在灰色主题底上看不出深浅、主次就
-  /// 没了；白底 + 灰卡才是 iOS 列表的分层做法（回复是平铺的，直接铺在白底上）。
+  /// 全页白底（用户 2026-09-21：灰背景一律改白）。楼层之间靠黑色实线分层。
   override var pageUsesRowSurface: Bool { true }
   override var skeletonCount: Int { 5 }
   override var skeletonInsetTop: CGFloat { 12 }
@@ -146,13 +145,13 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     knownPostView?.applyPalette(list.palette.base)
   }
 
-  /// 已知主贴卡的落位与真实主贴卡对齐：真实卡 = 内容顶 + 行内 cardMarginV(4)，
-  /// 骨架的默认内白是 +12 —— 不对齐的话首包落地时整块会往上跳一次（用户实证
-  /// "刚开始位置在正确位置靠下，加载完突然往上顺移"）。
+  /// 已知主贴占位的落位与真实主贴卡对齐：真实卡 = 内容顶 + outerTop(floorGap 14)，
+  /// 骨架的默认内白是 +12 —— 不对齐的话首包落地时整块会跳一次（用户实证"刚开始位置
+  /// 在正确位置靠下，加载完突然往上顺移"）。
   override func applyBaseInsets() {
     super.applyBaseInsets()
     guard knownPostView != nil else { return }
-    skeletonView.contentInsets.top = view.safeAreaInsets.top + TiebaPostRowLayout.cardMarginV
+    skeletonView.contentInsets.top = view.safeAreaInsets.top + TiebaPostRowLayout.floorGap
   }
 
   /// 列表自带 refreshControl 且 contentInsetAdjustmentBehavior = .never：顶部内白自补。
@@ -404,9 +403,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
             palette: palette,
             forumName: forumName,
             containerWidth: width,
-            // 主贴是"高亮卡片"、回复是平铺（楼层线分层）：全平铺读不出主次，全卡片
-            // 又回到原样；主贴卡底色比白底页面深一档，一眼能看出楼主与回复流的分界。
-            style: isMain ? .tinted : .flat,
+            // 主贴是浮在白页上的白卡（阴影分层，不要灰底也不要描边），回复是平铺
+            // 裸行：一眼看出哪层是楼主、往下是回复流（用户 2026-09-21 的口径）。
+            style: isMain ? .elevated : .flat,
             title: threadTitle,
             // 进帖转场的目标端：只有主贴卡参与配对（回复卡不配对，避免与
             // 列表里的行抢同一个 id）。
