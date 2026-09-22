@@ -45,11 +45,6 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private var showShortcut = true
 
   override var skeletonVariant: TiebaSkeletonVariant { .post }
-  /// 骨架与真行同形态（主贴卡 + 平铺回复）：否则数据落地时会跳一下。
-  override var skeletonStyle: TiebaPostRowStyle { .flat }
-  /// 帖子页白底：主贴卡是比页面深一档的灰块，铺在灰色主题底上看不出深浅、主次就
-  /// 没了；白底 + 灰卡才是 iOS 列表的分层做法（回复是平铺的，直接铺在白底上）。
-  override var pageUsesRowSurface: Bool { true }
   override var skeletonCount: Int { 5 }
   override var skeletonInsetTop: CGFloat { 12 }
   /// Toast.tsx 的 pill 停在 bottom = insets.bottom + 96。
@@ -404,9 +399,6 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
             palette: palette,
             forumName: forumName,
             containerWidth: width,
-            // 主贴是"高亮卡片"、回复是平铺（楼层线分层）：全平铺读不出主次，全卡片
-            // 又回到原样；主贴卡底色比白底页面深一档，一眼能看出楼主与回复流的分界。
-            style: isMain ? .tinted : .flat,
             title: threadTitle,
             // 进帖转场的目标端：只有主贴卡参与配对（回复卡不配对，避免与
             // 列表里的行抢同一个 id）。
@@ -955,14 +947,9 @@ final class TiebaThreadFloatingBar: UIView {
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    // 不自裁：胶囊的描边与阴影画在本层（圆角由 background 自己裁，子视图都在界内）。
-    clipsToBounds = false
+    clipsToBounds = true
     layer.cornerRadius = 27
     layer.cornerCurve = .continuous
-    layer.shadowColor = UIColor.black.cgColor
-    layer.shadowOpacity = 0.10
-    layer.shadowRadius = 8
-    layer.shadowOffset = CGSize(width: 0, height: 2)
     background.layer.cornerRadius = 27
     background.layer.cornerCurve = .continuous
     background.clipsToBounds = true
@@ -994,15 +981,6 @@ final class TiebaThreadFloatingBar: UIView {
 
   func configure(hasAgree: Bool, zanNum: Int, isCollected: Bool, palette: TiebaFeedRowPalette) {
     self.palette = palette
-    // 帖子页底色已改白：.clear 玻璃（浅色下 15% 白）铺在白底上等于看不见。液态玻璃
-    // 自己的做法是给边缘一道描边 + 一层浅阴影，胶囊就浮起来了（不改材质、不放底色）。
-    let scale = max(traitCollection.displayScale, 1)
-    layer.borderWidth = 1 / scale
-    layer.borderColor = UIColor { traits in
-      traits.userInterfaceStyle == .dark
-        ? UIColor.white.withAlphaComponent(0.16)
-        : UIColor.black.withAlphaComponent(0.12)
-    }.resolvedColor(with: traitCollection).cgColor
     agreeIcon.image = UIImage(
       systemName: hasAgree ? "heart.fill" : "heart",
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)

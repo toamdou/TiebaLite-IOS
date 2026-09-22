@@ -50,9 +50,7 @@ final class TiebaThreadKnownPostView: UIView {
 
   func applyPalette(_ palette: TiebaFeedRowPalette) {
     self.palette = palette
-    // 与真主贴同形态：主贴是高亮卡片（回复才平铺），占位卡跟着用同一底色与描边，
-    // 首包落地换卡时才不闪。
-    card.backgroundColor = TiebaPostRowLayout.tintedShell
+    card.backgroundColor = palette.card
     card.layer.borderColor = palette.borderCard.cgColor
     titleLabel.textColor = palette.text
     authorLabel.textColor = palette.textSecondary
