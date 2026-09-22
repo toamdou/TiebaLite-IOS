@@ -590,7 +590,7 @@ public final class TiebaKindListContentView: UIView {
     let count = TiebaKindRowPages.shared.rowCount(pageKey: pageKey)
     if isSamePage, count == itemCount {
       refreshGeometry()
-      reconfigureVisibleItems()
+      reconfigureSamePageItems()
       flushPendingReveal()
       return
     }
@@ -608,9 +608,10 @@ public final class TiebaKindListContentView: UIView {
       snapshot.appendItems((0..<count).map { TiebaKindItem(pageKey: pageKey, index: $0) }, toSection: 0)
     }
     if isSamePage {
+      // 同页重推（切排序/切只看楼主/点赞/回填）：先让 diffable 走完增删，再把整页标成
+      // 重配（内容才是权威，标识不作数），最后失效布局——行高由拉取式布局重取。
       dataSource.apply(snapshot, animatingDifferences: false)
-      // 同页重推（展开/点赞/回填）：行数/行高变了，失效布局即可——拉取式布局会在
-      // 下一次 prepare 重新取帧，可见区间没变的行连属性对象都不用重建。
+      reconfigureSamePageItems()
       refreshGeometry()
     } else {
       dataSource.applySnapshotUsingReloadData(snapshot)
@@ -1164,12 +1165,14 @@ public final class TiebaKindListContentView: UIView {
 
   // MARK: 快照辅助
 
-  private func reconfigureVisibleItems() {
-    let visible = collectionView.indexPathsForVisibleItems
-      .compactMap { dataSource.itemIdentifier(for: $0) }
-    guard !visible.isEmpty else { return }
+  /// 同页重推的整页重配。行标识是 (pageKey, index)，**不含内容**：内容换了标识却一字
+  /// 不变，而 diffable 只重配"变了"的行 ⇒ 行数一变（哪怕只差一行）那些没变的行就留着
+  /// 旧 cell，要滚动一趟重新配 cell 才刷新（用户实证：切排序后旧回复残留）。
+  private func reconfigureSamePageItems() {
     var snapshot = dataSource.snapshot()
-    snapshot.reconfigureItems(visible)
+    let items = snapshot.itemIdentifiers
+    guard !items.isEmpty else { return }
+    snapshot.reconfigureItems(items)
     dataSource.apply(snapshot, animatingDifferences: false)
   }
 
