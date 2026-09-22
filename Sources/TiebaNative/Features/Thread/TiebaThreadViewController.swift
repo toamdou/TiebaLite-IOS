@@ -180,7 +180,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     if posts.isEmpty { showState(.loading) }
     Task { @MainActor in
       defer {
-        self.isLoading = false
+        // 期间被更新的代际（切排序/切只看楼主）接管：它自己收尾 isLoading。
+        if generation == self.loadGeneration { self.isLoading = false }
         self.isUserRefresh = false
         self.list.endRefreshing()
       }
@@ -207,16 +208,17 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     }
   }
 
-  /// 只看楼主 / 正序倒序：只重取回复（主贴卡与工具栏整块不动，也不出现骨架）。
+  /// 只看楼主 / 排序：只重取回复（主贴卡与工具栏整块不动，也不出现骨架）。
   /// 与 reload() 的区别只有两点：keepMain（不覆盖钉住的主贴）与不换页键。
   private func reloadReplies() {
-    guard !isLoading else { return }
-    isLoading = true
+    // 点了就换：作废在飞的旧请求（代际自增）而不是被 isLoading 挡回去——挡回去的话
+    // 药丸已显示新档位、列表还是上一次的内容（用户实证"残留切换前的内容"）。
     loadGeneration += 1
     let generation = loadGeneration
+    isLoading = true
     Task { @MainActor in
       defer {
-        self.isLoading = false
+        if generation == self.loadGeneration { self.isLoading = false }
         self.isUserRefresh = false
         self.list.endRefreshing()
       }
@@ -272,7 +274,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     loadGeneration += 1
     let generation = loadGeneration
     Task { @MainActor in
-      defer { self.isLoading = false }
+      defer {
+        if generation == self.loadGeneration { self.isLoading = false }
+      }
       do {
         let result = try await TiebaThreadAPI.page(
           threadId: self.threadId,
@@ -464,8 +468,10 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     case .toggleSeeLz:
       seeLz.toggle()
       reloadReplies()
-    case .toggleSort:
-      sort = sort.next
+    case .selectSort(let next):
+      guard next != sort else { return }
+      sort = next
+      TiebaSceneHaptics.fire("toggle")
       reloadReplies()
     }
   }
@@ -502,8 +508,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       seeLz.toggle()
       TiebaSceneHaptics.fire("toggle")
       reloadReplies()
-    case .sort:
-      sort = sort.next
+    case .selectSort(let next):
+      guard next != sort else { return }
+      sort = next
       TiebaSceneHaptics.fire("toggle")
       reloadReplies()
     case .jump:

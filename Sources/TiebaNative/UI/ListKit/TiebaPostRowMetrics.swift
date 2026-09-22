@@ -636,14 +636,6 @@ public enum TiebaThreadSort: Int, CaseIterable, Sendable {
     case .desc: return "倒序"
     }
   }
-  /// 药丸点击的下一个档位（热门 → 正序 → 倒序 → 热门）。
-  var next: TiebaThreadSort {
-    switch self {
-    case .hot: return .asc
-    case .asc: return .desc
-    case .desc: return .hot
-    }
-  }
 }
 
 /// 主贴行底部的回复工具栏（原 ThreadHeader 的 Reply Toolbar）。
@@ -739,6 +731,12 @@ enum TiebaPostRowLayout {
   static var actionFont: UIFont { TiebaSimpleText.font(size: 12, weight: .medium) }
   static var moreFont: UIFont { TiebaSimpleText.font(size: 13, weight: .semibold) }
   static var pillFont: UIFont { TiebaSimpleText.font(size: 13, weight: .semibold) }
+  /// 排序药丸尾部那个向下箭头（点开 = 热门/正序/倒序三档菜单）。
+  static var pillChevronConfig: UIImage.SymbolConfiguration {
+    UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
+  }
+  /// 箭头占的宽度（10pt 字形 + 与标题的 4pt 间距）：药丸宽度要算上它。
+  static let pillChevronWidth: CGFloat = 14
   static var subPostNameFont: UIFont { TiebaSimpleText.font(size: 14, weight: .semibold) }
   static var replyCountFont: UIFont { TiebaSimpleText.font(size: 15, weight: .semibold) }
 
@@ -1196,7 +1194,9 @@ struct TiebaPostRowPlan {
       let pillY = toolbarY + (TiebaPostRowLayout.toolbarHeight - pillHeight) / 2
       var pillX = TiebaPostRowLayout.cardMarginH + cardW - TiebaPostRowLayout.cardPadding
       let sortTitle = inputs.toolbar?.sort.title ?? ""
-      let sortWidth = TiebaSimpleText.singleLineWidth(sortTitle, font: pillFont) + 28
+      let sortWidth =
+        TiebaSimpleText.singleLineWidth(sortTitle, font: pillFont) + 28
+        + TiebaPostRowLayout.pillChevronWidth
       toolbarSortFrame = CGRect(x: pillX - sortWidth, y: pillY, width: sortWidth, height: pillHeight)
       pillX -= sortWidth + 8
       let seeLzWidth = TiebaSimpleText.singleLineWidth("只看楼主", font: pillFont) + 28
