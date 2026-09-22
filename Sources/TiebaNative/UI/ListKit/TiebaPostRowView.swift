@@ -696,10 +696,10 @@ final class TiebaPostRowView: UIView {
   private var assignedText: NSAttributedString?
 
   private let cardView = UIView()
-  /// 扁平形态（帖子页）楼层之间的分隔线：整幅贯穿，卡片形态恒隐藏。
+  /// 楼层之间的细黑线（只有帖子页的平铺行画）：整幅贯穿，带壳的形态恒隐藏。
   private let dividerView = UIView()
-  /// 楼中楼预览的小卡（浅灰底 + 圆角）：把"三条预览 + 查看全部"框成一块，
-  /// 免得它与楼层之间的分隔线混成同一层级。
+  /// 楼中楼预览的容器（白卡 + 阴影、无描边）：把"三条预览 + 查看全部"框成一块，
+  /// 免得它与楼层之间的细黑线混成同一层级。
   private let subPostsBox = UIView()
   private var avatarView: TiebaForumAvatarView?
   private let titleLabel = UILabel()
@@ -727,7 +727,6 @@ final class TiebaPostRowView: UIView {
   private let subPostsHairline = UIView()
   private var subPostNameLabels: [UILabel] = []
   private var subPostTextViews: [UILabel] = []
-  private var subPostDividers: [UIView] = []
   private let subPostsMoreLabel = UILabel()
   private let toolbarView = UIView()
   private let toolbarReplyLabel = UILabel()
@@ -777,13 +776,15 @@ final class TiebaPostRowView: UIView {
     cardView.frame = plan.cardFrame
     cardView.layer.cornerRadius = model.style.radius
     cardView.layer.cornerCurve = .continuous
-    // 外壳底色按形态：普通卡片=主题 card、高亮卡片=比页面深一档、平铺=透明。
+    // 外壳：底色按形态（卡片=主题 card、平铺=透明）；描边只有信息流卡片有；
+    // 帖子页的"块"（.elevated）靠一层柔和阴影浮起来，不要边框。
     cardView.backgroundColor = model.style.shellColor(model.palette)
     cardView.layer.borderWidth =
-      model.style.hasShell ? 1 / max(traitCollection.displayScale, 1) : 0
+      model.style.hasBorder ? 1 / max(traitCollection.displayScale, 1) : 0
     cardView.layer.borderColor = model.palette.borderCard.cgColor
-    // 楼层分隔（只有平铺形态的帖子页有楼层线）：整幅贯穿、1pt，线上下各留
-    // floorGap 空白（见 plan）。第 0 行是主贴卡，线上不画。
+    applyCardShadow(to: cardView, radius: model.style.radius, enabled: model.style.hasShadow)
+    // 楼层分隔（只有平铺形态画）：整幅贯穿、**1 物理像素**的细黑线，线上下各留
+    // floorGap 空白（见 plan）。第 0 行是主贴，线上不画。
     // 宽度取 plan 的卡宽（= 行宽，平铺形态 marginH 为 0）：apply 时本视图的 frame
     // 还没被 cell 设好，读 bounds.width 会拿到 0，线就永远看不见。
     dividerView.isHidden = !model.style.hasFloorSeparator || model.index <= 0
@@ -792,7 +793,7 @@ final class TiebaPostRowView: UIView {
       x: plan.cardFrame.minX,
       y: 0,
       width: plan.cardFrame.width,
-      height: TiebaPostRowLayout.floorSeparatorHeight
+      height: TiebaPostRowLayout.floorSeparatorWidth(traitCollection.displayScale)
     )
 
     avatarControl.frame = plan.avatarFrame
@@ -899,34 +900,21 @@ final class TiebaPostRowView: UIView {
     imageBadge.textColor = .white
     imageBadge.backgroundColor = UIColor.black.withAlphaComponent(0.45)
     dividerView.backgroundColor = TiebaPostRowLayout.floorSeparator
-    // 预览小卡只在平铺形态出现：卡片形态的整行本来就是一张卡，再套一层会糊。
-    // 底色与主贴卡同值（浅色 #F2F2F7 / 深色 0x1C1C1E 档），页面里的"块"是同一种灰。
-    subPostsBox.backgroundColor = model?.style == .flat
-      ? TiebaPostRowLayout.tintedShell
-      : .clear
+    // 楼中楼预览的容器：**白卡 + 阴影、无描边**（用户 2026-09-21：要有阴影有立体感，
+    // 不要边框）。卡内不再画线分隔预览，只留一段很小的间距。
+    let boxed = model?.style == .flat
+    subPostsBox.backgroundColor = boxed ? palette.card : .clear
     subPostsBox.layer.borderWidth = 0
     subPostsHairline.backgroundColor = palette.separator
-    for divider in subPostDividers { divider.backgroundColor = palette.separator }
     for label in subPostNameLabels { label.textColor = palette.textSecondary }
     for label in subPostTextViews {
       label.textColor = palette.textSecondary
     }
     subPostsMoreLabel.textColor = palette.primary
-    // 工具栏与主贴卡同壳：帖子页主贴卡是深一档的灰块，工具栏跟它同色同描边，两块
-    // 才读成一个「主贴区」；平铺形态不画壳（底色透出页面）。
-    // 底色 = 主题 surfaceSecondary（原 JS replyToolbar 的 colors.surfaceSecondary）：
-    // 只靠 hairline 描边成卡，不用 .systemFill —— 那块灰在浅色下是一整条"脏底"。
-    let shell = model?.style ?? .card
-    if shell.hasShell {
-      toolbarView.backgroundColor = shell == .tinted
-        ? TiebaPostRowLayout.tintedShell
-        : TiebaSimpleRowPalette.default.surfaceSecondary
-      toolbarView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
-    } else {
-      toolbarView.backgroundColor = .clear
-      toolbarView.layer.borderWidth = 0
-    }
-    toolbarView.layer.borderColor = palette.borderCard.cgColor
+    // 工具栏在主贴卡内部（见 plan）：不再有独立的底板，壳与描边一律不画——
+    // 那层灰底在帖子页白底上很突兀（用户 2026-09-21）。
+    toolbarView.backgroundColor = .clear
+    toolbarView.layer.borderWidth = 0
     toolbarReplyLabel.textColor = palette.text
     seeLzButton.tintColor = palette.primary
     sortButton.tintColor = palette.primary
@@ -964,6 +952,26 @@ final class TiebaPostRowView: UIView {
   }
 
   // MARK: 子视图装配
+
+  /// 卡片阴影（.elevated 专用）：浅色页面上是"浮起来"的柔影；深色页面本身是黑的，
+  /// 柔影看不出来（黑阴影落在黑底上也没有意义），卡片靠自身比页面亮一档的底色分层。
+  /// 一律给 shadowPath：没有它 Core Animation 每帧都要从图层内容算轮廓。
+  private func applyCardShadow(to view: UIView, radius: CGFloat, enabled: Bool) {
+    guard enabled else {
+      view.layer.shadowOpacity = 0
+      view.layer.shadowPath = nil
+      return
+    }
+    let dark = traitCollection.userInterfaceStyle == .dark
+    view.layer.shadowColor = UIColor.black.cgColor
+    view.layer.shadowOpacity = dark ? 0.45 : 0.10
+    view.layer.shadowRadius = 8
+    view.layer.shadowOffset = CGSize(width: 0, height: 2)
+    view.layer.shadowPath = UIBezierPath(
+      roundedRect: view.bounds.insetBy(dx: 1, dy: 1),
+      cornerRadius: radius
+    ).cgPath
+  }
 
   private func buildSubviews() {
     addSubview(cardView)
@@ -1060,9 +1068,6 @@ final class TiebaPostRowView: UIView {
       text.lineBreakMode = .byTruncatingTail
       addSubview(text)
       subPostTextViews.append(text)
-      let divider = UIView()
-      addSubview(divider)
-      subPostDividers.append(divider)
     }
     subPostsMoreLabel.font = TiebaPostRowLayout.moreFont
     subPostsMoreLabel.numberOfLines = 1
@@ -1228,7 +1233,6 @@ final class TiebaPostRowView: UIView {
       subPostsBox.isHidden = true
       for label in subPostNameLabels { label.isHidden = true }
       for view in subPostTextViews { view.isHidden = true }
-      for divider in subPostDividers { divider.isHidden = true }
       subPostsMoreLabel.isHidden = true
       return
     }
@@ -1237,6 +1241,11 @@ final class TiebaPostRowView: UIView {
     let boxed = model.style == .flat
     subPostsBox.isHidden = !boxed
     subPostsBox.frame = frame
+    applyCardShadow(
+      to: subPostsBox,
+      radius: TiebaPostRowLayout.subPostBoxRadius,
+      enabled: boxed
+    )
     subPostsHairline.isHidden = boxed
     subPostsHairline.frame = CGRect(x: contentX, y: frame.minY, width: frame.width - TiebaPostRowLayout.cardPadding * 2, height: 1 / max(traitCollection.displayScale, 1))
     subPostsControl.frame = frame
@@ -1265,15 +1274,7 @@ final class TiebaPostRowView: UIView {
         text.frame = plan.subPostTextFrames[index]
         text.attributedText = model.subPostTexts.indices.contains(index) ? model.subPostTexts[index] : nil
       }
-      let divider = subPostDividers[index]
-      divider.isHidden = true
       _ = textWidth
-    }
-    for (index, divider) in subPostDividers.enumerated() where index < model.post.subPosts.count {
-      if plan.subPostDividerFrames.indices.contains(index) {
-        divider.isHidden = false
-        divider.frame = plan.subPostDividerFrames[index]
-      }
     }
     subPostsMoreLabel.isHidden = plan.subPostsMoreFrame == nil
     if let moreFrame = plan.subPostsMoreFrame {
