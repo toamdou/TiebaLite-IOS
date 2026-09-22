@@ -23,8 +23,9 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
 
   override var reachEndThreshold: CGFloat { 0.5 }
   override var emptySecondaryText: String { "还没有楼中楼回复" }
-  /// 全页白底 + 顶层回复卡片、回复平铺（用户 2026-09-21：这一页的灰底也要改白）。
-  override var pageUsesRowSurface: Bool { true }
+  /// 全页白底 + 顶层回复卡片、楼中楼回复裸行（用户 2026-09-21：这一页也要白底，
+  /// 行与行之间用很细很细的淡黑线隔开）。
+  override var pageUsesPostSurface: Bool { true }
   override var skeletonStyle: TiebaPostRowStyle { .flat }
 
   /// 类型化入口：floor = nil 表示楼层未知（显示「第?楼」，首包后由 floorPost.floor 补）。
@@ -223,8 +224,7 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
             palette: palette,
             forumName: forum,
             containerWidth: width,
-            // 顶层回复（父楼）用卡片浮起来、楼中楼回复平铺：层级差别就出来了
-            //（用户 2026-09-21）。
+            // 顶层回复（父楼）是带阴影的卡片以凸显层次，楼中楼回复是裸行 + 淡黑线。
             style: isParent ? .elevated : .flat
           ))
           kept.append(post)

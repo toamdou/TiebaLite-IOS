@@ -45,10 +45,10 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private var showShortcut = true
 
   override var skeletonVariant: TiebaSkeletonVariant { .post }
-  /// 骨架与真行同形态（全平铺）：否则数据落地时会跳一下。
-  override var skeletonStyle: TiebaPostRowStyle { .flat }
-  /// 全页白底（用户 2026-09-21：灰背景一律改白）。楼层之间靠黑色实线分层。
-  override var pageUsesRowSurface: Bool { true }
+  /// 骨架与真行同形态（回复是描边白卡）：否则数据落地时会跳一下。
+  override var skeletonStyle: TiebaPostRowStyle { .outlined }
+  /// 全页白底（用户 2026-09-21：灰背景一律改白），楼层是浮在上面的白卡。
+  override var pageUsesPostSurface: Bool { true }
   override var skeletonCount: Int { 5 }
   override var skeletonInsetTop: CGFloat { 12 }
   /// Toast.tsx 的 pill 停在 bottom = insets.bottom + 96。
@@ -145,13 +145,13 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     knownPostView?.applyPalette(list.palette.base)
   }
 
-  /// 已知主贴占位的落位与真实主贴卡对齐：真实卡 = 内容顶 + outerTop(floorGap 14)，
+  /// 已知主贴占位的落位与真实主贴卡对齐：真实卡 = 内容顶 + 卡外边距 cardMarginV(4)，
   /// 骨架的默认内白是 +12 —— 不对齐的话首包落地时整块会跳一次（用户实证"刚开始位置
   /// 在正确位置靠下，加载完突然往上顺移"）。
   override func applyBaseInsets() {
     super.applyBaseInsets()
     guard knownPostView != nil else { return }
-    skeletonView.contentInsets.top = view.safeAreaInsets.top + TiebaPostRowLayout.floorGap
+    skeletonView.contentInsets.top = view.safeAreaInsets.top + TiebaPostRowLayout.cardMarginV
   }
 
   /// 列表自带 refreshControl 且 contentInsetAdjustmentBehavior = .never：顶部内白自补。
@@ -403,9 +403,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
             palette: palette,
             forumName: forumName,
             containerWidth: width,
-            // 主贴是浮在白页上的白卡（阴影分层，不要灰底也不要描边），回复是平铺
-            // 裸行：一眼看出哪层是楼主、往下是回复流（用户 2026-09-21 的口径）。
-            style: isMain ? .elevated : .flat,
+            // 主贴是唯一带阴影的顶层块，回复是白卡 + 一道淡黑线描边（不叠阴影：
+            // 每张卡都带阴影就是用户说的"阴影太多了"）。
+            style: isMain ? .elevated : .outlined,
             title: threadTitle,
             // 进帖转场的目标端：只有主贴卡参与配对（回复卡不配对，避免与
             // 列表里的行抢同一个 id）。

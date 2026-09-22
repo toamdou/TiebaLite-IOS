@@ -73,7 +73,7 @@ private enum TiebaSkeletonMetrics {
 
 /// 单个骨架单元（对齐 Skeleton.tsx 的 SkeletonCell）。
 final class TiebaSkeletonCellView: UIView {
-  /// 外壳形态（与真行同一个枚举）：帖子页全平铺 = .flat，其余页 = .card。
+  /// 外壳形态（与真行同一个枚举）：帖子 / 楼中楼 = .elevated，其余页 = .card。
   private let style: TiebaPostRowStyle
 
   let variant: TiebaSkeletonVariant
@@ -161,10 +161,7 @@ final class TiebaSkeletonCellView: UIView {
   /// 卡片面（背景 card + hairline 描边；layer 色随外观在 trait 变化时刷新）。
   private func makeSurface(radius: CGFloat) -> UIView {
     let view = UIView()
-    let shell = style != .flat
-    // 平铺形态（帖子页）不画壳：底色透出白页，占位块自己就是形状。
-    view.backgroundColor = shell ? cardColor : .clear
-    if !shell { view.layer.borderWidth = 0 }
+    view.backgroundColor = cardColor
     view.layer.cornerRadius = radius
     view.layer.cornerCurve = .continuous
     view.layer.borderWidth = TiebaSkeletonMetrics.hairline(for: traitCollection)
@@ -196,8 +193,8 @@ final class TiebaSkeletonCellView: UIView {
         equalTo: trailingAnchor, constant: -style.marginH),
       surface.topAnchor.constraint(
         equalTo: topAnchor,
-        constant: style.outerTop),
-      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -style.outerBottom),
+        constant: style.marginV),
+      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -style.marginV),
       inner.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: TiebaFeedRowLayout.cardPaddingX),
       inner.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -TiebaFeedRowLayout.cardPaddingX),
       inner.topAnchor.constraint(equalTo: surface.topAnchor, constant: TiebaFeedRowLayout.cardPaddingTop),
@@ -315,8 +312,8 @@ final class TiebaSkeletonCellView: UIView {
       surface.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -style.marginH),
       surface.topAnchor.constraint(
         equalTo: topAnchor,
-        constant: style.outerTop),
-      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -style.outerBottom),
+        constant: style.marginV),
+      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -style.marginV),
       inner.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: TiebaSkeletonMetrics.postPadding),
       inner.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -TiebaSkeletonMetrics.postPadding),
       inner.topAnchor.constraint(equalTo: surface.topAnchor, constant: TiebaSkeletonMetrics.postPadding),
@@ -454,7 +451,7 @@ final class TiebaSkeletonCellView: UIView {
 /// thread/post 行高自然撑出，card/row 缺省 232/88。
 final class TiebaSkeletonList: UIView {
   /// 形状（换值即重建，供搜索页按 tab 切换 thread/row）。
-  /// 外壳形态（帖子页全平铺 = .flat；其余页 .card）。
+  /// 外壳形态（帖子 / 楼中楼 = .elevated；其余页 .card）。
   private let style: TiebaPostRowStyle
 
   var variant: TiebaSkeletonVariant = .thread { didSet { if variant != oldValue { rebuild() } } }

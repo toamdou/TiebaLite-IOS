@@ -701,40 +701,37 @@ final class TiebaPostRowMetrics: @unchecked Sendable {
 
 // MARK: - 布局常量
 
-/// 行外壳三形态。帖子页（帖子 / 楼中楼）只有两种：**块**用 .elevated（浮在页面上的
-/// 白卡，靠阴影分层）、**普通回复**用 .flat（白底裸行，靠细黑线分层）。信息流 / 吧页
-/// 仍是 .card（页面是灰底、卡片带描边）。
+/// 行外壳四形态，按"这一行在页面里是什么角色"选：
+/// - 灰底页（信息流 / 吧页）只有 .card；
+/// - 白底页（帖子 / 楼中楼）分三层：顶层块 .elevated（一张卡带阴影）、
+///   回复 .outlined（白卡 + 一道淡描边，**不叠阴影**）、裸行 .flat（无壳，
+///   行间一条很细的淡黑线）。
 enum TiebaPostRowStyle {
-  /// 信息流 / 吧页卡片：底色 = 主题 card，hairline 描边（页面是灰底，不需要阴影）。
+  /// 灰底页的卡：白底 + 主题 borderCard 描边。
   case card
-  /// 帖子页的"块"（主贴、楼中楼顶层回复）：与 .card 同尺同圆角，但**无描边**、
-  /// 带一层柔和阴影浮起来（用户 2026-09-21："卡片有阴影有立体感，不要有边框"）。
+  /// 白底页的回复卡：白底 + 淡描边（白底上 6% 的黑几乎看不见，故用更明显一档的淡线）。
+  case outlined
+  /// 白底页的顶层块（主贴 / 楼中楼父楼）：白底 + 一层柔和阴影浮起来，不描边。
   case elevated
-  /// 无外壳：页面底色直接透上来，楼层之间靠细黑线分层。
+  /// 白底页的裸行（楼中楼回复）：无壳，靠行间那条很细的淡黑线分隔。
   case flat
 
   var hasShell: Bool { self != .flat }
   var marginH: CGFloat { hasShell ? TiebaPostRowLayout.cardMarginH : 0 }
   var marginV: CGFloat { hasShell ? TiebaPostRowLayout.cardMarginV : 0 }
   var radius: CGFloat { hasShell ? TiebaPostRowLayout.cardRadius : 0 }
-  /// 内容内缩两种形态一致：只去掉外壳，内容列位置不动（否则正文宽度会跟着变）。
   var padding: CGFloat { TiebaPostRowLayout.cardPadding }
-  /// 描边只有 .card 有：白卡上的 hairline 描边在灰底页面里读作"卡边"；
-  /// 浮在白底页面上的 .elevated 要的是阴影而不是一圈线。
-  var hasBorder: Bool { self == .card }
+  var hasBorder: Bool { self == .card || self == .outlined }
   var hasShadow: Bool { self == .elevated }
-  /// 楼层之间的分隔线：平铺形态是整幅贯穿线，带壳的形态没有楼层线可言，恒不画。
   var hasFloorSeparator: Bool { self == .flat }
-  /// 每层楼内容之外的上下留白：帖子页两页的留白一律走 floorGap —— 平铺行要留出与
-  /// 细黑线的距离，浮起来的卡片要留出阴影的距离（4pt 的话线会切在阴影上）。
-  /// 信息流 / 吧页的卡片保持原样（4pt）。
-  var outerTop: CGFloat { self == .card ? TiebaPostRowLayout.cardMarginV : TiebaPostRowLayout.floorGap }
+  /// 行外的上下留白：裸行要留出与淡黑线的距离，卡片留卡间距。
+  var outerTop: CGFloat { self == .flat ? TiebaPostRowLayout.floorGap : TiebaPostRowLayout.cardMarginV }
   var outerBottom: CGFloat {
-    self == .card ? TiebaPostRowLayout.cardMarginV : TiebaPostRowLayout.floorGap
+    self == .flat ? TiebaPostRowLayout.floorGap : TiebaPostRowLayout.cardMarginV
   }
-  /// 外壳底色（.flat 返回透明，由调用方忽略）。
-  func shellColor(_ palette: TiebaFeedRowPalette) -> UIColor {
-    self == .flat ? .clear : palette.card
+  /// 描边色：灰底页用主题 borderCard（6% 黑在灰底上看得见），白底页用那条淡黑线。
+  func borderColor(_ palette: TiebaFeedRowPalette) -> UIColor {
+    self == .card ? palette.borderCard : TiebaPostRowLayout.fineLine
   }
 }
 
@@ -746,22 +743,25 @@ enum TiebaPostRowLayout {
   static let cardMarginV: CGFloat = 4
   static let cardPadding: CGFloat = 16
   static let cardRadius: CGFloat = 16
-  /// 平铺页（帖子 / 楼中楼）的页面底色：浅色纯白、深色纯黑——卡片本身是白 / 深灰，
-  /// 页面压到极值，卡片才浮得出来（同一个灰的话卡与页面糊成一片）。
-  static let flatPage = UIColor { traits in
+  /// 帖子 / 楼中楼两页的页面底色：浅色纯白、深色纯黑——卡片本身是白 / 深灰，页面压到
+  /// 极值，卡片的阴影才浮得出来（页面与卡片同色时卡就糊进背景里了）。
+  static let postPageSurface = UIColor { traits in
     traits.userInterfaceStyle == .dark ? .black : .white
   }
-  /// 楼层分隔线（用户 2026-09-21："分隔线极其僵硬，我要的是细黑线不是浓黑线"）：
-  /// **细**到 1 物理像素（见 floorSeparatorWidth 的取法），纯黑；深色端反转成白
-  /// （黑线落在黑页面上等于没画）。
-  static let floorSeparator = UIColor { traits in
-    traits.userInterfaceStyle == .dark ? .white : .black
+  /// 白底页的淡黑线：**很细很细**的一道（线宽 1 物理像素，见 fineLineWidth），
+  /// 用作裸行之间的分隔线与白底回复卡的描边（用户 2026-09-21："用很细很细的淡黑线
+  /// 隔开"）。深色端反转成淡白，否则黑线落在黑页面上等于没画。
+  static let fineLine = UIColor { traits in
+    traits.userInterfaceStyle == .dark
+      ? UIColor(white: 1, alpha: 0.18)
+      : UIColor(white: 0, alpha: 0.15)
   }
-  /// 楼层分隔线的线宽：1 物理像素（1/scale），不是 1pt。1pt 在 2x/3x 屏上是 2–3 像素
-  /// 黑，就是用户说的"浓黑线"；1 像素才是"细黑线"。
-  static func floorSeparatorWidth(_ displayScale: CGFloat) -> CGFloat {
+  /// 淡黑线的线宽：1 物理像素（1/scale）。1pt 在 2x/3x 屏上是 2–3 像素，就不是"很细"了。
+  static func fineLineWidth(_ displayScale: CGFloat) -> CGFloat {
     1 / max(displayScale, 1)
   }
+  /// 裸行上下各留的空白（淡黑线居中于两行之间）。
+  static let floorGap: CGFloat = 14
   static let avatarSide: CGFloat = 36
   static let avatarSideMain: CGFloat = 40
   static let avatarGap: CGFloat = 10
@@ -780,11 +780,9 @@ enum TiebaPostRowLayout {
   static let subPostTop: CGFloat = 10
   /// 卡内相邻两条预览之间的间距（刻意压小：用户要求"间隔不明显"）。
   static let subPostGap: CGFloat = 7
-  /// 楼中楼预览的容器内缩与圆角（白卡 + 阴影，无描边）。
+  /// 楼中楼预览的容器内缩与圆角（卡片内再嵌一层白卡 + 阴影，无描边）。
   static let subPostBoxPadding: CGFloat = 10
   static let subPostBoxRadius: CGFloat = 12
-  /// 平铺形态每层楼上下各留的空白（细黑线居中于两楼之间）。
-  static let floorGap: CGFloat = 14
   /// 卡内工具栏与上方内容之间的间距（其余留白由 toolbarHeight 自带的 12pt 内距给）。
   static let toolbarGap: CGFloat = 4
   /// 主贴回复工具栏（ThreadHeader.replyToolbar：paddingVertical 12×2 + 药丸 30）。
@@ -996,8 +994,7 @@ struct TiebaPostRowPlan {
     let contentX = style.marginH + style.padding
     let contentW = max(cardW - style.padding * 2, 0)
 
-    // 平铺形态的上下留白走 outerTop/outerBottom（楼层线两侧各一段空白）：分隔线画在
-    // 行顶 y=0，线与上一楼、线与本楼正文都不贴。卡片形态两个值都是 4，尺寸一字未变。
+    // 行外留白：裸行留出与淡黑线的距离，卡片留卡间距（见 TiebaPostRowStyle）。
     var y = style.outerTop
     let cardTop = y
     y += style.padding
