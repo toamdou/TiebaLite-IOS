@@ -32,6 +32,10 @@ final class TiebaThreadMoreViewController: UIViewController {
     form.translatesAutoresizingMaskIntoConstraints = false
     form.isDark = TiebaNavigator.shared.chromeTheme.dark
     form.onRowPress = { [weak self] id in self?.handleRowPress(id) }
+    form.onPick = { [weak self] group, value in
+      guard group == "sort" else { return }
+      self?.handleSortPick(value)
+    }
     view.addSubview(form)
     NSLayoutConstraint.activate([
       form.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -52,14 +56,6 @@ final class TiebaThreadMoreViewController: UIViewController {
         "iconTint": "#5856D6",
       ],
       [
-        "id": "sort",
-        "kind": "link",
-        // 与帖子页那颗药丸同语义：点一下切到下一档（热门 → 正序 → 倒序）。
-        "title": "切换排序（当前：\(sort.title)）",
-        "icon": "arrow.up.arrow.down",
-        "iconTint": "#AF52DE",
-      ],
-      [
         "id": "jump",
         "kind": "link",
         "title": "跳转页码",
@@ -67,6 +63,16 @@ final class TiebaThreadMoreViewController: UIViewController {
         "iconTint": "#5856D6",
       ],
     ]
+    // 排序 = 三档直接选（与帖子页那颗药丸同一套语义），当前档打勾；不再是"点一次换一档"。
+    let sortRows: [[String: Any]] = TiebaThreadSort.allCases.map { option in
+      [
+        "id": "sort",
+        "kind": "option",
+        "title": option.title,
+        "value": String(option.rawValue),
+        "selected": option == sort,
+      ]
+    }
     var actions: [[String: Any]] = [
       [
         "id": "share",
@@ -87,6 +93,7 @@ final class TiebaThreadMoreViewController: UIViewController {
     }
     return [
       ["title": "浏览", "rows": browsing],
+      ["title": "排序", "rows": sortRows],
       ["title": "操作", "rows": actions],
     ]
   }
@@ -102,9 +109,21 @@ final class TiebaThreadMoreViewController: UIViewController {
 
   private func handleRowPress(_ id: String) {
     TiebaSceneHaptics.fire("press")
-    if let action = TiebaThreadMoreSignal.Action(rawValue: id) {
-      pendingAction = action
+    switch id {
+    case "seeLz": pendingAction = .seeLz
+    case "jump": pendingAction = .jump
+    case "share": pendingAction = .share
+    case "delete": pendingAction = .delete
+    default: break
     }
+    TiebaNavigator.shared.dismissPresented(animated: true)
+  }
+
+  /// 排序档位（option 行的 value = TiebaThreadSort 的 rawValue）。选的就是当前档
+  /// 也不必特判：收起后由帖子页按"同档不重载"处理。
+  private func handleSortPick(_ value: String) {
+    TiebaSceneHaptics.fire("press")
+    pendingAction = .selectSort(TiebaThreadSort(rawValue: Int(value) ?? -1) ?? .hot)
     TiebaNavigator.shared.dismissPresented(animated: true)
   }
 }
