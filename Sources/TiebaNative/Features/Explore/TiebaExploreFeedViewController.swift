@@ -346,7 +346,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
 
   private func makeRows() -> [[String: Any]] {
     var options = TiebaFeedRowBuilder.Options.current()
-    options.closeMenuOptions = ["dislike", "block", "copy-title"]
+    options.closeMenuOptions = ["dislike", "block", "block-forum", "copy-title"]
     options.imageContextMenu = true
     return items.map { item in
       guard let thread = item["threadInfo"] as? [String: Any] else { return [:] }
@@ -429,6 +429,8 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
       presentDislikeSheet(thread)
     case "block":
       blockAuthor(thread)
+    case "block-forum":
+      blockForum(thread)
     case "copy-title":
       let title = value(thread, "title")
       guard !title.isEmpty else { return }
@@ -560,6 +562,58 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     return media.contains { ($0["type"] as? String ?? "image") == "image" }
   }
 
+  // MARK: - 屏蔽吧
+
+  /// 屏蔽这个吧 = 提交推荐流的不感兴趣理由「不想看这个吧」（Kotlin DislikeBtn 同一条
+  /// 链路：服务端收到该理由即不再推荐这个吧），成功后立刻收起本页该吧的所有行。
+  private func blockForum(_ thread: [String: Any]) {
+    let threadId = value(thread, "id")
+    guard !threadId.isEmpty else { return }
+    let name = TiebaFeedRowFallback.forumName(thread)
+    let forumId = value(thread, "forumId")
+    Task { @MainActor in
+      do {
+        try await TiebaFeedAPI.submitDislike(
+          threadId: threadId,
+          dislikeIds: TiebaDislikeSheetViewController.forumReasonId,
+          forumId: forumId
+        )
+        TiebaSceneHaptics.fire("action-success")
+        pill.showResult(success: true, text: name.isEmpty ? "已屏蔽这个吧" : "已屏蔽 \(name)吧")
+        removeForumRows(name: name, threadId: threadId)
+      } catch {
+        TiebaSceneHaptics.fire("action-fail")
+        pill.showResult(success: false, text: "屏蔽失败，请稍后重试")
+      }
+    }
+  }
+
+  /// 移除本页该吧的所有行（被点那行先折叠，同不感兴趣的退场时序）。吧名缺失的行
+  /// 只按帖子 id 命中那一行，不至于把同吧的行漏在外。
+  private func removeForumRows(name: String, threadId: String) {
+    let remove: () -> Void = { [weak self] in
+      guard let self else { return }
+      self.items.removeAll { item in
+        guard let info = item["threadInfo"] as? [String: Any] else { return false }
+        if !name.isEmpty, TiebaFeedRowFallback.forumName(info) == name { return true }
+        return TiebaSimpleRowParser.string(info["id"]) == threadId
+      }
+      if self.items.isEmpty {
+        self.showState(self.emptyState)
+      } else {
+        self.publishFresh()
+      }
+    }
+    let index = items.firstIndex {
+      TiebaSimpleRowParser.string(($0["threadInfo"] as? [String: Any])?["id"]) == threadId
+    }
+    guard let index else {
+      remove()
+      return
+    }
+    list.collapseRowThen(atIndex: index, remove: remove)
+  }
+
   // MARK: - 不感兴趣
 
   /// 原因面板（原 BottomSheet）：系统 sheet + 多选列表（可多选，提交逗号串）。
@@ -622,8 +676,12 @@ final class TiebaDislikeSheetViewController: UIViewController {
     Reason(id: "3", title: "重复推荐"),
     Reason(id: "4", title: "内容不适"),
     Reason(id: "5", title: "广告太多"),
-    Reason(id: "7", title: "不想看这个吧"),
+    Reason(id: TiebaDislikeSheetViewController.forumReasonId, title: "不想看这个吧"),
   ]
+
+  /// 「不想看这个吧」的服务端理由 id：卡片菜单的「屏蔽吧」一键提交它
+  /// （上面那条文案与这里必须同指一个 id，服务端按它停止推荐这个吧）。
+  static let forumReasonId = "7"
 
   private let onSubmit: (String) -> Void
   private let table = UITableView(frame: .zero, style: .insetGrouped)
