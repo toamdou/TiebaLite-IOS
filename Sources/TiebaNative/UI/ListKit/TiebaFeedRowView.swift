@@ -1694,6 +1694,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     switch option {
     case "dislike": return "不感兴趣"
     case "block": return "屏蔽作者"
+    case "block-forum": return "屏蔽吧"
     case "copy-title": return "复制标题"
     default: return option
     }
