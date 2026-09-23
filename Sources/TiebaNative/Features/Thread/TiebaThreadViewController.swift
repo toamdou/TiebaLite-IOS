@@ -216,6 +216,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     loadGeneration += 1
     let generation = loadGeneration
     isLoading = true
+    // 换档要等一次服务端往返（~1.3s）：期间挂个 spinner 药丸，否则点完界面毫无反应
+    //（用户实证"没有加载动画"）。
+    pill.show(text: "正在加载", progress: nil)
     Task { @MainActor in
       defer {
         if generation == self.loadGeneration { self.isLoading = false }
@@ -231,6 +234,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           sort: self.sort
         )
         self.apply(page, replacing: true, generation: generation, keepMain: true)
+        if generation == self.loadGeneration { self.pill.hide() }
       } catch {
         guard generation == self.loadGeneration else { return }
         self.pill.showResult(success: false, text: "加载失败")

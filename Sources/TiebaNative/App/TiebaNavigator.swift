@@ -294,6 +294,11 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
 
     switch entry?.presentation ?? .push {
     case .push:
+      // 二级页一律盖住底栏。`hidesBottomBarWhenPushed` 是唯一一个 iPhone / iPad /
+      // iOS 17 都认的开关（iPad 的侧边栏另有 syncIPadTabChrome 管）：此前只有 iPad
+      // 分支动栏，手机上压进吧页 / 帖子页 / 搜索页后底栏一直露在下面（用户实证）。
+      // tab 根屏不经过这里（装配时直接设栈），所以只影响压栈页。
+      host.hidesBottomBarWhenPushed = true
       switch mode {
       case .replace:
         var stack = nav.viewControllers
