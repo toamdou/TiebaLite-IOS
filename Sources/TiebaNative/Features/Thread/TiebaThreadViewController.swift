@@ -943,7 +943,9 @@ final class TiebaThreadFloatingBar: UIView {
 
   var onAction: ((Action) -> Void)?
 
-  private let background = UIVisualEffectView(effect: TiebaThreadFloatingBar.makeEffect())
+  /// 浮动栏底色：纯色卡片色 + 一点阴影（原 JS 的液态玻璃 .clear 太花，用户要求
+  /// 照系统浮动条的观感来：实底、轻微投影）。
+  private let background = UIView()
   private let copyButton = TiebaThreadFloatingBar.makeButton("link")
   // 点赞图标与计数分开摆（计数在图标正上方，不再画进按钮里当角标）。
   private let agreeButton = TiebaThreadFloatingBar.makeButton(nil)
@@ -958,9 +960,14 @@ final class TiebaThreadFloatingBar: UIView {
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    clipsToBounds = true
+    // 不自裁：投影画在本层，圆角由 background 自己裁（子视图都在界内）。
+    clipsToBounds = false
     layer.cornerRadius = 27
     layer.cornerCurve = .continuous
+    layer.shadowColor = UIColor.black.cgColor
+    layer.shadowOpacity = 0.10
+    layer.shadowRadius = 8
+    layer.shadowOffset = CGSize(width: 0, height: 2)
     background.layer.cornerRadius = 27
     background.layer.cornerCurve = .continuous
     background.clipsToBounds = true
@@ -992,6 +999,7 @@ final class TiebaThreadFloatingBar: UIView {
 
   func configure(hasAgree: Bool, zanNum: Int, isCollected: Bool, palette: TiebaFeedRowPalette) {
     self.palette = palette
+    background.backgroundColor = palette.card
     agreeIcon.image = UIImage(
       systemName: hasAgree ? "heart.fill" : "heart",
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
@@ -1046,6 +1054,11 @@ final class TiebaThreadFloatingBar: UIView {
   override func layoutSubviews() {
     super.layoutSubviews()
     background.frame = bounds
+    // 投影轮廓按实际尺寸给（没有它 Core Animation 每帧从图层内容算轮廓）。
+    layer.shadowPath = UIBezierPath(
+      roundedRect: bounds,
+      cornerRadius: layer.cornerRadius
+    ).cgPath
     // 先让 stack 落位：下面 layoutAgreeContent 读的是 agreeButton.frame（箭头/计数）。
     buttonStack.frame = bounds
     buttonStack.layoutIfNeeded()
@@ -1094,17 +1107,5 @@ final class TiebaThreadFloatingBar: UIView {
       )
     }
     return button
-  }
-
-  /// 系统液态玻璃（.clear：JS 侧 glassEffectStyle="clear" 同材质；.regular 会厚
-  /// 一层、胶囊显大）。部署底线 iOS 26：UIGlassEffect 恒可用，无低版本分档。
-  private static func makeEffect() -> UIVisualEffect {
-    let effect = UIGlassEffect(style: .clear)
-    effect.tintColor = UIColor { traits in
-      traits.userInterfaceStyle == .dark
-        ? UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.15)
-        : UIColor(white: 1, alpha: 0.15)
-    }
-    return effect
   }
 }
