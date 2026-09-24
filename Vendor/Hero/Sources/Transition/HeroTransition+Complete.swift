@@ -127,14 +127,21 @@ extension HeroTransition {
 
     completionCallback?(finished)
 
-    // https://github.com/lkzhao/Hero/issues/354
-    // tabbar not responding after pushing a view controller with hideBottomBarWhenPushed
-    // this is due to iOS adding a few extra animation to the tabbar but they are not removed when
-    // the transition completes. Possibly another iOS bug. let me know if you have better work around.
-    if finished {
-      toViewController?.tabBarController?.tabBar.layer.removeAllAnimations()
-    } else {
-      fromViewController?.tabBarController?.tabBar.layer.removeAllAnimations()
+    // 上游（2018）此处对 tabBar.layer 做 removeAllAnimations，注释见
+    // https://github.com/lkzhao/Hero/issues/354：压栈页用 hideBottomBarWhenPushed 时
+    // iOS 会给底栏留几条动画不收，底栏之后不响应点击，所以在收尾时清一次。
+    //
+    // 本仓 2026-09-24 收窄到 iOS 17：iOS 18 起这个 App 不再用 hidesBottomBarWhenPushed
+    // 收底栏（走 UITabBarController.setTabBarHidden，见 TiebaNavigator.syncTabChrome），
+    // 而这条清理在 iOS 26 上会把系统收栏自身那条玻璃动画掐在半路 —— 表现就是二级页底部
+    // 常驻一条与底栏等宽等高的玻璃残带（用户实证，只在"点卡片进帖"这条唯一开 Hero 的
+    // 路径上出现）。iOS 17 档仍在用那个 API，那里的清理保持原样。
+    if #unavailable(iOS 18.0) {
+      if finished {
+        toViewController?.tabBarController?.tabBar.layer.removeAllAnimations()
+      } else {
+        fromViewController?.tabBarController?.tabBar.layer.removeAllAnimations()
+      }
     }
 
     if finished {

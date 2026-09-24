@@ -679,16 +679,21 @@ extension TiebaNavigator: UINavigationControllerDelegate {
   private func syncTabChrome(for navigationController: UINavigationController) {
     guard #available(iOS 18.0, *), let tabBar else { return }
     let atRoot = navigationController.viewControllers.count <= 1
-    guard atRoot != tabChromeAtRoot else { return }
-    tabChromeAtRoot = atRoot
-    if tabBar.traitCollection.userInterfaceIdiom == .pad {
-      if atRoot {
-        tabBar.sidebar.isHidden = sidebarHiddenBeforePush
-      } else {
-        sidebarHiddenBeforePush = tabBar.sidebar.isHidden
-        tabBar.sidebar.isHidden = true
+    // 侧边栏只在"根屏 ↔ 二级页"翻转时动：它要记住用户当时的折叠状态。
+    if atRoot != tabChromeAtRoot {
+      tabChromeAtRoot = atRoot
+      if tabBar.traitCollection.userInterfaceIdiom == .pad {
+        if atRoot {
+          tabBar.sidebar.isHidden = sidebarHiddenBeforePush
+        } else {
+          sidebarHiddenBeforePush = tabBar.sidebar.isHidden
+          tabBar.sidebar.isHidden = true
+        }
       }
     }
+    // 底栏可见性**每次转场都重写**（不再只在状态翻转时写）：转场期间可能有别的东西
+    // 动过它——Hero 的收尾就曾对 tabBar.layer 做 removeAllAnimations（见 Vendor/Hero
+    // 的说明），把系统收栏那半动画掐掉，只写一次就会漏掉这种情形，留下一条残带。
     tabBar.setTabBarHidden(!atRoot, animated: false)
   }
 
