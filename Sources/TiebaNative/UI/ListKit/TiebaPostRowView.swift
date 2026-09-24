@@ -1425,6 +1425,15 @@ final class TiebaPostRowView: UIView {
 // MARK: - 文本交互（选中 / 链接）
 
 extension TiebaPostRowView: UITextViewDelegate {
+  /// 只读正文的长按菜单补「全选」（系统不一定给，见 tiebaSelectableEditMenu）。
+  func textView(
+    _ textView: UITextView,
+    editMenuForTextIn range: NSRange,
+    suggestedActions: [UIMenuElement]
+  ) -> UIMenu? {
+    textView.tiebaSelectableEditMenu(suggestedActions: suggestedActions)
+  }
+
   func textView(
     _ textView: UITextView,
     primaryActionFor textItem: UITextItem,

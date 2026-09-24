@@ -294,11 +294,6 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
 
     switch entry?.presentation ?? .push {
     case .push:
-      // 二级页一律盖住底栏。`hidesBottomBarWhenPushed` 是唯一一个 iPhone / iPad /
-      // iOS 17 都认的开关（iPad 的侧边栏另有 syncIPadTabChrome 管）：此前只有 iPad
-      // 分支动栏，手机上压进吧页 / 帖子页 / 搜索页后底栏一直露在下面（用户实证）。
-      // tab 根屏不经过这里（装配时直接设栈），所以只影响压栈页。
-      host.hidesBottomBarWhenPushed = true
       switch mode {
       case .replace:
         var stack = nav.viewControllers
@@ -619,7 +614,7 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     animated: Bool
   ) {
     applyBarVisibility(shouldHideBar(in: viewController), to: navigationController)
-    syncIPadTabChrome(for: navigationController)
+    syncTabChrome(for: navigationController)
   }
 
   public func navigationController(
@@ -630,7 +625,7 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     // 转场落定后按**实际栈顶**再校一次：右滑中途松手（转场取消）时栈顶仍是原页，
     // willShow 已按目标页隐过栏，这里把栏还给仍在上面的那一屏。
     applyBarVisibility(shouldHideBar(in: viewController), to: navigationController)
-    syncIPadTabChrome(for: navigationController)
+    syncTabChrome(for: navigationController)
     // 滚动视图的跟踪关联由各宿主 VC 自己在 viewDidLayoutSubviews 里做
     // （setContentScrollView 是子 VC 的职责，容器没有替它设的 API）。
     // 转场完成即重扫（原来监听未公开的 UINavigationControllerDidShowNotification，
@@ -650,22 +645,27 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     return (TiebaRouteTable.entry(named: host.route.name)?.chrome ?? .standard) == .hidden
   }
 
-  /// iPad 的 tab chrome（侧边栏 + 折叠后顶部的 tab 横幅）只属于 tab 根屏：压进吧页、
-  /// 帖子页等二级页后整套收起，宽度全给内容，返回走栏内返回箭头；回到根屏再还原
-  /// （还原的是用户当时的折叠状态，不是强制展开）。手机没有侧边栏，不动。
-  private func syncIPadTabChrome(for navigationController: UINavigationController) {
-    guard let tabBar, tabBar.traitCollection.userInterfaceIdiom == .pad else { return }
+  /// tab chrome（手机底栏 / iPad 侧边栏 + 折叠后顶部的 tab 横幅）只属于 tab 根屏：
+  /// 压进吧页、帖子页、搜索页等二级页后整套收起，宽度全给内容，返回走栏内返回箭头；
+  /// 回到根屏再还原（iPad 还原的是用户当时的折叠状态，不是强制展开）。
+  ///
+  /// 隐藏走 `setTabBarHidden`（iOS 18 起）而**不是** `hidesBottomBarWhenPushed`：后者在
+  /// iOS 26 的悬浮玻璃底栏上只把图标移走，玻璃背景留在屏底成一条与底栏等宽等高的残带
+  /// （用户实证"页面下方常驻一条带子"）。`setTabBarHidden` 收的是整条栏。
+  private func syncTabChrome(for navigationController: UINavigationController) {
+    guard let tabBar else { return }
     let atRoot = navigationController.viewControllers.count <= 1
     guard atRoot != tabChromeAtRoot else { return }
     tabChromeAtRoot = atRoot
-    if atRoot {
-      tabBar.sidebar.isHidden = sidebarHiddenBeforePush
-      tabBar.setTabBarHidden(false, animated: false)
-    } else {
-      sidebarHiddenBeforePush = tabBar.sidebar.isHidden
-      tabBar.sidebar.isHidden = true
-      tabBar.setTabBarHidden(true, animated: false)
+    if tabBar.traitCollection.userInterfaceIdiom == .pad {
+      if atRoot {
+        tabBar.sidebar.isHidden = sidebarHiddenBeforePush
+      } else {
+        sidebarHiddenBeforePush = tabBar.sidebar.isHidden
+        tabBar.sidebar.isHidden = true
+      }
     }
+    tabBar.setTabBarHidden(!atRoot, animated: false)
   }
 
   /// 立即落定栏的可见性（**含返回，不许延到转场结束**），并把 alpha 一起归零/还原。
