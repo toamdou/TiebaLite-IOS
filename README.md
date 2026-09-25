@@ -1,6 +1,6 @@
 <div align="center">
 
-# 贴吧 Lite · TiebaLite for iOS
+# 贴吧 Lite-IOS
 
 **第三方百度贴吧 iOS 客户端** ；最低 iOS 17，26+ 为液态玻璃形态、17退回常规材质
 
