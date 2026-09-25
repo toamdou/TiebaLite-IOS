@@ -2,7 +2,7 @@
 
 # 贴吧 Lite · TiebaLite for iOS
 
-**第三方百度贴吧 iOS 客户端** — 纯 Swift / UIKit（零 JS、零 RN）；最低 iOS 17，26+ 为液态玻璃形态、17–25 退回该系统年代的常规材质
+**第三方百度贴吧 iOS 客户端** ；最低 iOS 17，26+ 为液态玻璃形态、17–25 退回常规材质
 
 [![Build iOS Unsigned IPA](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml/badge.svg)](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml)
 ![Version](https://img.shields.io/badge/version-2.1.1-208AEF)
@@ -54,7 +54,8 @@
 - ✅ 广告 / 直播内容过滤
 - ❓ 屏蔽：屏蔽词 / 屏蔽用户 / 屏蔽吧
 - ✅ 阅读字号、省流量模式、图片加载质量三档
-- ❓  App scheme 深链
+- ✅  App scheme 深链
+- ✅ iPad 适配
 
 ### ❌ 未实现
 
@@ -63,7 +64,6 @@
 - ❌ 推送通知（应用不带推送权限）
 - ❌ 直播观看（信息流中已过滤）
 - ❌ 投票等帖子内互动插件
-- ❌ iPad 适配（仅 iPhone 竖屏）
 
 ## 📁 项目结构
 
