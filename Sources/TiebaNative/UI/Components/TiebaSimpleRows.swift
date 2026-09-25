@@ -398,7 +398,9 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
       self.gap = gap
       self.cornerRadius = number("radius", 20)
       self.borderWidth = borderWidth
-      self.backgroundColor = color("bg", .white)
+      // 缺省卡底 = 主题卡片色：消息列表/吧务组都显式传 bg，而搜索结果的
+      // user/message 行不传，写死 .white 在深色下就是白卡（用户实证）。
+      self.backgroundColor = color("bg", TiebaSimpleRowPalette.default.base.card)
       self.borderColor = color("borderColor", nil)
       self.avatarSize = avatarSize
       self.avatarURL = TiebaSimpleRowParser.avatarURL(TiebaSimpleRowParser.nonEmpty(raw["avatar"]) ?? "")
@@ -485,7 +487,7 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
       self.gap = gap
       self.cornerRadius = number("radius", 20)
       self.borderWidth = borderWidth
-      self.backgroundColor = color("bg", .white)
+      self.backgroundColor = color("bg", TiebaSimpleRowPalette.default.base.card)
       self.borderColor = color("borderColor", nil)
       self.avatarSize = avatarSize
       self.avatarURL = TiebaSimpleRowParser.avatarURL(TiebaSimpleRowParser.nonEmpty(raw["avatar"]) ?? "")
