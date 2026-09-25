@@ -343,21 +343,23 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
   private func openPost(_ hit: TiebaSearchAPI.PostHit) {
     guard !hit.threadId.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    if hit.postId.isEmpty {
-      TiebaNavigator.shared.navigate(.thread(id: hit.threadId))
+    // 回复命中（type=2）→ 带 pid 直达楼中楼；主贴命中（type=1，pid 只是代表楼）
+    // 必须进帖子页，否则整帖被套进楼中楼的"回复"外壳（用户实证）。
+    if hit.isReply, !hit.postId.isEmpty {
+      TiebaNavigator.shared.navigate(
+        .subposts(
+          threadId: hit.threadId,
+          postId: hit.postId,
+          forumId: forumId,
+          floor: hit.floor > 0 ? hit.floor : nil,
+          threadAuthorId: "",
+          forumName: forumName,
+          threadTitle: ""
+        )
+      )
       return
     }
-    TiebaNavigator.shared.navigate(
-      .subposts(
-        threadId: hit.threadId,
-        postId: hit.postId,
-        forumId: forumId,
-        floor: hit.floor > 0 ? hit.floor : nil,
-        threadAuthorId: "",
-        forumName: forumName,
-        threadTitle: ""
-      )
-    )
+    TiebaNavigator.shared.navigate(.thread(id: hit.threadId))
   }
 }
 
