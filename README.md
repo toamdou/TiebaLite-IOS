@@ -2,7 +2,7 @@
 
 # 贴吧 Lite · TiebaLite for iOS
 
-**第三方百度贴吧 iOS 客户端** ；最低 iOS 17，26+ 为液态玻璃形态、17–25 退回常规材质
+**第三方百度贴吧 iOS 客户端** ；最低 iOS 17，26+ 为液态玻璃形态、17退回常规材质
 
 [![Build iOS Unsigned IPA](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml/badge.svg)](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml)
 ![Version](https://img.shields.io/badge/version-2.1.1-208AEF)
