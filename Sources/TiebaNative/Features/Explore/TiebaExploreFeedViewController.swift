@@ -464,7 +464,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   private func openThread(_ thread: [String: Any]) {
     // 回复类推荐卡（"回复了xxx"）：ThreadInfo.id 装的是回复 pid，threadId 才是帖子
     // 本体，拿 id 导航服务端按"帖子已删除"回错（用户实证）。有 postId 顺路带上，
-    // 进帖直接落到被推荐的那一楼。
+    // 进帖直接落到被推荐的那一楼；普通帖卡的 post_id 是首楼 pid，不跳。
     let threadId = value(thread, "threadId").isEmpty ? value(thread, "id") : value(thread, "threadId")
     guard !threadId.isEmpty else { return }
     let postId = value(thread, "postId")
