@@ -302,6 +302,9 @@ public enum TiebaViewModelMapper {
     out["isAd"] = isAdThread(rd)
     out["threadId"] = str(coalesce(rd["threadId"], rd["thread_id"], rd["id"], ""))
     out["firstPostId"] = str(coalesce(rd["firstPostId"], rd["first_post_id"], ""))
+    // 被推荐的那条回复（"回复了xxx"类卡片）：ThreadInfo.post_id(52) = 回复 pid。
+    // 这类卡上 id(1) 不是帖子 id、threadId(2) 才是 —— 导航用 threadId + 这个 pid。
+    out["postId"] = str(coalesce(rd["postId"], rd["post_id"], ""))
     out["title"] = coalesce(rd["title"], "")!
     out["forumId"] = str(coalesce(rd["forumId"], rd["forum_id"], rd["fid"], forumInfo?["id"], forumDict["id"], ""))
     out["forumName"] = jsOr(resolvedForumName, rd["fname"], "")!

@@ -23,6 +23,10 @@ enum TiebaSearchAPI {
     var threadId = ""
     var postId = ""
     var floor = 0
+    /// 命中落点在第几楼就决定去哪：第 1 楼 = 主贴本体 → 帖子页；第 2 楼起的回复
+    /// → 楼中楼。引擎的 type/main_post 标签不可靠——实测第 1 楼的命中也会带
+    ///（用户实证：主贴结果被套进"第 1 楼回复"）。
+    var isReply = false
     var row: [String: Any] = [:]
   }
 
@@ -171,6 +175,7 @@ enum TiebaSearchAPI {
       hit.threadId = threadId
       hit.postId = TiebaSimpleRowParser.string(item["pid"] ?? postInfo?["pid"]) ?? ""
       hit.floor = Int(TiebaSimpleRowParser.double(item["floor"] ?? postInfo?["floor"]) ?? 0)
+      hit.isReply = (TiebaSimpleRowParser.double(item["floor"] ?? postInfo?["floor"]) ?? 0) > 1
       hit.row = postRow(item)
       return hit
     }

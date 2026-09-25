@@ -58,7 +58,9 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   private var isLoggedIn: Bool { !TiebaBackgroundSnapshot.shared.bduss.isEmpty }
 
   init(name: String, forumId: String) {
-    self.forumName = name
+    // 吧名规范形 = 不带"吧"后缀：标题/链接/浏览记录都自己追加"吧"，路由参数若带
+    // （深链、分享链人工写成"XX吧"）就会叠成"XX吧吧"（用户实证）。
+    self.forumName = name.hasSuffix("吧") ? String(name.dropLast()) : name
     self.routeForumId = forumId
     super.init(nibName: nil, bundle: nil)
   }
