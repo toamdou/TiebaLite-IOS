@@ -21,7 +21,7 @@ expand_template(
     substitutions = {
         "$(CURRENT_PROJECT_VERSION)": "3",
         "$(EXECUTABLE_NAME)": "TiebaLiveActivity",
-        "$(MARKETING_VERSION)": "2.1.1",
+        "$(MARKETING_VERSION)": "2.1.2",
     },
     template = "Info.plist",
 )
