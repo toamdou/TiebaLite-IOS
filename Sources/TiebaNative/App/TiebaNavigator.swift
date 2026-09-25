@@ -671,11 +671,13 @@ extension TiebaNavigator: UINavigationControllerDelegate {
   /// 压进吧页、帖子页、搜索页等二级页后整套收起，宽度全给内容，返回走栏内返回箭头；
   /// 回到根屏再还原（iPad 还原的是用户当时的折叠状态，不是强制展开）。
   ///
-  /// 隐藏走 `setTabBarHidden`（iOS 18 起）而**不是** `hidesBottomBarWhenPushed`：后者在
-  /// iOS 26 的悬浮玻璃底栏上只把图标移走，玻璃背景留在屏底成一条与底栏等宽等高的残带
-  /// （用户实证"页面下方常驻一条带子"）。`setTabBarHidden` 收的是整条栏。
-  /// iOS 17 没有这个 API：那一档退回 push 时的 `hidesBottomBarWhenPushed`（经典底栏上
-  /// 行为正确，见 pushRoute），这里不重复动。
+  /// 底栏要**双写**：`setTabBarHidden`（iOS 18 起）负责布局与安全区（内容让位、
+  /// 返回时还原），`isHidden` 负责把整条栏视图（含 iOS 26 的液态玻璃背景、下滑
+  /// 收纳态的圆）从屏上拿掉——实测 iOS 26 上只 set 隐藏时玻璃层会留在屏底：
+  /// 整条栏状态剩一条与底栏等宽等高的模糊带、收纳状态剩一个圆（用户实证）。
+  /// 两者同向，willShow/didShow 都重写。iOS 17 没有 setTabBarHidden：那一档退回
+  /// push 时的 hidesBottomBarWhenPushed（经典底栏上行为正确，见 pushRoute）。
+
   private func syncTabChrome(for navigationController: UINavigationController) {
     guard #available(iOS 18.0, *), let tabBar else { return }
     let atRoot = navigationController.viewControllers.count <= 1
@@ -691,10 +693,11 @@ extension TiebaNavigator: UINavigationControllerDelegate {
         }
       }
     }
-    // 底栏可见性**每次转场都重写**（不再只在状态翻转时写）：转场期间可能有别的东西
-    // 动过它——Hero 的收尾就曾对 tabBar.layer 做 removeAllAnimations（见 Vendor/Hero
-    // 的说明），把系统收栏那半动画掐掉，只写一次就会漏掉这种情形，留下一条残带。
+    // 底栏可见性**每次转场都重写**：转场期间可能有别的东西动过它（Hero 收尾、
+    // 系统收纳动画），只写一次就会漏。
     tabBar.setTabBarHidden(!atRoot, animated: false)
+    // isHidden 写在 UITabBar 视图上：把整条栏（含液态玻璃背景、收纳态的圆）从屏上拿掉。
+    tabBar.tabBar.isHidden = !atRoot
   }
 
   /// 立即落定栏的可见性（**含返回，不许延到转场结束**），并把 alpha 一起归零/还原。
