@@ -85,42 +85,6 @@ Tools/                     占位描述文件生成、产物隐私清洗
 
 构建入口与标签：`bazel build //:App`，主模块 `//Sources/TiebaNative:TiebaNative`。
 
-## 🛠 本地编译
-
-### 环境要求
-
-| 依赖 | 要求 |
-| --- | --- |
-| 最低 iOS | 17.0（26+ 出液态玻璃形态；17–25 出常规材质形态，见 Actions 的两种 IPA） |
-| macOS | 14+ |
-| Xcode | 26 或更高（开发环境为 Xcode 27 beta） |
-| [Bazelisk](https://github.com/bazelbuild/bazelisk) | `brew install bazelisk`（版本由 `.bazelversion` 锁定） |
-| Apple ID | 免费个人 Apple ID 即可真机调试 |
-
-### 步骤
-
-```bash
-git clone https://github.com/toamdou/TiebaLite-IOS.git
-cd TiebaLite-IOS
-
-# 模拟器编译+运行（无需签名）
-bazel build //:App --config=sim
-
-# 真机：把自己的描述文件放进 Signing/ 后（app 与扩展各一份）
-bazel build //:App --config=device --config=sign
-
-# 需要 Xcode 断点调试时：先用 Bazel 生成工程，再打开
-bazel run //:xcodeproj && open xcodeproj.xcodeproj
-```
-
-> 可选：把 Bazel 缓存路径写进 `.bazelrc.user`（已 gitignore，含本机绝对路径），可大幅加速重复编译。
-
-在 Xcode 中：
-
-1. 选中 `tiebalite` target → **Signing & Capabilities** → 勾选你自己的 Team（免费个人 Apple ID 即可）；
-2. 若 Bundle Identifier `com.tiebalite.app` 与你的签名冲突，改成自己的（如 `com.yourname.tiebalite`）；
-3. 选择你的 iPhone 真机 → **⌘R** 编译运行。
-
 
 ## 🤖 GitHub Actions 自动打包（未签名 IPA）
 
@@ -129,7 +93,6 @@ bazel run //:xcodeproj && open xcodeproj.xcodeproj
 **两种触发方式：**
 
 1. **手动构建**：仓库页 → **Actions** → **Build iOS Unsigned IPA** → **Run workflow**（可选 Release / Debug）→ 一次同时编译 `main` 与 `ios17` 两个分支，在本次运行页面下载两个 Artifact：`TiebaLite-<版本>.ipa`（**iOS 26+**）与 `TiebaLite-<版本>-IOS17.ipa`（**最低 iOS 17**，同一套功能）；
-2. **打 Tag 自动发 Release**：
 
 ## 📱 通过 SideStore / AltStore 安装
 
