@@ -796,9 +796,13 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   }
 
   private func forumBarItems() -> [UIBarButtonItem]? {
-    guard let thread, !thread.forumName.isEmpty else { return nil }
-    let label = "进入\(thread.forumName)吧"
-    guard !thread.forumAvatar.isEmpty, let url = URL(string: thread.forumAvatar) else {
+    // 数据没落地时用快照（点卡片进帖必写）：否则首包前右侧是空的，首包一到吧按钮
+    // 才"突然"出现（用户实证）。深链无快照时仍等首包。
+    let forumName = thread?.forumName ?? knownSnapshot?.forumName ?? ""
+    guard !forumName.isEmpty else { return nil }
+    let label = "进入\(forumName)吧"
+    let avatar = thread?.forumAvatar ?? knownSnapshot?.forumAvatarURL?.absoluteString ?? ""
+    guard !avatar.isEmpty, let url = URL(string: avatar) else {
       // 缺吧头像：退化成通用头像符号（与原 headerRight 的 symbolItem 分支同语义）。
       let item = UIBarButtonItem(
         image: UIImage(systemName: "person.crop.circle"),
@@ -820,7 +824,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   }
 
   private func openForum() {
-    guard let name = thread?.forumName, !name.isEmpty else { return }
+    let name = thread?.forumName ?? knownSnapshot?.forumName ?? ""
+    guard !name.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
     TiebaNavigator.shared.navigate(.forum(name: name, forumId: thread?.forumId ?? ""))
   }
