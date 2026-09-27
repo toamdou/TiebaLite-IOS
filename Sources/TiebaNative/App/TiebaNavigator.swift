@@ -41,6 +41,9 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 所以压栈不再走"包住 tab 的那条根栈"。窗口根 VC 仍是一条只做容器的
   /// TiebaRootNavigationController（不压栈），状态栏链路与栏扫描都不用改。
   private var tabNavs: [Int: TiebaRootNavigationController] = [:]
+  /// 根容器栈（window.rootViewController）：手机上二级页压到这条栈，整页盖住
+  /// tab 控制器（底栏/玻璃 dock 一并盖住）。iPad 仍用每 tab 独立栈（侧边栏交互）。
+  private var shellNav: UINavigationController?
   private var tabBar: TiebaMainTabBarController?
   private var theme: TiebaChromeTheme = .default
 
@@ -167,8 +170,10 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     tab.applyTheme(theme)
 
     let shell = TiebaRootNavigationController(rootViewController: tab)
+    shell.delegate = self
     shell.setNavigationBarHidden(true, animated: false)
     window.rootViewController = shell
+    shellNav = shell
     return shell
   }
 
@@ -285,8 +290,8 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 为什么按跳开关：Hero 在没有配对视图时会回落成它自己的 push（整页位移 + 给整棵视图树
   /// 拍快照），明显慢于系统原生（用户实测"进吧/进设置过渡很卡"）。**返回一律系统原生**：
   /// 转场结束即关（见 didShow），所以 pop 不会走 Hero。
-  private func armHero(for route: TiebaRoute) {
-    guard let nav = currentNav else { return }
+  private func armHero(for route: TiebaRoute, target: UINavigationController?) {
+    guard let nav = target else { return }
     MainActor.assumeIsolated {
       var fromCard = false
       if case .thread(let id, _, _, let fromFavorites) = route, !fromFavorites {
@@ -306,7 +311,13 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     lastPushSignature = sig
     lastPushAt = now
 
-    armHero(for: route)
+    let isPad = tabBar?.traitCollection.userInterfaceIdiom == .pad
+    // 二级页压到哪条栈：iPad 压每 tab 独立栈（侧边栏布局，压栈只换内容区）；
+    // 手机压根容器栈——整页盖住 tab 控制器，底栏玻璃 dock 从结构上不可能残留
+    //（iOS 26 的私有 dock 视图对一切视图级修补免疫，见 syncTabChrome 注释）。
+    let targetNav: UINavigationController = isPad ? nav : (shellNav ?? nav)
+
+    armHero(for: route, target: targetNav)
 
     let host = makeHost(route: route, eager: true)
     let entry = TiebaRouteTable.entry(named: route.name)
@@ -318,16 +329,16 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       if #unavailable(iOS 18.0) { host.hidesBottomBarWhenPushed = true }
       switch mode {
       case .replace:
-        var stack = nav.viewControllers
+        var stack = targetNav.viewControllers
         guard !stack.isEmpty else { return }
         stack[stack.count - 1] = host
-        nav.setViewControllers(stack, animated: true)
+        targetNav.setViewControllers(stack, animated: true)
         pruneHosts()
       case .root:
-        nav.setViewControllers([nav.viewControllers[0], host], animated: true)
+        targetNav.setViewControllers([targetNav.viewControllers[0], host], animated: true)
         pruneHosts()
       case .push:
-        nav.pushViewController(host, animated: true)
+        targetNav.pushViewController(host, animated: true)
       }
     case .sheet(let detents, let grabber, let cornerRadius):
       // 表单要自带导航栏才能显示标题与 headerRight（登录页有"登录帮助"按钮、
@@ -726,8 +737,9 @@ extension TiebaNavigator: UINavigationControllerDelegate {
   /// 在 tab 控制器的视图树里找玻璃 dock（iOS 26 私有类，按名匹配）并设置可见性。
   private func hideFloatingTabDock(in view: UIView, hidden: Bool) {
     for subview in view.subviews {
-      if String(describing: type(of: subview)).contains("_UIBottomTabBarGroupView") {
+      if NSStringFromClass(type(of: subview)).contains("_UIBottomTabBarGroupView") {
         subview.isHidden = hidden
+        subview.accessibilityIdentifier = "DOCK-FOUND"
       }
       hideFloatingTabDock(in: subview, hidden: hidden)
     }
