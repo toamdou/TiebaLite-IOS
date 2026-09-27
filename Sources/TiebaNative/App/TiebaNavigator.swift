@@ -54,6 +54,14 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
 
   private var currentNav: TiebaRootNavigationController? { tabNavs[currentTabIndex] }
 
+  /// "当前这一屏"所在的栈：手机上二级页压在根容器栈上（见 pushRoute），iPad 压在
+  /// 每 tab 独立栈上。按"当前屏"语义工作的查询必须走这里，否则两套栈各说各话
+  ///（手机上 goBack 会因 tab 栈只有一层而返回 false：返回没反应）。
+  private var activeNav: UINavigationController? {
+    if let shellNav, shellNav.viewControllers.count > 1 { return shellNav }
+    return currentNav
+  }
+
   /// 当前主题（宿主 VC 画底色要用，保证转场首帧不闪白）。
   var chromeTheme: TiebaChromeTheme { theme }
   private var hostCounter = 0
@@ -187,6 +195,10 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       nav.navigationBar.tintColor = theme.navTint
       nav.view.backgroundColor = theme.background
     }
+    // 手机上在展示二级页的是根容器栈（见 activeNav）：它的栏与底色同样要跟上，
+    // 否则主题切换时压在上面的页面顶栏还是旧色。
+    shellNav?.navigationBar.tintColor = theme.navTint
+    shellNav?.view.backgroundColor = theme.background
     // 已建好的宿主底色也要跟上：主题切换时在屏的页面转场首帧不该闪旧色。
     for host in liveHosts() {
       host.viewIfLoaded?.backgroundColor = theme.background
@@ -376,7 +388,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 返回上一屏（栈深 > 1）。返回 false = 已在栈底（调用方决定是否切 tab）。
   @discardableResult
   public func goBack() -> Bool {
-    guard let nav = currentNav else { return false }
+    guard let nav = activeNav else { return false }
     if nav.presentedViewController != nil {
       nav.dismiss(animated: true)
       pruneHosts()
@@ -392,7 +404,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
 
   /// 回到栈底（双击底栏 tab / 双击顶栏回顶时用）。
   public func popToRoot() {
-    guard let nav = currentNav else { return }
+    guard let nav = activeNav else { return }
     if nav.presentedViewController != nil {
       nav.dismiss(animated: true)
       return
@@ -403,20 +415,20 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     // 改经 @unchecked Sendable 的 self 读当前栈（同一对象），在 assumeIsolated 内
     // 调用并就地丢弃结果——同 actor 调用，不产生跨域结果。
     MainActor.assumeIsolated {
-      _ = self.currentNav?.popToRootViewController(animated: true)
+      _ = self.activeNav?.popToRootViewController(animated: true)
       self.pruneHosts()
     }
   }
 
   /// 关掉当前上推的表单（登录页 / 更多）。
   public func dismissPresented(animated: Bool) {
-    currentNav?.presentedViewController?.dismiss(animated: animated)
+    activeNav?.presentedViewController?.dismiss(animated: animated)
     pruneHosts()
   }
 
   /// 能否返回（router.canGoBack）。
   public var canGoBack: Bool {
-    guard let nav = currentNav else { return false }
+    guard let nav = activeNav else { return false }
     if nav.presentedViewController != nil { return true }
     return nav.viewControllers.count > 1
   }
@@ -426,6 +438,15 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     // 每个 tab 一条自己的栈 ⇒ 切 tab 只换选中的那条，各 tab 保留自己的去处。
     // （单栈时代这里要 pop 回根，否则会停在别的 tab 压出来的页上；分栈后那个
     // 问题不存在了，这也就成了 iPad 的常规交互。）
+    // 手机是单条根容器栈、二级页正压在 tab 控制器上面（见 pushRoute）：切 tab 前
+    // 必须先收掉它，否则底下换了、屏上还是那个二级页（深链切 tab 会走到这里）。
+    let isPad = tabBar.traitCollection.userInterfaceIdiom == .pad
+    if !isPad, let shellNav, shellNav.viewControllers.count > 1 {
+      MainActor.assumeIsolated {
+        _ = shellNav.popToRootViewController(animated: false)
+        self.pruneHosts()
+      }
+    }
     tabBar.selectRoute(index)
   }
 
@@ -486,7 +507,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   }
 
   private func currentHost() -> TiebaRouteHostViewController? {
-    currentNav?.topViewController as? TiebaRouteHostViewController
+    activeNav?.topViewController as? TiebaRouteHostViewController
   }
 
   /// hostId → 宿主（弱值，宿主已释放即 nil）。
@@ -512,7 +533,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       if let host = vc as? TiebaRouteHostViewController { kept.insert(host.hostId) }
     }
     // 四条 tab 栈都要扫：非当前 tab 停在页面上的宿主也必须留在表里。
-    for nav in tabNavs.values {
+    func collect(from nav: UINavigationController) {
       for vc in nav.viewControllers { collect(vc) }
       var presented = nav.presentedViewController
       while let current = presented {
@@ -523,6 +544,10 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
         presented = current.presentedViewController
       }
     }
+    for nav in tabNavs.values { collect(from: nav) }
+    // 手机上二级页压在根容器栈上（见 activeNav）：漏扫它 = 在屏页被移出表，
+    // 主题/状态栏刷新会跳过它。
+    if let shellNav { collect(from: shellNav) }
     let enumerator = hostsById.keyEnumerator()
     var victims: [NSNumber] = []
     while let key = enumerator.nextObject() as? NSNumber, !kept.contains(key.intValue) {
