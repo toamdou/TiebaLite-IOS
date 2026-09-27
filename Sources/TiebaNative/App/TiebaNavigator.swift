@@ -649,10 +649,20 @@ extension TiebaNavigator: UINavigationControllerDelegate {
   /// 压进吧页、帖子页、搜索页等二级页后整套收起，宽度全给内容，返回走栏内返回箭头；
   /// 回到根屏再还原（iPad 还原的是用户当时的折叠状态，不是强制展开）。
   ///
-  /// 底栏要**双写**：`setTabBarHidden` 负责布局与安全区（内容让位、返回时还原），
-  /// `isHidden` 负责把整条栏视图（含 iOS 26 的液态玻璃背景、下滑收纳态的圆）从屏上
-  /// 拿掉——实测 iOS 26 上只 set 隐藏时玻璃层会留在屏底：整条栏状态剩一条与底栏等宽
-  /// 等高的模糊带、收纳状态剩一个圆（用户实证）。两者同向，willShow/didShow 都重写。
+  /// 底栏三写（缺一不可，均每次转场重写）：
+  /// 1. `setTabBarHidden`（iOS 18 起）：布局与安全区（内容让位、返回时还原）；
+  /// 2. `isHidden`：把 UITabBar 视图整个拿掉；
+  /// 3. `removeAllAnimations()`：**真正的元凶**——系统会在底栏 layer 上挂透明度动画
+  ///    （下滑收纳的淡出、转场透明度都算），有动画在，layer 的渲染就不理会
+  ///    hidden/alpha=0 的模型值，玻璃以半透明残留在屏底：整条栏状态剩一条与底栏
+  ///    等宽等高的模糊带、收纳状态剩一个圆（lldb 视图树实证：
+  ///    `UITabBar … alpha=0; hidden=YES; animations={opacity=CABasicAnimation}`）。
+  /// iOS 17 没有 setTabBarHidden：那一档退回 push 时的 hidesBottomBarWhenPushed
+  ///（经典底栏上行为正确，见 pushRoute）。
+  private func isAtRoot(of navigationController: UINavigationController) -> Bool {
+    navigationController.viewControllers.count <= 1
+  }
+
   private func syncTabChrome(for navigationController: UINavigationController) {
     guard let tabBar else { return }
     let atRoot = navigationController.viewControllers.count <= 1
@@ -673,6 +683,37 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     tabBar.setTabBarHidden(!atRoot, animated: false)
     // isHidden 写在 UITabBar 视图上：把整条栏（含液态玻璃背景、收纳态的圆）从屏上拿掉。
     tabBar.tabBar.isHidden = !atRoot
+    // 挂在 layer 上的透明度动画不清掉，前两写的模型值就不生效（见上注释）。
+    tabBar.tabBar.layer.removeAllAnimations()
+    // iOS 26 的悬浮底栏玻璃 dock 是独立私有视图（_UIBottomTabBarGroupView，
+    // lldb 视图树实证：与 UITabBar 平级、整棵子树含 4 个 tab 按钮），上面三写
+    // 全部作用在 UITabBar 上管不到它——必须找到它一起藏，残留才会消失。
+    hideFloatingTabDock(in: tabBar.view, hidden: !atRoot)
+    if let window = tabBar.view.window {
+      hideFloatingTabDock(in: window, hidden: !atRoot)
+    }
+    // 转场收尾/悬浮容器重排会在我们写完之后把 dock 重新亮出来（实证）：落定后
+    // 再补几次重申，确保压栈期间它一直是收起的。
+    for delay in [0.15, 0.5, 1.2] {
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+        guard let self, let tabBar = self.tabBar, !self.isAtRoot(of: navigationController) else { return }
+        tabBar.tabBar.isHidden = true
+        self.hideFloatingTabDock(in: tabBar.view, hidden: true)
+        if let window = tabBar.view.window {
+          self.hideFloatingTabDock(in: window, hidden: true)
+        }
+      }
+    }
+  }
+
+  /// 在 tab 控制器的视图树里找玻璃 dock（私有类，按名匹配）并设置可见性。
+  private func hideFloatingTabDock(in view: UIView, hidden: Bool) {
+    for subview in view.subviews {
+      if String(describing: type(of: subview)).contains("_UIBottomTabBarGroupView") {
+        subview.isHidden = hidden
+      }
+      hideFloatingTabDock(in: subview, hidden: hidden)
+    }
   }
 
   /// 立即落定栏的可见性（**含返回，不许延到转场结束**），并把 alpha 一起归零/还原。
