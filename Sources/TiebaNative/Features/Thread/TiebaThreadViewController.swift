@@ -752,7 +752,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
         threadId: threadId,
         postId: post.id,
         forumId: thread?.forumId ?? "",
-        floor: post.floor,
+        // 热门档服务端不回楼层号（floor=0）：传 nil 让楼中楼页显示"第?楼"，
+        // 首包后由 floorPost.floor 补——传 0 会顶栏固定成"第0楼回复"（用户实证）。
+        floor: post.floor > 0 ? post.floor : nil,
         threadAuthorId: thread?.authorId ?? "",
         forumName: thread?.forumName ?? "",
         threadTitle: thread?.title ?? ""
