@@ -698,6 +698,39 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     tabBar.setTabBarHidden(!atRoot, animated: false)
     // isHidden 写在 UITabBar 视图上：把整条栏（含液态玻璃背景、收纳态的圆）从屏上拿掉。
     tabBar.tabBar.isHidden = !atRoot
+    // iOS 26 的悬浮底栏玻璃 dock 是独立私有视图（_UIBottomTabBarGroupView，
+    // lldb 视图树实证：与 UITabBar 平级、整棵子树含 4 个 tab 按钮），上面三写
+    // 全部作用在 UITabBar 上管不到它——必须找到它一起藏，残留才会消失。
+    hideFloatingTabDock(in: tabBar.view, hidden: !atRoot)
+    if let window = tabBar.view.window {
+      hideFloatingTabDock(in: window, hidden: !atRoot)
+    }
+    // 转场收尾/悬浮容器重排会在我们写完之后把 dock 重新亮出来（实证）：落定后
+    // 再补几次重申，确保压栈期间它一直是收起的。
+    for delay in [0.15, 0.5, 1.2] {
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+        guard let self, let tabBar = self.tabBar, self.isAtRoot(of: navigationController) else { return }
+        tabBar.tabBar.isHidden = true
+        self.hideFloatingTabDock(in: tabBar.view, hidden: true)
+        if let window = tabBar.view.window {
+          self.hideFloatingTabDock(in: window, hidden: true)
+        }
+      }
+    }
+  }
+
+  private func isAtRoot(of navigationController: UINavigationController) -> Bool {
+    navigationController.viewControllers.count <= 1
+  }
+
+  /// 在 tab 控制器的视图树里找玻璃 dock（iOS 26 私有类，按名匹配）并设置可见性。
+  private func hideFloatingTabDock(in view: UIView, hidden: Bool) {
+    for subview in view.subviews {
+      if String(describing: type(of: subview)).contains("_UIBottomTabBarGroupView") {
+        subview.isHidden = hidden
+      }
+      hideFloatingTabDock(in: subview, hidden: hidden)
+    }
   }
 
   /// 立即落定栏的可见性（**含返回，不许延到转场结束**），并把 alpha 一起归零/还原。
