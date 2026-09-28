@@ -700,7 +700,13 @@ extension TiebaNavigator: UINavigationControllerDelegate {
   }
 
   /// 该屏是否无栏（tab 根屏 / webview / thread/[id]/more）。
+  ///
+  /// ⚠️ 根容器栈的底屏是 tab 控制器，它的栏必须隐——漏了这一支，容器栈每次
+  /// willShow/didShow（delegate 已挂）都会把一条**透明**栏摆到状态栏下方：
+  /// 看不见，但实打实占掉 54pt 安全区，表现为 tab 根屏顶部一大片空白
+  ///（用户报「动态页分段栏离状态栏很远」，lldb 实证 barHidden=false barH=54）。
   private func shouldHideBar(in viewController: UIViewController) -> Bool {
+    if viewController is TiebaMainTabBarController { return true }
     guard let host = viewController as? TiebaRouteHostViewController else { return false }
     return (TiebaRouteTable.entry(named: host.route.name)?.chrome ?? .standard) == .hidden
   }
