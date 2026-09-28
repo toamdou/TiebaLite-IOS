@@ -354,7 +354,9 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
         // 表单内的滑动不该把表单拖下去（登录页有可滚动内容）。
         sheet.prefersScrollingExpandsWhenScrolledToEdge = true
       }
-      let presenter = nav.topViewController ?? nav
+      // 从"当前这一屏"推表单：手机上二级页正压在根容器栈上（见 activeNav），
+      // 从被盖住的 tab 根屏推会被压在二级页下面（管理/排序这类页内表单）。
+      let presenter = activeNav?.topViewController ?? activeNav ?? nav.topViewController ?? nav
       // 表单深浅不单独写：presented 不继承 presenter 的 override，但**继承窗口**
       // ——窗口级 override（TiebaChrome.setChromeDarkMode）明确覆盖该窗口内的
       // 所有 presentation（UIView.h: set on UIWindow "also affects presentations
