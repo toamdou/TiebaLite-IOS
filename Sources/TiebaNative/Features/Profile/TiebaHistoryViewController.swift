@@ -288,7 +288,7 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
       "showForumPill": !isForumRow,
       "hideActions": true,
       "imageContextMenu": !isForumRow,
-      // 原 TweetCard 未传 onMenuAction → 不渲染右上角 ×。
+      // 原 TweetCard 未传 onMenuAction → 不渲染右上角的更多钮。
       "closeMenuOptions": [] as [String],
     ]
     row.merge(TiebaFeedRowPreferences.current()) { _, new in new }

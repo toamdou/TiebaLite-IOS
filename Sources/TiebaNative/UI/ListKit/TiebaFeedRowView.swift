@@ -191,9 +191,9 @@ private enum TiebaFeedRowHapticIds {
 
 // MARK: - 右上角菜单钮（UIButton.Configuration + 44pt 命中区）
 
-/// TweetCard closeButton 的 UIKit 直译：26×26、xmark 13 bold、textTertiary。
-/// 用 UIButton.Configuration.plain()：图标居中/缩放由配置系统算（此前自绘
-/// UIControl + 手算居中产出过"× 太大"），本类只保留 hitSlop 外扩。
+/// 卡片右上角「更多」钮：26×26 槽位、ellipsis、textTertiary（与帖子页的更多钮同形）。
+/// 原设计是 xmark（RN closeButton 直译），但它的动作是弹出「不感兴趣/屏蔽/复制标题」
+/// 菜单、并非关闭卡片，iOS 信息流此处惯例也是省略号（2026-09-19 改）。
 private final class TiebaFeedRowMenuButton: UIButton {
   /// 命中区下限（RN hitSlop=8 等价；26 视觉 + 两侧 9 = 44pt，行内布局仍按 26）。
   private static let minHitSide: CGFloat = 44
@@ -209,13 +209,13 @@ private final class TiebaFeedRowMenuButton: UIButton {
     super.init(frame: frame)
     var config = UIButton.Configuration.plain()
     config.image = UIImage(
-      systemName: "xmark",
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+      systemName: "ellipsis",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
     )
     config.contentInsets = .zero
     configuration = config
     isAccessibilityElement = true
-    accessibilityLabel = "屏蔽或举报"
+    accessibilityLabel = "更多操作"
   }
 
   required init?(coder: NSCoder) {
@@ -926,7 +926,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     loadModel(pageKey: pageKey, index: index)
   }
 
-  /// 右上角 × 菜单选中项（dislike / block / copy-title）：业务动作全在 JS
+  /// 右上角「更多」菜单选中项（dislike / block / copy-title）：业务动作全在 JS
   /// （不感兴趣面板 / 屏蔽作者 / 复制标题，见 FeedContent 的 rowMenuAction）。
   public var onMenuAction: ((String) -> Void)?
 
@@ -1074,7 +1074,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   private let avatarContainer = UIView()
   private let avatarInitialLabel = UILabel()
   private let avatarView = UIImageView()
-  /// 右上角 26×26 菜单钮（TweetCard styles.closeButton：xmark 13 bold + textTertiary）。
+  /// 右上角 26×26 更多钮（ellipsis + textTertiary，与帖子页同形）。
   private let menuButton = TiebaFeedRowMenuButton(frame: .zero)
   private let singleMediaView = TiebaFeedRowMediaItemView()
   private let stripScrollView = UIScrollView()
@@ -1136,8 +1136,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     // 图片/徽章/操作栏之下（那些之后才挂，且都是不透明的实内容）。
     cardView.addSubview(textCanvas)
 
-    // 右上角菜单钮（TweetCard closeButton 的 UIKit 直译）：26×26 圆形、
-    // xmark 13 bold、textTertiary；无菜单项的行（menuOptions 空）保持隐藏。
+    // 右上角菜单钮（与帖子页同形的「更多」）：26×26 槽位、ellipsis、textTertiary；
+    // 无菜单项的行（menuOptions 空）保持隐藏。
     menuButton.isHidden = true
     menuButton.configure(tint: palette.textTertiary)
     menuButton.addTarget(self, action: #selector(handleMenuButtonTap), for: .touchUpInside)
@@ -1664,7 +1664,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   // MARK: - 交互（右上角菜单 / 操作栏按压反馈）
 
-  /// 右上角 ×：与 RN 的 Alert.alert(title, nil, [菜单项…, 取消]) 同形态——
+  /// 右上角「更多」：与 RN 的 Alert.alert(title, nil, [菜单项…, 取消]) 同形态——
   /// iOS 侧本就是 UIAlertController(.actionSheet)，这里直出同一控件。
   /// 动作只回传 JS（不感兴趣面板/屏蔽/复制标题全在 FeedContent），原生不猜业务。
   @objc private func handleMenuButtonTap() {
