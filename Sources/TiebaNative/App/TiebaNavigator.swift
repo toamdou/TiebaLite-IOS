@@ -736,6 +736,10 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     tabBar.setTabBarHidden(!atRoot, animated: false)
     // isHidden 写在 UITabBar 视图上：把整条栏（含液态玻璃背景、收纳态的圆）从屏上拿掉。
     tabBar.tabBar.isHidden = !atRoot
+    // 挂在 layer 上的透明度动画不清掉，前两写的模型值就不生效（下滑收纳的淡出、
+    // 转场透明度都算）——有动画在，layer 渲染就不理会 hidden/alpha=0，玻璃以
+    // 半透明残留在屏底（beta 分支同款修复）。
+    tabBar.tabBar.layer.removeAllAnimations()
     // iOS 26 的悬浮底栏玻璃 dock 是独立私有视图（_UIBottomTabBarGroupView，
     // lldb 视图树实证：与 UITabBar 平级、整棵子树含 4 个 tab 按钮），上面三写
     // 全部作用在 UITabBar 上管不到它——必须找到它一起藏，残留才会消失。
@@ -745,9 +749,11 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     }
     // 转场收尾/悬浮容器重排会在我们写完之后把 dock 重新亮出来（实证）：落定后
     // 再补几次重申，确保压栈期间它一直是收起的。
+    // ⚠️ 条件必须是"不在根屏"（!isAtRoot）：写成 isAtRoot 就是**在根屏上把底栏
+    // 藏掉**——0.15/0.5/1.2s 三拍各藏一次，表现为"根屏压根没有底栏"。
     for delay in [0.15, 0.5, 1.2] {
       DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-        guard let self, let tabBar = self.tabBar, self.isAtRoot(of: navigationController) else { return }
+        guard let self, let tabBar = self.tabBar, !self.isAtRoot(of: navigationController) else { return }
         tabBar.tabBar.isHidden = true
         self.hideFloatingTabDock(in: tabBar.view, hidden: true)
         if let window = tabBar.view.window {
