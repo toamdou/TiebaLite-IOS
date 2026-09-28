@@ -99,7 +99,7 @@ final class TiebaKindListViewCell: UICollectionViewCell {
 // MARK: - 信息流单元格（kind = "feed" 的行）
 
 /// 单元格：只托管一个 TiebaFeedRowView（信息流卡片行，行视图是绘制/度量的
-/// 单一来源）。行内自管交互（右上角 × 的 ActionSheet / 图片长按菜单 / 操作栏
+/// 单一来源）。行内自管交互（右上角「更多」的 ActionSheet / 图片长按菜单 / 操作栏
 /// 按压反馈）由行视图自己处理；整卡点击装在 cell 上，命中区域由列表按行模型
 /// layoutPlan 判定。
 final class TiebaKindListFeedCell: UICollectionViewCell {
@@ -108,7 +108,7 @@ final class TiebaKindListFeedCell: UICollectionViewCell {
 
   /// 点击回调：参数是点击点在 cell（= 行视图）坐标系的坐标。
   var onTap: ((CGPoint) -> Void)?
-  /// 行右上角 × 菜单选中项（dislike / block / copy-title）。
+  /// 行右上角「更多」菜单选中项（dislike / block / copy-title）。
   var onRowMenuAction: ((String) -> Void)?
   /// 行内图片长按菜单选中项（媒体序号, save-image / share-image）。
   var onMediaMenuAction: ((Int, String) -> Void)?
@@ -1236,7 +1236,7 @@ public final class TiebaKindListContentView: UIView {
     return 0..<min(last + 3, frames.count)
   }
 
-  /// 行内菜单（右上角 × 的 ActionSheet；行视图自弹，选中项只回传）。
+  /// 行内菜单（右上角「更多」的 ActionSheet；行视图自弹，选中项只回传）。
   private func handleRowMenuAction(_ action: String, at indexPath: IndexPath) {
     onListEvent?(.menuAction(index: indexPath.item, action: action))
   }

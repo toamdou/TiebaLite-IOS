@@ -133,7 +133,7 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
   public let bannerText: String
 
   // ── 交互开关（JS 下发，原生不猜业务场景）──
-  /// 右上角 ×（屏蔽/举报）菜单项：TweetCard closeMenuOptions 的取值子集
+  /// 右上角「更多」菜单项（屏蔽/举报）：TweetCard closeMenuOptions 的取值子集
   /// （dislike / block / copy-title）。空数组 = 该行不绘制菜单钮（与
   /// TweetCard 未传 onMenuAction 时一致）；缺 key 同样为空。
   public let menuOptions: [String]
@@ -573,7 +573,7 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
 /// 一行的各块高度与单行文本宽度（测量一次；plan() 只用它做算术）。
 nonisolated struct TiebaFeedRowBlocks {
   let isBanner: Bool
-  /// 右上角 × 菜单钮是否存在（决定名字行可用宽度让位 menuButtonSize + gap，
+  /// 右上角「更多」钮是否存在（决定名字行可用宽度让位 menuButtonSize + gap，
   /// 与 TweetCard headerRow 里 closeButton 参与 flex 布局同几何）。
   let showsMenu: Bool
   let headerHeight: CGFloat
@@ -653,7 +653,9 @@ nonisolated struct TiebaFeedRowLayoutPlan {
 /// 几何，禁止在行视图里另算一套（文本列宽不一致是"截断/超高"类 bug 的根源）。
 nonisolated enum TiebaFeedRowLayout {
   // TweetCard.tsx 常量
-  static let cardMarginH: CGFloat = 10
+  /// 左右边距 16：与首页关注吧网格（sectionInset 16）、最近访问条一致，
+  /// 也是系统 inset 列表的标准档。原 10 与页面其余部分对不齐（2026-09-19）。
+  static let cardMarginH: CGFloat = 16
   static let cardMarginV: CGFloat = 4
   static let cardPaddingX: CGFloat = 12
   static let cardPaddingTop: CGFloat = 12
@@ -918,7 +920,7 @@ nonisolated enum TiebaFeedRowLayout {
       + (blocks.ipWidth == nil ? 0 : 1 + geometry.fonts.ip.lineHeight)
     let nameTop = headerTop + max((blocks.headerHeight - nameContentHeight) / 2, 0)
     let nameRowHeight = geometry.lineHeights.subhead
-    // 右上角 × 在 headerRow 里参与 flex 布局（TweetCard closeButton 26pt +
+    // 右上角「更多」钮在 headerRow 里参与 flex 布局（26pt +
     // headerRow gap 10），名字行可用宽度必须让位，否则长名会压到按钮下面。
     let menuButtonFrame: CGRect? = blocks.showsMenu
       ? CGRect(

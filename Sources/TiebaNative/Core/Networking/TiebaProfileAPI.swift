@@ -391,7 +391,7 @@ enum TiebaProfileAPI {
       "showForumPill": true,
       "hideActions": true,
       "imageContextMenu": true,
-      // 原 TweetCard 未传 onMenuAction → 不渲染右上角 ×。
+      // 原 TweetCard 未传 onMenuAction → 不渲染右上角的更多钮。
       "closeMenuOptions": [] as [String],
     ]
     row.merge(TiebaFeedRowPreferences.current()) { _, new in new }
