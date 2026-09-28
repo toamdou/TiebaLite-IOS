@@ -709,11 +709,14 @@ extension TiebaNavigator: UINavigationControllerDelegate {
   /// 压进吧页、帖子页、搜索页等二级页后整套收起，宽度全给内容，返回走栏内返回箭头；
   /// 回到根屏再还原（iPad 还原的是用户当时的折叠状态，不是强制展开）。
   ///
-  /// 底栏要**双写**：`setTabBarHidden`（iOS 18 起）负责布局与安全区（内容让位、
-  /// 返回时还原），`isHidden` 负责把整条栏视图（含 iOS 26 的液态玻璃背景、下滑
-  /// 收纳态的圆）从屏上拿掉——实测 iOS 26 上只 set 隐藏时玻璃层会留在屏底：
-  /// 整条栏状态剩一条与底栏等宽等高的模糊带、收纳状态剩一个圆（用户实证）。
-  /// 两者同向，willShow/didShow 都重写。iOS 17 没有 setTabBarHidden：那一档退回
+  /// 底栏要**三写**（缺一不可）：
+  /// 1. `setTabBarHidden`（iOS 18 起）负责布局与安全区（内容让位、返回时还原）；
+  /// 2. `isHidden` 负责把整条栏视图（含 iOS 26 的液态玻璃背景、下滑收纳态的圆）
+  ///    从屏上拿掉——实测 iOS 26 上只 set 隐藏时玻璃层会留在屏底：整条栏状态剩
+  ///    一条与底栏等宽等高的模糊带、收纳状态剩一个圆（用户实证）；
+  /// 3. `removeAllAnimations()`：挂在 layer 上的透明度动画不清掉，前两写的模型值
+  ///    就不生效（下滑收纳的淡出、转场透明度都算），玻璃照样以半透明残留。
+  /// 三者同向，willShow/didShow 都重写。iOS 17 没有 setTabBarHidden：那一档退回
   /// push 时的 hidesBottomBarWhenPushed（经典底栏上行为正确，见 pushRoute）。
 
   private func syncTabChrome(for navigationController: UINavigationController) {
