@@ -1,12 +1,12 @@
 <div align="center">
 
-# 贴吧 Lite · TiebaLite for iOS
+# 贴吧 Lite-IOS
 
-**第三方百度贴吧 iOS 客户端** — 纯 Swift / UIKit（零 JS、零 RN），iOS 26 液态玻璃风格
+**第三方百度贴吧 iOS 客户端** ；最低 iOS 17，26+ 为液态玻璃形态、17退回常规材质
 
 [![Build iOS Unsigned IPA](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml/badge.svg)](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml)
-![Version](https://img.shields.io/badge/version-2.0.0-208AEF)
-![Platform](https://img.shields.io/badge/platform-iOS%2016.4%2B-208AEF)
+![Version](https://img.shields.io/badge/version-2.1.1-208AEF)
+![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-208AEF)
 ![License](https://img.shields.io/badge/License-GPLv3-blue.svg)
 ![Stack](https://img.shields.io/badge/Swift%206%20%C2%B7%20UIKit-native-blue)
 
@@ -19,28 +19,6 @@
 <img src="docs/screenshots/settings.jpg" width="24%" alt="设置页" />
 
 </div>
-
----
-
-## 🆕 2.0.0 · 从 React Native 完全迁移至纯原生
-
-> ⚠️ 本版本需要**重新登录**。
-
-**体积与性能**
-
-- 安装包 **15.7 MB → 6.6 MB**（约 −58%）
-- 全部页面原生重写：启动引导、关注、动态（推荐 / 关注 / 热榜 / 话题）、消息、我的、吧页、帖子详情、楼中楼、搜索、设置、登录、内置浏览器等
-- 顶栏 / 底栏"内容滚到栏下渐隐模糊"改用 iOS 26 系统的滚动边缘效果，无边界、无硬切边，不再是自绘的半透明色带
-- 空态 / 失败态 / 加载骨架、分享面板、动作菜单、表单控件全部使用系统组件（系统图标尺寸、行距与 iOS 26 液态玻璃按钮）
-- 构建改用 **Bazel**，大幅提高构建速度；迁移至原生架构后显著提高性能与省电
-
-**图片与查看器**
-
-- 点图直接进原生查看器：跟手拖拽、下拉关闭、多图横滑、双击放大、放大后滑到边缘切页
-
-**本版修掉的问题**
-
-- 吧详情页点进去报"响应解析失败"（服务端换掉了原来的接口，改走更稳的数据通道）
 
 ---
 
@@ -76,7 +54,8 @@
 - ✅ 广告 / 直播内容过滤
 - ❓ 屏蔽：屏蔽词 / 屏蔽用户 / 屏蔽吧
 - ✅ 阅读字号、省流量模式、图片加载质量三档
-- ❓  App scheme 深链
+- ✅  App scheme 深链
+- ✅ iPad 适配
 
 ### ❌ 未实现
 
@@ -85,7 +64,6 @@
 - ❌ 推送通知（应用不带推送权限）
 - ❌ 直播观看（信息流中已过滤）
 - ❌ 投票等帖子内互动插件
-- ❌ iPad 适配（仅 iPhone 竖屏）
 
 ## 📁 项目结构
 
@@ -107,41 +85,6 @@ Tools/                     占位描述文件生成、产物隐私清洗
 
 构建入口与标签：`bazel build //:App`，主模块 `//Sources/TiebaNative:TiebaNative`。
 
-## 🛠 本地编译
-
-### 环境要求
-
-| 依赖 | 要求 |
-| --- | --- |
-| macOS | 14+ |
-| Xcode | 26 或更高（开发环境为 Xcode 27 beta） |
-| [Bazelisk](https://github.com/bazelbuild/bazelisk) | `brew install bazelisk`（版本由 `.bazelversion` 锁定） |
-| Apple ID | 免费个人 Apple ID 即可真机调试 |
-
-### 步骤
-
-```bash
-git clone https://github.com/toamdou/TiebaLite-IOS.git
-cd TiebaLite-IOS
-
-# 模拟器编译+运行（无需签名）
-bazel build //:App --config=sim
-
-# 真机：把自己的描述文件放进 Signing/ 后（app 与扩展各一份）
-bazel build //:App --config=device --config=sign
-
-# 需要 Xcode 断点调试时：先用 Bazel 生成工程，再打开
-bazel run //:xcodeproj && open xcodeproj.xcodeproj
-```
-
-> 可选：把 Bazel 缓存路径写进 `.bazelrc.user`（已 gitignore，含本机绝对路径），可大幅加速重复编译。
-
-在 Xcode 中：
-
-1. 选中 `tiebalite` target → **Signing & Capabilities** → 勾选你自己的 Team（免费个人 Apple ID 即可）；
-2. 若 Bundle Identifier `com.tiebalite.app` 与你的签名冲突，改成自己的（如 `com.yourname.tiebalite`）；
-3. 选择你的 iPhone 真机 → **⌘R** 编译运行。
-
 
 ## 🤖 GitHub Actions 自动打包（未签名 IPA）
 
@@ -149,8 +92,7 @@ bazel run //:xcodeproj && open xcodeproj.xcodeproj
 
 **两种触发方式：**
 
-1. **手动构建**：仓库页 → **Actions** → **Build iOS Unsigned IPA** → **Run workflow**（可选 Release / Debug）→ 结束后在本次运行页面的 Artifacts 下载 `TiebaLite-unsigned-*.ipa`；
-2. **打 Tag 自动发 Release**：
+1. **手动构建**：仓库页 → **Actions** → **Build iOS Unsigned IPA** → **Run workflow**（可选 Release / Debug）→ 一次同时编译 `main` 与 `ios17` 两个分支，在本次运行页面下载两个 Artifact：`TiebaLite-<版本>.ipa`（**iOS 26+**）与 `TiebaLite-<版本>-IOS17.ipa`（**最低 iOS 17**，同一套功能）；
 
 ## 📱 通过 SideStore / AltStore 安装
 

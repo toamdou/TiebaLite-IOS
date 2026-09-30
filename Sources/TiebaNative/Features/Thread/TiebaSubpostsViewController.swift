@@ -278,7 +278,7 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     case .user(let uid):
       guard !uid.isEmpty else { return }
       TiebaNavigator.shared.navigate(.user(uid: uid))
-    case .toggleSeeLz, .toggleSort:
+    case .toggleSeeLz, .selectSort:
       break
     }
   }

@@ -23,7 +23,6 @@ final class TiebaSelectableLabel: UITextView {
     setContentCompressionResistancePriority(.required, for: .vertical)
     // 宽度由容器（栈/单元格）给，别拿文字固有宽度去撑布局。
     setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-    // 编辑菜单要补"全选"（见 TiebaTextEditMenu），只有自己能做自己的 delegate。
     delegate = self
   }
 
@@ -43,9 +42,27 @@ final class TiebaSelectableLabel: UITextView {
 extension TiebaSelectableLabel: UITextViewDelegate {
   func textView(
     _ textView: UITextView,
-    editMenuForTextInRanges ranges: [NSValue],
+    editMenuForTextIn range: NSRange,
     suggestedActions: [UIMenuElement]
   ) -> UIMenu? {
-    TiebaTextEditMenu.addingSelectAll(to: textView, suggestedActions: suggestedActions)
+    textView.tiebaSelectableEditMenu(suggestedActions: suggestedActions)
+  }
+}
+
+// MARK: - 只读文本的「全选」
+
+extension UITextView {
+  /// 只读（isEditable = false）文本的系统长按菜单不一定给「全选」——iOS 27 上实测没有
+  /// （用户报"长按文字没有全选的选项"）。这里补一条；菜单里已有就不重复加（系统那条的
+  /// 标题随语言走，中英都认）。
+  func tiebaSelectableEditMenu(suggestedActions: [UIMenuElement]) -> UIMenu {
+    let titles = Set(suggestedActions.compactMap { ($0 as? UIAction)?.title })
+    guard !titles.contains("全选"), !titles.contains("Select All") else {
+      return UIMenu(children: suggestedActions)
+    }
+    let selectAll = UIAction(title: "全选") { [weak self] _ in
+      self?.selectAll(nil)
+    }
+    return UIMenu(children: suggestedActions + [selectAll])
   }
 }

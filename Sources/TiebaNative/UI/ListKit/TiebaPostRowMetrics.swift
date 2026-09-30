@@ -632,12 +632,28 @@ final class TiebaPostRowModel: @unchecked Sendable {
   let likeText: String
 }
 
+/// 帖子页回复排序。取值直接是 `pb/page` 的 `r`：服务端在响应里就列出这三档
+///（pb_sort_info = 热门(2)/正序(0)/倒序(1)，实测 2026-09-21）。
+public enum TiebaThreadSort: Int, CaseIterable, Sendable {
+  case hot = 2
+  case asc = 0
+  case desc = 1
+
+  var title: String {
+    switch self {
+    case .hot: return "热门"
+    case .asc: return "正序"
+    case .desc: return "倒序"
+    }
+  }
+}
+
 /// 主贴行底部的回复工具栏（原 ThreadHeader 的 Reply Toolbar）。
 struct TiebaPostToolbarModel: Sendable {
   var replyNum = 0
   var pageLabel: String?
   var seeLz = false
-  var reverse = false
+  var sort: TiebaThreadSort = .hot
 }
 
 // MARK: - 测量缓存
@@ -725,6 +741,12 @@ enum TiebaPostRowLayout {
   static var actionFont: UIFont { TiebaSimpleText.font(size: 12, weight: .medium) }
   static var moreFont: UIFont { TiebaSimpleText.font(size: 13, weight: .semibold) }
   static var pillFont: UIFont { TiebaSimpleText.font(size: 13, weight: .semibold) }
+  /// 排序药丸尾部那个向下箭头（点开 = 热门/正序/倒序三档菜单）。
+  static var pillChevronConfig: UIImage.SymbolConfiguration {
+    UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
+  }
+  /// 箭头占的宽度（10pt 字形 + 与标题的 4pt 间距）：药丸宽度要算上它。
+  static let pillChevronWidth: CGFloat = 14
   static var subPostNameFont: UIFont { TiebaSimpleText.font(size: 14, weight: .semibold) }
   static var replyCountFont: UIFont { TiebaSimpleText.font(size: 15, weight: .semibold) }
 
@@ -1089,7 +1111,11 @@ struct TiebaPostRowPlan {
     // ── 视频 ──
     if let video = inputs.video {
       flushGap()
-      let height = contentW / CGFloat(max(video.aspect, 0.01))
+      // 竖版视频按宽高比在宽列上能到上千 pt 高：上限同单图（520），横版 16:9 远在其下。
+      let height = min(
+        contentW / CGFloat(max(video.aspect, 0.01)),
+        TiebaPostRowLayout.singleImageMaxHeight
+      )
       videoFrame = CGRect(x: contentX, y: y, width: contentW, height: max(height, 1))
       y += max(height, 1)
       gap = TiebaPostRowLayout.mediaGap
@@ -1177,8 +1203,10 @@ struct TiebaPostRowPlan {
       let pillHeight: CGFloat = 30
       let pillY = toolbarY + (TiebaPostRowLayout.toolbarHeight - pillHeight) / 2
       var pillX = TiebaPostRowLayout.cardMarginH + cardW - TiebaPostRowLayout.cardPadding
-      let sortTitle = inputs.toolbar?.reverse == true ? "倒序" : "正序"
-      let sortWidth = TiebaSimpleText.singleLineWidth(sortTitle, font: pillFont) + 28
+      let sortTitle = inputs.toolbar?.sort.title ?? ""
+      let sortWidth =
+        TiebaSimpleText.singleLineWidth(sortTitle, font: pillFont) + 28
+        + TiebaPostRowLayout.pillChevronWidth
       toolbarSortFrame = CGRect(x: pillX - sortWidth, y: pillY, width: sortWidth, height: pillHeight)
       pillX -= sortWidth + 8
       let seeLzWidth = TiebaSimpleText.singleLineWidth("只看楼主", font: pillFont) + 28
