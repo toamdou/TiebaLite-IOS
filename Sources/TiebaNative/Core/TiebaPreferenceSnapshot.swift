@@ -6,8 +6,9 @@
 // 已经整体原生化的页面不新建任何 TS 层，直接按同一格式读写。
 //
 // 纪律：
-//   - 原生页面**每次出现时现读**（不做订阅/缓存），永远拿到最新值；
-//   - 写只有 store 一条路径（落盘 + 广播 TiebaPreferenceChange），不手拼字面量。
+//   - 原生页面**每次出现时现读**（不做订阅），永远拿到最新值——现读的代价由
+//     进程内读缓存承担（见 cache 注释），SQLite 点查不再落在行构造路径上；
+//   - 写只有 store 一条路径（落盘 + 更新缓存 + 广播 TiebaPreferenceChange），不手拼字面量。
 //
 // 落盘格式（与原 JS 逐字节一致，读写都用 JSONEncoder/JSONDecoder 保证）：
 //   - 现行：每键一条 `tiebalite_preferences:<key>`，值是该键的 JSON 编码
@@ -25,8 +26,33 @@ enum TiebaPreferenceSnapshot {
   private static let storageKey = "tiebalite_preferences"
   private static let keyPrefix = "tiebalite_preferences:"
 
+  // MARK: - 进程内读缓存
+  //
+  // 偏好读遍布行构造路径（feed 行 Options.current() 每页 5 键、搜索每行 1 键、
+  // 消息行时间标签逐行读），每键一次 SQLite 点查累计在页面构造上。缓存以
+  // 「键 → 原始存储串或 .some(nil)（确证缺失，含旧整份 JSON 的 miss）」记忆化：
+  //   - 写路径 store() 是唯一落盘点（文件头纪律），顺手更新缓存；
+  //   - 全清/恢复默认（两个显式动作）调 invalidateCache()；
+  //   - 本仓不存在绕过这里直写偏好键的路径；跨进程不适用（无扩展写共享库）。
+  private static let cacheLock = NSLock()
+  nonisolated(unsafe) private static var cache: [String: String?] = [:]
+
+  /// 清空读缓存（KV 层全清/偏好前缀清空后必须调用，否则旧值在进程内复活）。
+  static func invalidateCache() {
+    cacheLock.withLock { cache.removeAll() }
+  }
+
   /// 取偏好键的原始存储串（JSON 字面量形态；逐键优先，旧整份 JSON 兜底）。
   static func rawValue(_ key: String) -> String? {
+    cacheLock.withLock {
+      if let cached = cache[key] { return cached }
+      let resolved = resolveRawValue(key)
+      cache[key] = resolved
+      return resolved
+    }
+  }
+
+  private static func resolveRawValue(_ key: String) -> String? {
     if let perKey = TiebaKvStore.shared.get(key: keyPrefix + key) {
       return perKey
     }
@@ -89,8 +115,9 @@ enum TiebaPreferenceSnapshot {
   /// 落盘 + 广播：键布局 `tiebalite_preferences:<key>`，值 = JSON 字面量字节。
   private static func store(_ key: String, _ encoded: Data) throws {
     // JSONEncoder 输出恒为 UTF-8：String(decoding:) 不产生第二错误分支。
-    try TiebaKvStore.shared.set(
-      key: keyPrefix + key, value: String(decoding: encoded, as: UTF8.self))
+    let value = String(decoding: encoded, as: UTF8.self)
+    try TiebaKvStore.shared.set(key: keyPrefix + key, value: value)
+    cacheLock.withLock { cache[key] = value }
     // 唯一写入点即广播点：在屏页面订阅后立刻刷新（不再等"下次出现时现读"）。
     TiebaPreferenceChange.post(key)
   }

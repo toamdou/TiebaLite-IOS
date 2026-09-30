@@ -99,7 +99,7 @@ final class TiebaKindListViewCell: UICollectionViewCell {
 // MARK: - 信息流单元格（kind = "feed" 的行）
 
 /// 单元格：只托管一个 TiebaFeedRowView（信息流卡片行，行视图是绘制/度量的
-/// 单一来源）。行内自管交互（右上角 × 的 ActionSheet / 图片长按菜单 / 操作栏
+/// 单一来源）。行内自管交互（右上角「更多」的 ActionSheet / 图片长按菜单 / 操作栏
 /// 按压反馈）由行视图自己处理；整卡点击装在 cell 上，命中区域由列表按行模型
 /// layoutPlan 判定。
 final class TiebaKindListFeedCell: UICollectionViewCell {
@@ -108,7 +108,7 @@ final class TiebaKindListFeedCell: UICollectionViewCell {
 
   /// 点击回调：参数是点击点在 cell（= 行视图）坐标系的坐标。
   var onTap: ((CGPoint) -> Void)?
-  /// 行右上角 × 菜单选中项（dislike / block / copy-title）。
+  /// 行右上角「更多」菜单选中项（dislike / block / copy-title）。
   var onRowMenuAction: ((String) -> Void)?
   /// 行内图片长按菜单选中项（媒体序号, save-image / share-image）。
   var onMediaMenuAction: ((Int, String) -> Void)?
@@ -1201,7 +1201,7 @@ public final class TiebaKindListContentView: UIView {
     return 0..<min(last + 3, frames.count)
   }
 
-  /// 行内菜单（右上角 × 的 ActionSheet；行视图自弹，选中项只回传）。
+  /// 行内菜单（右上角「更多」的 ActionSheet；行视图自弹，选中项只回传）。
   private func handleRowMenuAction(_ action: String, at indexPath: IndexPath) {
     onListEvent?(.menuAction(index: indexPath.item, action: action))
   }
@@ -1590,6 +1590,14 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
         )
       )
     }
+    /// GIF 档预取：与展示侧同形态的无处理器请求（Resize 会压平动画；键=URL）。
+    func appendRaw(_ url: URL?) {
+      guard let url else { return }
+      let secure = TiebaNuke.secureURL(url)
+      let key = "\(secure.absoluteString)#raw"
+      guard seen.insert(key).inserted else { return }
+      requests.append(ImageRequest(url: secure))
+    }
     for path in indexPaths {
       switch TiebaKindRowPages.shared.kind(pageKey: pageKey, index: path.item) {
       case .feed:
@@ -1601,19 +1609,37 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
             // **只预取初始窗口**（可见 + 2 格，口径同 TiebaFeedRowView.extendStripLoadWindow）：
             // 展示侧已经改成懒加载，这里若仍预取全部 9 张，等于把省下的解码又做了一遍。
             for index in stripPrefetchRange(row) {
+              let media = row.media[index]
+              if media.isGif, let gifURL = media.originURL ?? media.url {
+                appendRaw(gifURL)
+              } else {
+                appendDisplay(
+                  media.url,
+                  size: row.plan.mediaItemFrames[index].size,
+                  radius: 0
+                )
+              }
+            }
+          } else if row.media.first?.isGif == true,
+                    let gifURL = row.media.first?.originURL ?? row.media.first?.url {
+            appendRaw(gifURL)
+          } else {
+            // 与展示侧 loadFitDisplay 同参数 ⇒ 同处理器 ⇒ 同缓存键。
+            let columnWidth = TiebaFeedRowLayout.textColumnWidth(containerWidth: row.containerWidth)
+            let height = row.singleMediaHeight ?? 0
+            if let url = row.media.first?.url, height > 0 {
               appendDisplay(
-                row.media[index].url,
-                size: row.plan.mediaItemFrames[index].size,
-                radius: 0
+                url,
+                size: CGSize(width: columnWidth, height: height),
+                radius: 16
+              )
+            } else {
+              append(
+                row.media.first?.url ?? row.videoPosterURL,
+                maxPixel: max(height, columnWidth) * scale,
+                mode: .fit
               )
             }
-          } else {
-            let columnWidth = TiebaFeedRowLayout.textColumnWidth(containerWidth: row.containerWidth)
-            append(
-              row.media.first?.url ?? row.videoPosterURL,
-              maxPixel: max(row.singleMediaHeight ?? 0, columnWidth) * scale,
-              mode: .fit
-            )
           }
         }
         if row.showsForumChip {
@@ -1631,12 +1657,16 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
         let single = row.images.count == 1
         let shown = row.images.prefix(TiebaPostRowLayout.maxImages)
         for (index, image) in shown.enumerated() {
-          guard let url = TiebaPostRowText.displayURL(image, preferences: row.preferences) else {
-            continue
-          }
           let frame = single || !row.plan.imageItemFrames.indices.contains(index)
             ? imagesFrame
             : row.plan.imageItemFrames[index]
+          if image.isGif, let gifURL = TiebaPostRowText.gifDisplayURL(image) {
+            appendRaw(gifURL)
+            continue
+          }
+          guard let url = TiebaPostRowText.displayURL(image, preferences: row.preferences) else {
+            continue
+          }
           appendDisplay(url, size: frame.size, radius: TiebaPostRowLayout.imageRadius)
         }
       case .simple, .none:

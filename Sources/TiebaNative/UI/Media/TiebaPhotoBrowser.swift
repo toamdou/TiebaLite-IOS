@@ -34,9 +34,10 @@
 //    打开期间列表预取暂停（TiebaKindListView:727），本会话自带 prefetcher
 //    以同一请求形态预取相邻页。
 //  - GIF 会动：GIF 请求**不套** resizeProcessor（Resize 重绘会把多帧
-//    animatedImage 压成单帧），走 Nuke 默认解码器的多帧 UIImage（iOS 的
-//    UIImage(data:) 对 GIF 返回动画图，UIImageView 直接播放）；渐进解码的
-//    isPreview 帧显式拒绝当终图（见 TiebaPhotoBrowserImageLoader）。
+//    压成首帧）。Nuke 默认解码器对 GIF 只产首帧 + 把原始字节挂在
+//    ImageContainer.data（UIImageView 并不会自动播 GIF），播放由 Gifu
+//    逐帧渲染承担（JXGIFObservedImageView，见 Vendor/JXPhotoBrowser 补丁）；
+//    渐进解码的 isPreview 帧显式拒绝当终图（见 TiebaPhotoBrowserImageLoader）。
 //  - 保存进度/结果用底部胶囊（TiebaPhotoBrowserPillView）：样式对齐旧查看器
 //    styles.savePill（rgba(28,28,30,.88) / 圆角 18 / 白 14pt medium /
 //    max(insets.bottom,16)+96 / 成功 2.2s 自动消失），并新增确定进度条。
@@ -54,9 +55,9 @@
 //     已有 applyWatermark 原生实现，拿到文本即可接。
 //  2. 视频：视频行没有 media 数组（只有 poster），列表侧不上报图片命中、
 //     仍走 rowTap -> JS 既有视频链路；本查看器不接视频 item。
-//  3. 大 GIF 全帧常驻内存：Nuke 解码产物 + 内存缓存都是全尺寸多帧位图，
-//     超大 GIF 会抬高峰值内存（无逐帧上限）。出路：自定义 ImageContainer.data
-//     渲染器 + CGImageSource 逐帧。
+//  3. 大 GIF 峰值内存：Gifu 按帧缓冲窗逐帧解码（查看页 setFrameBufferSize(8)，
+//     不做全帧常驻），内存缓存里存的是首帧位图 + 原始 GIF 字节。超大 GIF 的
+//     峰值 = 单帧位图 × 窗口，已显著低于"全帧常驻"。
 //  4. 长图页下拉不退出：长图阅读模式 zoomScale > minimumZoomScale 被框架
 //     下拉关闭守卫判定为"已缩放"，需点关闭按钮退出（旧查看器长图页同样只在
 //     贴顶/贴底才移交退出）。
@@ -334,35 +335,36 @@ enum TiebaPhotoBrowserError: LocalizedError {
 /// 闭包式 loadData 无 queue 参数，见 Deprecated.swift）。
 /// ⚠️ 依赖：TiebaNative.podspec 必须加 s.dependency 'Nuke/Core'，否则 import 失败。
 enum TiebaPhotoBrowserImageLoader {
-  /// 载入一张图（已解码、可直接上屏）。
+  /// 载入一张图（已解码、可直接上屏）；GIF 返回附带原始字节的 container 供 Gifu 播放。
   ///
   /// GIF 分支的两个硬约束（依据 vendored 源码，勿凭记忆改）：
   /// - **不套 resizeProcessor**：ImageProcessors.Resize 会对解码结果重绘
-  ///   （CoreGraphics），多帧 animatedImage 只剩第一帧 → 动图变静图。无处理器
-  ///   请求走 Nuke 默认解码器，GIF 路径是 UIImage(data:scale:)
-  ///   （ios/vendor/Nuke/Sources/Nuke/Decoding/ImageDecoders+Default.swift:70-73、
-  ///   167-173），iOS 上即多帧 animatedImage，data 也保留在 ImageContainer 里。
+  ///   （CoreGraphics），多帧动画只剩第一帧 → 动图变静图。无处理器请求走
+  ///   Nuke 默认解码器，GIF 产物是首帧 UIImage，原始 GIF 字节挂在
+  ///   ImageContainer.data（ImageDecoders+Default.swift:193 + ImageContainer
+  ///   文档「attaches data to GIFs」），播放交给 Gifu（JXGIFObservedImageView）。
   /// - **isPreview 帧不是终图**：渐进解码的 GIF 会先发一帧静态预览
   ///   （同文件 :84-87，isPreview: true）。本管线 progressive 关闭，正常到不了，
   ///   但这里显式拒绝：拿数据任务的原始字节重新解码（data 任务不会返回预览帧）。
-  static func load(_ url: URL, pixelSize: CGSize, isGif: Bool) async throws -> UIImage {
+  static func load(_ url: URL, pixelSize: CGSize, isGif: Bool) async throws -> ImageContainer {
     if isGif {
       let request = ImageRequest(url: TiebaNuke.secureURL(url))
       let response = try await TiebaNuke.pipeline.imageTask(with: request).response
       if !response.isPreview {
-        return response.image
+        return response.container
       }
       let (data, _) = try await TiebaNuke.pipeline.data(for: request)
       guard let image = UIImage(data: data) else {
         throw TiebaPhotoBrowserError.incompleteGif
       }
-      return image
+      return ImageContainer(image: image, type: .gif, data: data)
     }
     let request = ImageRequest(
       url: TiebaNuke.secureURL(url),
       processors: [TiebaNuke.resizeProcessor(targetPixelSize: Self.target(pixelSize))]
     )
-    return try await TiebaNuke.pipeline.image(for: request)
+    let image = try await TiebaNuke.pipeline.image(for: request)
+    return ImageContainer(image: image)
   }
 
   /// 展示请求（预取与加载必须同形态：同 URL + 同处理器，否则内存缓存键不同）。
@@ -1474,6 +1476,7 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     longFitApplied = false
     thumbTask?.cancel()
     fullTask?.cancel()
+    stopGifAnimation()
     imageView.image = nil
     scrollView.setZoomScale(scrollView.minimumZoomScale, animated: false)
     // 旧查看器缩放域 1~5、双击 3x（parts.tsx useZoomGesture maxScale:5 /
@@ -1485,13 +1488,13 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
 
     if let thumbURL = item.thumbUrl {
       thumbTask = Task { [weak self] in
-        guard let image = try? await TiebaPhotoBrowserImageLoader.load(
+        guard let container = try? await TiebaPhotoBrowserImageLoader.load(
           thumbURL,
           pixelSize: targetPixelSize,
           isGif: false
         ) else { return }
         DispatchQueue.main.async {
-          self?.apply(image: image, isThumb: true, generation: generation)
+          self?.apply(container: container, isThumb: true, isGif: false, generation: generation)
         }
       }
     } else {
@@ -1505,18 +1508,19 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     fullTask?.cancel()
     thumbTask = nil
     fullTask = nil
+    stopGifAnimation()
   }
 
   private func loadFull(item: TiebaPhotoItem, targetPixelSize: CGSize, generation: Int) {
     fullTask = Task { [weak self] in
       do {
-        let image = try await TiebaPhotoBrowserImageLoader.load(
+        let container = try await TiebaPhotoBrowserImageLoader.load(
           item.url,
           pixelSize: targetPixelSize,
           isGif: item.isGif
         )
         DispatchQueue.main.async {
-          self?.apply(image: image, isThumb: false, generation: generation)
+          self?.apply(container: container, isThumb: false, isGif: item.isGif, generation: generation)
         }
       } catch {
         DispatchQueue.main.async {
@@ -1542,16 +1546,20 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     }
   }
 
-  private func apply(image: UIImage, isThumb: Bool, generation: Int) {
+  private func apply(container: ImageContainer, isThumb: Bool, isGif: Bool, generation: Int) {
     guard generation == self.generation else { return }
     // 大图已到后缩略图任务迟到：不覆盖（保持清晰）。
     if isThumb && fullImageReady { return }
-    // GIF 的 UIImage 是多帧 animatedImage（Nuke 默认解码器产物），
-    // UIImageView 赋值后自动播放，无需 startAnimating。
-    imageView.image = image
+    // 首帧静态底走正常赋值（触发一次 JX 布局，长图 fit 依赖首帧尺寸）；
+    // 随后的动画帧由 Gifu 经 display(layer:) 写入，suppressImageChange 挡住
+    // 每帧一次的布局重算（播放/停止机制在 JXZoomImageCell 的 vendored 扩展里）。
+    imageView.image = container.image
     if isThumb { return }
     fullImageReady = true
     spinner.stopAnimating()
+    if isGif, let data = container.data {
+      playGifAnimation(data: data)
+    }
     // 大图落位后再套长图阅读模式（需要真实像素比例算 fit-width）。
     setNeedsLayout()
     applyLongImageFitIfNeeded()

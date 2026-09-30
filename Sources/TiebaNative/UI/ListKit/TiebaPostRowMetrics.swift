@@ -69,7 +69,8 @@ struct TiebaPostBlockFilter: Sendable {
       guard !word.keyword.isEmpty else { return nil }
       return Word(
         keyword: word.keyword,
-        regex: word.isRegex == true ? try? NSRegularExpression(pattern: word.keyword) : nil,
+        // 编译走 BlockStore 的记忆化：整页测量每行都调 load，正则只编一次。
+        regex: word.isRegex == true ? TiebaBlockStore.compiledRegex(pattern: word.keyword) : nil,
         whitelist: word.isWhitelist
       )
     }
@@ -310,6 +311,15 @@ enum TiebaPostRowText {
     let raw = preferences.imageLoadType == "all_origin"
       ? (image.originSrc.isEmpty ? image.src : image.originSrc)
       : (image.src.isEmpty ? image.originSrc : image.src)
+    return TiebaPhotoItem.normalizedURL(raw)
+  }
+
+  /// GIF 播放档：动图真身（ThreadAPI 填的 gifSrc；src/bigPic 常是静态预览帧）。
+  /// 非 GIF 图没有 gifSrc，走 displayURL 兜底；省流（all_no）由调用方先行拦截。
+  static func gifDisplayURL(_ image: TiebaThreadImage) -> URL? {
+    let raw = image.gifSrc.isEmpty
+      ? (image.originSrc.isEmpty ? image.src : image.originSrc)
+      : image.gifSrc
     return TiebaPhotoItem.normalizedURL(raw)
   }
 

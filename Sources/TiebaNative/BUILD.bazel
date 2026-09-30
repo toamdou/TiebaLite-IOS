@@ -14,6 +14,7 @@ swift_library(
     linkopts = ["-lsqlite3"],
     module_name = "TiebaNative",
     deps = [
+        "//Vendor/Gifu",
         "//Vendor/Hero",
         "//Vendor/JXPhotoBrowser",
         "//Vendor/Nuke",

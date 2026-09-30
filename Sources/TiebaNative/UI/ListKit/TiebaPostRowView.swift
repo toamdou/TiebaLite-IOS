@@ -5,6 +5,7 @@
 // 视频/语音的互斥与离屏暂停由 TiebaThreadMediaCoordinator 收敛（原 mediaBusStore）。
 import AVFoundation
 import AVKit
+import Gifu
 import UIKit
 import Nuke
 import NukeExtensions
@@ -136,6 +137,69 @@ func tiebaPostLoadDisplayImage(
     ),
     into: imageView
   )
+}
+
+/// 单图 fit 显示档（aspectFit 视图专用）：fit 缩放 + 圆角烘焙进位图（见
+/// TiebaNuke.fitDisplayProcessor），视图侧不再 clipsToBounds。
+@MainActor
+func tiebaLoadFitDisplayImage(
+  _ url: URL?,
+  targetSize: CGSize,
+  cornerRadius: CGFloat,
+  scale: CGFloat,
+  into imageView: UIImageView,
+  transition: Bool = false
+) {
+  guard let url, targetSize.width > 1, targetSize.height > 1 else {
+    imageView.image = nil
+    return
+  }
+  loadImage(
+    with: TiebaNuke.secureURL(url),
+    options: TiebaNuke.options(
+      processor: TiebaNuke.fitDisplayProcessor(
+        targetSize: targetSize,
+        cornerRadius: cornerRadius,
+        scale: scale
+      ),
+      transition: transition
+    ),
+    into: imageView
+  )
+}
+
+/// GIF 播放档（Gifu 逐帧渲染）。GIF 请求必须无处理器：Resize/圆角烘焙都会把
+/// 多帧重绘压成首帧（TiebaPhotoBrowser 文件头同结论）。数据源是 Nuke 默认解码器
+/// 挂在 container.data 的原始 GIF 字节；到位后先落首帧静态底再异步起帧。
+/// 帧按 targetSize×contentMode 重采样（Gifu shouldResizeFrames），缓冲窗
+/// frameBufferSize 控内存；targetSize 未布局（≤1pt）时退全尺寸帧。
+/// isStale 由调用方持行级身份判断（复用/换行后迟到的 GIF 不回贴）。
+@MainActor
+func tiebaLoadGifImage(
+  _ url: URL,
+  targetSize: CGSize,
+  contentMode: UIView.ContentMode,
+  frameBufferSize: Int,
+  into view: GIFImageView,
+  isStale: @escaping @MainActor () -> Bool
+) {
+  view.stopAnimatingGIF()
+  view.clipsToBounds = true
+  Task { [weak view] in
+    // imageTask.response 给出完整 ImageResponse（container 里才有 GIF 原始字节）；
+    // image(for:) 只回已解码的首帧位图。
+    let task = TiebaNuke.pipeline.imageTask(with: ImageRequest(url: TiebaNuke.secureURL(url)))
+    guard
+      let response = try? await task.response,
+      let view, !isStale()
+    else { return }
+    view.image = response.container.image
+    guard let data = response.container.data else { return }
+    let animator = view.animator
+    animator?.frameBufferSize = frameBufferSize
+    animator?.shouldResizeFrames = targetSize.width > 1 && targetSize.height > 1
+    animator?.animate(withGIFData: data, size: targetSize, contentMode: contentMode)
+  }
 }
 
 // MARK: - 头像
@@ -712,10 +776,13 @@ final class TiebaPostRowView: UIView {
   private let blockedTipLabel = UILabel()
   private let blockedTipIcon = UIImageView()
   private let imageScrollView = UIScrollView()
-  private var imageViews: [UIImageView] = []
+  // GIFImageView：GIF 档走 Gifu 逐帧渲染，静态档当普通 UIImageView 用（子类透明）。
+  private var imageViews: [GIFImageView] = []
   private var imagePlaceholderViews: [TiebaPostPlaceholderView] = []
   private let videoPlaceholderView = TiebaPostPlaceholderView()
   private let imageBadge = UILabel()
+  /// GIF 角标（对齐 Kotlin 版：GIF 图右下角小黑标；.feed 行已有同款）。
+  private let gifBadge = UILabel()
   private var videoView: TiebaInlineVideoView?
   private var audioView: TiebaAudioPillView?
   private let subPostsControl = UIControl()
@@ -907,8 +974,14 @@ final class TiebaPostRowView: UIView {
     titleLabel.attributedText = nil
     textView.attributedText = nil
     for view in imageViews {
+      // 在途请求必须取消（与 TiebaFeedRowView.resetContent / TiebaSimpleRows 同纪律，
+      // 文件头写明）：否则旧 displayProcessor 请求照常解码并写缓存，位图贴在复用后的
+      // 隐藏视图上。GIF 侧 stopAnimatingGIF 同时释放 Gifu 帧缓冲。
+      cancelRequest(for: view)
+      view.stopAnimatingGIF()
       view.image = nil
       view.alpha = 1
+      view.clipsToBounds = false
     }
     for view in imagePlaceholderViews { view.isHidden = true }
     for view in subPostTextViews { view.attributedText = nil }
@@ -919,6 +992,7 @@ final class TiebaPostRowView: UIView {
     videoView = nil
     audioView = nil
     imageBadge.isHidden = true
+    gifBadge.isHidden = true
   }
 
   /// 首屏入场：参数与其余三族共用 TiebaEntrance（原各抄一份时位移是 10pt、
@@ -998,6 +1072,16 @@ final class TiebaPostRowView: UIView {
     imageBadge.layer.cornerRadius = 8
     imageBadge.layer.cornerCurve = .continuous
     imageBadge.clipsToBounds = true
+    // GIF 角标样式与信息流行 TiebaFeedRowBadgeView 同款（rgba(0,0,0,0.55) + 11pt 白字）。
+    gifBadge.text = "GIF"
+    gifBadge.font = .systemFont(ofSize: 11, weight: .semibold)
+    gifBadge.textColor = .white
+    gifBadge.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+    gifBadge.textAlignment = .center
+    gifBadge.layer.cornerRadius = 10
+    gifBadge.layer.cornerCurve = .continuous
+    gifBadge.clipsToBounds = true
+    gifBadge.isHidden = true
 
     subPostsControl.addTarget(self, action: #selector(handleSubPosts), for: .touchUpInside)
     addSubview(subPostsHairline)
@@ -1067,10 +1151,11 @@ final class TiebaPostRowView: UIView {
     imageScrollView.frame = frame
     let shownCount = min(model.images.count, TiebaPostRowLayout.maxImages)
     while imageViews.count < shownCount {
-      let view = UIImageView()
+      let view = GIFImageView()
       view.contentMode = .scaleAspectFill
       // 圆角由图片管线烘焙进位图（见 tiebaPostLoadDisplayImage）：这里只留
       // cornerRadius 给占位底色，不再 clipsToBounds（否则每帧一次离屏合成）。
+      // GIF 档例外：帧不烘焙圆角，tiebaLoadGifImage 里临时开 clipsToBounds。
       view.layer.cornerRadius = TiebaPostRowLayout.imageRadius
       view.layer.cornerCurve = .continuous
       view.isUserInteractionEnabled = true
@@ -1081,9 +1166,13 @@ final class TiebaPostRowView: UIView {
     }
     let scale = max(traitCollection.displayScale, 1)
     let single = model.images.count == 1
+    var gifBadgeFrame: CGRect?
     for (index, view) in imageViews.enumerated() {
       guard index < shownCount else {
         view.isHidden = true
+        // 在途请求一并取消（复用纪律，见 prepareForReuse）。
+        cancelRequest(for: view)
+        view.stopAnimatingGIF()
         view.image = nil
         TiebaHeroTransition.clear(view)
         continue
@@ -1103,8 +1192,23 @@ final class TiebaPostRowView: UIView {
       let image = model.images[index]
       view.backgroundColor = model.palette.placeholder
       if model.preferences.imageLoadType == "all_no" {
+        view.stopAnimatingGIF()
         view.image = nil
+      } else if image.isGif, let gifURL = TiebaPostRowText.gifDisplayURL(image) {
+        // GIF 档：无处理器取动图真身，Gifu 按显示尺寸逐帧播放。
+        tiebaLoadGifImage(
+          gifURL,
+          targetSize: view.bounds.size,
+          contentMode: .scaleAspectFill,
+          frameBufferSize: 24,
+          into: view,
+          isStale: { [weak self] in self?.appliedModel !== model }
+        )
+        if gifBadgeFrame == nil {
+          gifBadgeFrame = view.frame
+        }
       } else {
+        view.stopAnimatingGIF()
         tiebaPostLoadDisplayImage(
           TiebaPostRowText.displayURL(image, preferences: model.preferences),
           targetSize: view.bounds.size,
@@ -1129,6 +1233,22 @@ final class TiebaPostRowView: UIView {
       imageScrollView.bringSubviewToFront(imageBadge)
     } else {
       imageBadge.isHidden = true
+    }
+    // GIF 角标：第一张 GIF 图的右下角（信息流/查看器同语义；复用 imageBadge 的
+    // 挂载懒挂载模式）。
+    if let gifBadgeFrame {
+      if gifBadge.superview == nil { imageScrollView.addSubview(gifBadge) }
+      gifBadge.sizeToFit()
+      gifBadge.frame = CGRect(
+        x: gifBadgeFrame.maxX - 8 - gifBadge.bounds.width,
+        y: gifBadgeFrame.maxY - 8 - gifBadge.bounds.height,
+        width: gifBadge.bounds.width,
+        height: gifBadge.bounds.height
+      )
+      gifBadge.isHidden = false
+      imageScrollView.bringSubviewToFront(gifBadge)
+    } else {
+      gifBadge.isHidden = true
     }
   }
 
@@ -1413,6 +1533,15 @@ final class TiebaPostRowView: UIView {
 // MARK: - 文本交互（选中 / 链接）
 
 extension TiebaPostRowView: UITextViewDelegate {
+  /// 正文/回复是只读可选文本，系统建议项里没有"全选"，补回去（见 TiebaTextEditMenu）。
+  func textView(
+    _ textView: UITextView,
+    editMenuForTextInRanges ranges: [NSValue],
+    suggestedActions: [UIMenuElement]
+  ) -> UIMenu? {
+    TiebaTextEditMenu.addingSelectAll(to: textView, suggestedActions: suggestedActions)
+  }
+
   func textView(
     _ textView: UITextView,
     primaryActionFor textItem: UITextItem,

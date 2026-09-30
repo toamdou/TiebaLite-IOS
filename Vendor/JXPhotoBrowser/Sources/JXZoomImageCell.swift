@@ -4,14 +4,44 @@
 //
 
 import UIKit
+import Gifu
 
-private final class JXObservedImageView: UIImageView {
+private class JXObservedImageView: UIImageView {
     var onImageChange: (() -> Void)?
 
     override var image: UIImage? {
         didSet {
             onImageChange?()
         }
+    }
+}
+
+/// JXObservedImageView + Gifu 逐帧渲染（GIF 查看页播放用；非 GIF 行为与父类一致）。
+/// 动画期间 Gifu 每帧重写 image，suppressImageChange 让这些帧不触发
+/// handleImageDidChange 的布局重算——首帧静态底仍走正常赋值（布局算一次）。
+// @preconcurrency：GIFAnimatable（Gifu，Swift 5 模块）的 requirement 是非隔离的，
+// 而 UIView 子类是 MainActor 隔离的——v6 模式下按编译器建议加垫片，全部调用都在
+// 主线程（UIView 的 layer/display 回调）。
+private final class JXGIFObservedImageView: JXObservedImageView, @preconcurrency GIFAnimatable {
+    var suppressImageChange = false
+
+    override var image: UIImage? {
+        didSet {
+            if !suppressImageChange {
+                onImageChange?()
+            }
+        }
+    }
+
+    public lazy var animator: Animator? = {
+        return Animator(withDelegate: self)
+    }()
+
+    public override func display(_ layer: CALayer) {
+        if UIImageView.instancesRespond(to: #selector(display(_:))) {
+            super.display(layer)
+        }
+        updateImageIfNeeded()
     }
 }
 
@@ -47,7 +77,7 @@ open class JXZoomImageCell: UICollectionViewCell, UIScrollViewDelegate, JXPhotoB
 
     /// 展示图片内容的视图（参与缩放与转场）
     public let imageView: UIImageView = {
-        let iv = JXObservedImageView()
+        let iv = JXGIFObservedImageView()
         // 使用非 AutoLayout 的 frame 布局以配合缩放
         iv.translatesAutoresizingMaskIntoConstraints = true
         iv.contentMode = .scaleAspectFill
@@ -118,6 +148,30 @@ open class JXZoomImageCell: UICollectionViewCell, UIScrollViewDelegate, JXPhotoB
         scrollView.addGestureRecognizer(singleTapGesture)
         singleTapGesture.require(toFail: doubleTapGesture)
         backgroundColor = .clear
+    }
+
+    // MARK: - GIF 播放（Gifu；查看页 GIF 由 TiebaPhotoBrowserImageCell 调用）
+
+    /// 播放 GIF：首帧静态底已由调用方赋值，这里接管逐帧渲染（全尺寸帧、
+    /// 缓冲窗 8 → 峰值内存 = 单帧 × 8）。动画期间 JXGIFObservedImageView
+    /// 的 suppressImageChange 挡住每帧 image 赋值触发的布局重算。
+    /// 返回 false 表示当前 cell 不承载 GIF（类型转换失败）。
+    @discardableResult
+    public func playGifAnimation(data: Data) -> Bool {
+        guard let gif = imageView as? JXGIFObservedImageView else { return false }
+        let animator = gif.animator
+        animator?.frameBufferSize = 8
+        animator?.shouldResizeFrames = false
+        animator?.animate(withGIFData: data, size: .zero, contentMode: .scaleAspectFit)
+        gif.suppressImageChange = true
+        return true
+    }
+
+    /// 停止 GIF 动画并释放帧缓冲、恢复布局钩子（换页/取消/复用共用）。
+    public func stopGifAnimation() {
+        guard let gif = imageView as? JXGIFObservedImageView else { return }
+        gif.suppressImageChange = false
+        gif.prepareForReuse()
     }
     
     // MARK: - Layout State

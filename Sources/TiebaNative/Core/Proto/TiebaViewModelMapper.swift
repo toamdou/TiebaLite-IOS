@@ -256,18 +256,23 @@ public enum TiebaViewModelMapper {
 
   /// raw 单个 thread 对象 → UI ThreadInfo。语义逐行对齐 mapProtoThread，
   /// `forum`/`userList`/`forumName` 对应 TS opts。
+  /// prebuiltUserMap：批量映射（一页 N 条线程共享同一份 userList）时由调用方
+  /// 建一次传入——每线程重建同一张哈希表是 O(线程数×用户数) 的纯重复（90 线
+  /// 翻页 ≈ 4500 次无效字典插入）。
   public static func mapProtoThread(
     _ raw: Any?,
     forum: Any? = nil,
     userList: Any? = nil,
-    forumName: Any? = nil
+    forumName: Any? = nil,
+    prebuiltUserMap: [String: [String: Any]]? = nil
   ) -> [String: Any] {
     // if (!raw) return {};（0/''/false/null 同为 falsy）
     guard truthy(raw) else { return [:] }
     // 非对象 truthy 值在 JS 里属性读取全 undefined → 走默认值；dict 缺失时按空字典。
     let rd = dict(raw) ?? [:]
 
-    let userMap = buildUserMap(userList, keyOf: { u in coalesce(u["id"], u["uid"], u["user_id"]) })
+    let userMap = prebuiltUserMap
+      ?? buildUserMap(userList, keyOf: { u in coalesce(u["id"], u["uid"], u["user_id"]) })
     let authorId = str(coalesce(rd["authorId"], rd["author_id"], dict(rd["author"])?["id"], ""))
     // raw.author 可能是"存在但为空对象 {}"（proto3 解码产物）：有键才用内嵌。
     let rawAuthor = nonEmptyDict(rd["author"])
@@ -360,8 +365,10 @@ public enum TiebaViewModelMapper {
   public static func mapFeedThreadItems(threadList: Any?, userList: Any?) -> [[String: Any]] {
     let list = (threadList as? [Any]) ?? []
     let users = (userList as? [Any]) ?? []
+    // 同一份 userList 建一次表，N 条线程共用（见 mapProtoThread 的 prebuiltUserMap）。
+    let userMap = buildUserMap(users, keyOf: { u in coalesce(u["id"], u["uid"], u["user_id"]) })
     return list.map { t in
-      ["type": "thread", "threadInfo": mapProtoThread(t, userList: users)] as [String: Any]
+      ["type": "thread", "threadInfo": mapProtoThread(t, userList: users, prebuiltUserMap: userMap)] as [String: Any]
     }
   }
 
@@ -464,10 +471,12 @@ public enum TiebaViewModelMapper {
     }
 
     // threads: mapProtoThread ×N + `!t.isAd` 过滤（ala_info 广告/直播剔除）。
+    // 同一份 userList 建一次表，N 条线程共用（见 mapProtoThread 的 prebuiltUserMap）。
     var threads: [[String: Any]] = []
     if let rawThreadList = dd["threadList"] as? [Any] {
+      let userMap = buildUserMap(userList, keyOf: { u in coalesce(u["id"], u["uid"], u["user_id"]) })
       for item in rawThreadList {
-        let t = mapProtoThread(item, forum: forumRaw, userList: userList, forumName: forumName)
+        let t = mapProtoThread(item, forum: forumRaw, userList: userList, forumName: forumName, prebuiltUserMap: userMap)
         if !truthy(t["isAd"]) { threads.append(t) }
       }
     }

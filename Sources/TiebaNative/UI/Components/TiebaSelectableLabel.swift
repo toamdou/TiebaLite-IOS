@@ -23,6 +23,8 @@ final class TiebaSelectableLabel: UITextView {
     setContentCompressionResistancePriority(.required, for: .vertical)
     // 宽度由容器（栈/单元格）给，别拿文字固有宽度去撑布局。
     setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    // 编辑菜单要补"全选"（见 TiebaTextEditMenu），只有自己能做自己的 delegate。
+    delegate = self
   }
 
   @available(*, unavailable)
@@ -35,5 +37,15 @@ final class TiebaSelectableLabel: UITextView {
     guard bounds.width != measuredWidth else { return }
     measuredWidth = bounds.width
     invalidateIntrinsicContentSize()
+  }
+}
+
+extension TiebaSelectableLabel: UITextViewDelegate {
+  func textView(
+    _ textView: UITextView,
+    editMenuForTextInRanges ranges: [NSValue],
+    suggestedActions: [UIMenuElement]
+  ) -> UIMenu? {
+    TiebaTextEditMenu.addingSelectAll(to: textView, suggestedActions: suggestedActions)
   }
 }

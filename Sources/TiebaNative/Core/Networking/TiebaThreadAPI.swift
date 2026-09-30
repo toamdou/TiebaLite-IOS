@@ -20,6 +20,10 @@ enum TiebaThreadContentSegment: Sendable {
 struct TiebaThreadImage: Sendable {
   var src = ""
   var originSrc = ""
+  /// 动图真身 URL：候选链（dynamic > origin > big > src）里第一个 .gif 后缀的
+  /// 档（与 TiebaViewModelMapper 的 gifChain 同规则）；非 GIF 恒为空串。
+  /// src/bigPic 常是静态预览帧，播放 GIF 必须走这里。
+  var gifSrc = ""
   var width = 0.0
   var height = 0.0
   var isGif = false
@@ -306,8 +310,11 @@ enum TiebaThreadAPI {
     var image = TiebaThreadImage()
     image.src = display
     image.originSrc = firstNonEmpty(media.originPic, media.bigPic, media.srcPic)
-    image.isGif = [media.dynamicPic, media.originPic, media.bigPic, media.srcPic]
-      .contains { TiebaViewModelMapper.hasGifSuffix($0) }
+    let gifCandidates = [media.dynamicPic, media.originPic, media.bigPic, media.srcPic]
+    image.isGif = gifCandidates.contains { TiebaViewModelMapper.hasGifSuffix($0) }
+    if image.isGif {
+      image.gifSrc = gifCandidates.first { TiebaViewModelMapper.hasGifSuffix($0) } ?? display
+    }
     image.width = media.width == 0 ? 300 : Double(media.width)
     image.height = media.height == 0 ? 300 : Double(media.height)
     image.isLongPic = media.isLongPic != 0
@@ -455,10 +462,15 @@ enum TiebaThreadAPI {
         image.height = height == 0 ? 300 : height
         image.src = firstNonEmpty(element.cdnSrc, element.bigCdnSrc, element.cdnSrcActive, element.src)
         image.originSrc = firstNonEmpty(element.originSrc, element.bigSrc, element.bigCdnSrc, element.src)
-        image.isGif = [
+        let gifCandidates = [
           element.dynamic, element.cdnSrc, element.bigCdnSrc,
           element.cdnSrcActive, element.originSrc, element.bigSrc, element.src,
-        ].contains { TiebaViewModelMapper.hasGifSuffix($0) }
+        ]
+        image.isGif = gifCandidates.contains { TiebaViewModelMapper.hasGifSuffix($0) }
+        if image.isGif {
+          image.gifSrc = gifCandidates.first { TiebaViewModelMapper.hasGifSuffix($0) }
+            ?? firstNonEmpty(element.cdnSrc, element.src)
+        }
         image.isLongPic = element.isLongPic != 0
         image.showOriginalBtn = element.showOriginalBtn != 0
         return .image(image)

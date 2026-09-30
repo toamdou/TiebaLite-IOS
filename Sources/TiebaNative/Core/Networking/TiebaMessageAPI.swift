@@ -125,10 +125,14 @@ enum TiebaMessageAPI {
     if let data = try? JSONSerialization.data(withJSONObject: payload),
       let text = String(data: data, encoding: .utf8)
     {
-      do {
-        try TiebaKvStore.shared.set(key: "tiebalite_last_notif_counts_\(uid)", value: text)
-      } catch {
-        messageLog.error("notification baseline write failed: \(error.localizedDescription, privacy: .public)")
+      // 写事务挪后台（与 feed 快照同口径）：调用线程是主线程，这里只有 KV 写。
+      let key = "tiebalite_last_notif_counts_\(uid)"
+      Task.detached(priority: .utility) {
+        do {
+          try TiebaKvStore.shared.set(key: key, value: text)
+        } catch {
+          messageLog.error("notification baseline write failed: \(error.localizedDescription, privacy: .public)")
+        }
       }
     }
     // 原生后台轮询的基线也要同写（JS 侧同款：setNotificationCounts），否则后台
