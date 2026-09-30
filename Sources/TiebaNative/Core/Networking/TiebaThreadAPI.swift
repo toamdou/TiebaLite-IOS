@@ -157,7 +157,7 @@ enum TiebaThreadAPI {
     page: Int,
     postId: String?,
     seeLz: Bool,
-    reverse: Bool
+    sort: TiebaThreadSort
   ) async throws -> TiebaThreadPage {
     guard !threadId.isEmpty else { throw TiebaForumAPIError.invalidURL }
     let data = try await TiebaForumAPI.protoPost(path: "/c/f/pb/page", cmd: "302001&format=protobuf") { common in
@@ -166,7 +166,9 @@ enum TiebaThreadAPI {
       request.kz = Int64(threadId) ?? 0
       if let postId, let pid = Int64(postId) { request.pid = pid }
       request.pn = Int32(page)
-      request.r = reverse ? 1 : 0
+      // r = 排序档位（热门 2 / 正序 0 / 倒序 1），服务端自己在 pb_sort_info 里列的
+      // 就是这三档（实测：热门档回的是按热度重排、不带楼层的列表）。
+      request.r = Int32(sort.rawValue)
       request.lz = seeLz ? 1 : 0
       // 与 JS encodePbPageRequest 的非零常量逐项一致（其余保持 proto 默认 0）。
       request.rn = 15
@@ -395,6 +397,10 @@ enum TiebaThreadAPI {
     info.zanNum = Int(raw.agreeNum)
     info.hasAgree = raw.agree.hasAgree_p == 1
     info.createTimeMs = TiebaViewModelMapper.toMillis(Double(raw.createTime))
+    // 服务端实测从不回 first_post_id(40)（连查四帖皆缺）⇒ 这里实际总是兜底成**帖子
+    // id**。帖级写接口的 post_id 要的是首楼 post id，把帖子 id 发过去服务端按"楼层
+    // 不存在"回错（"点收藏永远失败"）。消费方必须先认这个兜底值：
+    // 见 TiebaThreadViewController.firstFloorPostId。
     info.firstPostId = String(raw.firstPostID != 0 ? raw.firstPostID : raw.id)
     return info
   }

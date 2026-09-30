@@ -1,6 +1,9 @@
 name: Build iOS Unsigned IPA
 
-# 产出未签名（ad-hoc 签名）真机 IPA（Artifact + 打 tag 时发布 Release），供 SideStore / AltStore 重签侧载。
+# 一次编译**两个分支**、发两种产物（Artifact + 打 tag 时发布 Release）：
+#   main  → TiebaLite-<版本>.ipa        最低 iOS 26：液态玻璃完整形态
+#   ios17 → TiebaLite-<版本>-IOS17.ipa  最低 iOS 17：同功能，材质退回该系统年代
+# 两边都是未签名（ad-hoc 签名）真机 IPA，供 SideStore / AltStore 重签侧载。
 # 纯 Swift + Bazel：无 Node / npm / Metro / CocoaPods，也不需要任何 Apple 账号或 secret。
 #
 # 为什么 ad-hoc 等于"无签名"口径：rules_apple 对设备构建强制要求每个 bundle 都有
@@ -20,7 +23,7 @@ on:
           - Debug
         default: Release
       tag_name:
-        description: '发布到的 tag（如 v1.0.1；留空则只出 Artifact 不发 Release）'
+        description: '发布到的 tag（如 v2.1.1；留空则只出 Artifact 不发 Release）'
         type: string
         required: false
         default: ''
@@ -38,28 +41,40 @@ on:
     tags:
       - 'v*'
 
-concurrency:
-  group: ios-build-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: write
 
 jobs:
   build:
-    name: Build & package unsigned IPA
-    # macos-26 自带 Xcode 26.x。如需固定版本可加：
+    name: Build ${{ matrix.ref }}${{ matrix.suffix }}
+    # macOS 26 自带 Xcode 26.x。如需固定版本可加：
     #   - uses: maxim-lobanov/setup-xcode@v1
     #     with:
     #       xcode-version: '26.2.0'
     runs-on: macos-26
     timeout-minutes: 120
+    # 并发键放在 job 级才拿得到 matrix.ref；两条腿各自成组，不会互相取消。
+    concurrency:
+      group: ios-build-${{ github.ref }}-${{ matrix.ref }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ref 是"在这个分支的树上出包"；suffix 进 IPA 文件名（IOS17 那份必须带 IOS17，
+          # 用户就是靠文件名区分下哪一个）。
+          - ref: main
+            suffix: ''
+          - ref: ios17
+            suffix: '-IOS17'
     env:
-      IPA_NAME: TiebaLite-unsigned.ipa
       CONFIGURATION: ${{ inputs.configuration || 'Release' }}
+      SUFFIX: ${{ matrix.suffix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
 
       - name: Show toolchain
         run: |
@@ -67,14 +82,16 @@ jobs:
           swift --version
 
       # Bazel 磁盘/仓库缓存：命中后整包十几秒（冷编约 100 s）。
+      # key 里带 ref：两条腿并行时不会抢同一个 key（命中失败也还有 restore-keys 兜）。
       - name: Cache Bazel
         uses: actions/cache@v4
         with:
           path: |
             ~/.bazel_cache/disk
             ~/.bazel_cache/repository
-          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', '.bazelrc', '.bazelversion', 'BUILD.bazel', '**/BUILD.bazel') }}
+          key: bazel-${{ matrix.ref }}-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', '.bazelrc', '.bazelversion', 'BUILD.bazel', '**/BUILD.bazel') }}
           restore-keys: |
+            bazel-${{ matrix.ref }}-${{ runner.os }}-
             bazel-${{ runner.os }}-
 
       - name: Build (bazel, ad-hoc signed device IPA)
@@ -89,33 +106,51 @@ jobs:
 
       - name: Package IPA
         run: |
+          # 文件名：填了 tag 就用 tag 作版本号（v2.1.1 → TiebaLite-v2.1.1.ipa），
+          # 没填就退回按 commit 命名；ios17 那条腿再加 -IOS17。
+          tag="${{ inputs.tag_name || github.ref_name }}"
+          case "$tag" in
+            v*) base="TiebaLite-$tag" ;;
+            *)  base="TiebaLite-unsigned-$(echo "${GITHUB_SHA}" | cut -c1-7)" ;;
+          esac
+          echo "IPA_NAME=${base}${SUFFIX}.ipa" >> "$GITHUB_ENV"
           mkdir -p build/Payload
           unzip -q bazel-bin/AppStripped.ipa -d build
           # 隐私消毒：把产物内嵌的构建机绝对路径（含 runner 用户名）做等长替换
           python3 Tools/privacy-scrub.py build/Payload/*.app
-          ( cd build && zip -qry "$IPA_NAME" Payload )
-          unzip -l "build/$IPA_NAME" | head -20
+          ( cd build && zip -qry "$(basename "${base}${SUFFIX}.ipa")" Payload )
+          unzip -l "build/${base}${SUFFIX}.ipa" | head -20
+          # 产物自检：APP 与扩展的最低系统版本要跟本分支一致（防止把两种 IPA 搞混）
+          /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" build/Payload/*.app/Info.plist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TiebaLite-unsigned-${{ github.sha }}
-          path: build/TiebaLite-unsigned.ipa
+          name: ipa-${{ matrix.ref }}
+          path: build/${{ env.IPA_NAME }}
           if-no-files-found: error
 
-      # 两种发布路径：
-      # 1. 手动触发且填了 tag_name 输入框 → 在该 tag（不存在则建）发 Release，
-      #    说明文本用 release_notes 输入框的内容
-      # 2. push 了 v* tag → 用 tag 原名发 Release
+  # 两条腿都出完才发 Release，且**两种 IPA 一起挂上去**（用户按文件名挑系统）。
+  # 只在"手动触发且填了 tag_name"或"push 了 v* tag"时执行。
+  release:
+    needs: build
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.tag_name != '') ||
+      startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download IPAs
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
       - name: Publish to GitHub Releases
-        if: >-
-          (github.event_name == 'workflow_dispatch' && inputs.tag_name != '') ||
-          startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
           name: ${{ (github.event_name == 'workflow_dispatch' && inputs.release_title != '') && inputs.release_title || (github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name) }}
           body: ${{ github.event_name == 'workflow_dispatch' && inputs.release_notes || '' }}
           generate_release_notes: ${{ github.event_name != 'workflow_dispatch' }}
-          files: build/TiebaLite-unsigned.ipa
+          files: dist/*.ipa
           fail_on_unmatched_files: true

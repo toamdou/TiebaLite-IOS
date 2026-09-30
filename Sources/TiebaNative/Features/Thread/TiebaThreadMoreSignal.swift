@@ -7,9 +7,10 @@ import Foundation
 /// 只负责同步投递。
 @MainActor
 final class TiebaThreadMoreSignal {
-  enum Action: String {
+  enum Action {
     case seeLz
-    case sort
+    /// 排序档位选择（热门/正序/倒序直接选一档，不再循环）。
+    case selectSort(TiebaThreadSort)
     case jump
     case share
     case delete

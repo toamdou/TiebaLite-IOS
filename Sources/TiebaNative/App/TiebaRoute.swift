@@ -28,7 +28,7 @@ public enum TiebaRoute: Equatable, Hashable, Sendable {
     forumName: String,
     threadTitle: String
   )
-  case threadMore(id: String, canDelete: Bool, seeLz: Bool, reverse: Bool)
+  case threadMore(id: String, canDelete: Bool, seeLz: Bool, sort: TiebaThreadSort)
 
   // ── 吧 ──
   case forum(name: String, forumId: String = "")
@@ -131,12 +131,12 @@ public enum TiebaRoute: Equatable, Hashable, Sendable {
         ("forumName", forumName),
         ("threadTitle", threadTitle),
       ])
-    case .threadMore(let id, let canDelete, let seeLz, let reverse):
+    case .threadMore(let id, let canDelete, let seeLz, let sort):
       // 0/1 都进签名：与旧参数的形状一致（回调式 sheet 只有这几项决定内容）。
       return "/thread/\(Self.segment(id))/more" + Self.query([
         ("canDelete", canDelete ? "1" : "0"),
         ("seeLz", seeLz ? "1" : "0"),
-        ("reverse", reverse ? "1" : "0"),
+        ("sort", String(sort.rawValue)),
       ])
     case .forum(let name, let forumId):
       return "/forum/\(Self.segment(name))" + Self.query([("forumId", forumId)])

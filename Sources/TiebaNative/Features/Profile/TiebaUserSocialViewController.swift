@@ -105,8 +105,11 @@ final class TiebaUserSocialViewController: UIViewController {
           page = target
         }
         hasMore = result.hasMore
-        stateView.isHidden = true
-        list.isHidden = false
+        // 数据到手 ≠ 行能画：整页测量在后台跑，提前让位就是状态视图先消失、正文空白。
+        list.revealWhenReady { [weak self] in
+          self?.stateView.isHidden = true
+          self?.list.isHidden = false
+        }
         // 分页同页键重推；刷新/切段才换页键。
         publish(fresh: reset)
       } catch {

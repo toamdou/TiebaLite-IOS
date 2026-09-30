@@ -19,6 +19,10 @@ struct TiebaThreadSnapshot {
   /// 文本列宽不同 ⇒ Nuke 缓存键不同），重新下载解码期间若没有它就只剩灰底
   ///（用户 2026-09-19 报的"明明缩略图已加载好，进帖一片灰"）。
   var thumbnailImage: UIImage?
+  /// 卡片所属吧：顶栏右侧的吧按钮在首包落地前就靠它画（否则按钮"突然"出现，
+  /// 用户 2026-09-25 实证）。深链无快照时仍等首包。
+  var forumName = ""
+  var forumAvatarURL: URL?
 }
 
 extension TiebaThreadSnapshot {
@@ -34,6 +38,8 @@ extension TiebaThreadSnapshot {
     imageURL = image?.url
     imageWidth = image?.width ?? 0
     imageHeight = image?.height ?? 0
+    forumName = row.forumName
+    forumAvatarURL = row.forumAvatarURL
   }
 }
 

@@ -16,7 +16,8 @@ enum TiebaPostRowEvent: Sendable {
   case avatar
   case agree
   case toggleSeeLz
-  case toggleSort
+  /// 排序档位选择（药丸弹菜单，直接选热门/正序/倒序，不再循环）。
+  case selectSort(TiebaThreadSort)
   case copyContent
   case share
   case copyLink
@@ -1122,7 +1123,9 @@ final class TiebaPostRowView: UIView {
     sortButton.titleLabel?.font = TiebaPostRowLayout.pillFont
     sortButton.layer.cornerRadius = 15
     sortButton.layer.cornerCurve = .continuous
-    sortButton.addTarget(self, action: #selector(handleToggleSort), for: .touchUpInside)
+    // 排序药丸 = 菜单按钮：点一下弹三档直接选，不再"点好几次"循环（菜单在
+    // updateToolbarPills 里按当前档位重建）。
+    sortButton.showsMenuAsPrimaryAction = true
     addSubview(seeLzButton)
     addSubview(sortButton)
   }
@@ -1392,7 +1395,21 @@ final class TiebaPostRowView: UIView {
   private func updateToolbarPills() {
     guard let toolbar = model?.toolbar else { return }
     configurePill(seeLzButton, title: "只看楼主", selected: toolbar.seeLz, palette: palette)
-    configurePill(sortButton, title: toolbar.reverse ? "倒序" : "正序", selected: toolbar.reverse, palette: palette)
+    // 排序药丸：离开默认档（热门）才加亮，箭头表明点开是三档菜单。
+    let selected = toolbar.sort != .hot
+    let color = selected ? UIColor.white : palette.textSecondary
+    let chevron = UIImage(
+      systemName: "chevron.down",
+      withConfiguration: TiebaPostRowLayout.pillChevronConfig
+    )?.withTintColor(color, renderingMode: .alwaysOriginal)
+    sortButton.setImage(chevron, for: .normal)
+    sortButton.semanticContentAttribute = .forceRightToLeft
+    configurePill(sortButton, title: toolbar.sort.title, selected: selected, palette: palette)
+    sortButton.menu = UIMenu(children: TiebaThreadSort.allCases.map { option in
+      UIAction(title: option.title, state: option == toolbar.sort ? .on : .off) { [weak self] _ in
+        self?.onEvent?(.selectSort(option))
+      }
+    })
   }
 
   private func configurePill(_ button: UIButton, title: String, selected: Bool, palette: TiebaFeedRowPalette) {
@@ -1441,11 +1458,6 @@ final class TiebaPostRowView: UIView {
   @objc private func handleToggleSeeLz() {
     TiebaSceneHaptics.fire("toggle")
     onEvent?(.toggleSeeLz)
-  }
-
-  @objc private func handleToggleSort() {
-    TiebaSceneHaptics.fire("toggle")
-    onEvent?(.toggleSort)
   }
 
   @objc private func handleImageTap(_ gesture: UITapGestureRecognizer) {
@@ -1533,13 +1545,13 @@ final class TiebaPostRowView: UIView {
 // MARK: - 文本交互（选中 / 链接）
 
 extension TiebaPostRowView: UITextViewDelegate {
-  /// 正文/回复是只读可选文本，系统建议项里没有"全选"，补回去（见 TiebaTextEditMenu）。
+  /// 只读正文的长按菜单补「全选」（系统不一定给，见 tiebaSelectableEditMenu）。
   func textView(
     _ textView: UITextView,
-    editMenuForTextInRanges ranges: [NSValue],
+    editMenuForTextIn range: NSRange,
     suggestedActions: [UIMenuElement]
   ) -> UIMenu? {
-    TiebaTextEditMenu.addingSelectAll(to: textView, suggestedActions: suggestedActions)
+    textView.tiebaSelectableEditMenu(suggestedActions: suggestedActions)
   }
 
   func textView(
