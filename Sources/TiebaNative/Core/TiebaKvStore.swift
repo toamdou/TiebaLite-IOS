@@ -206,6 +206,32 @@ final class TiebaKvStore: @unchecked Sendable {
     }
   }
 
+  /// 前缀键值对一次取回（屏蔽列表读取的主路径）：GLOB 'prefix*' 前缀模式会被
+  /// 查询计划器转成主键索引的 range 扫描（BINARY 排序），一条语句替代
+  /// keys(prefix:) + 逐键 get 的 N+1（每次 get 一轮 prepare/step/finalize）。
+  /// prefix 不得含 GLOB 通配符（*?[，当前调用方都是固定 ASCII 前缀）。
+  /// 库不可用/导入未完成 → 空数组。
+  func scan(prefix: String) -> [(key: String, value: String)] {
+    lock.withLock {
+      guard let db = openLocked() else { return [] }
+      guard let statement = TiebaSQLiteCore.prepare(
+        db,
+        "SELECT key, value FROM kv WHERE key GLOB ?1 ORDER BY key;"
+      ) else { return [] }
+      defer { sqlite3_finalize(statement) }
+      TiebaSQLiteCore.bind(statement, 1, prefix + "*")
+      var result: [(key: String, value: String)] = []
+      while sqlite3_step(statement) == SQLITE_ROW {
+        if let key = TiebaSQLiteCore.columnString(statement, 0),
+          let value = TiebaSQLiteCore.columnString(statement, 1)
+        {
+          result.append((key, value))
+        }
+      }
+      return result
+    }
+  }
+
   /// 批量写（旧 kvBatchSync 的语义：value == nil = 删除）。整批一个事务：
   /// 半途失败回滚整批，不会出现「前几条生效、后几条丢失」。
   func batchWrite(_ writes: [(key: String, value: String?)]) throws {
@@ -344,6 +370,9 @@ final class TiebaKvStore: @unchecked Sendable {
 
   /// WAL：两条连接读写同一库时读不阻塞写。单条 PRAGMA，失败只记日志——
   /// 回滚日志模式下靠 busy_timeout 也能跑，只是写-写撞车时表现为等待。
+  /// synchronous=NORMAL 是 WAL 的标准搭配（缺省 FULL 让每次 COMMIT 都 fsync
+  /// WAL）：app 崩溃仍一致（WAL 未 checkpoint 的数据可恢复），只有掉电可能丢
+  /// 最后一笔——kv 里全是可重建的缓存/快照/偏好，这个代价换掉每次提交的 fsync。
   private func enableWALLocked(_ db: OpaquePointer) {
     var statement: OpaquePointer?
     guard sqlite3_prepare_v2(db, "PRAGMA journal_mode = WAL;", -1, &statement, nil) == SQLITE_OK,
@@ -354,6 +383,11 @@ final class TiebaKvStore: @unchecked Sendable {
       if mode.lowercased() != "wal" {
         Self.log.notice("journal_mode=\(mode, privacy: .public) (WAL 未生效，并发写可能等待)")
       }
+    }
+    let syncStatement: OpaquePointer? = TiebaSQLiteCore.prepare(db, "PRAGMA synchronous = NORMAL;")
+    if let syncStatement {
+      defer { sqlite3_finalize(syncStatement) }
+      _ = sqlite3_step(syncStatement)
     }
   }
 

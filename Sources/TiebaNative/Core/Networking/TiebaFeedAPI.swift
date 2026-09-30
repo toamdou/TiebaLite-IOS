@@ -243,6 +243,9 @@ enum TiebaFeedAPI {
   }
 
   /// 写快照（页面 page=1 成功后调用；失败静默——快照是加速手段，不影响主流程）。
+  /// 序列化（~1ms 级）留在调用线程，KV 写事务（含 fsync）挪后台：首屏成功路径
+  /// 不被一条写事务拖住。旧死键的清理 DELETE 随写同批进后台（此后每次都命中
+  /// 0 行，只花后台线程）。
   static func saveSnapshot(_ items: [[String: Any]], segment: String) {
     guard !items.isEmpty else { return }
     let payload: [String: Any] = [
@@ -253,9 +256,11 @@ enum TiebaFeedAPI {
       let text = String(data: data, encoding: .utf8)
     else { return }
     let key = snapshotKey(segment: segment, uid: TiebaBackgroundSnapshot.shared.uid)
-    try? TiebaKvStore.shared.set(key: key, value: text)
-    // 旧死键顺手清掉（只写不读的那份，留着永远占 KV）。
-    try? TiebaKvStore.shared.remove(key: snapshotKey)
+    let legacyKey = snapshotKey
+    Task.detached(priority: .utility) {
+      try? TiebaKvStore.shared.set(key: key, value: text)
+      try? TiebaKvStore.shared.remove(key: legacyKey)
+    }
   }
 }
 
@@ -483,7 +488,8 @@ enum TiebaFeedFilter {
         return Word(
           keyword: word.keyword,
           isRegex: word.isRegex == true,
-          regex: word.isRegex == true ? try? NSRegularExpression(pattern: word.keyword) : nil,
+          // 编译走 BlockStore 的记忆化：同一 keyword 与帖子行测量/消息页共享结果。
+          regex: word.isRegex == true ? TiebaBlockStore.compiledRegex(pattern: word.keyword) : nil,
           whitelist: word.isWhitelist
         )
       })

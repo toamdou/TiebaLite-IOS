@@ -298,6 +298,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   }
 
   private func apply(_ result: TiebaForumFeedPage, tab: Int, page: Int, timeType: String) {
+    rowInputsVersion += 1
     if let card = result.card {
       self.card = card
       if !card.tbs.isEmpty { TiebaBackgroundSnapshot.shared.tbs = card.tbs }
@@ -384,7 +385,18 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     return result
   }
 
+  // ── 行派发缓存 ──
+  // makeRows 的调用面：driver.publish 主线程同步回调、apply 的空判、tap/菜单
+  // 处理器各一次——此前每次都是全量重派（SQLite 屏蔽表扫描 + 正则编译 + 逐行
+  // 字典拷贝 + 逐行屏蔽匹配）。输入版本不变时直接复用上次数组；版本由所有
+  // 变更点 bump（apply/换 tab/切排序/展开/不感兴趣/点赞 patch/屏蔽/精品重置），
+  // 偏好与屏蔽表变更则进版本串（读侧现已是内存缓存，廉价）。
+  private var rowInputsVersion = 0
+  private var rowCache: (version: String, rows: [[String: Any]])?
+
   private func makeRows() -> [[String: Any]] {
+    let version = "\(rowInputsVersion)|\(TiebaBlockStore.changeVersion)|\(TiebaPreferenceSnapshot.bool("hideMedia", default: false))|\(TiebaPreferenceSnapshot.bool("showIpLocation", default: true))|\(TiebaPreferenceSnapshot.string("fontScale") ?? "")"
+    if let cached = rowCache, cached.version == version { return cached.rows }
     let hideMedia = TiebaPreferenceSnapshot.bool("hideMedia", default: false)
     let showIp = TiebaPreferenceSnapshot.bool("showIpLocation", default: true)
     let fontScale = Double(TiebaPreferenceSnapshot.string("fontScale") ?? "") ?? 1
@@ -404,6 +416,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
         rows.append(row)
       }
     }
+    rowCache = (version, rows)
     return rows
   }
 
@@ -526,6 +539,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     case .sort(let value):
       guard value != sortType else { return }
       sortType = value
+      rowInputsVersion += 1
       buckets[1] = []
       pages[1] = 1
       hasMores[1] = true
@@ -541,6 +555,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   private func switchTab(_ tab: Int) {
     guard tab >= 0, tab <= 2, tab != currentTab else { return }
     currentTab = tab
+    rowInputsVersion += 1
     list.headerSpec = headerSpec()
     publish(fresh: true)
     list.scrollToTop(animated: false)
@@ -571,6 +586,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     case "showMore":
       let id = value("id")
       guard !id.isEmpty, expandedIds.insert(id).inserted else { return }
+      rowInputsVersion += 1
       TiebaSceneHaptics.fire("toggle")
       publish(fresh: false)
     case "action":
@@ -655,6 +671,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
           guard let self else { return }
           for tab in 0..<3 {
             buckets[tab].removeAll { TiebaSimpleRowParser.string($0["id"]) == threadId }
+            rowInputsVersion += 1
           }
           publish(fresh: true)
           if makeRows().isEmpty { showState(.empty) }
@@ -730,6 +747,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       for index in buckets[tab].indices
       where TiebaSimpleRowParser.string(buckets[tab][index]["id"]) == id {
         buckets[tab][index]["hasAgree"] = liked
+        rowInputsVersion += 1
         let count = TiebaSimpleRowParser.double(buckets[tab][index]["zanNum"]) ?? 0
         buckets[tab][index]["zanNum"] = max(0, count + (liked ? 1 : -1))
       }
@@ -754,6 +772,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     TiebaSceneHaptics.fire("action-success")
     for tab in 0..<3 {
       buckets[tab].removeAll { TiebaSimpleRowParser.string($0["authorId"]) == uid }
+      rowInputsVersion += 1
     }
     publish(fresh: true)
     if makeRows().isEmpty { showState(.empty) }
@@ -908,6 +927,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     TiebaSceneHaptics.fire("toggle")
     classifyId = id
     buckets[2] = []
+    rowInputsVersion += 1
     pages[2] = 1
     hasMores[2] = true
     list.headerSpec = headerSpec()

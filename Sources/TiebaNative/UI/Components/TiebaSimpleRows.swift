@@ -161,9 +161,42 @@ nonisolated enum TiebaSimpleText {
     }
   }
 
+  // ── 字体缓存 ──
+  // font(size:weight:) 是全仓行字体的咽喉（帖子行 TiebaPostRowLayout 全部字体 +
+  // 简单行族）：帖子页每行 plan 访问 nameFont/actionFont/metaFont 等 10+ 次，
+  // 400 楼整页 publish ≈ 4000 次 UIFontMetrics descriptor 解析，而 (size,weight)
+  // 组合屈指可数——按组合缓存，系统字号档变化（didChange）整体失效。
+  // UIFont 不可变且线程安全；测量在后台队列跑，访问统一走锁。
+  private static let fontCacheLock = NSLock()
+  nonisolated(unsafe) private static var fontCache: [FontKey: UIFont] = [:]
+
+  private struct FontKey: Hashable {
+    let size: CGFloat
+    // UIFont.Weight.rawValue 是 CGFloat（不是 UInt）。
+    let weightRaw: CGFloat
+  }
+
+  private static let fontCacheReset: Void = {
+    NotificationCenter.default.addObserver(
+      forName: UIContentSizeCategory.didChangeNotification,
+      object: nil,
+      queue: .main
+    ) { _ in
+      fontCacheLock.withLock { fontCache.removeAll() }
+    }
+    return ()
+  }()
+
   static func font(size: CGFloat, weight: UIFont.Weight) -> UIFont {
-    UIFontMetrics(forTextStyle: textStyle(for: size))
-      .scaledFont(for: UIFont.systemFont(ofSize: max(size, 1), weight: weight))
+    _ = fontCacheReset
+    let key = FontKey(size: size, weightRaw: weight.rawValue)
+    return fontCacheLock.withLock {
+      if let cached = fontCache[key] { return cached }
+      let font = UIFontMetrics(forTextStyle: textStyle(for: size))
+        .scaledFont(for: UIFont.systemFont(ofSize: max(size, 1), weight: weight))
+      fontCache[key] = font
+      return font
+    }
   }
 
   /// 行高：RN 给了显式 lineHeight → ×UIFontMetrics；未给（RN 走字体默认行高）

@@ -133,7 +133,7 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
   public let bannerText: String
 
   // ── 交互开关（JS 下发，原生不猜业务场景）──
-  /// 右上角 ×（屏蔽/举报）菜单项：TweetCard closeMenuOptions 的取值子集
+  /// 右上角「更多」菜单项（屏蔽/举报）：TweetCard closeMenuOptions 的取值子集
   /// （dislike / block / copy-title）。空数组 = 该行不绘制菜单钮（与
   /// TweetCard 未传 onMenuAction 时一致）；缺 key 同样为空。
   public let menuOptions: [String]
@@ -573,7 +573,7 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
 /// 一行的各块高度与单行文本宽度（测量一次；plan() 只用它做算术）。
 nonisolated struct TiebaFeedRowBlocks {
   let isBanner: Bool
-  /// 右上角 × 菜单钮是否存在（决定名字行可用宽度让位 menuButtonSize + gap，
+  /// 右上角「更多」钮是否存在（决定名字行可用宽度让位 menuButtonSize + gap，
   /// 与 TweetCard headerRow 里 closeButton 参与 flex 布局同几何）。
   let showsMenu: Bool
   let headerHeight: CGFloat
@@ -653,7 +653,9 @@ nonisolated struct TiebaFeedRowLayoutPlan {
 /// 几何，禁止在行视图里另算一套（文本列宽不一致是"截断/超高"类 bug 的根源）。
 nonisolated enum TiebaFeedRowLayout {
   // TweetCard.tsx 常量
-  static let cardMarginH: CGFloat = 10
+  /// 左右边距 16：与首页关注吧网格（sectionInset 16）、最近访问条一致，
+  /// 也是系统 inset 列表的标准档。原 10 与页面其余部分对不齐（2026-09-19）。
+  static let cardMarginH: CGFloat = 16
   static let cardMarginV: CGFloat = 4
   static let cardPaddingX: CGFloat = 12
   static let cardPaddingTop: CGFloat = 12
@@ -783,11 +785,37 @@ nonisolated enum TiebaFeedRowLayout {
     let lineHeights: LineHeights
   }
 
+  // ── 排版缓存 ──
+  // 每个行模型 init 都经 geometry() 重建 Fonts(14 属性)+LineHeights(9 属性)，
+  // 每次 scaledFont/scaledValue 都是一次 UIFontMetrics descriptor 匹配；而
+  // fontScale 取值域极小（偏好 0.8–2.0，通常恒 1）——一页 20 行 ≈ 280 次重复
+  // 解析。按 fontScale 缓存，系统字号档变化整体失效（UIFont 不可变、CGFloat
+  // 值线程安全；测量在后台队列，访问走锁）。
+  private static let typographyLock = NSLock()
+  nonisolated(unsafe) private static var fontsCache: [CGFloat: Fonts] = [:]
+  nonisolated(unsafe) private static var lineHeightsCache: [CGFloat: LineHeights] = [:]
+
+  private static let typographyCacheReset: Void = {
+    NotificationCenter.default.addObserver(
+      forName: UIContentSizeCategory.didChangeNotification,
+      object: nil,
+      queue: .main
+    ) { _ in
+      typographyLock.withLock {
+        fontsCache.removeAll()
+        lineHeightsCache.removeAll()
+      }
+    }
+    return ()
+  }()
+
   static func geometry(containerWidth: CGFloat, fontScale: CGFloat) -> Geometry {
+    _ = typographyCacheReset
     let width = max(containerWidth, 0)
     let cardWidth = max(width - cardMarginH * 2, 0)
     let contentWidth = max(cardWidth - cardPaddingX * 2, 0)
     let textColumnWidth = max(contentWidth - contentIndent, 0)
+    let typography = cachedTypography(fontScale: fontScale)
     return Geometry(
       containerWidth: width,
       cardWidth: cardWidth,
@@ -796,9 +824,29 @@ nonisolated enum TiebaFeedRowLayout {
       stripViewportWidth: cardWidth,
       stripLeadInset: cardPaddingX + contentIndent,
       fontScale: fontScale,
-      fonts: Fonts(fontScale: fontScale),
-      lineHeights: LineHeights(fontScale: fontScale)
+      fonts: typography.fonts,
+      lineHeights: typography.lineHeights
     )
+  }
+
+  private static func cachedTypography(fontScale: CGFloat) -> (fonts: Fonts, lineHeights: LineHeights) {
+    typographyLock.withLock {
+      let fonts: Fonts
+      if let cached = fontsCache[fontScale] {
+        fonts = cached
+      } else {
+        fonts = Fonts(fontScale: fontScale)
+        fontsCache[fontScale] = fonts
+      }
+      let lineHeights: LineHeights
+      if let cached = lineHeightsCache[fontScale] {
+        lineHeights = cached
+      } else {
+        lineHeights = LineHeights(fontScale: fontScale)
+        lineHeightsCache[fontScale] = lineHeights
+      }
+      return (fonts, lineHeights)
+    }
   }
 
   /// 文本可用宽度（唯一的宽度换算入口）。
@@ -918,7 +966,7 @@ nonisolated enum TiebaFeedRowLayout {
       + (blocks.ipWidth == nil ? 0 : 1 + geometry.fonts.ip.lineHeight)
     let nameTop = headerTop + max((blocks.headerHeight - nameContentHeight) / 2, 0)
     let nameRowHeight = geometry.lineHeights.subhead
-    // 右上角 × 在 headerRow 里参与 flex 布局（TweetCard closeButton 26pt +
+    // 右上角「更多」钮在 headerRow 里参与 flex 布局（26pt +
     // headerRow gap 10），名字行可用宽度必须让位，否则长名会压到按钮下面。
     let menuButtonFrame: CGRect? = blocks.showsMenu
       ? CGRect(
@@ -1456,6 +1504,18 @@ nonisolated enum TiebaRowText {
     measure(attributed, width: width, maxLines: maxLines).height
   }
 
+  // ── 可复用 TextKit 栈 ──
+  // 整页 prepare 逐行调 measure：信息流一行 2-3 处、一页 60+ 次；帖子页 400 楼
+  // publish 数百次。每次新建 NSTextStorage+NSLayoutManager+NSTextContainer 的
+  // 三件套分配与 layoutManager 冷启动是排版之外的纯开销（NSLayoutManager 属重
+  // 对象）。测量恒在串行队列/后台 prepare 内执行（见 prepareFeedRowsBlocking 的
+  // 契约），同一时刻只有一个调用方——按持锁换取单套栈复用即可，高度/截断判据
+  // 不变。锁同时保护"递归进入 measure"（TextKit 回调不会再进 measure，防御）。
+  private static let measureStackLock = NSLock()
+  nonisolated(unsafe) private static var measureStorage: NSTextStorage?
+  nonisolated(unsafe) private static var measureLayoutManager: NSLayoutManager?
+  nonisolated(unsafe) private static var measureContainer: NSTextContainer?
+
   /// 高度 + 是否真被 maxLines 截断（同一趟布局里判：截断时可见字形范围盖不到
   /// 末字形）。折叠判据必须用"真截断"，不能只比字数。
   static func measure(
@@ -1464,14 +1524,32 @@ nonisolated enum TiebaRowText {
     maxLines: Int
   ) -> (height: CGFloat, truncated: Bool) {
     guard attributed.length > 0, width > 0 else { return (0, false) }
-    let storage = NSTextStorage(attributedString: attributed)
-    let layoutManager = NSLayoutManager()
-    let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
-    container.lineFragmentPadding = 0
+    measureStackLock.lock()
+    defer { measureStackLock.unlock() }
+    let storage: NSTextStorage
+    let layoutManager: NSLayoutManager
+    let container: NSTextContainer
+    if let reusableStorage = measureStorage,
+      let reusableLayout = measureLayoutManager,
+      let reusableContainer = measureContainer
+    {
+      storage = reusableStorage
+      layoutManager = reusableLayout
+      container = reusableContainer
+    } else {
+      storage = NSTextStorage(attributedString: attributed)
+      layoutManager = NSLayoutManager()
+      container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
+      storage.addLayoutManager(layoutManager)
+      layoutManager.addTextContainer(container)
+      measureStorage = storage
+      measureLayoutManager = layoutManager
+      measureContainer = container
+    }
+    storage.setAttributedString(attributed)
+    container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
     container.maximumNumberOfLines = maxLines
     container.lineBreakMode = .byTruncatingTail
-    storage.addLayoutManager(layoutManager)
-    layoutManager.addTextContainer(container)
     layoutManager.ensureLayout(for: container)
     let visible = layoutManager.glyphRange(for: container)
     // ceil：避免 22.0001 → 22 后 UILabel 最后一行被裁掉半像素。

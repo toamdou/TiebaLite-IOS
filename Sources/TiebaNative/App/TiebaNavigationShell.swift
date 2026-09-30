@@ -286,8 +286,24 @@ public final class TiebaRouteHostViewController: UIViewController {
   }
 
   /// 供底栏/顶栏找滚动视图用。
+  ///
+  /// 解析缓存：viewDidLayoutSubviews 每布局趟都会进 sync，此前每趟一次全树
+  /// DFS（primaryScrollView 取面积最大、无法早退；转场期逐帧布局＝每帧一趟，
+  /// 重页面单棵树数百上千节点，一次转场合计数万次节点访问，纯浪费在重复解析
+  /// 同一个结果）。重解析只在三件事发生时：从未解析过、缓存实例已离开窗口
+  /// （页面被拆/换容器）、或结构纪元前进了（页面级滚动视图挂载/栏结构变化推
+  /// 纪元，见 TiebaChrome.markChromeDirty）。
   func scrollViewForSystem() -> UIScrollView? {
-    view.primaryScrollView()
+    if let cached = cachedPrimaryScrollView,
+      cached.window != nil,
+      resolvedEpoch == TiebaChrome.structuralEpoch
+    {
+      return cached
+    }
+    let resolved = view.primaryScrollView()
+    cachedPrimaryScrollView = resolved
+    resolvedEpoch = TiebaChrome.structuralEpoch
+    return resolved
   }
 
   /// 把本屏的主滚动视图交给系统跟踪（栏边缘模糊 + 底栏收纳都靠这个关联）。
@@ -336,6 +352,9 @@ public final class TiebaRouteHostViewController: UIViewController {
   }
 
   private weak var trackedContentScrollView: UIScrollView?
+  /// 主滚动视图解析缓存（见 scrollViewForSystem）。
+  private weak var cachedPrimaryScrollView: UIScrollView?
+  private var resolvedEpoch = -1
 
   public override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()

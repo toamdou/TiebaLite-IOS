@@ -52,6 +52,7 @@ enum TiebaPreferences {
   /// 恢复默认：逐键 + 旧整份 JSON 同在前缀下，一次清掉。
   static func resetAll() throws {
     try TiebaKvStore.shared.clear(prefix: storagePrefix, preserveKeys: [])
+    TiebaPreferenceSnapshot.invalidateCache()
   }
 
   /// 数字偏好的**显示值**（picker 行 value，把偏好填回表单）：JS JSON.stringify

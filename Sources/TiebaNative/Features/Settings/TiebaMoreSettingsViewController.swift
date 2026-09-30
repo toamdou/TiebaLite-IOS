@@ -243,6 +243,7 @@ final class TiebaMoreSettingsViewController: TiebaFormPageController {
       // 全清 KV（账号列表/元数据/历史引用/屏蔽项/缓存），保留一次性迁移标记：
       // 删了标记会让旧 MMKV 在下次启动被重新灌回来、或重跑孤儿登录态清理。
       try TiebaKvStore.shared.clear(prefix: nil, preserveKeys: [Self.migrationKey])
+      TiebaPreferenceSnapshot.invalidateCache()
       try TiebaSQLite.shared.exec(
         database: TiebaSQLite.mainDatabase,
         sql: "DELETE FROM search_history; DELETE FROM visit_history;"

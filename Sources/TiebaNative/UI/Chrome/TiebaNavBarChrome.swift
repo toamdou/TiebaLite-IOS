@@ -41,6 +41,9 @@ enum TiebaChrome {
     /// 视图层级已变化（新 bar / 新页面级滚动视图挂载、栏结构布局、回前台、
     /// 转场完成、主题或路由门控），下一次重扫需要全量遍历。
     nonisolated(unsafe) static var needsRescan = true
+    /// 结构纪元（monotonic）：markChromeDirty 每次调用 +1。NavigationShell 的
+    /// 主滚动视图解析缓存以此为失效信号；全部调用在主线程（单写者），直接 Int。
+    nonisolated(unsafe) static var structuralEpoch = 0
     /// 上次全量重扫时间（CACurrentMediaTime），节流用。
     nonisolated(unsafe) static var lastScanAt: CFTimeInterval = 0
     /// tick 路径（栏/滚动视图挂载与布局这类高频事件）的最小重扫间隔：挂载事件
@@ -68,7 +71,16 @@ enum TiebaChrome {
   }
 
   /// 标记视图层级已变化：下一次 tick / 事件会做一次全量重扫（幂等、零遍历）。
-  static func markChromeDirty() { ChromeState.needsRescan = true }
+  static func markChromeDirty() {
+    ChromeState.needsRescan = true
+    // 结构纪元：markChromeDirty 的调用面 = 页面级滚动视图挂载、栏结构布局、
+    // 回前台这类"主滚动视图可能换人"的结构事件（每屏几次，绝不逐帧）。
+    // TiebaNavigationShell 缓存的解析结果以此为失效信号，布局趟不再每趟全树 DFS。
+    ChromeState.structuralEpoch &+= 1
+  }
+
+  /// 当前结构纪元（见 markChromeDirty）。
+  static var structuralEpoch: Int { ChromeState.structuralEpoch }
 
   /// 合并排一次 tick 重扫（2026-09-12 二轮空转治理）：改前每个布局/挂载事件都
   /// 各自 async 一个 force 块，快滚时主队列被无界块灌满（每帧数趟全树遍历）。

@@ -39,6 +39,13 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private var moreSignalToken: UUID?
   /// 长帖保留上限（原 MAX_POSTS）：头楼保留，其余丢弃最早追加的尾部之外的头。
   private static let maxPosts = 400
+  /// 上一轮 publish 的模型 + 行指纹（键 = post id）：行内容未变的行直接复用
+  /// 模型实例——feed 族有 isSameRaw 逐行复用，post 族此前每次 publish 都全量
+  /// 重造整页（触底加载 400 楼全部重测，后台数百 ms 与滚动抢 CPU）。
+  private var lastPublishedModels: [TiebaPostRowModel] = []
+  private var lastPublishedFingerprints: [String: String] = [:]
+  private var lastPublishedWidth: CGFloat = 0
+  private var lastPublishedToolbar = ""
   /// 显示设置（现读偏好；布局路径不重复查 KV）。
   private var showShortcut = true
 
@@ -368,6 +375,15 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     let palette = list.palette.base
     let accountUid = TiebaBackgroundSnapshot.shared.uid
     let hideBlocked = TiebaPreferenceSnapshot.bool("hideBlockedContent", default: false)
+    // 行复用输入：上一轮模型/指纹 + 宽度/工具栏（变化即全量重造）。
+    let previousById = Dictionary(
+      lastPublishedModels.map { ($0.post.id, $0) },
+      uniquingKeysWith: { first, _ in first }
+    )
+    let previousFingerprints = lastPublishedFingerprints
+    let previousWidth = lastPublishedWidth
+    let previousToolbar = lastPublishedToolbar
+    let toolbarFingerprint = "\(toolbar.replyNum)|\(toolbar.pageLabel ?? "")|\(toolbar.seeLz)|\(toolbar.reverse)"
 
     Task { @MainActor in
       let box = await Task.detached(priority: .userInitiated) { () -> (models: [TiebaPostRowModel], posts: [TiebaThreadPost]) in
@@ -378,6 +394,17 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           if hideBlocked, !isMain {
             if blockFilter.isUserBlocked(uid: post.authorId, name: post.authorName) { continue }
             if blockFilter.isContentBlocked(post.plainText) { continue }
+          }
+          // 未变行复用：同一 id、行指纹相同、宽度与主贴工具栏未变 → 上一份模型
+          // 原样复用（emoji 升级缓存/plan/测量全部继承，零重测）。
+          if width == previousWidth,
+             let prev = previousById[post.id],
+             previousFingerprints[post.id] == Self.postFingerprint(post),
+             (!isMain || toolbarFingerprint == previousToolbar)
+          {
+            models.append(prev)
+            kept.append(post)
+            continue
           }
           models.append(TiebaPostRowModel(
             pageKey: key,
@@ -403,11 +430,29 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       }.value
       guard self.pageKey == key else { return }
       self.rowPosts = box.posts
+      self.lastPublishedModels = box.models
+      self.lastPublishedFingerprints = Dictionary(
+        uniqueKeysWithValues: box.posts.map { ($0.id, Self.postFingerprint($0)) }
+      )
+      self.lastPublishedWidth = width
+      self.lastPublishedToolbar = toolbarFingerprint
       TiebaPostRowMetrics.shared.prepare(pageKey: key, models: box.models)
       TiebaKindRowPages.shared.publish(pageKey: key, kinds: Array(repeating: .post, count: box.models.count))
       self.list.setPage(pageKey: key)
       self.refreshMediaVisibility()
     }
+  }
+
+  /// 行模型输入指纹：作者族 + 计数 + 内容段数/纯文本/图片档。不逐字段 Equatable
+  /// （content 枚举带关联值），这些键覆盖行视图消费的一切。
+  nonisolated private static func postFingerprint(_ post: TiebaThreadPost) -> String {
+    var images = ""
+    for segment in post.content {
+      if case .image(let img) = segment {
+        images += "|\(img.src)|\(img.originSrc)|\(img.gifSrc)|\(img.width)|\(img.height)"
+      }
+    }
+    return "\(post.id)|\(post.floor)|\(post.authorId)|\(post.authorName)|\(post.authorNameShow)|\(post.authorPortrait)|\(post.authorLevel)|\(post.authorLevelName)|\(post.ipLocation)|\(post.createTimeMs)|\(post.agreeNum)|\(post.isAgree)|\(post.subPostNum)|\(post.content.count)|\(images)|\(post.plainText)"
   }
 
   private func toolbarModel() -> TiebaPostToolbarModel {
@@ -612,7 +657,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       isCollected: isCollected,
       palette: list.palette.base
     )
-    publish(fresh: false)
+    // 行内容不读 thread.hasAgree/zanNum（浮条是唯一显示面，已在上面 configure），
+    // 此前这里的 publish 会触发整页重发布：可见行逐行重贴 attributedText（每个
+    // UITextView 一次全文排版，主线程 10-30ms 一卡）——两处 publish 全删。
     Task { @MainActor in
       defer { finishOnce("threadAgree") }
       do {
@@ -642,7 +689,6 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           isCollected: isCollected,
           palette: list.palette.base
         )
-        publish(fresh: false)
         TiebaSceneHaptics.fire("action-fail")
         pill.showResult(success: false, text: "点赞失败，请稍后重试")
       }

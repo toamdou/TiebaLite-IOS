@@ -40,6 +40,7 @@
 //   手势据此过滤，避免"点菜单同时进帖"）。
 // ============================================================
 
+import Gifu
 import UIKit
 import Nuke
 import NukeExtensions
@@ -191,9 +192,9 @@ private enum TiebaFeedRowHapticIds {
 
 // MARK: - 右上角菜单钮（UIButton.Configuration + 44pt 命中区）
 
-/// TweetCard closeButton 的 UIKit 直译：26×26、xmark 13 bold、textTertiary。
-/// 用 UIButton.Configuration.plain()：图标居中/缩放由配置系统算（此前自绘
-/// UIControl + 手算居中产出过"× 太大"），本类只保留 hitSlop 外扩。
+/// 卡片右上角「更多」钮：26×26 槽位、ellipsis、textTertiary（与帖子页的更多钮同形）。
+/// 原设计是 xmark（RN closeButton 直译），但它的动作是弹出「不感兴趣/屏蔽/复制标题」
+/// 菜单、并非关闭卡片，iOS 信息流此处惯例也是省略号（2026-09-19 改）。
 private final class TiebaFeedRowMenuButton: UIButton {
   /// 命中区下限（RN hitSlop=8 等价；26 视觉 + 两侧 9 = 44pt，行内布局仍按 26）。
   private static let minHitSide: CGFloat = 44
@@ -209,13 +210,13 @@ private final class TiebaFeedRowMenuButton: UIButton {
     super.init(frame: frame)
     var config = UIButton.Configuration.plain()
     config.image = UIImage(
-      systemName: "xmark",
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+      systemName: "ellipsis",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
     )
     config.contentInsets = .zero
     configuration = config
     isAccessibilityElement = true
-    accessibilityLabel = "屏蔽或举报"
+    accessibilityLabel = "更多操作"
   }
 
   required init?(coder: NSCoder) {
@@ -296,7 +297,8 @@ private final class TiebaFeedRowBadgeView: UIView {
 // MARK: - 媒体单元（单图 / 图片带一格 / 视频 poster 共用）
 
 private final class TiebaFeedRowMediaItemView: UIView {
-  private let imageView = UIImageView()
+  // GIFImageView：GIF 档走 Gifu 逐帧渲染，静态档当普通 UIImageView 用（子类透明）。
+  private let imageView = GIFImageView()
 
   /// 进帖转场的图片配对用（同模块内部）：媒体项不持有 threadId，由行视图下发 id。
   var heroImageView: UIView { imageView }
@@ -331,7 +333,12 @@ private final class TiebaFeedRowMediaItemView: UIView {
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    clipsToBounds = true
+    // 不再 clipsToBounds：静态图的圆角由管线烘焙进位图（displayProcessor/
+    // fitDisplayProcessor，位图与显示框逐像素等价），裁切挂在每帧离屏合成上
+    // （仓内 TiebaPostRowView 同结论）。GIF 档例外：tiebaLoadGifImage 里临时
+    // 开回 clipsToBounds（帧不烘焙圆角）。cornerRadius 仍保留——它裁的是本层
+    // 占位底色（纯色随圆角自动剪裁，不需要 masksToBounds）。
+    clipsToBounds = false
     backgroundColor = palette.placeholder
     imageView.contentMode = .scaleAspectFill
     addSubview(imageView)
@@ -363,6 +370,7 @@ private final class TiebaFeedRowMediaItemView: UIView {
   func prepareForReuse() {
     TiebaHeroTransition.clear(imageView)
     cancelRequest(for: imageView)
+    imageView.stopAnimatingGIF()
     imageView.image = nil
     longBadge.isHidden = true
     gifBadge.isHidden = true
@@ -449,6 +457,32 @@ private final class TiebaFeedRowMediaItemView: UIView {
       cornerRadius: cornerRadius,
       scale: scale,
       into: imageView
+    )
+  }
+
+  /// 单图 fit 显示档：fit 缩放 + 圆角烘焙（见 TiebaNuke.fitDisplayProcessor），
+  /// 配合容器 clipsToBounds = false 去掉每帧离屏合成。
+  func loadFitDisplay(url: URL?, targetSize: CGSize, cornerRadius: CGFloat, scale: CGFloat) {
+    tiebaLoadFitDisplayImage(
+      url,
+      targetSize: targetSize,
+      cornerRadius: cornerRadius,
+      scale: scale,
+      into: imageView
+    )
+  }
+
+  /// GIF 播放档：动图真身（originURL = mapper 的 gifChain）交 Gifu 逐帧渲染，
+  /// 帧按显示尺寸×contentMode 重采样、缓冲窗 24。isStale 由行视图给（换行后
+  /// 迟到的 GIF 不回贴）。
+  func loadGif(url: URL, targetSize: CGSize, isStale: @escaping @MainActor () -> Bool) {
+    tiebaLoadGifImage(
+      url,
+      targetSize: targetSize,
+      contentMode: imageView.contentMode,
+      frameBufferSize: 24,
+      into: imageView,
+      isStale: isStale
     )
   }
 
@@ -867,12 +901,16 @@ private final class TiebaFeedRowTextCanvas: UIView {
     let attributed = run.attributed
     let frame = run.frame
     guard attributed.length > 0, frame.width > 0, frame.height > 0 else { return }
+    // 有界量高：垂直居中只需要知道"自然高是否超过框高"——超框（截断态）inset
+    // 恒为 0。无界 .greatestFiniteMagnitude 会把折叠态长摘要的**全文**逐行排完
+    // （几十行 vs 实画 4 行，约 5-10 倍排版量）再整个丢弃；有界版排版在框高处
+    // 停，结果与无界版逐像素一致。
     let natural = attributed.boundingRect(
-      with: CGSize(width: frame.width, height: .greatestFiniteMagnitude),
+      with: CGSize(width: frame.width, height: frame.height),
       options: [.usesLineFragmentOrigin],
       context: nil
     ).height
-    let inset = max((frame.height - natural) / 2, 0)
+    let inset = natural < frame.height ? max((frame.height - natural) / 2, 0) : 0
     attributed.draw(
       with: CGRect(
         x: frame.minX,
@@ -926,7 +964,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     loadModel(pageKey: pageKey, index: index)
   }
 
-  /// 右上角 × 菜单选中项（dislike / block / copy-title）：业务动作全在 JS
+  /// 右上角「更多」菜单选中项（dislike / block / copy-title）：业务动作全在 JS
   /// （不感兴趣面板 / 屏蔽作者 / 复制标题，见 FeedContent 的 rowMenuAction）。
   public var onMenuAction: ((String) -> Void)?
 
@@ -1074,7 +1112,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   private let avatarContainer = UIView()
   private let avatarInitialLabel = UILabel()
   private let avatarView = UIImageView()
-  /// 右上角 26×26 菜单钮（TweetCard styles.closeButton：xmark 13 bold + textTertiary）。
+  /// 右上角 26×26 更多钮（ellipsis + textTertiary，与帖子页同形）。
   private let menuButton = TiebaFeedRowMenuButton(frame: .zero)
   private let singleMediaView = TiebaFeedRowMediaItemView()
   private let stripScrollView = UIScrollView()
@@ -1136,8 +1174,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     // 图片/徽章/操作栏之下（那些之后才挂，且都是不透明的实内容）。
     cardView.addSubview(textCanvas)
 
-    // 右上角菜单钮（TweetCard closeButton 的 UIKit 直译）：26×26 圆形、
-    // xmark 13 bold、textTertiary；无菜单项的行（menuOptions 空）保持隐藏。
+    // 右上角菜单钮（与帖子页同形的「更多」）：26×26 槽位、ellipsis、textTertiary；
+    // 无菜单项的行（menuOptions 空）保持隐藏。
     menuButton.isHidden = true
     menuButton.configure(tint: palette.textTertiary)
     menuButton.addTarget(self, action: #selector(handleMenuButtonTap), for: .touchUpInside)
@@ -1564,10 +1602,28 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
       TiebaHeroTransition.markImage(singleMediaView.heroImageView, threadId: model.threadId)
       if !isSameRow {
         let height = model.singleMediaHeight ?? 0
-        singleMediaView.load(
-          url: url,
-          maxPixel: max(height, model.geometry.textColumnWidth) * scale
-        )
+        if media?.isGif == true, let gifURL = media?.originURL ?? url {
+          // GIF 档：真身是 originURL（mapper 的 gifChain），url 常是静态预览帧。
+          singleMediaView.loadGif(
+            url: gifURL,
+            targetSize: singleMediaView.bounds.size,
+            isStale: { [weak self] in self?.model !== model }
+          )
+        } else if height > 0 {
+          // fit 显示档：位图 = 显示框像素 + 圆角烘焙（容器已去 clipsToBounds）。
+          // 半径与上方 configure(cornerRadius: 16) 同源（Radius.card - 4）。
+          singleMediaView.loadFitDisplay(
+            url: url,
+            targetSize: CGSize(width: model.geometry.textColumnWidth, height: height),
+            cornerRadius: 16,
+            scale: scale
+          )
+        } else {
+          singleMediaView.load(
+            url: url,
+            maxPixel: model.geometry.textColumnWidth * scale
+          )
+        }
       }
     }
   }
@@ -1664,7 +1720,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   // MARK: - 交互（右上角菜单 / 操作栏按压反馈）
 
-  /// 右上角 ×：与 RN 的 Alert.alert(title, nil, [菜单项…, 取消]) 同形态——
+  /// 右上角「更多」：与 RN 的 Alert.alert(title, nil, [菜单项…, 取消]) 同形态——
   /// iOS 侧本就是 UIAlertController(.actionSheet)，这里直出同一控件。
   /// 动作只回传 JS（不感兴趣面板/屏蔽/复制标题全在 FeedContent），原生不猜业务。
   @objc private func handleMenuButtonTap() {
@@ -2113,12 +2169,22 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
             stripItems.indices.contains(index),
             model.media.indices.contains(index)
       else { continue }
-      stripItems[index].loadDisplay(
-        url: model.media[index].url,
-        targetSize: frames[index].size,
-        cornerRadius: 0,
-        scale: scale
-      )
+      let media = model.media[index]
+      if media.isGif, let gifURL = media.originURL ?? media.url {
+        // GIF 档：动图真身走 Gifu；帧按这一格真实尺寸重采样（同下方显示档口径）。
+        stripItems[index].loadGif(
+          url: gifURL,
+          targetSize: frames[index].size,
+          isStale: { [weak self] in self?.model !== model }
+        )
+      } else {
+        stripItems[index].loadDisplay(
+          url: media.url,
+          targetSize: frames[index].size,
+          cornerRadius: 0,
+          scale: scale
+        )
+      }
     }
   }
 }

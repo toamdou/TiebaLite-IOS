@@ -85,14 +85,32 @@ final class TiebaNotificationsViewController: UIViewController, TiebaTabReselect
     // 抢走宿主 primaryScrollView 的唯一名额（底栏滚动收纳 / 状态栏点按回顶）。
     // 宿主在其 viewDidLayoutSubviews 里先写一轮，这里异步后写即最终态：把关联与
     // scrollsToTop 名额交还给当前列表。
-    guard current?.trackedScrollView != nil else { return }
+    //
+    // 主滚动视图解析缓存：trackedScrollView / primaryScrollView 都是无早退的全树
+    // DFS，此前每次布局趟最多 3 趟（转场/分段切换期逐帧 = 一次转场约百趟，pager
+    // 子树横滑时还覆盖最多三个列表）。缓存放 current 实例上：列表换人（分段切换）
+    // 时重解析，其余布局趟零遍历。
+    guard let current else { return }
+    guard let scroll = current.resolvedTrackedScrollView() else { return }
     DispatchQueue.main.async { [weak self] in
-      guard let self, let scroll = self.current?.trackedScrollView else { return }
+      guard let self, let scroll = self.current?.resolvedTrackedScrollView() else { return }
       self.setContentScrollView(scroll, for: .top)
       self.setContentScrollView(scroll, for: .bottom)
       scroll.scrollsToTop = true
-      self.pager.view.primaryScrollView()?.scrollsToTop = false
+      // pager 的内部横向滚动视图只在 setViewControllers 换人时变，不逐趟扫。
+      if let pagerScroll = self.resolvedPagerScrollView() {
+        pagerScroll.scrollsToTop = false
+      }
     }
+  }
+
+  /// pager 内部横向滚动视图的解析缓存（见 viewDidLayoutSubviews 注释）。
+  private weak var cachedPagerScrollView: UIScrollView?
+  private func resolvedPagerScrollView() -> UIScrollView? {
+    if let cached = cachedPagerScrollView, cached.window != nil { return cached }
+    let resolved = pager.view.primaryScrollView()
+    cachedPagerScrollView = resolved
+    return resolved
   }
 
   /// 底栏重复点击：当前列表回顶 + 刷新，并刷新未读计数。

@@ -234,6 +234,35 @@ public enum TiebaNuke {
     ])
   }
 
+  /// 单图 fit 显示档处理器（aspectFit 视图专用）：fit 缩放到视图**像素**尺寸 +
+  /// 圆角烘焙进位图。fit 产物 = 视图内的可见图矩形（长边贴边、短边留白），
+  /// 圆角在该矩形上生效；视图侧 contentMode = .scaleAspectFit 居中显示即与
+  /// 「clipsToBounds 圆角」逐像素等价，而每帧一次的离屏合成随之消失。
+  /// upscale: true 与 displayProcessor 同理——位图必须贴住显示像素，否则烘焙
+  /// 的圆角随视图的二次放大被放大（小图尤其明显）。
+  public static func fitDisplayProcessor(
+    targetSize: CGSize,
+    cornerRadius: CGFloat,
+    scale: CGFloat
+  ) -> any ImageProcessing {
+    let pixel = CGSize(
+      width: max((targetSize.width * scale).rounded(), 1),
+      height: max((targetSize.height * scale).rounded(), 1)
+    )
+    let resize = ImageProcessors.Resize(
+      size: pixel,
+      unit: .pixels,
+      contentMode: .aspectFit,
+      crop: false,
+      upscale: true
+    )
+    guard cornerRadius > 0.5 else { return resize }
+    return ImageProcessors.Composition([
+      resize,
+      ImageProcessors.RoundedCorners(radius: cornerRadius * scale, unit: .pixels),
+    ])
+  }
+
   /// 视图加载的 options 组装：全 App 只有这一处知道「哪条管线 + 哪个降采样处理器
   /// + 要不要淡入」。调用点直接交给 NukeExtensions.loadImage(with:options:into:)。
   /// maxPixel ≤ 0 = 不下采样（大图档）。
