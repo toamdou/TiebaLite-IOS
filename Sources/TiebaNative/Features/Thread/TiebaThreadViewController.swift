@@ -398,7 +398,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     let previousFingerprints = lastPublishedFingerprints
     let previousWidth = lastPublishedWidth
     let previousToolbar = lastPublishedToolbar
-    let toolbarFingerprint = "\(toolbar.replyNum)|\(toolbar.pageLabel ?? "")|\(toolbar.seeLz)|\(toolbar.reverse)"
+    let toolbarFingerprint = "\(toolbar.replyNum)|\(toolbar.pageLabel ?? "")|\(toolbar.seeLz)|\(toolbar.sort.rawValue)"
 
     Task { @MainActor in
       let box = await Task.detached(priority: .userInitiated) { () -> (models: [TiebaPostRowModel], posts: [TiebaThreadPost]) in
