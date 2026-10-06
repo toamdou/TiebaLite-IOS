@@ -51,14 +51,7 @@ enum TiebaFollowedForums {
   /// 跨天**——跨天读取时把 isSign 全部清零，靠服务端/重新签到再亮起来。
   static func today() -> String { dayKey() }
 
-  private static let dayFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
-    formatter.dateFormat = "yyyy-MM-dd"
-    return formatter
-  }()
+  private static let dayFormatter: DateFormatter = TiebaDateFormats.fixed("yyyy-MM-dd", timeZone: TimeZone(identifier: "Asia/Shanghai") ?? .current)
 
   private static func dayKey(_ date: Date = Date()) -> String {
     dayFormatter.string(from: date)
