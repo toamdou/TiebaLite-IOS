@@ -531,10 +531,6 @@ class TiebaCheckNode: UIView {
         return self.layer as! TiebaCheckLayer
     }
 
-    var checkLayerIfLoaded: TiebaCheckLayer? {
-        return self.layer as? TiebaCheckLayer
-    }
-
     var theme: TiebaCheckNodeTheme {
         didSet {
             self.checkLayer.theme = self.theme

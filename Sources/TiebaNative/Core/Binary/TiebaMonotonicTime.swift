@@ -36,14 +36,6 @@ public enum TiebaMonotonicTime {
         }
     }
 
-    /// 已开机秒数；取不到时返回 -1（与上游 getDeviceUptimeSeconds 的失败语义一致）。
-    public nonisolated static var uptime: TimeInterval {
-        guard let bootTime = bootTime else {
-            return -1
-        }
-        return Date().timeIntervalSince1970 - bootTime
-    }
-
     /// 以开机时刻为锚的 Unix 时间戳（秒）。
     /// 数值上约等于 Date().timeIntervalSince1970，但来源是 KERN_BOOTTIME + 开机秒数：
     /// 重启不会像 CACurrentMediaTime() 那样归零，两次采样做差才是正确的「停留时长」。
@@ -78,9 +70,10 @@ extension TiebaMonotonicTime {
         let wallClock = Date().timeIntervalSince1970
         assert(bootTime <= wallClock, "开机时刻不可能在未来")
         assert(bootTime > 978_307_200, "开机时刻早于 2001 年，说明 sysctl 取值有误")
-        let uptimeValue = uptime
-        assert(uptimeValue >= -1, "开机秒数只能是正数或 -1")
+        // 「开机时刻 + 已开机秒数」必须落在墙钟附近：这一步同时校验了 sysctl 取到的开机秒数没有畸形。
         let sampled = now
+        assert(sampled >= bootTime, "以开机时刻为锚的时间戳不可能早于开机时刻")
+        assert(abs(sampled - wallClock) < 1, "锚定时间戳与墙钟偏差超过 1 秒，说明开机秒数有误")
         assert(now >= sampled, "单调时钟不许回退")
         return true
     }

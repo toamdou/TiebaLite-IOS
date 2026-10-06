@@ -217,34 +217,4 @@ enum TiebaShareSheet {
     }
   }
 
-  /// JS 门面入口（TiebaNative.sharePresent）：文件已由 JS 侧落盘，直接分享。
-  /// 宿主缺失/文件不可读时抛错——没有静默返回：调用方 await 返回后要清理临时
-  /// 文件，"面板没出现却 resolve"会让失败变成无反馈。
-  static func presentFromTop(fileUri: String, dialogTitle: String?) async throws {
-    guard let url = URL(string: fileUri), url.isFileURL else {
-      throw TiebaShareError(message: "分享只受理本地文件 URL（file://）：\(fileUri)")
-    }
-    guard FileManager.default.isReadableFile(atPath: url.path) else {
-      throw TiebaShareError(message: "文件不存在或不可读：\(url.lastPathComponent)")
-    }
-    guard let presenter = TiebaTopViewController.find() else {
-      throw TiebaShareError(message: "没有可用的宿主视图控制器")
-    }
-    // 已有面板（分享面板/菜单/Alert）时不再叠加：UIKit 会拒绝这次 present，
-    // completion 永不回调 → JS 侧 await 永挂、临时文件不清理。显式失败，
-    // 让调用方走自己的错误分支（旧包 expo-sharing 没有这道闸，会静默挂住）。
-    guard presenter.presentedViewController == nil else {
-      throw TiebaShareError(message: "已有其它面板在呈现，无法打开分享面板")
-    }
-    // 面板关闭前不返回：completion 在系统回调里 resume（成功/取消/失败都调）。
-    try await withCheckedThrowingContinuation {
-      (continuation: CheckedContinuation<Void, any Error>) in
-      let didPresent = present(fileURL: url, dialogTitle: dialogTitle, from: presenter) {
-        continuation.resume()
-      }
-      if !didPresent {
-        continuation.resume(throwing: TiebaShareError(message: "宿主视图不在窗口上，无法呈现分享面板"))
-      }
-    }
-  }
 }

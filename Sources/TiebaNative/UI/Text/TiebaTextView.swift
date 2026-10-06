@@ -52,14 +52,6 @@ open class TiebaTextView: UIView {
         return self.cachedLayout?.attributeSubstring(name: name, index: index)
     }
     
-    public func attributeRects(name: String, at index: Int) -> [CGRect]? {
-        if let cachedLayout = self.cachedLayout {
-            return cachedLayout.lineAndAttributeRects(name: name, at: index)?.map { $0.1 }
-        } else {
-            return nil
-        }
-    }
-    
     public func rangeRects(in range: NSRange) -> (rects: [CGRect], start: TiebaTextRangeRectEdge, end: TiebaTextRangeRectEdge)? {
         if let cachedLayout = self.cachedLayout {
             return cachedLayout.rangeRects(in: range)

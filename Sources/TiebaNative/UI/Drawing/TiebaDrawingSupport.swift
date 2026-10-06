@@ -56,11 +56,6 @@ enum TiebaDrawingMetrics {
         return floor(value * TiebaDrawingMetrics.screenScale) / TiebaDrawingMetrics.screenScale
     }
 
-    /// 向上对齐到物理像素（上游 UIKitUtils.swift:82-84）。
-    nonisolated static func ceilToPixels(_ value: CGFloat) -> CGFloat {
-        return ceil(value * TiebaDrawingMetrics.screenScale) / TiebaDrawingMetrics.screenScale
-    }
-
     /// 上游 UIView.animationDurationFactor()：真机恒为 1.0；模拟器「Slow Animations」下小于 1。
     /// [移植] 上游转发 ObjC 实现，本工程无 ObjC 模块，取真机语义。
     nonisolated static func animationDurationFactor() -> Double {
@@ -205,11 +200,6 @@ final class TiebaBitmapContext {
         context.translateBy(x: self.size.width / 2.0, y: self.size.height / 2.0)
         context.scaleBy(x: 1.0, y: -1.0)
         context.translateBy(x: -self.size.width / 2.0, y: -self.size.height / 2.0)
-    }
-
-    /// 上游 withFlippedContext(_:)：不做翻转，直接用 CGContext 原生（左下原点）坐标。
-    func withFlippedContext(_ f: (CGContext) -> Void) {
-        f(self.context)
     }
 
     /// 上游 generateImage()：这里走 makeImage()，比上游多一次像素拷贝（见文件头第 1 条）。

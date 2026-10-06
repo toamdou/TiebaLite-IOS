@@ -132,25 +132,12 @@ struct TiebaImageCorners: Equatable, Sendable {
         self.init(topLeft: .corner(0.0), topRight: .corner(0.0), bottomLeft: .corner(0.0), bottomRight: .corner(0.0), curve: .circular)
     }
 
-    /// 四角是否同一半径的纯圆角（上游 `isRoundEqualCorners`，这里做成实例属性更好用）。
-    nonisolated var isRoundEqualCorners: Bool {
-        if case .corner = self.topLeft, case .corner = self.topRight, case .corner = self.bottomLeft, case .corner = self.bottomRight {
-            if self.topLeft.radius == self.topRight.radius && self.topRight.radius == self.bottomLeft.radius && self.bottomLeft.radius == self.bottomRight.radius {
-                return true
-            }
-        }
-        return false
-    }
-
     nonisolated var extendedEdges: UIEdgeInsets {
         let left = self.bottomLeft.extendedInsets.width
         let right = self.bottomRight.extendedInsets.width
         return UIEdgeInsets(top: 0.0, left: left, bottom: 0.0, right: right)
     }
 
-    nonisolated func withRemovedTails() -> TiebaImageCorners {
-        return TiebaImageCorners(topLeft: self.topLeft.withoutTail, topRight: self.topRight.withoutTail, bottomLeft: self.bottomLeft.withoutTail, bottomRight: self.bottomRight.withoutTail, curve: self.curve)
-    }
 }
 
 extension TiebaImageCorners {

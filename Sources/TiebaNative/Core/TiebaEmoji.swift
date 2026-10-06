@@ -56,7 +56,6 @@ public extension UnicodeScalar {
     
     // [移植] Swift 6：非隔离可变全局（static var）非法；这两个值本就是常量（全仓无任何赋值点），
     //        故改为 `static let`——取值/语义不变，且 UnicodeScalar 是 Sendable。
-    static let ZeroWidthJoiner = UnicodeScalar(0x200D)!
     static let VariationSelector = UnicodeScalar(0xFE0F)!
 }
 
@@ -74,38 +73,12 @@ private let allowedEmojiLikeSymbols: Set<String> = [
 ]
 
 public extension String {
-    func trimmingTrailingSpaces() -> String {
-        var t = self
-        while t.hasSuffix(" ") {
-            t = "" + t.dropLast()
-        }
-        return t
-    }
-    
     var isSingleEmoji: Bool {
         return self.count == 1 && self.containsEmoji
     }
     
     var containsEmoji: Bool {
         return self.contains { $0.isEmoji }
-    }
-    
-    var containsGraphicEmoji: Bool {
-        var containsEmoji = false
-        self.enumerateSubstrings(in: self.startIndex ..< self.endIndex, options: .byComposedCharacterSequences) { substring, _, _, stop in
-            guard let substring else {
-                return
-            }
-            if substring.containsEmoji && !allowedEmojiLikeSymbols.contains(substring) {
-                containsEmoji = true
-                stop = true
-            }
-        }
-        return containsEmoji
-    }
-    
-    var containsOnlyEmoji: Bool {
-        return !self.isEmpty && !self.contains { !$0.isEmoji }
     }
     
     var emojis: [String] {
@@ -116,64 +89,6 @@ public extension String {
             }
         }
         return emojis
-    }
-    
-    var trimmingEmojis: String {
-        var string: String = ""
-        self.enumerateSubstrings(in: self.startIndex ..< self.endIndex, options: .byComposedCharacterSequences) { substring, _, _, _ in
-            if let substring = substring, !substring.containsEmoji {
-                string.append(substring)
-            }
-        }
-        return string
-    }
-    
-    var normalizedEmoji: String {
-        var string = ""
-        
-        var nextShouldBeVariationSelector = false
-        for scalar in self.unicodeScalars {
-            if nextShouldBeVariationSelector {
-                if scalar != UnicodeScalar.VariationSelector {
-                    string.unicodeScalars.append(UnicodeScalar.VariationSelector)
-                }
-                nextShouldBeVariationSelector = false
-            }
-            string.unicodeScalars.append(scalar)
-            if !scalar.isEmoji && scalar.maybeEmoji {
-                nextShouldBeVariationSelector = true
-            }
-        }
-        
-        if nextShouldBeVariationSelector {
-            string.unicodeScalars.append(UnicodeScalar.VariationSelector)
-        }
-        
-        return string
-    }
-    
-    var basicEmoji: (String, String?) {
-        let fitzCodes: [UInt32] = [
-            0x1f3fb,
-            0x1f3fc,
-            0x1f3fd,
-            0x1f3fe,
-            0x1f3ff
-        ]
-        
-        var string = ""
-        var fitzModifier: String?
-        for scalar in self.unicodeScalars {
-            if fitzCodes.contains(scalar.value) {
-                fitzModifier = String(scalar)
-                continue
-            }
-            string.unicodeScalars.append(scalar)
-            if scalar.value == 0x2764 && self.unicodeScalars.count < 3 {
-                break
-            }
-        }
-        return (string, fitzModifier)
     }
     
     var strippedEmoji: String {

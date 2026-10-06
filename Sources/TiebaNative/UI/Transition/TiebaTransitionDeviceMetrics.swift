@@ -426,22 +426,6 @@ public enum TiebaDeviceMetrics: CaseIterable, Equatable, Sendable {
                 return false
         }
     }
-    
-    public var hasDynamicIsland: Bool {
-        switch self {
-            case .iPhone14Pro, .iPhone14ProZoomed, .iPhone14ProMax, .iPhone14ProMaxZoomed, .iPhone16Pro, .iPhone16ProMax, .iPhoneAir:
-                return true
-            default:
-                return false
-        }
-    }
-    
-    public var showAppBadge: Bool {
-        if case .iPhoneX = self {
-            return false
-        }
-        return self.hasTopNotch
-    }
 }
 
 /// 上游 UIScreenPixel（UIKitUtils.swift:86）的文件私有替身（见文件头改动 2）。

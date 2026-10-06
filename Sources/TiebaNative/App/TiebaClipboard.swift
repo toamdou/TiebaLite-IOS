@@ -24,19 +24,4 @@ enum TiebaClipboard {
     UIPasteboard.general.string = text
   }
 
-  /// 空剪贴板 / 粘贴被拒 → 空串（旧包 getStringAsync 同语义）。
-  static func getString() -> String {
-    UIPasteboard.general.string ?? ""
-  }
-
-  /// 旧包语义 = hasStrings || hasHTML，其中 hasHTML 是 expo 自己的扩展：
-  /// contains([public.html, public.rtf])——从 Safari 等复制的富文本只带 HTML/RTF
-  /// 表示时 hasStrings 为 false，这里按同款类型查询补齐。两个查询都只查类型、
-  /// 不读内容，不触发粘贴提示。
-  static func hasString() -> Bool {
-    UIPasteboard.general.hasStrings
-      || UIPasteboard.general.contains(
-        pasteboardTypes: [UTType.html.identifier, UTType.rtf.identifier]
-      )
-  }
 }

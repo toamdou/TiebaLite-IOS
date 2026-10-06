@@ -165,17 +165,6 @@ public extension UIColor {
         }
     }
     
-    nonisolated var hsb: (h: CGFloat, s: CGFloat, b: CGFloat) {
-        var hue: CGFloat = 0.0
-        var saturation: CGFloat = 0.0
-        var brightness: CGFloat = 0.0
-        if self.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: nil) {
-            return (hue, saturation, brightness)
-        } else {
-            return (0.0, 0.0, 0.0)
-        }
-    }
-    
     nonisolated var components: (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
         var red: CGFloat = 0.0
         var green: CGFloat = 0.0
@@ -203,12 +192,6 @@ public extension UIColor {
         }
     }
     
-    nonisolated func contrastRatio(with other: UIColor) -> CGFloat {
-        let l1 = self.lightness
-        let l2 = other.lightness
-        return (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
-    }
-    
     nonisolated var brightness: CGFloat {
         var hue: CGFloat = 0.0
         var saturation: CGFloat = 0.0
@@ -225,57 +208,6 @@ public extension UIColor {
         var alpha: CGFloat = 0.0
         self.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
         return saturation
-    }
-    
-    nonisolated func withMultipliedBrightnessBy(_ factor: CGFloat) -> UIColor {
-        var hue: CGFloat = 0.0
-        var saturation: CGFloat = 0.0
-        var brightness: CGFloat = 0.0
-        var alpha: CGFloat = 0.0
-        self.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-        
-        return UIColor(hue: hue, saturation: saturation, brightness: max(0.0, min(1.0, brightness * factor)), alpha: alpha)
-    }
-    
-    nonisolated func adjustedPerceivedBrightness(_ factor: CGFloat) -> UIColor {
-        let f = max(0, factor)
-        let base = self
-        guard
-            let cs = CGColorSpace(name: CGColorSpace.extendedSRGB),
-            let cg = base.cgColor.converted(to: cs, intent: .defaultIntent, options: nil),
-            let c = cg.components, c.count >= 3
-        else { return base }
-
-        func toLin(_ x: CGFloat) -> CGFloat { x <= 0.04045 ? x/12.92 : pow((x+0.055)/1.055, 2.4) }
-        func toSRGB(_ x: CGFloat) -> CGFloat { x <= 0.0031308 ? 12.92*x : 1.055*pow(x, 1/2.4) - 0.055 }
-        func clamp(_ x: CGFloat) -> CGFloat { min(max(x, 0), 1) }
-
-        var r = toLin(c[0]), g = toLin(c[1]), b = toLin(c[2])
-        if f >= 1 {
-            // mix toward white: t = 1 - 1/f (so f=1 → t=0, f→∞ → t→1)
-            let t = 1 - 1/f
-            r = r + (1 - r) * t
-            g = g + (1 - g) * t
-            b = b + (1 - b) * t
-        } else {
-            // scale toward black
-            r *= f; g *= f; b *= f
-        }
-
-        return UIColor(red: clamp(toSRGB(r)),
-                       green: clamp(toSRGB(g)),
-                       blue: clamp(toSRGB(b)),
-                       alpha: cg.alpha)
-    }
-    
-    nonisolated func withMultiplied(hue: CGFloat, saturation: CGFloat, brightness: CGFloat) -> UIColor {
-        var hueValue: CGFloat = 0.0
-        var saturationValue: CGFloat = 0.0
-        var brightnessValue: CGFloat = 0.0
-        var alphaValue: CGFloat = 0.0
-        self.getHue(&hueValue, saturation: &saturationValue, brightness: &brightnessValue, alpha: &alphaValue)
-        
-        return UIColor(hue: max(0.0, min(1.0, hueValue * hue)), saturation: max(0.0, min(1.0, saturationValue * saturation)), brightness: max(0.0, min(1.0, brightnessValue * brightness)), alpha: alphaValue)
     }
     
     nonisolated func desaturatedHSL(by amount: CGFloat) -> UIColor {
@@ -326,10 +258,6 @@ public extension UIColor {
         return UIColor(red: r2, green: g2, blue: b2, alpha: a)
     }
     
-    nonisolated func desaturated() -> UIColor {
-        return desaturatedHSL(by: 1.0)
-    }
-    
     /// 与另一颜色按 alpha 线性混合（逐分量，含 alpha 通道）。
     /// 上游：UIKitUtils.swift:308
     nonisolated func mixedWith(_ other: UIColor, alpha: CGFloat) -> UIColor {
@@ -352,26 +280,6 @@ public extension UIColor {
             let b = b1 * oneMinusAlpha + b2 * alpha
             let a = a1 * oneMinusAlpha + a2 * alpha
             return UIColor(red: r, green: g, blue: b, alpha: a)
-        }
-        return self
-    }
-    
-    nonisolated func multipliedWith(_ other: UIColor) -> UIColor {
-        var r1: CGFloat = 0.0
-        var r2: CGFloat = 0.0
-        var g1: CGFloat = 0.0
-        var g2: CGFloat = 0.0
-        var b1: CGFloat = 0.0
-        var b2: CGFloat = 0.0
-        var a1: CGFloat = 0.0
-        var a2: CGFloat = 0.0
-        if self.getRed(&r1, green: &g1, blue: &b1, alpha: &a1) &&
-            other.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
-        {
-            let r = r1 * r2
-            let g = g1 * g2
-            let b = b1 * b2
-            return UIColor(red: r, green: g, blue: b, alpha: 1.0)
         }
         return self
     }
@@ -402,35 +310,6 @@ public extension UIColor {
         return self
     }
     
-    nonisolated func blendOver(background: UIColor) -> UIColor {
-        let base = background
-        let blend = self
-        
-        func overlayChannel(baseChannel: CGFloat, blendChannel: CGFloat) -> CGFloat {
-            if baseChannel < 0.5 {
-                return 2 * baseChannel * blendChannel
-            } else {
-                return 1 - 2 * (1 - baseChannel) * (1 - blendChannel)
-            }
-        }
-        
-        var baseRed: CGFloat = 0, baseGreen: CGFloat = 0, baseBlue: CGFloat = 0, baseAlpha: CGFloat = 0
-        base.getRed(&baseRed, green: &baseGreen, blue: &baseBlue, alpha: &baseAlpha)
-        
-        var blendRed: CGFloat = 0, blendGreen: CGFloat = 0, blendBlue: CGFloat = 0, blendAlpha: CGFloat = 0
-        blend.getRed(&blendRed, green: &blendGreen, blue: &blendBlue, alpha: &blendAlpha)
-        
-        var red = overlayChannel(baseChannel: baseRed, blendChannel: blendRed)
-        var green = overlayChannel(baseChannel: baseGreen, blendChannel: blendGreen)
-        var blue = overlayChannel(baseChannel: baseBlue, blendChannel: blendBlue)
-        
-        red = max(0.0, min(1.0, red))
-        green = max(0.0, min(1.0, green))
-        blue = max(0.0, min(1.0, blue))
-        
-        return UIColor(red: red, green: green, blue: blue, alpha: blendAlpha).blitOver(background, alpha: 1.0)
-    }
-    
     nonisolated func withMultipliedAlpha(_ alpha: CGFloat) -> UIColor {
         var r1: CGFloat = 0.0
         var g1: CGFloat = 0.0
@@ -440,30 +319,6 @@ public extension UIColor {
             return UIColor(red: r1, green: g1, blue: b1, alpha: max(0.0, min(1.0, a1 * alpha)))
         }
         return self
-    }
-    
-    nonisolated func interpolateTo(_ color: UIColor, fraction: CGFloat) -> UIColor? {
-        let f = min(max(0, fraction), 1)
-        
-        var r1: CGFloat = 0.0
-        var r2: CGFloat = 0.0
-        var g1: CGFloat = 0.0
-        var g2: CGFloat = 0.0
-        var b1: CGFloat = 0.0
-        var b2: CGFloat = 0.0
-        var a1: CGFloat = 0.0
-        var a2: CGFloat = 0.0
-        if self.getRed(&r1, green: &g1, blue: &b1, alpha: &a1) &&
-            color.getRed(&r2, green: &g2, blue: &b2, alpha: &a2) {
-            let r: CGFloat = CGFloat(r1 + (r2 - r1) * f)
-            let g: CGFloat = CGFloat(g1 + (g2 - g1) * f)
-            let b: CGFloat = CGFloat(b1 + (b2 - b1) * f)
-            let a: CGFloat = CGFloat(a1 + (a2 - a1) * f)
-            
-            return UIColor(red: r, green: g, blue: b, alpha: a)
-        } else {
-            return self
-        }
     }
     
     nonisolated private var colorComponents: (r: Int32, g: Int32, b: Int32) {
@@ -487,27 +342,6 @@ public extension UIColor {
         let b = e1.b - e2.b
         return ((512 + rMean) * r * r) >> 8 + 4 * g * g + ((767 - rMean) * b * b) >> 8
     }
-
-    nonisolated static func average(of colors: [UIColor]) -> UIColor {
-        var sr: CGFloat = 0.0
-        var sg: CGFloat = 0.0
-        var sb: CGFloat = 0.0
-        var sa: CGFloat = 0.0
-
-        for color in colors {
-            var r: CGFloat = 0.0
-            var g: CGFloat = 0.0
-            var b: CGFloat = 0.0
-            var a: CGFloat = 0.0
-            color.getRed(&r, green: &g, blue: &b, alpha: &a)
-            sr += r
-            sg += g
-            sb += b
-            sa += a
-        }
-
-        return UIColor(red: sr / CGFloat(colors.count), green: sg / CGFloat(colors.count), blue: sb / CGFloat(colors.count), alpha: sa / CGFloat(colors.count))
-    }
 }
 
 public extension CGSize {
@@ -522,91 +356,13 @@ public extension CGSize {
         return fittedSize
     }
     
-    nonisolated func cropped(_ size: CGSize) -> CGSize {
-        return CGSize(width: min(size.width, self.width), height: min(size.height, self.height))
-    }
-    
-    nonisolated func fittedToArea(_ area: CGFloat) -> CGSize {
-        if self.height < 1.0 || self.width < 1.0 {
-            return CGSize()
-        }
-        let aspect = self.width / self.height
-        let height = sqrt(area / aspect)
-        let width = aspect * height
-        return CGSize(width: floor(width), height: floor(height))
-    }
-    
     nonisolated func aspectFilled(_ size: CGSize) -> CGSize {
         let scale = max(size.width / max(1.0, self.width), size.height / max(1.0, self.height))
         return CGSize(width: floor(self.width * scale), height: floor(self.height * scale))
     }
-    
-    nonisolated func aspectFitted(_ size: CGSize) -> CGSize {
-        let scale = min(size.width / max(1.0, self.width), size.height / max(1.0, self.height))
-        return CGSize(width: floor(self.width * scale), height: floor(self.height * scale))
-    }
-    
-    nonisolated func aspectFittedOrSmaller(_ size: CGSize) -> CGSize {
-        let scale = min(1.0, min(size.width / max(1.0, self.width), size.height / max(1.0, self.height)))
-        return CGSize(width: floor(self.width * scale), height: floor(self.height * scale))
-    }
-    
-    nonisolated func aspectFittedWithOverflow(_ size: CGSize, leeway: CGFloat) -> CGSize {
-        let scale = min(size.width / max(1.0, self.width), size.height / max(1.0, self.height))
-        var result = CGSize(width: floor(self.width * scale), height: floor(self.height * scale))
-        if result.width < size.width && result.width > size.width - leeway {
-            result.height += size.width - result.width
-            result.width = size.width
-        }
-        if result.height < size.height && result.height > size.height - leeway {
-            result.width += size.height - result.height
-            result.height = size.height
-        }
-        return result
-    }
-    
-    nonisolated func fittedToWidthOrSmaller(_ width: CGFloat) -> CGSize {
-        let scale = min(1.0, width / max(1.0, self.width))
-        return CGSize(width: floor(self.width * scale), height: floor(self.height * scale))
-    }
-    
-    func multipliedByScreenScale() -> CGSize {
-        let scale = tiebaUIScreenScale
-        return CGSize(width: self.width * scale, height: self.height * scale)
-    }
-    
-    func dividedByScreenScale() -> CGSize {
-        let scale = tiebaUIScreenScale
-        return CGSize(width: self.width / scale, height: self.height / scale)
-    }
-    
-    nonisolated var integralFloor: CGSize {
-        return CGSize(width: floor(self.width), height: floor(self.height))
-    }
 }
 
 public extension UIImage {
-    nonisolated func precomposed() -> UIImage {
-        UIGraphicsBeginImageContextWithOptions(self.size, false, self.scale)
-        self.draw(at: CGPoint())
-        let result = UIGraphicsGetImageFromCurrentImageContext()!
-        UIGraphicsEndImageContext()
-        if self.capInsets != UIEdgeInsets() {
-            return result.resizableImage(withCapInsets: self.capInsets, resizingMode: self.resizingMode)
-        }
-        return result
-    }
-    
-    nonisolated func fixedOrientation() -> UIImage {
-        if self.imageOrientation == .up { return self }
-        
-        UIGraphicsBeginImageContextWithOptions(self.size, false, self.scale)
-        self.draw(in: CGRect(origin: .zero, size: size))
-        let normalizedImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        
-        return normalizedImage ?? self
-    }
 }
 
 private func makeSubtreeSnapshot(layer: CALayer, keepPortals: Bool = false, keepTransform: Bool = false) -> UIView? {
@@ -935,23 +691,6 @@ public extension CALayer {
 // "CAEmitterBehavior" 并 unsafeBitCast 调 behaviorWithType:，按私有 API 规则跳过。
 
 public extension CALayer {
-    func snapshotContentTreeAsView(unhide: Bool = false) -> UIView? {
-        let wasHidden = self.isHidden
-        if unhide && wasHidden {
-            self.isHidden = false
-        }
-        let snapshot = makeLayerSubtreeSnapshotAsView(layer: self)
-        if unhide && wasHidden {
-            self.isHidden = true
-        }
-        if let snapshot = snapshot {
-            snapshot.frame = self.frame
-            snapshot.bounds = self.bounds
-            return snapshot
-        }
-        
-        return nil
-    }
 }
 
 public extension CGRect {

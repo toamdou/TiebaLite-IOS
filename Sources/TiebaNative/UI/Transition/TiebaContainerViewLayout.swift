@@ -60,13 +60,6 @@ public struct TiebaLayoutMetrics: Equatable, Sendable {
 }
 
 public extension TiebaLayoutMetrics {
-    var isTablet: Bool {
-        if case .regular = self.widthClass {
-            return true
-        } else {
-            return false
-        }
-    }
 }
 
 public enum TiebaLayoutOrientation: Sendable {
@@ -98,34 +91,6 @@ public struct TiebaContainerViewLayout: Equatable, Sendable {
         self.inputHeightIsInteractivelyChanging = inputHeightIsInteractivelyChanging
         self.inVoiceOver = inVoiceOver
     }
-    
-    public func addedInsets(insets: UIEdgeInsets) -> TiebaContainerViewLayout {
-        return TiebaContainerViewLayout(size: self.size, metrics: self.metrics, deviceMetrics: self.deviceMetrics, intrinsicInsets: UIEdgeInsets(top: self.intrinsicInsets.top + insets.top, left: self.intrinsicInsets.left + insets.left, bottom: self.intrinsicInsets.bottom + insets.bottom, right: self.intrinsicInsets.right + insets.right), safeInsets: self.safeInsets, additionalInsets: self.additionalInsets, statusBarHeight: self.statusBarHeight, inputHeight: self.inputHeight, inputHeightIsInteractivelyChanging: self.inputHeightIsInteractivelyChanging, inVoiceOver: self.inVoiceOver)
-    }
-    
-    public func withUpdatedSize(_ size: CGSize) -> TiebaContainerViewLayout {
-        return TiebaContainerViewLayout(size: size, metrics: self.metrics, deviceMetrics: self.deviceMetrics, intrinsicInsets: self.intrinsicInsets, safeInsets: self.safeInsets, additionalInsets: self.additionalInsets, statusBarHeight: self.statusBarHeight, inputHeight: self.inputHeight, inputHeightIsInteractivelyChanging: self.inputHeightIsInteractivelyChanging, inVoiceOver: self.inVoiceOver)
-    }
-    
-    public func withUpdatedIntrinsicInsets(_ intrinsicInsets: UIEdgeInsets) -> TiebaContainerViewLayout {
-        return TiebaContainerViewLayout(size: self.size, metrics: self.metrics, deviceMetrics: self.deviceMetrics, intrinsicInsets: intrinsicInsets, safeInsets: self.safeInsets, additionalInsets: self.additionalInsets, statusBarHeight: self.statusBarHeight, inputHeight: self.inputHeight, inputHeightIsInteractivelyChanging: self.inputHeightIsInteractivelyChanging, inVoiceOver: self.inVoiceOver)
-    }
-    
-    public func withUpdatedSafeInsets(_ safeInsets: UIEdgeInsets) -> TiebaContainerViewLayout {
-        return TiebaContainerViewLayout(size: self.size, metrics: self.metrics, deviceMetrics: self.deviceMetrics, intrinsicInsets: self.intrinsicInsets, safeInsets: safeInsets, additionalInsets: self.additionalInsets, statusBarHeight: self.statusBarHeight, inputHeight: self.inputHeight, inputHeightIsInteractivelyChanging: self.inputHeightIsInteractivelyChanging, inVoiceOver: self.inVoiceOver)
-    }
-    
-    public func withUpdatedAdditionalInsets(_ additionalInsets: UIEdgeInsets) -> TiebaContainerViewLayout {
-        return TiebaContainerViewLayout(size: self.size, metrics: self.metrics, deviceMetrics: self.deviceMetrics, intrinsicInsets: self.intrinsicInsets, safeInsets: self.safeInsets, additionalInsets: additionalInsets, statusBarHeight: self.statusBarHeight, inputHeight: self.inputHeight, inputHeightIsInteractivelyChanging: self.inputHeightIsInteractivelyChanging, inVoiceOver: self.inVoiceOver)
-    }
-    
-    public func withUpdatedInputHeight(_ inputHeight: CGFloat?) -> TiebaContainerViewLayout {
-        return TiebaContainerViewLayout(size: self.size, metrics: self.metrics, deviceMetrics: self.deviceMetrics, intrinsicInsets: self.intrinsicInsets, safeInsets: self.safeInsets, additionalInsets: self.additionalInsets, statusBarHeight: self.statusBarHeight, inputHeight: inputHeight, inputHeightIsInteractivelyChanging: self.inputHeightIsInteractivelyChanging, inVoiceOver: self.inVoiceOver)
-    }
-    
-    public func withUpdatedMetrics(_ metrics: TiebaLayoutMetrics) -> TiebaContainerViewLayout {
-        return TiebaContainerViewLayout(size: self.size, metrics: metrics, deviceMetrics: self.deviceMetrics, intrinsicInsets: self.intrinsicInsets, safeInsets: self.safeInsets, additionalInsets: self.additionalInsets, statusBarHeight: self.statusBarHeight, inputHeight: self.inputHeight, inputHeightIsInteractivelyChanging: self.inputHeightIsInteractivelyChanging, inVoiceOver: self.inVoiceOver)
-    }
 }
 
 public extension TiebaContainerViewLayout {
@@ -140,66 +105,9 @@ public extension TiebaContainerViewLayout {
         return insets
     }
     
-    var isModalOverlay: Bool {
-        if case .tablet = self.deviceMetrics.type {
-            if case .regular = self.metrics.widthClass {
-                return abs(max(self.size.width, self.size.height) - self.deviceMetrics.screenSize.height) > 1.0
-            }
-        }
-        return false
-    }
-    
-    var isNonExclusive: Bool {
-        if case .tablet = self.deviceMetrics.type {
-            if case .compact = self.metrics.widthClass {
-                return true
-            }
-            if case .compact = self.metrics.heightClass {
-                return true
-            }
-        }
-        return false
-    }
-    
     var deviceOrientationSize: CGSize {
         let screenSize = self.deviceMetrics.screenSize
         return self.actualOrientation == .landscape ? CGSize(width: screenSize.height, height: screenSize.width) : screenSize
-    }
-    
-    var inSplitView: Bool {
-        guard case .tablet = self.deviceMetrics.type else {
-            return false
-        }
-        guard self.metrics.widthClass == .compact || self.metrics.heightClass == .compact else {
-            return false
-        }
-        
-        let orient = self.deviceOrientationSize
-        guard abs(self.size.height - orient.height) < 1.0 else {
-            return false
-        }
-        
-        let ratio = self.size.width / max(orient.width, 1.0)
-        let tol: CGFloat = 0.04
-        let isSplitFraction = abs(ratio - 0.5)   < tol || abs(ratio - (1.0/3.0)) < tol || abs(ratio - (2.0/3.0)) < tol
-        
-        return isSplitFraction
-    }
-    
-    var inSlideOver: Bool {
-        guard case .tablet = self.deviceMetrics.type else {
-            return false
-        }
-        guard self.metrics.widthClass == .compact || self.metrics.heightClass == .compact else {
-            return false
-        }
-        let currentLong = max(self.size.width, self.size.height)
-        let screenLong = max(self.deviceMetrics.screenSize.width, self.deviceMetrics.screenSize.height)
-        
-        if abs(currentLong - screenLong) > 10.0 {
-            return true
-        }
-        return false
     }
     
     var actualOrientation: TiebaLayoutOrientation {
@@ -216,17 +124,8 @@ public extension TiebaContainerViewLayout {
         return self.size.width > self.size.height ? .landscape : .portrait
     }
     
-    var standardKeyboardHeight: CGFloat {
-        return self.deviceMetrics.keyboardHeight(inLandscape: self.orientation == .landscape)
-    }
-    
     var standardInputHeight: CGFloat {
         return self.deviceMetrics.standardInputHeight(inLandscape: self.orientation == .landscape)
-    }
-    
-    static func concentricInsets(bottomInset: CGFloat, innerDiameter: CGFloat, sideInset: CGFloat) -> UIEdgeInsets {
-        let mappedBottomInset: CGFloat = max(bottomInset, sideInset)
-        return UIEdgeInsets(top: 0.0, left: sideInset, bottom: mappedBottomInset, right: sideInset)
     }
 }
 

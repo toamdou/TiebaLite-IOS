@@ -127,22 +127,6 @@ final class TiebaPortalSourceView: UIView {
         view.disablePortal()
     }
 
-    func setGlobalPortal(view: (any TiebaGlobalPortalHosting)?) {
-        if let globalPortalView = self.globalPortalView {
-            self.globalPortalView = nil
-
-            globalPortalView.triggerWasRemoved()
-        }
-
-        if let view = view {
-            self.globalPortalView = view
-
-            if self.window != nil {
-                view.reloadPortal(sourceView: self)
-            }
-        }
-    }
-
     override func didMoveToWindow() {
         super.didMoveToWindow()
 
