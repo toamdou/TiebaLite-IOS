@@ -90,7 +90,9 @@ enum TiebaSocialAPI {
       formParts: [
         TiebaHttpFormPart(
           name: "portrait", value: nil, fileUri: fileUri,
-          fileName: "portrait.jpg", mimeType: "image/jpeg"
+          // mimeType 交给 TiebaHttpClient 按文件名扩展名派生（jpg → image/jpeg）：
+          // 手写映射只会在"哪天文件名换了"的时候和真实字节不一致。
+          fileName: "portrait.jpg", mimeType: nil
         ),
         TiebaHttpFormPart(name: "tbs", value: tbs, fileUri: nil, fileName: nil, mimeType: nil),
         TiebaHttpFormPart(

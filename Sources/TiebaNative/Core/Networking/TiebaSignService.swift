@@ -311,7 +311,7 @@ final class TiebaSignService {
     let state = activityState(
       done: done, total: total, name: name, success: success, fail: fail, exp: exp, signing: true
     )
-    Task { await TiebaLiveActivityManager.shared.update(activityId: id, state: LiveActivityKitAttributes.ContentState(raw: state)) }
+    Task { await TiebaLiveActivityManager.shared.update(activityId: id, state: TiebaLiveActivityKitAttributes.ContentState(raw: state)) }
   }
 
   /// 收尾：先把灵动岛改成完成态并**弹一条通知**（用户要的"签到完成提醒"），
@@ -357,7 +357,7 @@ final class TiebaSignService {
     Task {
       await TiebaLiveActivityManager.shared.end(
         activityId: activityId,
-        state: LiveActivityKitAttributes.ContentState(raw: state),
+        state: TiebaLiveActivityKitAttributes.ContentState(raw: state),
         dismissalPolicy: .default,
         alert: inForeground ? nil : alert
       )
@@ -490,7 +490,7 @@ private final class TiebaSignToastView: UIView {
     )
     label.text = text
     isHidden = false
-    UIView.animate(withDuration: 0.18) { self.alpha = 1 }
+    TiebaAnimation.animate(duration: 0.18) { self.alpha = 1 }
     hideWorkItem?.cancel()
     let item = DispatchWorkItem { [weak self] in self?.hideToast() }
     hideWorkItem = item
@@ -500,7 +500,7 @@ private final class TiebaSignToastView: UIView {
   private func hideToast() {
     hideWorkItem?.cancel()
     hideWorkItem = nil
-    UIView.animate(withDuration: 0.18, animations: { self.alpha = 0 }) { _ in
+    TiebaAnimation.animate(duration: 0.18, animations: { self.alpha = 0 }) { _ in
       self.isHidden = true
     }
   }

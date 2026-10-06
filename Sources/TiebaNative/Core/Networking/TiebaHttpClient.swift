@@ -103,6 +103,12 @@ final class TiebaHttpClient: @unchecked Sendable {
     guard let url = URL(string: urlString) else {
       throw TiebaHttpError.invalidUrl
     }
+    // 出网前再过一遍 URL 安全校验：只认 http/https，host 必须带点、不允许 user:pass
+    // （"https://user@real-host/" 这种 user 段是绕过 host 判断的经典形态）。
+    // 本仓请求地址都是自己拼的绝对 https，这道闸挡的是"将来有人把外部串直接喂进来"。
+    guard tiebaIsValidUrl(urlString, validSchemes: ["http": true, "https": true]) else {
+      throw TiebaHttpError.invalidUrl
+    }
     guard Self.isAllowedHost(url) else {
       throw TiebaHttpError.disallowedHost
     }
@@ -233,7 +239,10 @@ final class TiebaHttpClient: @unchecked Sendable {
       append("--\(boundary)\(crlf)")
       if let fileUri = part.fileUri, !fileUri.isEmpty {
         let fileName = part.fileName ?? "file"
-        let mimeType = part.mimeType ?? "application/octet-stream"
+        // 调用方显式给了就用（显式优先），否则按文件名扩展名查 TiebaMimeTypes 全表。
+        // 不让系统 UTType 单独决定：服务端/分享进来的冷门扩展名（sdc / kpr / pcf.Z …）
+        // 它查不到，而 multipart 的 Content-Type 一旦错，接收侧就按错误类型处理。
+        let mimeType = part.mimeType ?? Self.mimeType(forFileName: fileName)
         append("Content-Disposition: form-data; name=\"\(part.name)\"; filename=\"\(fileName)\"\(crlf)")
         append("Content-Type: \(mimeType)\(crlf)\(crlf)")
         body.append(try readFileData(fileUri))
@@ -245,6 +254,17 @@ final class TiebaHttpClient: @unchecked Sendable {
     }
     append("--\(boundary)--\(crlf)")
     return (body, "multipart/form-data; boundary=\(boundary)")
+  }
+
+  /// 文件部件的 Content-Type：按扩展名查 TiebaMimeTypes（304 条全表，内部自带 UTType 兜底），
+  /// 表里也没有才退回 application/octet-stream。扩展名统一小写后再查：服务端给的
+  /// 文件名常是 IMG_0001.JPG 这种大写形态，而表是大小写敏感的。
+  private static func mimeType(forFileName fileName: String) -> String {
+    let fileExtension = URL(fileURLWithPath: fileName).pathExtension.lowercased()
+    guard !fileExtension.isEmpty, let mime = TiebaMimeTypes.mimeType(forExtension: fileExtension) else {
+      return "application/octet-stream"
+    }
+    return mime
   }
 
   /// 只支持本地文件（file:// 或绝对路径）——当前 multipart 调用点是头像上传。
