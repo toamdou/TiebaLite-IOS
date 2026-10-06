@@ -51,7 +51,10 @@
 //   释放-重入序列；见 22-接线报告的说明。）
 //
 // 大值压缩（本次接线）：kv 值 ≥512 字节、且 gzip+base64 确实比原文更小时，
-// 存成 "\u{01}gz:" + base64(gzip(utf8))，读侧按前缀识别后解压；解不开当明文。
+// 存成 "\u{01}gz:" + base64(gzip(utf8))，读侧按前缀识别后解压。
+// 没有前缀 = 明文（旧版本写的就是明文，这条读路径是老数据的命）；有前缀却解不开
+// = 这一行坏了：get 如实返回 nil，lookup 报 .unavailable（**不** fail-open 当明文
+// 返回，也不报成「确证为空」——破坏性调用方会拿空数据覆盖用户那一份）。
 // 标记是控制字符，业务值不会以它开头，因此不动 schema、不加列；
 // 小值与压不动的值字节完全不变，旧数据与旧 MMKV 导入照读。
 // ⚠️ 单向兼容：新版写的压缩值，降级回旧版本会读成乱码（22-接线报告已注明）。
@@ -162,7 +165,17 @@ final class TiebaKvStore: @unchecked Sendable {
       guard let db = openLocked() else {
         return .unavailable(openFailure ?? "database unavailable")
       }
-      if let value = queryStringLocked(db, key: key) { return .value(value) }
+      switch readKeyLocked(db, key: key) {
+      case .value(let value):
+        return .value(value)
+      case .unreadable(let reason):
+        // 行在、值解不开（压缩值坏了 / 语句失败）：这**不是**「确证为空」。
+        // 消费方的破坏性决策（账号列表重写、孤儿登录态清理）必须看到「读不出来」，
+        // 否则会拿空数据覆盖掉用户真正的那一份（112 的教训）。
+        return .unavailable(reason)
+      case .missing:
+        break
+      }
       switch legacyImportState {
       case .running:
         return .unavailable("legacy mmkv import in progress")
@@ -298,26 +311,6 @@ final class TiebaKvStore: @unchecked Sendable {
     guard sqlite3_step(statement) == SQLITE_DONE else {
       throw TiebaKvError.statementFailed(TiebaSQLiteCore.errorMessage(db))
     }
-  }
-
-  /// 旧 MMKV 文件 → kv 表（一次性、幂等、非破坏）。首次 kv 访问时自动排入后台
-  /// 导入；显式调用会等待完成再返回，便于验证迁移结果（重复调用只是查一次标记）。
-  /// 返回 true = 已完成（含「旧文件本来就不存在」）。
-  @discardableResult
-  func importLegacyMmkvIfNeeded() -> Bool {
-    lock.lock()
-    guard openLocked() != nil else {
-      lock.unlock()
-      return false
-    }
-    if legacyImportState == .running {
-      lock.unlock()
-      legacyImportGate.wait()
-      lock.lock()
-    }
-    let done = legacyImportState == .done
-    lock.unlock()
-    return done
   }
 
   // MARK: - 打开 / 建表 / WAL / 导入调度
@@ -530,14 +523,36 @@ final class TiebaKvStore: @unchecked Sendable {
 
   // MARK: - SQLite 原语（调用方须已持有 lock）
 
-  private func queryStringLocked(_ db: OpaquePointer, key: String) -> String? {
+  /// 单键读取的结果：行不在 / 值可解 / **行在但值解不开**。
+  /// 第三态只给 lookup 用（见下）；get 只关心「能不能给出值」。
+  private enum KeyReadOutcome {
+    case missing
+    case value(String)
+    case unreadable(String)
+  }
+
+  /// 单键读取。区分「确证没有这一行」与「这一行读不出来」——压缩值（\u{01}gz: 前缀）
+  /// 解不开时若报成前者，破坏性调用方会把坏行当空数据写回（丢的是用户数据）。
+  private func readKeyLocked(_ db: OpaquePointer, key: String) -> KeyReadOutcome {
     guard let statement = TiebaSQLiteCore.prepare(db, "SELECT value FROM kv WHERE key = ?1;") else {
-      return nil
+      return .unreadable("prepare failed: \(TiebaSQLiteCore.errorMessage(db))")
     }
     defer { sqlite3_finalize(statement) }
     TiebaSQLiteCore.bind(statement, 1, key)
-    guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
-    return TiebaSQLiteCore.columnString(statement, 0).flatMap(Self.decodeValue)
+    guard sqlite3_step(statement) == SQLITE_ROW else { return .missing }
+    guard let raw = TiebaSQLiteCore.columnString(statement, 0) else {
+      return .unreadable("value column is not text")
+    }
+    guard let value = Self.decodeValue(raw) else {
+      return .unreadable("stored value failed to decode (corrupted compressed row)")
+    }
+    return .value(value)
+  }
+
+  /// 单键读取（只要值）。读不出来（行在但解不开 / 语句失败）一律 nil，与旧行为一致。
+  private func queryStringLocked(_ db: OpaquePointer, key: String) -> String? {
+    if case .value(let value) = readKeyLocked(db, key: key) { return value }
+    return nil
   }
 
   private func keysLocked(
