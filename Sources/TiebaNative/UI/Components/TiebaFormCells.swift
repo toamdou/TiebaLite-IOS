@@ -140,6 +140,15 @@ final class TiebaFormRowCell: UITableViewCell {
     }
 
     config.text = row.title
+    // 标题字体 = **界面级字号**，全种类统一。
+    // ⚠️ 这里不能只在 row.kind == .text 时设：其余种类（toggle / link / menu / picker…）
+    // 拿到的是 UIListContentConfiguration 的**系统默认字体**，只跟系统 Dynamic Type、
+    // 不跟应用内界面字号 —— 用户实测「界面字号调大后，深色模式 / 跟随系统外观 这些
+    // 行的标题不变大」。row.font 缺省就是 uiFont(.body)，应用倍率 1.0 时与系统默认
+    // 逐像素相同，所以这是一处纯增量。
+    config.textProperties.font = row.resolvedTitleWeight == .regular
+      ? row.font
+      : UIFont.tiebaFormFont(row.font, weight: row.resolvedTitleWeight)
     config.textProperties.color = row.disabled
       ? disabledColor
       : (row.kind == .button || row.kind == .confirm ? emphasized : .label)
@@ -157,9 +166,6 @@ final class TiebaFormRowCell: UITableViewCell {
       config.secondaryTextProperties.numberOfLines = 0
     }
     if row.kind == .text {
-      config.textProperties.font = row.resolvedTitleWeight == .regular
-        ? row.font
-        : UIFont.tiebaFormFont(row.font, weight: row.resolvedTitleWeight)
       // 颜色规则与 SwiftUI 的 foregroundStyle 一致：JS 给了就用 JS 的，
       // 否则 .label（要次级灰时 JS 传 secondaryLabel token）。
       config.textProperties.color = row.override ?? .label

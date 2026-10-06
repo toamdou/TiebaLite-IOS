@@ -678,6 +678,9 @@ extension TiebaFormListView: UITableViewDataSource, UITableViewDelegate {
     let view = headerFooter(tableView: tableView)
     var config = UIListContentConfiguration.groupedHeader()
     config.text = title
+    // 分组标题也属界面级（用户口径：界面字号管设置页与列表标题）。
+    // 系统 groupedHeader 的默认字体只跟 Dynamic Type，不跟应用内界面字号。
+    config.textProperties.font = TiebaSimpleText.uiFont(style: .footnote)
     view.contentConfiguration = config
     return view
   }
@@ -696,6 +699,8 @@ extension TiebaFormListView: UITableViewDataSource, UITableViewDelegate {
     let view = headerFooter(tableView: tableView)
     var config = UIListContentConfiguration.groupedFooter()
     config.text = footer
+    // 同上：脚注说明文字跟界面字号（系统默认只跟 Dynamic Type）。
+    config.textProperties.font = TiebaSimpleText.uiFont(style: .footnote)
     view.contentConfiguration = config
     return view
   }
