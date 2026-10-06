@@ -78,7 +78,6 @@ enum TiebaProfileError: LocalizedError {
 
 enum TiebaProfileAPI {
   static let postPageSize = 20
-  static let socialPageSize = 20
   private static let favoritePageSize = 50
 
   // MARK: 资料卡
@@ -391,7 +390,7 @@ enum TiebaProfileAPI {
       "showForumPill": true,
       "hideActions": true,
       "imageContextMenu": true,
-      // 原 TweetCard 未传 onMenuAction → 不渲染右上角 ×。
+      // 原 TweetCard 未传 onMenuAction → 不渲染右上角的更多钮。
       "closeMenuOptions": [] as [String],
     ]
     row.merge(TiebaFeedRowPreferences.current()) { _, new in new }
@@ -431,9 +430,6 @@ enum TiebaProfileAPI {
 
   // MARK: 辅助
 
-  /// 行级显示偏好（现读；键名 = TiebaRowMetrics 的解析键）。
-  static func rowPreferences() -> [String: Any] { TiebaFeedRowPreferences.current() }
-
   /// 服务端时间戳容错：秒 → 毫秒（原 storeTimestamp 同判据）。
   static func toMillis(_ raw: Double) -> Double {
     guard raw.isFinite, raw > 0 else { return 0 }
@@ -450,7 +446,8 @@ enum TiebaFeedRowPreferences {
       "hideMedia": TiebaPreferenceSnapshot.bool("hideMedia", default: false),
       "showIpLocation": TiebaPreferenceSnapshot.bool("showIpLocation", default: true),
       "showBothUsername": TiebaPreferenceSnapshot.bool("showBothUsername", default: false),
-      "fontScale": Double(TiebaPreferenceSnapshot.string("fontScale") ?? "") ?? 1,
+      // 正文级字号倍率（两级体系；旧 fontScale 键由 TiebaTypography 迁移）
+      "fontScale": TiebaTypography.snapshot().bodyScale,
       "timestampStyle": TiebaPreferenceSnapshot.string("timestampStyle") ?? "relative",
     ]
   }

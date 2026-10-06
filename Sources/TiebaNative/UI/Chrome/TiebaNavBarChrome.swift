@@ -26,6 +26,10 @@ enum TiebaChrome {
     /// 已写过"透明外观"的栏（弱引用，随栏释放自动清理）。
     /// 只写一次：写 appearance 会让 UIKit 重建栏底，周期性重写 = 周期性重建。
     nonisolated(unsafe) static let transparentAppearanceBars = NSHashTable<UINavigationBar>.weakObjects()
+    /// 上一次把字体写进栏 appearance 时的**字号世代**（TiebaTypography.generation）。
+    /// 栏外观是"写过即不再写"的记账（transparentAppearanceBars），字体变了必须让
+    /// 全部栏重写一次——这里存世代当失效信号，见 applyChromeTypographyIfNeeded。
+    nonisolated(unsafe) static var typographyGeneration: UInt64 = .max
 
     // ── 空转治理（2026-09-12 发热审查）──
     // force 每次要做两趟视图树全量遍历：collectChromeBars 扫所有窗口的
@@ -41,6 +45,9 @@ enum TiebaChrome {
     /// 视图层级已变化（新 bar / 新页面级滚动视图挂载、栏结构布局、回前台、
     /// 转场完成、主题或路由门控），下一次重扫需要全量遍历。
     nonisolated(unsafe) static var needsRescan = true
+    /// 结构纪元（monotonic）：markChromeDirty 每次调用 +1。NavigationShell 的
+    /// 主滚动视图解析缓存以此为失效信号；全部调用在主线程（单写者），直接 Int。
+    nonisolated(unsafe) static var structuralEpoch = 0
     /// 上次全量重扫时间（CACurrentMediaTime），节流用。
     nonisolated(unsafe) static var lastScanAt: CFTimeInterval = 0
     /// tick 路径（栏/滚动视图挂载与布局这类高频事件）的最小重扫间隔：挂载事件
@@ -68,7 +75,16 @@ enum TiebaChrome {
   }
 
   /// 标记视图层级已变化：下一次 tick / 事件会做一次全量重扫（幂等、零遍历）。
-  static func markChromeDirty() { ChromeState.needsRescan = true }
+  static func markChromeDirty() {
+    ChromeState.needsRescan = true
+    // 结构纪元：markChromeDirty 的调用面 = 页面级滚动视图挂载、栏结构布局、
+    // 回前台这类"主滚动视图可能换人"的结构事件（每屏几次，绝不逐帧）。
+    // TiebaNavigationShell 缓存的解析结果以此为失效信号，布局趟不再每趟全树 DFS。
+    ChromeState.structuralEpoch &+= 1
+  }
+
+  /// 当前结构纪元（见 markChromeDirty）。
+  static var structuralEpoch: Int { ChromeState.structuralEpoch }
 
   /// 合并排一次 tick 重扫（2026-09-12 二轮空转治理）：改前每个布局/挂载事件都
   /// 各自 async 一个 force 块，快滚时主队列被无界块灌满（每帧数趟全树遍历）。
@@ -160,7 +176,27 @@ enum TiebaChrome {
   static func installNavBarChromeHooks() {
     _ = navChromeHooks
     _ = navChromeScrollHooks
+    _ = typographyObserverInstall
   }
+
+  /// 界面字号变化 → 导航栏标题字体要重贴。
+  /// 栏 appearance 只在挂载时写一次（见 applyBarAppearance 的记账），没有这个
+  /// 信号就会出现"设置里调了界面字号，顶栏标题还是旧大小"。这里只标脏 + 排一次
+  /// tick，真正的重写在重扫里做（事件驱动，不新增周期任务）。
+  private nonisolated(unsafe) static var typographyObserver: NSObjectProtocol?
+
+  /// 幂等：装一次观察者（TiebaPreferenceChange 是主队列广播）。
+  private static let typographyObserverInstall: Void = {
+    typographyObserver = TiebaPreferenceChange.observe(
+      keys: [
+        TiebaTypography.bodySizeKey, TiebaTypography.uiSizeKey, TiebaTypography.followsBodyKey,
+      ]
+    ) {
+      TiebaChrome.markChromeDirty()
+      TiebaChrome.scheduleChromeTick()
+    }
+    return ()
+  }()
 
   // 顶栏 chrome 的幂等重挂入口（v3 起，2026-08-22；v34 起职责收窄）：窗口
   // 底色/窗口 trait、导航容器底色、栏外观（透明）、双击回顶手势、滚动边缘模糊
@@ -359,8 +395,9 @@ enum TiebaChrome {
   //     软边，但不是系统渲染的玻璃，观感与 Liquid Glass 不同、栏底还会留一条亮边
   //     ⇒ "非常拉跨，根本不是 iOS 26 里 UIKit 实现模糊的接口"。
   //
-  // 定案（2026-09-16）：顶栏玻璃 = **UIGlassEffect**（iOS 26 的玻璃接口，仓库既有配方，
-  // 见 applyNavGlassLayer），栏自身 appearance 置透明，玻璃只由这一个提供者画。
+  // 定案（2026-09-16）见下方两态 appearance：栏级 appearance 只在 standard/scrollEdge 两态
+  // 之间切换，**不自建玻璃层**。历史上这里写过「UIGlassEffect + applyNavGlassLayer」，
+  // 该函数与那条路都已被否并删除——幽灵引用一并清掉（见 docs/uikit-migration/30-review复检.md Q7-7）。
   // 此外本文件对栏只做：装手势（双击回顶、栏内按压触觉）、底边滚动边缘效果关掉。
   // 顶边滚动边缘效果**不写**——它渲出来的那一层被玻璃层盖住，只会白花每帧的 GPU。
   // **不手写材质、不挂渐变 mask**（UIBlurEffect + mask 那版用户评价"非常拉跨、栏底一条亮边"）。
@@ -385,6 +422,15 @@ enum TiebaChrome {
     let scrollEdge = UINavigationBarAppearance()
     scrollEdge.configureWithTransparentBackground()
     scrollEdge.shadowColor = .clear
+    // 栏标题字体：系统默认是 headline(17 semibold)。**显式写一份 = 界面字号 ×
+    // 系统 Dynamic Type**（TiebaSimpleText.scaledFont 与全仓界面文本同一条换算），
+    // 不写就永远停在系统 17pt —— 设置里调界面字号，顶栏标题不动（用户口径：
+    // "字体大小调节意味着很多界面组件都要同步调节"）。其余栏元素（返回键、
+    // 右侧按钮）走各自 VC 的 UIButton.Configuration，不在这里。
+    let titleFont = TiebaSimpleText.scaledFont(
+      size: 17, weight: .semibold, scale: TiebaTypography.uiScale())
+    standard.titleTextAttributes = [.font: titleFont]
+    scrollEdge.titleTextAttributes = [.font: titleFont]
     bar.standardAppearance = standard
     bar.compactAppearance = standard
     bar.scrollEdgeAppearance = scrollEdge
@@ -491,8 +537,11 @@ enum TiebaChrome {
     for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
       for window in scene.windows
       where window.isKeyWindow && window.windowLevel == .normal {
-        if window.backgroundColor != TiebaChrome.chromeWindowColor {
-          window.backgroundColor = TiebaChrome.chromeWindowColor
+        // 求值一次再比较/赋值：改前这里访问两遍 chromeWindowColor
+        //（动态色时代两遍就是**两个不同实例**，比较必然为真）。
+        let windowColor = TiebaChrome.chromeWindowColor
+        if window.backgroundColor != windowColor {
+          window.backgroundColor = windowColor
         }
       }
     }
@@ -516,6 +565,12 @@ enum TiebaChrome {
     var applied = false
     CATransaction.begin()
     CATransaction.setDisableActions(true)
+    // 界面字号变过 ⇒ 作废"栏外观已写"的记账，让下面每个栏都重写一次 appearance
+    // （字体烙在 appearance 里，不重写就停在旧档）。世代只在字号真变时 +1。
+    if ChromeState.typographyGeneration != TiebaTypography.generation {
+      ChromeState.transparentAppearanceBars.removeAllObjects()
+      ChromeState.typographyGeneration = TiebaTypography.generation
+    }
     for navBar in chromeBars.navBars {
       // 栏内按压判定（HDR 高光 + 轻触觉）与双击回顶手势：两者在 bar 挂载钩子里
       // 已装好（见 navChromeScrollHooks.didMoveToWindow），这里幂等补齐
@@ -595,17 +650,20 @@ enum TiebaChrome {
 
   /// 应用主题对应的窗口底色：push 转场期间新屏内容未渲染、透出窗口背景时
   /// 不发白的兜底（深色模式"先白后黑"的最后一环，2026-08-26）。
-  /// nil 随系统：动态色跟随系统 trait（自动切换模式下不锁应用值，
-  /// 系统切深/浅时转场底色同步变化——2026-09-02 修复）。
+  ///
+  /// H5 修复（两件事）：
+  ///   1. **与主题链共用同一个色值**：这里改读 TiebaNavigator.chromeTheme.background ——
+  ///      主题链（TiebaSettingsSupport → TiebaSystemUI.setBackgroundColor）写的正是它。
+  ///      改前 chrome 自带一套固定 白/rgb(0.07,0.07,0.09)：主题应用后窗口先是主题色、
+  ///      下一次 chrome 重扫又被这套固定色覆盖，两个域对"转场露底"的预期不一致。
+  ///   2. **不再现造动态色**：UIColor 的 trait 闭包动态色每次访问都是**新实例**，
+  ///      参与 != / isEqual 恒为 false（发现者实测 two fresh dynamic colors isEqual: false），
+  ///      于是下面两处「幂等比较，零成本」会退化成每轮重扫都真实重写主窗口与全部导航容器底色
+  ///      （转场/挂载/回前台，双档节流 —— 与同文件对"周期性写边缘效果"的警惕自相矛盾）。
+  ///      chromeTheme.background 在 applyTheme 之前是同一个实例，比较因此才成立：
+  ///      改前症状是每轮都写，改后只在该色真正变化时写一次。
   static var chromeWindowColor: UIColor {
-    guard let dark = ChromeState.darkMode else {
-      return UIColor { trait in
-        trait.userInterfaceStyle == .dark
-          ? UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1)
-          : .white
-      }
-    }
-    return dark ? UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1) : .white
+    return TiebaNavigator.shared.chromeTheme.background
   }
 
   /// 应用主题 → 窗口/chrome trait：nil 还原 .unspecified（跟随系统，不锁窗口）。

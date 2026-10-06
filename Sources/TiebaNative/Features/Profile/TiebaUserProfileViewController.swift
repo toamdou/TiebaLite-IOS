@@ -436,7 +436,8 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
   private func shareProfile() {
     guard let detail else { return }
     let id = detail.portrait.isEmpty ? uid : detail.portrait
-    let link = "https://tieba.baidu.com/home/main?id=\(id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id)"
+    // [采用] 单个参数值编码集，见 TiebaURLQueryValue。
+    let link = "https://tieba.baidu.com/home/main?id=\(id.addingPercentEncoding(withAllowedCharacters: .tiebaURLQueryValueAllowed) ?? id)"
     TiebaClipboard.setString(link)
     TiebaSceneHaptics.fire("action-success")
     pill.showResult(success: true, text: "已复制用户主页链接")
@@ -490,7 +491,6 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
         TiebaPhotoItem(
           url: url,
           thumbUrl: url,
-          isGif: false,
           isLong: false,
           width: 0,
           height: 0
@@ -552,6 +552,14 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
       case 1: shareThread(row)
       case 2: toggleLike(index)
       default: openThread(row)
+      }
+    case "quote":
+      // 转发引用卡 → 原帖；老数据缺 tid 退回整卡进帖。
+      if let quoteId = TiebaFeedRowInteraction.quotedThreadId(in: row) {
+        TiebaSceneHaptics.fire("press")
+        TiebaNavigator.shared.navigate(.thread(id: quoteId))
+      } else {
+        openThread(row)
       }
     default:
       openThread(row)

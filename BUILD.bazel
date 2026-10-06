@@ -43,22 +43,42 @@ xcodeproj(
     top_level_targets = ["//:App"],
 )
 
-# 交付用正式包：//:App 的产物做一遍符号剥离（体积约 -12%；为什么剥离要在 Bazel 之外，
-# 见 Tools/strip-ipa-symbols.sh 头注）。用法：
+# 交付用正式包：//:App 的产物做一遍符号剥离（体积约 -12%）。用法：
 #   bazel build //:AppStripped --config=ci --config=release  → bazel-bin/AppStripped.ipa
-# ⚠️ 剥离会破坏代码签名：这个包是给 SideStore 侧载用的（与 CI 的隐私消毒同一口径）；
+# ⚠️ 剥离会破坏代码签名：这个包是给 SideStore 侧载用的（与 CI 的打包口径一致）；
 # 要 devicectl 直装真机就建 //:App（签名有效、符号未剥）。
-# //:App 的默认输出不止一个（IPA + dSYM），所以先按扩展名挑出 IPA 再交给脚本。
+# //:App 的默认输出不止一个（IPA + dSYM），所以先按扩展名挑出 IPA。
 genrule(
     name = "AppStripped",
     srcs = [":App"],
     outs = ["AppStripped.ipa"],
     cmd = """
+set -eu
 ipa=""
 for f in $(locations :App); do
   case "$$f" in *.ipa) ipa="$$f" ;; esac
 done
-$(location //Tools:strip-ipa-symbols) "$$ipa" $@
+# ── 符号剥离（原先的 Tools/strip-ipa-symbols.sh，2026-10-07 内联到这里）──
+# 为什么在 Bazel 之外做：-c opt 的 Swift 编译已经是 -O -whole-module-optimization
+# -internalize-at-link，但链接产物默认仍带符号表（实测 15.7MB 里 ~8MB 本地符号 +
+# ~4.6MB 字符串表）。Bazel 的 --objc_enable_binary_stripping 在 Bazel 7.4.0 +
+# rules_apple 4.5.3 下 analysis 期直接 NPE（Java 要取原生隐式属性 :xcode_config，
+# rules_apple 声明的是 _xcode_config）；链接期 -Wl,-x 对 private-extern 符号无效。
+# Xcode Release 的等效动作就是链接后 strip（STRIP_STYLE = Non-Global）；
+# dSYM 不受影响：Bazel 已用未剥离产物生成 dSYM，这里只处理交付副本。
+case "$$ipa" in /*) ;; *) ipa="$$PWD/$$ipa" ;; esac
+out="$$PWD/$@"
+tmp="$$(mktemp -d)"
+trap 'rm -rf "$$tmp"' EXIT
+unzip -q "$$ipa" -d "$$tmp"
+# 只剥 Mach-O（主二进制、PlugIns/*.appex、Frameworks/*）：-x 去本地符号，保留动态
+# 链接需要的全局符号（与 Xcode 的 Non-Global 档一致；-s 更狠但没必要）。
+find "$$tmp/Payload" -type f -print0 | while IFS= read -r -d '' file; do
+  case "$$(file -b "$$file")" in
+    Mach-O*) xcrun strip -x "$$file" ;;
+  esac
+done
+( cd "$$tmp" && zip -qry "$$out" Payload )
+echo "stripped: $$out ($$(wc -c <"$$out" | tr -d ' ') bytes)"
 """,
-    tools = ["//Tools:strip-ipa-symbols"],
 )

@@ -8,13 +8,7 @@ private let alreadySignedErrorCode = 1101
 
 // 与 commonParams 同款：固定 en_US_POSIX + Gregorian，签到"今天"判定
 // 不受地区/日历设置影响。
-private let autoSignDayFormatter: DateFormatter = {
-  let formatter = DateFormatter()
-  formatter.locale = Locale(identifier: "en_US_POSIX")
-  formatter.calendar = Calendar(identifier: .gregorian)
-  formatter.dateFormat = "yyyyMdd"
-  return formatter
-}()
+private let autoSignDayFormatter: DateFormatter = TiebaDateFormats.fixed("yyyyMdd")
 
 /// 自动签到：BGProcessingTask 工作体、签到协调状态（day-scoped、uid 命名空间）、
 /// 签到提醒本地通知。

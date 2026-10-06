@@ -18,11 +18,14 @@ enum TiebaThreadContentSegment: Sendable {
 }
 
 struct TiebaThreadImage: Sendable {
+  /// 列表显示档（cdn_src，g=0 强制静态压缩）。
   var src = ""
+  /// 大图档（big_cdn_src，w=1920 压缩、保留动图字节）：查看器默认档。
+  var bigSrc = ""
+  /// 原图档（origin_src）：查看器「查看原图」与保存/分享。
   var originSrc = ""
   var width = 0.0
   var height = 0.0
-  var isGif = false
   var isLongPic = false
   var showOriginalBtn = false
 
@@ -91,12 +94,12 @@ struct TiebaThreadPost: Sendable {
     }
   }
 
-  /// contentToText（src/utils/index.ts）：@ 带前缀，文本类段拼接，媒体段跳过。
+  /// contentToText（src/utils/index.ts）：@ 段按服务端 text（自带前缀）补足，文本类段拼接，媒体段跳过。
   var plainText: String {
     content.map { segment in
       switch segment {
       case .text(let text), .emoji(let text), .emoticon(let text, _): return text
-      case .at(_, let text): return "@\(text)"
+      case .at(_, let text): return TiebaViewModelMapper.atDisplayText(text)
       case .link(let text, _): return text
       case .image, .video, .audio: return ""
       }
@@ -300,16 +303,15 @@ enum TiebaThreadAPI {
     post.content.append(contentsOf: images.map { .image($0) })
   }
 
-  /// 线程级 media → 图片段。字段语义与正文图片段同一套：src = 显示档、originSrc =
-  /// 「查看原图」档（media 的 bigPic/srcPic/originPic 对应图床的大/小/原图三档）。
+  /// 线程级 media → 图片段。三档：src=显示（列表静图）、bigSrc=查看器默认、
+  /// originSrc=查看原图。
   private static func image(_ media: Tieba_Media) -> TiebaThreadImage? {
     let display = firstNonEmpty(media.bigPic, media.srcPic, media.originPic)
     guard !display.isEmpty else { return nil }
     var image = TiebaThreadImage()
     image.src = display
+    image.bigSrc = firstNonEmpty(media.srcPic, media.bigPic, media.originPic)
     image.originSrc = firstNonEmpty(media.originPic, media.bigPic, media.srcPic)
-    image.isGif = [media.dynamicPic, media.originPic, media.bigPic, media.srcPic]
-      .contains { TiebaViewModelMapper.hasGifSuffix($0) }
     image.width = media.width == 0 ? 300 : Double(media.width)
     image.height = media.height == 0 ? 300 : Double(media.height)
     image.isLongPic = media.isLongPic != 0
@@ -459,12 +461,13 @@ enum TiebaThreadAPI {
         }
         image.width = width == 0 ? 300 : width
         image.height = height == 0 ? 300 : height
+        // 三档（实测口径见 TiebaNuke「GIF 三档」注）：cdn_src=g=0 强制静态压缩
+        // （列表显示）；big_cdn_src=w=1920 保留动图字节（查看器默认/播放）；
+        // origin_src=原图（查看原图）。cdn_src_active 是 w=720 动图档，与
+        // big_cdn_src 同字节但更大（CDN 对 GIF 不重采样反膨胀），不用。
         image.src = firstNonEmpty(element.cdnSrc, element.bigCdnSrc, element.cdnSrcActive, element.src)
+        image.bigSrc = firstNonEmpty(element.bigCdnSrc, element.cdnSrcActive, element.bigSrc, element.src)
         image.originSrc = firstNonEmpty(element.originSrc, element.bigSrc, element.bigCdnSrc, element.src)
-        image.isGif = [
-          element.dynamic, element.cdnSrc, element.bigCdnSrc,
-          element.cdnSrcActive, element.originSrc, element.bigSrc, element.src,
-        ].contains { TiebaViewModelMapper.hasGifSuffix($0) }
         image.isLongPic = element.isLongPic != 0
         image.showOriginalBtn = element.showOriginalBtn != 0
         return .image(image)

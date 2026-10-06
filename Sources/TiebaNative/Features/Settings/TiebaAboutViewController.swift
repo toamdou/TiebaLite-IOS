@@ -115,47 +115,47 @@ final class TiebaAboutViewController: UIViewController {
     return TiebaFormListView.hexString(from: TiebaNavigator.shared.chromeTheme.tint)
   }
 
-  private func buildSections() -> [[String: Any]] {
+  private func buildSections() -> [TiebaFormSection] {
     let status = service.status
     let release = service.release
     let checking = status == .checking
 
-    var updateRows: [[String: Any]] = [
-      [
-        "id": "checkUpdate",
-        "kind": "button",
-        "title": checking ? "正在检查…" : "检查更新",
-        "icon": "arrow.triangle.2.circlepath",
-      ]
+    var updateRows = [
+      TiebaFormRow(
+        id: "checkUpdate",
+        kind: .button,
+        title: checking ? "正在检查…" : "检查更新",
+        icon: "arrow.triangle.2.circlepath"
+      )
     ]
     if status == .done, let release {
-      updateRows.append([
-        "id": "updateResult",
-        "kind": "text",
-        "textStyle": "subheadline",
-        "title": service.hasUpdate
+      updateRows.append(TiebaFormRow(
+        id: "updateResult",
+        kind: .text,
+        title: service.hasUpdate
           ? "发现新版本 v\(release.version)（当前 v\(service.currentVersion)）"
           : "已是最新版本（v\(service.currentVersion)）",
-      ])
+        textStyle: "subheadline"
+      ))
     }
     if status == .error {
-      updateRows.append([
-        "id": "updateError",
-        "kind": "text",
-        "textStyle": "footnote",
-        // 旧页面传的是 colors.textSecondary（rgba 串）：原生表单解析不了 rgba，
-        // 回落到 .label——这里用等价的系统语义 token，恢复旧页面的次级灰。
-        "color": "secondaryLabel",
-        "title": "检查失败：\(service.error ?? "网络异常")",
-      ])
+      // 旧页面传的是 colors.textSecondary（rgba 串）：原生表单解析不了 rgba，
+      // 回落到 .label——这里用等价的系统语义 token，恢复旧页面的次级灰。
+      updateRows.append(TiebaFormRow(
+        id: "updateError",
+        kind: .text,
+        title: "检查失败：\(service.error ?? "网络异常")",
+        override: TiebaFormColor.resolve("secondaryLabel"),
+        textStyle: "footnote"
+      ))
     }
     if release != nil {
-      updateRows.append([
-        "id": "openRelease",
-        "kind": "button",
-        "title": "在浏览器中打开 Release 页面",
-        "icon": "safari",
-      ])
+      updateRows.append(TiebaFormRow(
+        id: "openRelease",
+        kind: .button,
+        title: "在浏览器中打开 Release 页面",
+        icon: "safari"
+      ))
     }
 
     let repoButtons: [(id: String, title: String, icon: String)] = [
@@ -167,35 +167,35 @@ final class TiebaAboutViewController: UIViewController {
     ]
 
     return [
-      [
-        "rows": [
-          [
-            "id": "hero",
-            "kind": "hero",
-            "title": "贴吧Lite",
-            "subtitle": "Version \(TiebaReleaseAPI.currentVersion())",
-            "textStyle": "title",
-            "imageName": "expo.icon/Assets/icon-light.png",
-          ]
+      TiebaFormSection(
+        rows: [
+          TiebaFormRow(
+            id: "hero",
+            kind: .hero,
+            title: "贴吧Lite",
+            subtitle: "Version \(TiebaReleaseAPI.currentVersion())",
+            textStyle: "title",
+            imageName: "expo.icon/Assets/icon-light.png"
+          )
         ]
-      ],
-      [
-        "title": "更新",
-        "footer": Self.updateFooter,
-        "rows": updateRows,
-      ],
-      [
-        "title": "仓库与致谢",
-        "footer": Self.reposFooter,
-        "rows": repoButtons.map { item in
-          [
-            "id": item.id,
-            "kind": "button",
-            "title": item.title,
-            "icon": item.icon,
-          ]
-        },
-      ],
+      ),
+      TiebaFormSection(
+        title: "更新",
+        footer: Self.updateFooter,
+        rows: updateRows
+      ),
+      TiebaFormSection(
+        title: "仓库与致谢",
+        footer: Self.reposFooter,
+        rows: repoButtons.map { item in
+          TiebaFormRow(
+            id: item.id,
+            kind: .button,
+            title: item.title,
+            icon: item.icon
+          )
+        }
+      ),
     ]
   }
 

@@ -46,55 +46,55 @@ final class TiebaThreadMoreViewController: UIViewController {
     form.sections = sections()
   }
 
-  private func sections() -> [[String: Any]] {
-    let browsing: [[String: Any]] = [
-      [
-        "id": "seeLz",
-        "kind": "link",
-        "title": seeLz ? "只看楼主（开启）" : "只看楼主",
-        "icon": seeLz ? "person.fill" : "person",
-        "iconTint": "#5856D6",
-      ],
-      [
-        "id": "jump",
-        "kind": "link",
-        "title": "跳转页码",
-        "icon": "arrow.right.to.line",
-        "iconTint": "#5856D6",
-      ],
+  private func sections() -> [TiebaFormSection] {
+    let browsing = [
+      TiebaFormRow(
+        id: "seeLz",
+        kind: .link,
+        title: seeLz ? "只看楼主（开启）" : "只看楼主",
+        icon: seeLz ? "person.fill" : "person",
+        iconTint: TiebaFormColor.resolve("#5856D6")
+      ),
+      TiebaFormRow(
+        id: "jump",
+        kind: .link,
+        title: "跳转页码",
+        icon: "arrow.right.to.line",
+        iconTint: TiebaFormColor.resolve("#5856D6")
+      ),
     ]
     // 排序 = 三档直接选（与帖子页那颗药丸同一套语义），当前档打勾；不再是"点一次换一档"。
-    let sortRows: [[String: Any]] = TiebaThreadSort.allCases.map { option in
-      [
-        "id": "sort",
-        "kind": "option",
-        "title": option.title,
-        "value": String(option.rawValue),
-        "selected": option == sort,
-      ]
+    let sortRows = TiebaThreadSort.allCases.map { option in
+      TiebaFormRow(
+        id: "sort",
+        kind: .option,
+        title: option.title,
+        value: String(option.rawValue),
+        selected: option == sort
+      )
     }
-    var actions: [[String: Any]] = [
-      [
-        "id": "share",
-        "kind": "link",
-        "title": "分享",
-        "icon": "square.and.arrow.up",
-        "iconTint": "#0A84FF",
-      ]
+    var actions = [
+      TiebaFormRow(
+        id: "share",
+        kind: .link,
+        title: "分享",
+        icon: "square.and.arrow.up",
+        iconTint: TiebaFormColor.resolve("#0A84FF")
+      )
     ]
     if canDelete {
-      actions.append([
-        "id": "delete",
-        "kind": "link",
-        "title": "删除",
-        "icon": "trash",
-        "iconTint": "#FF3B30",
-      ])
+      actions.append(TiebaFormRow(
+        id: "delete",
+        kind: .link,
+        title: "删除",
+        icon: "trash",
+        iconTint: TiebaFormColor.resolve("#FF3B30")
+      ))
     }
     return [
-      ["title": "浏览", "rows": browsing],
-      ["title": "排序", "rows": sortRows],
-      ["title": "操作", "rows": actions],
+      TiebaFormSection(title: "浏览", rows: browsing),
+      TiebaFormSection(title: "排序", rows: sortRows),
+      TiebaFormSection(title: "操作", rows: actions),
     ]
   }
 

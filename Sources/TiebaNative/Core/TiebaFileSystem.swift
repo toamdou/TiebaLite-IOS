@@ -37,13 +37,6 @@ enum TiebaFileSystem {
     return url
   }
 
-  /// 写文本（非原子，与 expo File.write 的 `write(to:atomically:false)` 一致）。
-  /// 目标父目录不存在时抛错——本仓调用点写的是缓存根，不存在才是异常。
-  static func writeText(contents: String, to uri: String) throws {
-    let url = try url(from: uri)
-    try contents.write(to: url, atomically: false, encoding: .utf8)
-  }
-
   /// 删除文件或目录（递归）。不存在即抛错（与 expo delete() 一致）：
   /// 调用方 deleteBestEffort 自己 catch "已删除"，静默是它的语义，不是这里的。
   static func delete(_ uri: String) throws {
@@ -52,24 +45,6 @@ enum TiebaFileSystem {
       throw TiebaFileSystemError(message: "path does not exist: \(uri)")
     }
     try FileManager.default.removeItem(at: url)
-  }
-
-  /// 清空目录内容、保留目录本身。
-  /// expo 的 `new Directory(Paths.cache).delete()` 是把 Caches 目录整个删掉；
-  /// 根目录被删后 iOS 不会主动重建，后续写入可能 ENOENT（部分写入方会自建、
-  /// 部分不会，等于把"目录是否存在"变成隐性契约）。可观察结果相同（空缓存
-  /// 目录），但不会把"下一次写入是否失败"留给运气。
-  static func clearDirectory(_ uri: String) throws {
-    let url = try url(from: uri)
-    let fm = FileManager.default
-    if fm.fileExists(atPath: url.path) {
-      for child in try fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil) {
-        try fm.removeItem(at: child)
-      }
-    }
-    if !fm.fileExists(atPath: url.path) {
-      try fm.createDirectory(at: url, withIntermediateDirectories: true)
-    }
   }
 
   /// 下载远程文件到目标路径（替 File.downloadFileAsync）。

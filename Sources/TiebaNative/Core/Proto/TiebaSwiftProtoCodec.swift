@@ -5,9 +5,9 @@ import SwiftProtobuf
 /// - wire 解码全部走 protoc 生成的强类型代码（tbclient 权威 schema，
 ///   src/services/api/protos_src），手写 wire 解码器与白名单投影器已删除——
 ///   "投影剥字段"（alaInfo/forumLoc）这类结构性 bug 不复存在。
-/// - int64/enum 输出保真：proto3 JSON 会把 int64 发成字符串、enum 发成名字，
-///   这里用 proto-descriptors.json 描述符做类型驱动归一化，输出与旧解码器
-///   逐形状一致（数字/枚举值），映射层零改动。
+/// - int64 输出保真：proto3 JSON 会把 int64 发成字符串，这里用
+///   proto-descriptors.json 描述符做类型驱动归一化，输出与旧解码器
+///   逐形状一致（数字），映射层零改动。（enum 归一化已随死分支删除，见下。）
 /// - 2026-09-13：encodeJSON/renameKeysIn（JSON → wire，含键名规整）删除——全仓
 ///   0 调用方，请求方向一律用生成类型直接构造。
 enum TiebaSwiftProto {
@@ -124,12 +124,8 @@ enum TiebaSwiftProto {
     if scalars.contains(field.type) {
       return value
     }
-    // enum：proto3 JSON 发值名（字符串）→ 按描述符枚举表转数值
-    if let s = value as? String,
-       let values = try? TiebaProtoRegistry.shared.resolveEnumValues(typeName: field.type, currentPath: containingPath),
-       let num = values[s] {
-      return NSNumber(value: num)
-    }
+    // enum 分支已删除：本仓 schema（proto-descriptors.json）无任何 enum 节点、
+    // 生成代码无 SwiftProtobuf.Enum → SwiftProtobuf JSON 永远不会输出枚举值名。
     // message：递归
     if let dict = value as? [String: Any],
        let msg = try? TiebaProtoRegistry.shared.resolveMessage(typeName: field.type, currentPath: containingPath) {

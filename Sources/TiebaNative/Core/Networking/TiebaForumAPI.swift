@@ -576,13 +576,7 @@ enum TiebaForumAPI {
   /// TiebaSocialAPI 的签名 JSON 通道复用同一份身份参数。
   /// 复用静态 formatter：commonRequest 每请求都调，新建 DateFormatter 的
   /// locale/calendar 解析是热路径上的纯浪费。
-  nonisolated(unsafe) private static let eventDayFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.dateFormat = "yyyyMdd"
-    return formatter
-  }()
+  nonisolated(unsafe) private static let eventDayFormatter: DateFormatter = TiebaDateFormats.fixed("yyyyMdd")
 
   static func eventDay() -> String {
     eventDayFormatter.string(from: Date())

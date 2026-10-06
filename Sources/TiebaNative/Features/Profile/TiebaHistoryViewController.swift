@@ -107,7 +107,11 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
   private func buildTopBar() {
     segmented.selectedSegmentIndex = activeTab == "forum" ? 1 : 0
     segmented.addTarget(self, action: #selector(handleSegmentChange), for: .valueChanged)
-    var config = UIButton.Configuration.gray()
+    // 液态玻璃（用户 2026-10-06 报「清除全部是灰的，要液态玻璃按钮」）：文案/位置/点击行为
+    // 一字不变，只把材质从 .gray()（灰底填充）换成系统 .glass() —— 本仓既有配方，
+    // 同款见 Features/Home/TiebaHomeViewController.swift 的搜索胶囊与两颗圆钮、
+    // UI/ListKit/TiebaKindListParts.swift 的「重试」；圆角档 .capsule 与前景色沿用原值。
+    var config = UIButton.Configuration.glass()
     config.title = "清除全部"
     config.image = UIImage(
       systemName: "trash",
@@ -123,6 +127,15 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
     clearButton.setContentHuggingPriority(.required, for: .horizontal)
     clearButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
+    // 顶栏高度必须**确定**：本页顶部栏与列表共享竖向空间（list.bottom 钉死 view 底），
+    // 而 list 的高度偏好来自与它四边同框的 stateView（UIContentUnavailableView 自带
+    // 内在高度，实测 87pt）与 skeletonView。顶栏此前只有 row 的内在高度（hugging 250）
+    // ⇒ 求解器选择"满足 stateView 的 750 优先级"：list 被挤成 87pt，顶栏吃掉其余
+    // 672pt（row 的 .center 把 picker 居中到屏幕正中，列表只剩底部一条 = 用户报的错位）。
+    // 把分段控件的高度升成硬值、row 直接等于它，顶栏高度即 required 确定值
+    //（口径同 TiebaForumSearchViewController 给 toolRow 定高 34）。
+    segmented.setContentHuggingPriority(.required, for: .vertical)
+
     let row = UIStackView(arrangedSubviews: [segmented, clearButton])
     row.axis = .horizontal
     row.spacing = 10
@@ -134,6 +147,9 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
       row.trailingAnchor.constraint(equalTo: topBar.trailingAnchor, constant: -16),
       row.topAnchor.constraint(equalTo: topBar.topAnchor, constant: 6),
       row.bottomAnchor.constraint(equalTo: topBar.bottomAnchor, constant: -6),
+      // = 分段控件自身高度（32）⇒ 顶栏 = 6 + 32 + 6 = 44，与设计值逐位相同；
+      // clearButton 高度（动态字号）仍由 .center 对齐自理，不参与这条链路。
+      row.heightAnchor.constraint(equalTo: segmented.heightAnchor),
     ])
   }
 
@@ -288,7 +304,7 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
       "showForumPill": !isForumRow,
       "hideActions": true,
       "imageContextMenu": !isForumRow,
-      // 原 TweetCard 未传 onMenuAction → 不渲染右上角 ×。
+      // 原 TweetCard 未传 onMenuAction → 不渲染右上角的更多钮。
       "closeMenuOptions": [] as [String],
     ]
     row.merge(TiebaFeedRowPreferences.current()) { _, new in new }
@@ -345,12 +361,20 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
         let page = try await TiebaThreadAPI.page(
           threadId: threadId, page: 1, postId: nil, seeLz: false, sort: .asc
         )
-        guard let thread = page.thread else { return }
+        // 服务端正常响应但数据里没有 thread（被屏蔽/审核中的帖）：**同样写 30 秒退避**。
+        // 改前这里直接 return，不留任何标记 —— 该行每次重新进入可视区间都重发一轮
+        // /c/f/pb/page 整帖首页请求（用户在其附近滚动几秒就是几十次全帖请求，零节流）；
+        // throw 路径本来就有退避，这里与它同待遇。
+        guard let thread = page.thread else {
+          backfillFailedAt[threadId] = Int(Date().timeIntervalSince1970 * 1000)
+          return
+        }
         let images = (page.posts.first?.images ?? []).map { image -> [String: Any] in
           [
             "type": "image", "src": image.src, "originSrc": image.originSrc,
-            "smallSrc": image.src, "width": image.width, "height": image.height,
-            "isGif": image.isGif,
+            // smallSrc = 动图档（big_cdn_src）——feed 行模型拿它做 GIF 探测/播放
+            // （见 TiebaRowMetrics.parseMedia 与 TiebaNuke「GIF 三档」注）。
+            "smallSrc": image.bigSrc, "width": image.width, "height": image.height,
           ]
         }
         backfillExtra[threadId] = ["mediaList": images, "forumAvatar": thread.forumAvatar]

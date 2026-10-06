@@ -106,6 +106,15 @@ public enum TiebaViewModelMapper {
     return v >= 100_000_000_000 ? v : v * 1000
   }
 
+  // MARK: - @提及段（PbContent.type == 4）
+
+  /// 服务端 type=4 段的 text **自带** "@" 前缀（线上实测：type=4 的 text = "@无字教科书："，
+  /// 与同协议客户端 protos/Extensions.kt 的「4 -> append(it.text)」同口径），
+  /// 客户端只在缺失时补一个 —— 两边都补就是「@@」。
+  static func atDisplayText(_ raw: String) -> String {
+    raw.hasPrefix("@") ? raw : "@" + raw
+  }
+
   // MARK: - 响应错误检查（helpers.ts:59 assertProtoSuccess + interceptors.ts getTiebaError）
 
   /// 与 TS assertProtoSuccess(decoded) 等价：非零 error_code / 非法 code 时抛错。
@@ -197,29 +206,16 @@ public enum TiebaViewModelMapper {
       if src.isEmpty { continue }
 
       let smallRaw = str(coalesce(m["srcPic"], m["src_pic"], ""))
-      let dynamicRaw = str(coalesce(m["dynamicPic"], m["dynamic_pic"], ""))
-      let originRaw = str(coalesce(m["originPic"], m["origin_pic"], ""))
-      let bigRaw = str(coalesce(m["bigPic"], m["big_pic"], ""))
-      let srcRaw = str(coalesce(m["src"], ""))
-      let isGif = hasGifSuffix("\(dynamicRaw) \(originRaw) \(bigRaw) \(srcRaw)")
-      // 动图链：第一个带 .gif 后缀的 URL（dynamicPic > originPic > bigPic > src）。
-      var gifChain = ""
-      if isGif {
-        for candidate in [dynamicRaw, originRaw, bigRaw, srcRaw] where hasGifSuffix(candidate) {
-          gifChain = candidate
-          break
-        }
-      }
 
       var out: [String: Any] = [:]
       out["type"] = isVideo ? "video" : "image"
       out["src"] = src
 
-      // originSrc: toHttpsImgUrl(String(gifChain || (…))) || undefined
-      let originCandidate = gifChain.isEmpty
-        ? str(coalesce(m["originPic"], m["origin_pic"], m["originSrc"], m["origin_src"], m["bigPic"], m["big_pic"], ""))
-        : gifChain
-      let originSrc = toHttpsImgUrl(originCandidate)
+      // originSrc: 原图档（查看原图/保存）。GIF 无元数据标记（判定/播放走
+      // TiebaNuke 的字节嗅探三档），这里不再做 .gif 后缀猜测链。
+      let originSrc = toHttpsImgUrl(str(coalesce(
+        m["originPic"], m["origin_pic"], m["originSrc"], m["origin_src"], m["bigPic"], m["big_pic"], ""
+      )))
       if !originSrc.isEmpty { out["originSrc"] = originSrc }
 
       // smallSrc: smallRaw && smallRaw !== String(m.bigPic ?? m.big_pic ?? '')
@@ -243,7 +239,6 @@ public enum TiebaViewModelMapper {
       out["height"] = jsNumberOrNull((height == 0 || height.isNaN) ? 300 : height)
       out["isLongPic"] = strictOne(coalesce(m["isLongPic"], m["is_long_pic"]))
       out["showOriginalBtn"] = strictOne(coalesce(m["showOriginalBtn"], m["show_original_btn"]))
-      out["isGif"] = isGif
       if let duration = m["duration"], !isNullish(duration) {
         out["duration"] = jsNumberOrNull(number(duration))
       }
@@ -256,18 +251,23 @@ public enum TiebaViewModelMapper {
 
   /// raw 单个 thread 对象 → UI ThreadInfo。语义逐行对齐 mapProtoThread，
   /// `forum`/`userList`/`forumName` 对应 TS opts。
+  /// prebuiltUserMap：批量映射（一页 N 条线程共享同一份 userList）时由调用方
+  /// 建一次传入——每线程重建同一张哈希表是 O(线程数×用户数) 的纯重复（90 线
+  /// 翻页 ≈ 4500 次无效字典插入）。
   public static func mapProtoThread(
     _ raw: Any?,
     forum: Any? = nil,
     userList: Any? = nil,
-    forumName: Any? = nil
+    forumName: Any? = nil,
+    prebuiltUserMap: [String: [String: Any]]? = nil
   ) -> [String: Any] {
     // if (!raw) return {};（0/''/false/null 同为 falsy）
     guard truthy(raw) else { return [:] }
     // 非对象 truthy 值在 JS 里属性读取全 undefined → 走默认值；dict 缺失时按空字典。
     let rd = dict(raw) ?? [:]
 
-    let userMap = buildUserMap(userList, keyOf: { u in coalesce(u["id"], u["uid"], u["user_id"]) })
+    let userMap = prebuiltUserMap
+      ?? buildUserMap(userList, keyOf: { u in coalesce(u["id"], u["uid"], u["user_id"]) })
     let authorId = str(coalesce(rd["authorId"], rd["author_id"], dict(rd["author"])?["id"], ""))
     // raw.author 可能是"存在但为空对象 {}"（proto3 解码产物）：有键才用内嵌。
     let rawAuthor = nonEmptyDict(rd["author"])
@@ -300,7 +300,11 @@ public enum TiebaViewModelMapper {
     var out: [String: Any] = [:]
     out["id"] = str(coalesce(rd["id"], rd["threadId"], rd["thread_id"], ""))
     out["isAd"] = isAdThread(rd)
-    out["threadId"] = str(coalesce(rd["threadId"], rd["thread_id"], rd["id"], ""))
+    // ⚠️ **不能拿 id 兜 threadId**：回复类推荐卡的 id(1) 是**回复 pid**、threadId(2) 才是帖子本体
+    //（见下面 postId 的注释）。原来的 coalesce 里带了 rd["id"]，于是"回复卡没有 threadId 字段"时
+    // threadId 被填成 pid → 点卡导航按 pid 请求帖子 → 服务端回"帖子不存在"→ 前端显示
+    // "帖子已被删除"（用户实证）。宁可留空（导航侧会拒绝），也不能填成**另一个对象的 id**。
+    out["threadId"] = str(coalesce(rd["threadId"], rd["thread_id"], ""))
     out["firstPostId"] = str(coalesce(rd["firstPostId"], rd["first_post_id"], ""))
     // 被推荐的那条回复（"回复了xxx"类卡片）：ThreadInfo.post_id(52) = 回复 pid。
     // 这类卡上 id(1) 不是帖子 id、threadId(2) 才是 —— 导航用 threadId + 这个 pid。
@@ -351,6 +355,8 @@ public enum TiebaViewModelMapper {
         "title": coalesce(od["title"], "")!,
         "content": coalesce(od["content"], "")!,
         "forumName": coalesce(od["fname"], od["forumName"], "")!,
+        // 原帖 thread id（proto tid）：引用卡点击跳原帖用；服务端不回就空串。
+        "threadId": coalesce(od["tid"], od["threadId"], od["thread_id"], "")!,
         "media": mapMediaList(originRaw),
       ] as [String: Any]
     }
@@ -363,8 +369,10 @@ public enum TiebaViewModelMapper {
   public static func mapFeedThreadItems(threadList: Any?, userList: Any?) -> [[String: Any]] {
     let list = (threadList as? [Any]) ?? []
     let users = (userList as? [Any]) ?? []
+    // 同一份 userList 建一次表，N 条线程共用（见 mapProtoThread 的 prebuiltUserMap）。
+    let userMap = buildUserMap(users, keyOf: { u in coalesce(u["id"], u["uid"], u["user_id"]) })
     return list.map { t in
-      ["type": "thread", "threadInfo": mapProtoThread(t, userList: users)] as [String: Any]
+      ["type": "thread", "threadInfo": mapProtoThread(t, userList: users, prebuiltUserMap: userMap)] as [String: Any]
     }
   }
 
@@ -467,10 +475,12 @@ public enum TiebaViewModelMapper {
     }
 
     // threads: mapProtoThread ×N + `!t.isAd` 过滤（ala_info 广告/直播剔除）。
+    // 同一份 userList 建一次表，N 条线程共用（见 mapProtoThread 的 prebuiltUserMap）。
     var threads: [[String: Any]] = []
     if let rawThreadList = dd["threadList"] as? [Any] {
+      let userMap = buildUserMap(userList, keyOf: { u in coalesce(u["id"], u["uid"], u["user_id"]) })
       for item in rawThreadList {
-        let t = mapProtoThread(item, forum: forumRaw, userList: userList, forumName: forumName)
+        let t = mapProtoThread(item, forum: forumRaw, userList: userList, forumName: forumName, prebuiltUserMap: userMap)
         if !truthy(t["isAd"]) { threads.append(t) }
       }
     }
@@ -721,20 +731,6 @@ public enum TiebaViewModelMapper {
     }
     if url.hasPrefix("//") { return "https://" + url.dropFirst(2) }
     return url
-  }
-
-  /// `/\.gif(?:\?|#|$)/i`。
-  static func hasGifSuffix(_ s: String) -> Bool {
-    let lower = s.lowercased()
-    var searchStart = lower.startIndex
-    while let range = lower.range(of: ".gif", range: searchStart..<lower.endIndex) {
-      let after = range.upperBound
-      if after == lower.endIndex { return true }
-      let ch = lower[after]
-      if ch == "?" || ch == "#" { return true }
-      searchStart = after
-    }
-    return false
   }
 
   // MARK: - 表情（constants/emoticons.ts）

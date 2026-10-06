@@ -11,15 +11,18 @@ import Foundation
 import UIKit
 
 extension TiebaChrome {
-  enum HapticsState {
-    /// 同控件去重：pop 转场期间 UIKit 会重放一次按压，连按也从两次降至一次。
-    nonisolated(unsafe) static var lastChromeControl: UIControl?
-    nonisolated(unsafe) static var lastChromeAt: TimeInterval = 0
-    /// 底栏选中的去重（viewController 版与 UITab 版回调可能各来一发，见
-    /// TiebaNavigationShell.handleTabSelection）。
-    nonisolated(unsafe) static var lastTabIndex = -1
-    nonisolated(unsafe) static var lastTabAt: TimeInterval = 0
+  /// 按压去重状态（同控件 0.8s 内只发一次触觉：pop 转场期间 UIKit 会重放一次按压，连按也从两次降至一次）。
+  ///
+  /// Q7-6：原来是 4 个 nonisolated(unsafe) static var，靠"都在主线程"的口头约定兜底。
+  /// 其中底栏那两个（lastTabIndex/lastTabAt）的消费者其实是壳层的 tab 控制器 —— 已收进
+  /// TiebaMainTabBarController 的实例字段（自己的状态放自己身上，顺带解掉"壳层反向依赖 chrome 内部枚举"）。
+  /// 剩下这两个收进 TiebaMutex<State>：非隔离方法里照样能读写，但不再需要 nonisolated(unsafe)。
+  struct PressDedupState {
+    var lastControl: UIControl?
+    var lastAt: TimeInterval = 0
   }
+
+  static let pressDedup = TiebaMutex(PressDedupState())
 
   /// 触觉总开关转发（启动与设置页的写入点）：真相源在 TiebaHaptics 引擎层
   ///（见 TiebaHaptics.isEnabled），chrome 文件不持有第二份 enabled。
@@ -74,9 +77,15 @@ extension TiebaChrome {
     // 振两次」：pop 转场期间 UIKit 向原按钮重放一次按压（约 150-400ms 后），
     // 第二次振动恰落在「返回上一级之后」（2026-08-27 真机复现）。
     let now = ProcessInfo.processInfo.systemUptime
-    if target === HapticsState.lastChromeControl, now - HapticsState.lastChromeAt < 0.8 { return }
-    HapticsState.lastChromeControl = target
-    HapticsState.lastChromeAt = now
+    let isDuplicate = TiebaChrome.pressDedup.withLock { state -> Bool in
+      if target === state.lastControl, now - state.lastAt < 0.8 {
+        return true
+      }
+      state.lastControl = target
+      state.lastAt = now
+      return false
+    }
+    if isDuplicate { return }
     TiebaSceneHaptics.fire("press")
   }
 

@@ -167,7 +167,8 @@ final class TiebaForumDetailViewController: UIViewController, TiebaNativeScreen 
       TiebaSceneHaptics.fire("press")
       // 原 handleOpenInBrowser = openLink(buildForumUrl(name))：贴吧吧链接命中
       // tryTiebaInApp，站内 push 到 /forum/<name>（不是开浏览器），保持一致。
-      let kw = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
+      // [采用] 单个参数值编码集，见 TiebaURLQueryValue。
+      let kw = name.addingPercentEncoding(withAllowedCharacters: .tiebaURLQueryValueAllowed) ?? name
       TiebaLinkOpener.open("https://tieba.baidu.com/f?kw=\(kw)")
     default:
       break
@@ -269,7 +270,7 @@ private final class TiebaForumSelectableCell: UITableViewCell {
   private let iconView = UIImageView()
   private let titleLabel = UILabel()
   private let textView = TiebaSelectableLabel(
-    font: .preferredFont(forTextStyle: .body), color: .label
+    font: TiebaSimpleText.uiFont(style: .body), color: .label
   )
 
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -280,7 +281,7 @@ private final class TiebaForumSelectableCell: UITableViewCell {
     iconView.setContentHuggingPriority(.required, for: .horizontal)
     iconView.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-    titleLabel.font = .preferredFont(forTextStyle: .body)
+    titleLabel.font = TiebaSimpleText.uiFont(style: .body)
     titleLabel.textColor = .secondaryLabel
     titleLabel.adjustsFontForContentSizeCategory = true
     titleLabel.setContentHuggingPriority(.required, for: .horizontal)
@@ -343,11 +344,11 @@ private final class TiebaForumProfileCell: UITableViewCell {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
     selectionStyle = .none
 
-    nameLabel.font = .systemFont(ofSize: 24, weight: .bold)
+    nameLabel.font = TiebaSimpleText.font(size: 24, weight: .bold)
     nameLabel.textColor = .label
     nameLabel.textAlignment = .center
     nameLabel.adjustsFontForContentSizeCategory = true
-    sloganLabel.font = .preferredFont(forTextStyle: .footnote)
+    sloganLabel.font = TiebaSimpleText.uiFont(style: .footnote)
     sloganLabel.textColor = .secondaryLabel
     sloganLabel.textAlignment = .center
     sloganLabel.numberOfLines = 2
@@ -356,7 +357,7 @@ private final class TiebaForumProfileCell: UITableViewCell {
     let chipIcon = UIImageView(image: UIImage(systemName: "checkmark.seal.fill"))
     chipIcon.contentMode = .scaleAspectFit
     let chipLabel = UILabel()
-    chipLabel.font = .preferredFont(forTextStyle: .caption1)
+    chipLabel.font = TiebaSimpleText.uiFont(style: .caption1)
     chipLabel.text = "已关注"
     chip.axis = .horizontal
     chip.alignment = .center
@@ -400,7 +401,8 @@ private final class TiebaForumProfileCell: UITableViewCell {
     sloganLabel.text = slogan
     sloganLabel.isHidden = slogan.isEmpty
     chipView.isHidden = !isLike
-    avatarView.configure(url: avatar, initial: name)
+    // [N6] 同 Members：吧头像字段也是裸 id（对齐吧页 TiebaForumViewController 的现成口径）。
+    avatarView.configure(url: TiebaSimpleRowParser.avatarURL(avatar)?.absoluteString ?? "", initial: name)
   }
 }
 
@@ -410,8 +412,8 @@ private final class TiebaForumStatsCell: UITableViewCell {
   static let reuseID = "TiebaForumStatsCell"
 
   private let statsRow = TiebaStatColumnsRow(
-    valueFont: .monospacedDigitSystemFont(ofSize: 21, weight: .bold),
-    labelFont: .preferredFont(forTextStyle: .caption1),
+    valueFont: TiebaSimpleText.font(size: 21, weight: .bold),
+    labelFont: TiebaSimpleText.uiFont(style: .caption1),
     separator: .fixed(height: 30)
   )
 

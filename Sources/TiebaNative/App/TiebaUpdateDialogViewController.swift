@@ -24,10 +24,7 @@ import UIKit
 final class TiebaUpdateDialogViewController: UIViewController {
   private let service = TiebaUpdateService.shared
 
-  // 卡片材质：iOS 26 走系统液态玻璃；17 退回经典超薄材质模糊（不重建玻璃观感）。
-  private let card = UIVisualEffectView(
-    effect: TiebaUpdateDialogViewController.makeCardEffect()
-  )
+  private let card = TiebaGlassContainerView.makeEffect()
   private let stack = UIStackView()
   private let titleLabel = UILabel()
   private let metaLabel = UILabel()
@@ -39,14 +36,13 @@ final class TiebaUpdateDialogViewController: UIViewController {
   private let closeButton = UIButton(type: .system)
 
   private var observerToken: UUID?
+  /// 弹窗是否已经出现过（错误反馈抖动只在屏上发生，不在呈现动画里抖）。
+  private var hasAppeared = false
+  /// 上一次刷到的状态（用来判断"刚变成失败"）。
+  private var lastStatus: TiebaUpdateStatus?
   private var cardWidthConstraint: NSLayoutConstraint?
   /// 便签区高度的"内容高度"约束（750）：内容短时按内容撑、超长时被卡片上限压回可滚。
   private var notesHeightConstraint: NSLayoutConstraint?
-
-  /// 卡片材质：iOS 26 液态玻璃；17 退回经典超薄材质模糊（最接近的旧观感）。
-  private static func makeCardEffect() -> UIVisualEffect {
-    if #available(iOS 26.0, *) { UIGlassEffect(style: .regular) } else { UIBlurEffect(style: .systemUltraThinMaterial) }
-  }
 
   init() {
     super.init(nibName: nil, bundle: nil)
@@ -63,6 +59,11 @@ final class TiebaUpdateDialogViewController: UIViewController {
     view.backgroundColor = UIColor.black.withAlphaComponent(0.35)
     setUpCard()
     reload()
+  }
+
+  override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    hasAppeared = true
   }
 
   override func viewWillAppear(_ animated: Bool) {
@@ -89,7 +90,7 @@ final class TiebaUpdateDialogViewController: UIViewController {
   // MARK: - 布局
 
   private func setUpCard() {
-    // 卡片材质：iOS 26 液态玻璃 / 17 超薄材质模糊（见 makeCardEffect；不手写不透明底/阴影）。
+    // 卡片材质：iOS 26 液态玻璃（部署目标即 26，恒可用；不手写不透明底/阴影）。
     card.layer.cornerRadius = 20
     card.layer.cornerCurve = .continuous
     card.clipsToBounds = true
@@ -239,6 +240,13 @@ final class TiebaUpdateDialogViewController: UIViewController {
     openReleaseButton.configuration?.background.backgroundColor = theme.tint
     closeButton.configuration?.baseForegroundColor = .label
     closeButton.configuration?.background.backgroundColor = theme.background
+
+    // 错误反馈抖动（UI/Drawing/TiebaShakeAnimation.swift）：只在「屏上由非失败变成失败」时抖一次。
+    // 打开时就已经失败不抖 —— 那时正在播呈现动画，抖了会打架；标题本身已写明"检查更新失败"。
+    if hasAppeared, status == .error, lastStatus != .error {
+      card.layer.addShakeAnimation(amplitude: 8.0, duration: 0.35, count: 4)
+    }
+    lastStatus = status
   }
 
   /// 原 UpdateDialog 的 title 计算（逐字）。
@@ -271,13 +279,7 @@ final class TiebaUpdateDialogViewController: UIViewController {
   // MARK: - 文本处理
 
   private static let releaseDateParser = ISO8601DateFormatter()
-  private static let releaseDateFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.dateFormat = "yyyy-MM-dd"
-    return formatter
-  }()
+  private static let releaseDateFormatter: DateFormatter = TiebaDateFormats.fixed("yyyy-MM-dd")
 
   /// 2026-09-01T14:13:52Z → 2026-09-01；不合规范回空串。
   static func formatDate(_ iso: String?) -> String {

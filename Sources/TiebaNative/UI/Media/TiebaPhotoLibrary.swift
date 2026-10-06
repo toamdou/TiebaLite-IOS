@@ -20,6 +20,7 @@
 // ============================================================
 import Foundation
 import Photos
+import UIKit
 
 enum TiebaPhotoLibrary {
   /// 写相册。completion 恒在主线程回调（调用方持有 UI 状态：保存胶囊/提示）。
@@ -69,5 +70,105 @@ enum TiebaPhotoLibrary {
         continuation.resume(with: result)
       }
     }
+  }
+}
+
+// ============================================================
+// 图片「保存到相册 / 分享」的**唯一入口**（H14：原先定义在 Core/Networking/TiebaFeedAPI.swift，
+// 与 UI/Media 的相册写入分居两处，看图器只能另写一套）。现在整条链路 —— 水印 → 相册 / 分享 —— 收在这里，
+// 与 TiebaPhotoLibrary 的底层写入、TiebaImageWatermark 的渲染、TiebaShareSheet 的面板同目录。
+// 调用方（6 个页面共 12 处）只认 TiebaFeedImageActions，换文件不改任何调用点。
+// ============================================================
+/// 信息流图片的「保存照片 / 分享照片」（原 JS PostImageContextMenu 的水印 + 相册 + 分享）。
+@MainActor
+enum TiebaFeedImageActions {
+  static func save(url: String, forumName: String?, presenter: UIViewController?) {
+    Task { @MainActor in
+      do {
+        let file = try await prepare(url: url, forumName: forumName)
+        try await TiebaPhotoLibrary.saveFile(uri: file.absoluteString)
+        TiebaSceneHaptics.fire("action-success")
+        showToast("保存成功", on: presenter)
+      } catch {
+        TiebaSceneHaptics.fire("action-fail")
+        showAlert(title: "保存失败", message: error.localizedDescription, on: presenter)
+      }
+    }
+  }
+
+  static func share(url: String, forumName: String?, presenter: UIViewController?, sourceRect: CGRect) {
+    Task { @MainActor in
+      do {
+        let file = try await prepare(url: url, forumName: forumName)
+        guard let presenter else { return }
+        TiebaShareSheet.present(
+          fileURL: file,
+          dialogTitle: watermarkText(forumName: forumName).isEmpty
+            ? "分享图片" : "分享图片 — \(watermarkText(forumName: forumName))",
+          from: presenter,
+          sourceRect: sourceRect
+        )
+      } catch {
+        TiebaSceneHaptics.fire("action-fail")
+        showAlert(title: "分享失败", message: error.localizedDescription, on: presenter)
+      }
+    }
+  }
+
+  /// 源图落到临时文件；有水印偏好时渲染水印（TiebaImageWatermark）。
+  private static func prepare(url: String, forumName: String?) async throws -> URL {
+    guard let target = URL(string: url) else { throw TiebaPhotoBrowserError.invalidImageData }
+    // 走 TiebaPhotoBrowser 暴露的 Nuke 取数入口：Referer 注入 + DataCache 与
+    // 查看器同一条管线；不要手写 URLSession（贴吧图床防盗链，且会分裂缓存）。
+    let data = try await TiebaPhotoBrowserImageLoader.data(target)
+    let temp = FileManager.default.temporaryDirectory
+      .appendingPathComponent("feed-image-\(UUID().uuidString).jpg")
+    try data.write(to: temp, options: .atomic)
+    let text = watermarkText(forumName: forumName)
+    guard !text.isEmpty else { return temp }
+    let output = try await TiebaImageWatermark.applyWatermark(sourceUri: temp.absoluteString, text: text)
+    guard let url = URL(string: output) else { return temp }
+    return url
+  }
+
+  /// 与 JS resolveWatermarkText 同判据：username = 当前账号昵称，forum_name = 吧名。
+  static func watermarkText(forumName: String?) -> String {
+    guard TiebaPreferenceSnapshot.bool("imageWatermarkEnabled", default: false) else { return "" }
+    switch TiebaPreferenceSnapshot.string("imageWatermark") ?? "none" {
+    case "username": return accountName()
+    case "forum_name": return forumName ?? ""
+    default: return ""
+    }
+  }
+
+  /// 账号昵称：冷启动档案缓存（AuthSecureStorage 的无凭据缓存，与 JS 同一份 KV）。
+  private static func accountName() -> String {
+    guard let raw = TiebaKvStore.shared.get(key: "@tiebalite:account_profile_cache_v1"),
+      let data = raw.data(using: .utf8),
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return "" }
+    return object["name"] as? String ?? object["nameShow"] as? String ?? ""
+  }
+
+  private static func showToast(_ text: String, on presenter: UIViewController?) {
+    guard let presenter else { return }
+    let pill = TiebaPhotoBrowserPillView()
+    presenter.view.addSubview(pill)
+    pill.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      pill.centerXAnchor.constraint(equalTo: presenter.view.centerXAnchor),
+      pill.bottomAnchor.constraint(
+        equalTo: presenter.view.safeAreaLayoutGuide.bottomAnchor,
+        constant: -24
+      ),
+    ])
+    pill.showResult(success: true, text: text)
+  }
+
+  private static func showAlert(title: String, message: String, on presenter: UIViewController?) {
+    guard let presenter, presenter.presentedViewController == nil else { return }
+    let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "好", style: .default))
+    presenter.present(alert, animated: true)
   }
 }

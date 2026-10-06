@@ -14,10 +14,35 @@ swift_library(
     linkopts = ["-lsqlite3"],
     module_name = "TiebaNative",
     deps = [
+        # GIF 播放已改为原生 ImageIO（UI/Media/TiebaGIFPlayer.swift），Gifu 依赖已删除（2026-10-05）。
         "//Vendor/Hero",
         "//Vendor/JXPhotoBrowser",
         "//Vendor/Nuke",
         "//Vendor/Nuke:NukeExtensions",
         "//Vendor/SwiftProtobuf",
+        # 上游 移植的 Vendor 依赖已**全部移除**（2026-10-05）。
+        # 依据：docs/uikit-migration/{17,18,19,20} 四份独立审计 + 逐对比。
+        #   ① 该接线 1.6%（且已接线）；② 重复 61.7%；③ 无用 36.7%。
+        #   ② 里"现有实现更好"是多数（ComponentFlow 拿不到液态玻璃、TextNode 的几何是手绘文本才需要、
+        #      ContainedViewLayoutTransition 对应的布局动画本仓从设计上就不做、HapticFeedback 弱于 TiebaHaptics…）；
+        #   强行替换会破坏 6 项现有能力（后台整页测量 / 系统选择 UI 与无障碍 / 位图管线 /
+        #   iOS 26 液态玻璃 / 逐像素几何 / 命中区语义）。
+        # 仍在用的三件已**移入第一方**并解散 早期 vendor 目录 目录，现直接放在 Core/：
+        #   TiebaMergeLists / TiebaMergeIdentifiable / TiebaPersistentStringHash。
+        # 被借鉴的少数做法已用本仓风格重写：Core/TiebaURLQueryValue、Core/TiebaAnimationFrameRate、
+        #   Core/TiebaColorContrast（见各自文件头的"借鉴自"注明）。
+        # 原 早期 vendored 的模块 三个模块已整目录删除，备份在 /tmp/removed_ports/（可从上游重新移植）。
+        #
+        # 2026-10-06 起改为「按 .swift 原生落地」：上游可移植件不再进 Vendor/，而是直接落到本模块的
+        # 原生目录里（与第一方代码同一 swift_library、同一 Swift 6 严格并发标准）：
+        #   Core/Tables/     A2 数据表（MIME / CLDR 复数 / NOAA 日出 / 转写 / 联系人 / 距离传感器）
+        #   Core/Binary/     A2 二进制（单调时钟 / MurmurHash / CRC32 / 摘要与 AES / PKCS#7 / GZip / YUV / 环形缓冲 …）
+        #   UI/Text/         文本坐标系（TiebaTextNodeLayout + 渲染器 + TiebaTextView + 链接高亮）
+        #   UI/Transition/   容器布局与转场（ContainedViewLayoutTransition + ControlledTransition + 9 种插值）
+        #   UI/Nodes/        tooltip / confetti / 指示器 / 数字滚动 / 导航条纹 / 在线点
+        #   UI/Drawing/      参数→位图绘制、三态按钮、波形、透明判定、几何与小手势件
+        #   UI/Context/      按压激活手势 / 绕内容中点缩放 / 玻璃气泡 / 菜单模型
+        # srcs 是 glob(["**/*.swift"])，新增目录无需改本文件。
+        # 落地记录：docs/uikit-migration/21-落地-*.md。
     ],
 )

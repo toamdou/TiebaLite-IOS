@@ -58,6 +58,9 @@ enum TiebaEntrance {
     group.beginTime = CACurrentMediaTime() + delay(forIndex: index)
     group.fillMode = .backwards
     group.timingFunction = TiebaEntranceTiming.easeOut
+    // 帧率对齐：本组带 translateY（有运动）⇒ 120Hz 档写 preferredFrameRateRange；
+    // 纯淡入由 API 自己拒（省电判据在 TiebaAnimationFrameRate.isPureFade）。
+    TiebaAnimationFrameRate.align(group, to: view)
     layer.add(group, forKey: animationKey)
   }
 

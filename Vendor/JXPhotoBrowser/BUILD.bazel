@@ -11,4 +11,5 @@ swift_library(
     srcs = glob(["Sources/**/*.swift"]),
     features = ["swift.enable_v6"],
     module_name = "JXPhotoBrowser",
+    # 本框架是纯图片浏览器：GIF 播放职责已整个摘到宿主（TiebaNative），不再依赖任何 GIF 库（2026-10-05）。
 )

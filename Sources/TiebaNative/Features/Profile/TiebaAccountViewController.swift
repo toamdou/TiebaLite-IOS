@@ -40,50 +40,59 @@ final class TiebaAccountViewController: UIViewController {
     form.sections = buildSections()
   }
 
-  private func buildSections() -> [[String: Any]] {
+  private func buildSections() -> [TiebaFormSection] {
     let loggedIn = TiebaSession.isLoggedIn
-    let accountRows: [[String: Any]] = accounts.map { account in
-      [
-        "id": account.uid,
-        "kind": "menu",
-        "title": account.displayName,
-        "subtitle": account.name.isEmpty ? "UID: \(account.uid)" : "@\(account.name)",
-        "selected": account.uid == currentUid,
-        "trailingColor": "#34C759",
-        "menuItems": [["id": "remove", "title": "移除账号", "icon": "trash", "destructive": true]],
-      ]
+    let accountRows = accounts.map { account in
+      TiebaFormRow(
+        id: account.uid,
+        kind: .menu,
+        title: account.displayName,
+        subtitle: account.name.isEmpty ? "UID: \(account.uid)" : "@\(account.name)",
+        selected: account.uid == currentUid,
+        menuItems: [TiebaFormMenuItem(id: "remove", title: "移除账号", icon: "trash", destructive: true)],
+        trailingColor: TiebaFormColor.resolve("#34C759")
+      )
     }
-    var sections: [[String: Any]] = [
-      [
-        "title": "已登录账号",
-        "rows": accounts.isEmpty
-          ? [[
-              "id": "emptyAccounts", "kind": "empty",
-              "icon": "person.crop.circle.badge.questionmark",
-              "title": "暂无账号", "subtitle": "登录后将显示在这里",
-            ]]
-          : accountRows,
-      ]
+    var sections = [
+      TiebaFormSection(
+        title: "已登录账号",
+        rows: accounts.isEmpty
+          ? [TiebaFormRow(
+            id: "emptyAccounts",
+            kind: .empty,
+            title: "暂无账号",
+            subtitle: "登录后将显示在这里",
+            icon: "person.crop.circle.badge.questionmark"
+          )]
+          : accountRows
+      )
     ]
     if loggedIn {
-      sections.append([
-        "rows": [[
-          "id": "editProfile", "kind": "button", "title": "编辑个人资料",
-          "icon": "person.crop.circle.badge.checkmark",
-        ]]
-      ])
+      sections.append(TiebaFormSection(
+        rows: [TiebaFormRow(
+          id: "editProfile",
+          kind: .button,
+          title: "编辑个人资料",
+          icon: "person.crop.circle.badge.checkmark"
+        )]
+      ))
     }
-    sections.append([
-      "rows": [["id": "addAccount", "kind": "button", "title": "添加账号", "icon": "person.badge.plus"]]
-    ])
+    sections.append(TiebaFormSection(
+      rows: [TiebaFormRow(id: "addAccount", kind: .button, title: "添加账号", icon: "person.badge.plus")]
+    ))
     if loggedIn {
-      sections.append([
-        "rows": [[
-          "id": "logout", "kind": "confirm", "title": "退出登录",
-          "icon": "rectangle.portrait.and.arrow.right", "destructive": true,
-          "confirmTitle": "退出登录", "confirmMessage": "确定要退出当前账号吗？", "confirmLabel": "退出",
-        ]]
-      ])
+      sections.append(TiebaFormSection(
+        rows: [TiebaFormRow(
+          id: "logout",
+          kind: .confirm,
+          title: "退出登录",
+          icon: "rectangle.portrait.and.arrow.right",
+          destructive: true,
+          confirmTitle: "退出登录",
+          confirmMessage: "确定要退出当前账号吗？",
+          confirmLabel: "退出"
+        )]
+      ))
     }
     return sections
   }

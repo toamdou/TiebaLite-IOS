@@ -36,7 +36,8 @@ final class TiebaForumMembersViewController: UIViewController {
   private let forumName: String
   private let forumId: String
 
-  private let segmented = UISegmentedControl(items: ["成员", "等级排行"])
+  /// 分段 = TiebaTabSelector（选中/未选中两份文本交叉淡化 + 指示器连续插值，见 UI/Components）。
+  private let segmented = TiebaTabSelector(items: ["成员", "等级排行"])
   private let stateView = UIContentUnavailableView(configuration: .loading())
   /// 首屏骨架：成员段 = card count 6、排行段 = row count 8（原 members.tsx 同判据）
   private let skeletonView = TiebaSkeletonList(variant: .card, count: 6)
@@ -74,9 +75,9 @@ final class TiebaForumMembersViewController: UIViewController {
     // = 旧 colors.background（浅 #F2F2F7 / 深 #000）；卡片用 palette.card 才对比得出来
     view.backgroundColor = .systemGroupedBackground
 
-    segmented.selectedSegmentIndex = Segment.members.rawValue
+    segmented.select(Segment.members.rawValue, animated: false)
     segmented.translatesAutoresizingMaskIntoConstraints = false
-    segmented.addTarget(self, action: #selector(segmentChanged), for: .valueChanged)
+    segmented.onSelect = { [weak self] _ in self?.segmentChanged() }
 
     collectionView.translatesAutoresizingMaskIntoConstraints = false
     collectionView.backgroundColor = .clear
@@ -90,6 +91,12 @@ final class TiebaForumMembersViewController: UIViewController {
 
     stateView.translatesAutoresizingMaskIntoConstraints = false
     skeletonView.isHidden = true
+    // [修复] 分段栏的竖向尺寸必须是「硬要求」：它此前只靠内在高度（hugging/压缩阻力都是软优先级），
+    // 而 stateView（UIContentUnavailableView 自带 ~87pt 内在高度、优先 750）与 collectionView 四边同框，
+    // 求解器可能把高度让给分段栏、把列表压到只剩内在高度（与「浏览记录」页同一类挤压，那页实测 picker 被顶到屏幕正中）。
+    // 钉死竖向 hugging/压缩阻力后，分段栏 = 内在高度、列表拿走其余全部，挤压在约束层面不可能发生。
+    segmented.setContentHuggingPriority(.required, for: .vertical)
+    segmented.setContentCompressionResistancePriority(.required, for: .vertical)
     view.addSubview(segmented)
     view.addSubview(collectionView)
     view.addSubview(stateView)
@@ -621,15 +628,15 @@ final class MemberCardCell: UICollectionViewCell {
     card.backgroundColor = TiebaSimpleRowPalette.default.groupFill
     contentView.addSubview(card)
 
-    badge.font = .systemFont(ofSize: 12, weight: .bold)
+    badge.font = TiebaSimpleText.font(size: 12, weight: .bold)
     badge.layer.cornerRadius = 8
     badge.layer.masksToBounds = true
     badge.setContentHuggingPriority(.required, for: .horizontal)
 
-    titleLabel.font = .preferredFont(forTextStyle: .subheadline)
+    titleLabel.font = TiebaSimpleText.uiFont(style: .subheadline)
     titleLabel.adjustsFontForContentSizeCategory = true
     titleLabel.textColor = .label
-    subtitleLabel.font = .preferredFont(forTextStyle: .caption1)
+    subtitleLabel.font = TiebaSimpleText.uiFont(style: .caption1)
     subtitleLabel.adjustsFontForContentSizeCategory = true
     subtitleLabel.textColor = .tertiaryLabel
 
@@ -706,16 +713,16 @@ final class MemberGridCell: UICollectionViewCell {
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    nameLabel.font = .preferredFont(forTextStyle: .footnote)
+    nameLabel.font = TiebaSimpleText.uiFont(style: .footnote)
     nameLabel.adjustsFontForContentSizeCategory = true
     nameLabel.textColor = .label
     nameLabel.textAlignment = .center
     nameLabel.numberOfLines = 1
-    levelNameLabel.font = .preferredFont(forTextStyle: .caption2)
+    levelNameLabel.font = TiebaSimpleText.uiFont(style: .caption2)
     levelNameLabel.textColor = .tertiaryLabel
     levelNameLabel.textAlignment = .center
     levelNameLabel.numberOfLines = 1
-    levelBadge.font = .systemFont(ofSize: 10, weight: .bold)
+    levelBadge.font = TiebaSimpleText.font(size: 10, weight: .bold)
     levelBadge.layer.cornerRadius = 8
     levelBadge.layer.masksToBounds = true
 
@@ -740,7 +747,9 @@ final class MemberGridCell: UICollectionViewCell {
 
   func configure(member: TiebaForumAPI.TiebaForumMembers.Member) {
     let displayName = member.displayName
-    avatar.configure(url: member.portrait, initial: displayName)
+    // [N6] proto portrait 是裸 id（非 http）：直塞 URL(string:) 得到的是无 scheme 的相对 URL，
+    // 请求必然 NSURLErrorUnsupportedURL → 首字占位永远不消失。走全仓同一归一化口径（对完整 URL 幂等）。
+    avatar.configure(url: TiebaSimpleRowParser.avatarURL(member.portrait)?.absoluteString ?? "", initial: displayName)
     nameLabel.text = displayName
     let hasLevel = member.userLevel > 0
     levelBadge.isHidden = !hasLevel
@@ -782,15 +791,15 @@ final class RankRowCell: UICollectionViewCell {
     card.backgroundColor = TiebaSimpleRowPalette.default.base.card
     contentView.addSubview(card)
 
-    rankLabel.font = .systemFont(ofSize: 17, weight: .heavy)
+    rankLabel.font = TiebaSimpleText.font(size: 17, weight: .heavy)
     rankLabel.textAlignment = .center
     rankLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-    nameLabel.font = .preferredFont(forTextStyle: .subheadline)
+    nameLabel.font = TiebaSimpleText.uiFont(style: .subheadline)
     nameLabel.adjustsFontForContentSizeCategory = true
     nameLabel.textColor = .label
     nameLabel.lineBreakMode = .byTruncatingTail
-    subtitleLabel.font = .preferredFont(forTextStyle: .caption1)
+    subtitleLabel.font = TiebaSimpleText.uiFont(style: .caption1)
     subtitleLabel.adjustsFontForContentSizeCategory = true
     subtitleLabel.textColor = .tertiaryLabel
 
@@ -801,7 +810,7 @@ final class RankRowCell: UICollectionViewCell {
     crownView.tintColor = .systemOrange
     crownView.setContentHuggingPriority(.required, for: .horizontal)
 
-    levelBadge.font = .systemFont(ofSize: 11, weight: .bold)
+    levelBadge.font = TiebaSimpleText.font(size: 11, weight: .bold)
     levelBadge.layer.cornerRadius = 8
     levelBadge.layer.masksToBounds = true
 
@@ -834,7 +843,9 @@ final class RankRowCell: UICollectionViewCell {
       card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
       card.topAnchor.constraint(equalTo: contentView.topAnchor),
       card.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-      rankLabel.widthAnchor.constraint(equalToConstant: 26),
+      // ≥26：17pt heavy 的三位数（「100」）约 29pt，定宽会被截成「1…」；
+      // 排行最多 200 名，放到 stack 里按内容自然放宽。
+      rankLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 26),
       levelBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 48),
       placeholderSlot.widthAnchor.constraint(greaterThanOrEqualToConstant: 48),
       row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
@@ -881,9 +892,9 @@ final class MemberGroupHeaderView: UICollectionReusableView {
     super.init(frame: frame)
     dot.layer.cornerRadius = 2
     dot.translatesAutoresizingMaskIntoConstraints = false
-    titleLabel.font = .systemFont(ofSize: 15, weight: .bold)
+    titleLabel.font = TiebaSimpleText.font(size: 15, weight: .bold)
     titleLabel.textColor = .label
-    countChip.font = .systemFont(ofSize: 11, weight: .bold)
+    countChip.font = TiebaSimpleText.font(size: 11, weight: .bold)
     countChip.textColor = .tertiaryLabel
     countChip.backgroundColor = TiebaSimpleRowPalette.default.surfaceSecondary
     countChip.layer.cornerRadius = 8

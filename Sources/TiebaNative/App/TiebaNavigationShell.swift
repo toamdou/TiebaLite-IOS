@@ -18,9 +18,9 @@ import UIKit
 // 常规交互。外层容器栈恒定只有一个 VC，仅为保住 statusBarStyle 链路与顶栏扫描。
 
 /// 主题与状态栏配置：跟随应用内主题，而非系统外观。
-/// @unchecked Sendable：UIColor 事实上不可变；这个标记只是让"主线程 hop 里读
-/// 主题"在 Swift 6 下不被拦。
-public struct TiebaChromeTheme: @unchecked Sendable {
+/// Sendable：四个字段全是值类型（UIColor 在 iOS 26 SDK 里本身就是 Sendable），
+/// 所以这里不需要 @unchecked Sendable —— 真 Sendable 就够跨隔离域传主题。
+public struct TiebaChromeTheme: Sendable {
   /// 底栏选中态 / 强调色（原 colors.primary）
   public var tint: UIColor
   /// 导航栏返回箭头与按钮色（原 headerTint：默认 colors.text，可被"工具栏
@@ -67,7 +67,14 @@ public final class TiebaRootNavigationController: UINavigationController {
 
 extension TiebaRootNavigationController: UIGestureRecognizerDelegate {
   public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-    viewControllers.count > 1
+    guard viewControllers.count > 1 else { return false }
+    // [移植 P0] 命中点落在横向手势容器（段页/图集/横滑带）上时让位给横滑。
+    // 移植自上游 Display/Source/InteractiveTransitionGestureRecognizer.swift:10-39
+    // 的 hasHorizontalGestures 命中链探测，见 TiebaInteractivePopGuard.swift。
+    // 注意：这里只加准入判断，**不替换系统手势**（替换会丢 iOS 26 转场联动）。
+    guard let host = gestureRecognizer.view else { return true }
+    let point = gestureRecognizer.location(in: host)
+    return !TiebaInteractivePopGuard.shouldBlockInteractivePop(at: point, in: host)
   }
 }
 
@@ -79,9 +86,15 @@ extension TiebaRootNavigationController: UIGestureRecognizerDelegate {
 /// TiebaChrome.setChromeDarkMode），本控制器不再自己写。
 public final class TiebaMainTabBarController: UITabBarController {
   /// 已选中 tab 被再次点击时回调（原生直接受理 tabReselected）。
-  var onReselect: ((Int) -> Void)?
+  /// 标 @MainActor：回调体要访问宿主/页面的 @MainActor 状态（TiebaNavigator.install 里那段），
+  /// 声明成主 actor 闭包后调用方无需 MainActor.assumeIsolated。
+  var onReselect: (@MainActor (Int) -> Void)?
 
   private var theme: TiebaChromeTheme = .default
+
+  /// 底栏选中的去重（viewController 版与 UITab 版回调可能各来一发，同一 index 50ms 内只处理一次）。见 Q7-6。
+  private var lastTabSelectionIndex = -1
+  private var lastTabSelectionAt: TimeInterval = 0
 
   public override func viewDidLoad() {
     super.viewDidLoad()
@@ -122,9 +135,6 @@ public final class TiebaMainTabBarController: UITabBarController {
   /// （折叠按钮与快捷手势由系统提供，本仓不自造一套）。**底栏保留**：侧边栏
   /// 收起时它就是常规底栏，展开时两者是同一组 tab 的两种呈现，选中态由系统同步。
   func configureSidebar() {
-    // iOS 17 没有 tabs 模型、没有 mode、没有侧边栏：底栏就是系统默认形态，
-    // 这里什么都不用配（iPad 在 17 上也是底栏，与手机同形）。
-    guard #available(iOS 18.0, *) else { return }
     let regular = traitCollection.userInterfaceIdiom == .pad
       && traitCollection.horizontalSizeClass == .regular
     // 只在真要换形态时写 mode：赋值会重建 tab 模型，把侧边栏里刚拖好的顺序
@@ -132,13 +142,17 @@ public final class TiebaMainTabBarController: UITabBarController {
     // "编辑保存后顺序不变"的原因。
     let wanted: UITabBarController.Mode = regular ? .tabSidebar : .tabBar
     if mode != wanted { mode = wanted }
-    // 下滑收纳属于底栏：iPad 侧边栏形态下没有这回事，交给系统。
-    // iOS 26 之前没有这个能力，17 上该开关不生效（底栏常驻）。
-    if #available(iOS 26.0, *) {
-      tabBarMinimizeBehavior = regular
-        ? .automatic
-        : (tabBarMinimizeEnabled ? .onScrollDown : .never)
-    }
+    // 收纳方向：**上滑（手指向上 = 继续往下读）时收起、下滑恢复**。属于底栏；
+    // iPad 侧边栏形态下没有这回事，交给系统。
+    //
+    // 为什么用 .onScrollUp 而不是 .onScrollDown（2026-10-07 用户复报「浏览内容时
+    // 底栏持续存在」）：系统枚举名的语义是**手指拖动方向**，.onScrollDown = 手指
+    // 下滑时收纳 —— 于是读长帖（手指持续上滑）时底栏一直挂着，正好反了。头文件里
+    // .onScrollUp 的说明是 minimizes when scrolling up, and expands when scrolling
+    // back down，与「读内容时收起、往回翻时恢复」一致。
+    tabBarMinimizeBehavior = regular
+      ? .automatic
+      : (tabBarMinimizeEnabled ? .onScrollUp : .never)
     guard regular else { return }
     // 只落一次默认展开。之后 sidebar.isHidden 归用户（系统折叠按钮）与
     // TiebaNavigator 的进二级页收起管——这里再写会把用户的折叠顶回去。
@@ -158,8 +172,10 @@ public final class TiebaMainTabBarController: UITabBarController {
     with coordinator: UIViewControllerTransitionCoordinator
   ) {
     super.viewWillTransition(to: size, with: coordinator)
+    // coordinator 的 completion 本来就在主 actor 上回调，直接调即可
+    // （原来套了一层 MainActor.assumeIsolated，属多余的绕过标注）。
     coordinator.animate { _ in } completion: { [weak self] _ in
-      MainActor.assumeIsolated { self?.configureSidebar() }
+      self?.configureSidebar()
     }
   }
 
@@ -168,8 +184,8 @@ public final class TiebaMainTabBarController: UITabBarController {
     didSet {
       guard oldValue != tabBarMinimizeEnabled else { return }
       guard traitCollection.horizontalSizeClass != .regular else { return }
-      guard #available(iOS 26.0, *) else { return }
-      tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
+      // 方向同 configureSidebar：上滑收纳、下滑恢复（见那里的注释）。
+      tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollUp : .never
     }
   }
 }
@@ -187,7 +203,6 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
     return true
   }
 
-  @available(iOS 18.0, *)
   public func tabBarController(
     _ tabBarController: UITabBarController,
     shouldSelectTab tab: UITab
@@ -199,7 +214,6 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
   /// 侧边栏编辑保存后落盘：顺序的唯一权威是根分组的实际排列（displayOrder 是
   /// 排好序的完整列表；displayOrderIdentifiers 只是输入侧的自定义记录，可能为空）。
   /// 冷启动由 TiebaNavigator.orderedForDisplay 读回归位。
-  @available(iOS 18.0, *)
   public func tabBarController(
     _ tabBarController: UITabBarController,
     displayOrderDidChangeFor group: UITabGroup
@@ -215,41 +229,24 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
   /// ⚠️ 序号按**标识**取（标识就是路由表里的 tab 名），不按屏幕上的位置：侧边栏
   /// 编辑保存后视觉顺序会变，而路由表索引（tabIndex / 角标 / 重按回调）必须恒定，
   /// 否则"消息"会被当成别的 tab。
-  @available(iOS 18.0, *)
   private func index(of tab: UITab) -> Int {
     TiebaRouteTable.tabNames.firstIndex(of: tab.identifier) ?? -1
   }
 
   /// 回调给的是 tab 承载的 VC——本仓每个 tab 挂一条自己的导航栈，
-  /// 所以要沿 parent 链上溯到那个栈，再按**标识**取路由索引。
+  /// 所以要沿 parent 链上溯到那个栈。
   private func index(of viewController: UIViewController) -> Int {
     var cursor: UIViewController? = viewController
     while let current = cursor {
-      if let name = tabIdentifier(of: current),
-        let index = TiebaRouteTable.tabNames.firstIndex(of: name)
-      {
-        return index
+      if let tab = flatten(tabs).first(where: { ($0.viewController as? UIViewController) === current }) {
+        return index(of: tab)
       }
       cursor = current.parent
     }
     return -1
   }
 
-  /// 承载该 VC 的底栏项的标识（= 路由表里的 tab 名）。iOS 18 取自 UITab；
-  /// 17 取自底栏项上的 accessibilityIdentifier（顺序被保存的顺序重排过，
-  /// 只有标识能可靠回归，位置不行）。
-  private func tabIdentifier(of viewController: UIViewController) -> String? {
-    if #available(iOS 18.0, *) {
-      return flatten(tabs).first {
-        ($0.viewController as? UIViewController) === viewController
-      }?.identifier
-    }
-    return viewControllers?.first { $0 === viewController }?
-      .tabBarItem.accessibilityIdentifier
-  }
-
   /// 展开根分组：屏幕上的 tab 项来自子 tab，序号以扁平顺序为准。
-  @available(iOS 18.0, *)
   private func flatten(_ list: [UITab]) -> [UITab] {
     list.flatMap { ($0 as? UITabGroup)?.children ?? [$0] }
   }
@@ -259,11 +256,13 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
   private func handleTabSelection(_ index: Int) {
     guard index >= 0 else { return }
     let now = ProcessInfo.processInfo.systemUptime
-    let state = TiebaChrome.HapticsState.self
-    if index == state.lastTabIndex, now - state.lastTabAt < 0.05 { return }
-    state.lastTabIndex = index
-    state.lastTabAt = now
-    if index == indexOfSelected {
+    // Q7-6：去重时间戳是本控制器自己的状态，收成实例字段（原来放在 chrome 的
+    // nonisolated(unsafe) static 里，靠"都在主线程"兜底，壳层还因此反向依赖 chrome 内部枚举）。
+    if index == lastTabSelectionIndex, now - lastTabSelectionAt < 0.05 { return }
+    lastTabSelectionIndex = index
+    lastTabSelectionAt = now
+    let selected = selectedTab == nil ? -1 : indexOfSelected
+    if index == selected {
       // 重按已选中 tab（回顶/刷新由各 tab 根屏的 tabReselected 受理），档位
       // 对齐原 JS handleTabReselect 的 'press'。
       TiebaSceneHaptics.fire("press")
@@ -275,49 +274,9 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
     }
   }
 
-  private var indexOfSelected: Int { selectedRouteIndex }
-
-  /// 当前选中 tab 的**路由索引**（与屏幕位置无关）。iOS 18 走 UITab 标识；
-  /// 17 走底栏项上的标识，取不到才回落位置。
-  var selectedRouteIndex: Int {
-    if #available(iOS 18.0, *) {
-      guard let sel = selectedTab else { return -1 }
-      return index(of: sel)
-    }
-    guard let vc = selectedViewController else { return -1 }
-    guard let name = vc.tabBarItem.accessibilityIdentifier,
-      let index = TiebaRouteTable.tabNames.firstIndex(of: name)
-    else { return selectedIndex }
-    return index
-  }
-
-  /// 程序化切 tab（深链 / 切 tab 路由）：按标识定位，不按屏幕位置。
-  func selectRoute(_ routeIndex: Int) {
-    guard routeIndex >= 0, routeIndex < TiebaRouteTable.tabNames.count else { return }
-    let name = TiebaRouteTable.tabNames[routeIndex]
-    if #available(iOS 18.0, *) {
-      if let tab = tabs.first(where: { $0.identifier == name }) { selectedTab = tab }
-    } else {
-      let position = viewControllers?.firstIndex {
-        $0.tabBarItem.accessibilityIdentifier == name
-      }
-      selectedIndex = position ?? routeIndex
-    }
-  }
-
-  /// 写底栏角标（按路由索引）。⚠️ 只写 tab 项自己的 badgeValue，不碰
-  /// bar 级 appearance：任何 appearance 写入都会让 UIKit 退出自动 Liquid Glass
-  /// 渲染管线，底栏退化成旧磨砂（v34 起的既有结论）。
-  func setBadge(_ text: String?, routeIndex: Int) {
-    guard routeIndex >= 0, routeIndex < TiebaRouteTable.tabNames.count else { return }
-    let name = TiebaRouteTable.tabNames[routeIndex]
-    if #available(iOS 18.0, *) {
-      tabs.first { $0.identifier == name }?.badgeValue = text
-    } else {
-      viewControllers?.first {
-        $0.tabBarItem.accessibilityIdentifier == name
-      }?.tabBarItem.badgeValue = text
-    }
+  private var indexOfSelected: Int {
+    guard let sel = selectedTab else { return -1 }
+    return index(of: sel)
   }
 
   /// 在视图树里找"主滚动视图"，返回面积最大的那个。
@@ -450,8 +409,24 @@ public final class TiebaRouteHostViewController: UIViewController {
   }
 
   /// 供底栏/顶栏找滚动视图用。
+  ///
+  /// 解析缓存：viewDidLayoutSubviews 每布局趟都会进 sync，此前每趟一次全树
+  /// DFS（primaryScrollView 取面积最大、无法早退；转场期逐帧布局＝每帧一趟，
+  /// 重页面单棵树数百上千节点，一次转场合计数万次节点访问，纯浪费在重复解析
+  /// 同一个结果）。重解析只在三件事发生时：从未解析过、缓存实例已离开窗口
+  /// （页面被拆/换容器）、或结构纪元前进了（页面级滚动视图挂载/栏结构变化推
+  /// 纪元，见 TiebaChrome.markChromeDirty）。
   func scrollViewForSystem() -> UIScrollView? {
-    view.primaryScrollView()
+    if let cached = cachedPrimaryScrollView,
+      cached.window != nil,
+      resolvedEpoch == TiebaChrome.structuralEpoch
+    {
+      return cached
+    }
+    let resolved = view.primaryScrollView()
+    cachedPrimaryScrollView = resolved
+    resolvedEpoch = TiebaChrome.structuralEpoch
+    return resolved
   }
 
   /// 把本屏的主滚动视图交给系统跟踪（栏边缘模糊 + 底栏收纳都靠这个关联）。
@@ -500,6 +475,9 @@ public final class TiebaRouteHostViewController: UIViewController {
   }
 
   private weak var trackedContentScrollView: UIScrollView?
+  /// 主滚动视图解析缓存（见 scrollViewForSystem）。
+  private weak var cachedPrimaryScrollView: UIScrollView?
+  private var resolvedEpoch = -1
 
   public override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()

@@ -164,7 +164,10 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     } else {
       showList()
       list.footerState = subPosts.isEmpty ? .empty : (hasMore ? .more : .none)
-      publish(fresh: true)
+      // ⚠️ 只有整页替换才换页键（与帖子页 H1 同一处病）：loadMore 是追加，
+      // 换键会让快照里所有 (pageKey#index) 标识失效 → 列表走 applySnapshotUsingReloadData
+      // 整页重绑（可见楼中楼 cell 全部回收重建）。同页键 + 行数变化走 diff 追加 + 可见行重配。
+      publish(fresh: replacing)
     }
   }
 
@@ -206,7 +209,9 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     let hideBlocked = TiebaPreferenceSnapshot.bool("hideBlockedContent", default: false)
 
     Task { @MainActor in
-      let box = await Task.detached(priority: .userInitiated) { () -> (models: [TiebaPostRowModel], posts: [TiebaThreadPost]) in
+      // 离屏时降档（同 Thread 页 / TiebaRowPageDriver 的判据）：看不见的页不与滚动抢 CPU。
+      let measurementPriority: TaskPriority = view.window == nil ? .utility : .userInitiated
+      let box = await Task.detached(priority: measurementPriority) { () -> (models: [TiebaPostRowModel], posts: [TiebaThreadPost]) in
         var models: [TiebaPostRowModel] = []
         var kept: [TiebaThreadPost] = []
         for post in source {
@@ -285,6 +290,27 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
 
   // MARK: - 动作
 
+  /// 单行重发（点赞用）：只重建这一行的模型并替换页内那一条，**不整页 publish**。
+  /// 改前点赞走 publish(fresh: false)：整页行会被重新测量一遍（几十行 TextKit），
+  /// 而这次改动只有红心与计数两个字段。与帖子页 republishRow 同一通道。
+  private func republishRow(postId: String) {
+    guard let index = sourcePosts.firstIndex(where: { $0.id == postId }),
+      let current = TiebaPostRowMetrics.shared.row(pageKey: pageKey, index: index),
+      let updated = sourcePosts.first(where: { $0.id == postId })
+    else { return }
+    let key = pageKey
+    Task { @MainActor in
+      // [替换语义] init(replacing:post:) 沿用旧模型的身份/宽度/偏好，只换 post —— 正文没变的
+      // 情况仍然会重跑一次文本派生（见 37 号报告 R5-1：那是更大的 B 类改动，未动）。
+      let model = await Task.detached(priority: .userInitiated) {
+        TiebaPostRowModel(replacing: current, post: updated)
+      }.value
+      guard self.pageKey == key else { return }
+      TiebaPostRowMetrics.shared.replace(pageKey: key, index: index, model: model)
+      self.list.setPage(pageKey: key)
+    }
+  }
+
   /// 点赞：乐观翻转 + 失败回滚（旧页 agreeInFlightRef 的在途守卫同义）。
   private func toggleAgree(_ post: TiebaThreadPost, objType: Int) {
     guard requireLogin(), runOnce("agree:\(post.id)") else { return }
@@ -293,7 +319,7 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
       $0.isAgree = next
       $0.agreeNum = max(0, $0.agreeNum + (next ? 1 : -1))
     }
-    publish(fresh: false)
+    republishRow(postId: post.id)
     Task { @MainActor in
       defer { finishOnce("agree:\(post.id)") }
       do {
@@ -307,12 +333,14 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
         pill.showResult(success: true, text: next ? "点赞成功" : "已取消点赞")
       } catch {
         // 回滚仅当当前态仍等于本次乐观写入（期间的刷新/其它路径改写过就跳过）。
-        if let current = subPosts.first(where: { $0.id == post.id }), current.isAgree == next {
+        // 查询必须与 patchPost 对称：父楼（第 0 行）被写进 floorPost、不在 subPosts 里，
+        // 只查 subPosts 会让父楼的失败回滚整段跳过（红心与虚高计数永久停在乐观态）。
+        if let current = sourcePosts.first(where: { $0.id == post.id }), current.isAgree == next {
           patchPost(post.id) {
             $0.isAgree = !next
             $0.agreeNum = max(0, $0.agreeNum + (next ? -1 : 1))
           }
-          publish(fresh: false)
+          republishRow(postId: post.id)
         }
         TiebaSceneHaptics.fire("action-fail")
         pill.showResult(success: false, text: "点赞失败，请稍后重试")
