@@ -172,7 +172,7 @@ enum TiebaMessageAPI {
       "threadSize": 12,
       "threadWeight": 400,
       "threadLineHeight": 16,
-      "time": TiebaTimeLabel.label(millis: item.createTime),
+      "time": TiebaTimeText.label(ms: item.createTime),
       "timeSize": 11,
       "timeWeight": 400,
       "timeLineHeight": 13,
@@ -247,43 +247,5 @@ enum TiebaMessageAPI {
       return String(format: "#%02X%02X%02X", Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
     }
     return String(format: "rgba(%d,%d,%d,%.2f)", Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()), a)
-  }
-}
-
-/// 时间标签（原 useTimeLabel → relativeTime / absoluteTime，按 timestampStyle 偏好）。
-enum TiebaTimeLabel {
-  static func label(millis: Double) -> String {
-    TiebaPreferenceSnapshot.string("timestampStyle") == "absolute" ? absolute(millis) : relative(millis)
-  }
-
-  static func relative(_ millis: Double) -> String {
-    guard millis >= 946_684_800_000 else { return "" }
-    let now = Date()
-    let diff = max(0, now.timeIntervalSince1970 * 1000 - millis)
-    let minute = 60_000.0, hour = 3_600_000.0, day = 86_400_000.0
-    if diff < minute { return "刚刚" }
-    if diff < hour { return "\(Int(diff / minute))分钟前" }
-    if diff < day { return "\(Int(diff / hour))小时前" }
-    let then = Date(timeIntervalSince1970: millis / 1000)
-    let calendar = Calendar.current
-    if calendar.isDateInYesterday(then) {
-      let comps = calendar.dateComponents([.hour, .minute], from: then)
-      return String(format: "昨天 %02d:%02d", comps.hour ?? 0, comps.minute ?? 0)
-    }
-    if diff < 7 * day { return "\(Int(diff / day))天前" }
-    let comps = calendar.dateComponents([.year, .month, .day], from: then)
-    return String(format: "%04d-%02d-%02d", comps.year ?? 0, comps.month ?? 0, comps.day ?? 0)
-  }
-
-  static func absolute(_ millis: Double) -> String {
-    guard millis >= 946_684_800_000 else { return "" }
-    let comps = Calendar.current.dateComponents(
-      [.year, .month, .day, .hour, .minute],
-      from: Date(timeIntervalSince1970: millis / 1000)
-    )
-    return String(
-      format: "%04d-%02d-%02d %02d:%02d",
-      comps.year ?? 0, comps.month ?? 0, comps.day ?? 0, comps.hour ?? 0, comps.minute ?? 0
-    )
   }
 }

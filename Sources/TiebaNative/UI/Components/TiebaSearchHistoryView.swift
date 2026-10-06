@@ -85,7 +85,7 @@ final class TiebaSearchHistoryView: UIView {
     cloud.setPills(visible.map { item in
       makePill(
         text: item.keyword,
-        time: TiebaTimeLabel.label(millis: item.timestamp),
+        time: TiebaTimeText.label(ms: item.timestamp),
         maxWidth: Self.historyMaxWidth,
         deletable: true
       )

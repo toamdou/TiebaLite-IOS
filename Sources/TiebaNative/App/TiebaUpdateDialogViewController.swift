@@ -279,13 +279,7 @@ final class TiebaUpdateDialogViewController: UIViewController {
   // MARK: - 文本处理
 
   private static let releaseDateParser = ISO8601DateFormatter()
-  private static let releaseDateFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.dateFormat = "yyyy-MM-dd"
-    return formatter
-  }()
+  private static let releaseDateFormatter: DateFormatter = TiebaDateFormats.fixed("yyyy-MM-dd")
 
   /// 2026-09-01T14:13:52Z → 2026-09-01；不合规范回空串。
   static func formatDate(_ iso: String?) -> String {

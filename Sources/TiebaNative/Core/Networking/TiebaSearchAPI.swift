@@ -353,7 +353,7 @@ enum TiebaSearchAPI {
       "name": nameShow.isEmpty ? name : nameShow,
       "content": htmlToText(TiebaSimpleRowParser.string(item["content"]) ?? ""),
       "threadTitle": TiebaSimpleRowParser.string(item["title"]) ?? "",
-      "time": seconds > 0 ? relativeTime(seconds: seconds) : "",
+      "time": seconds > 0 ? TiebaTimeText.relative(ms: seconds * 1000) : "",
       "replyNum": TiebaSimpleRowParser.double(item["post_num"] ?? item["postNum"]) ?? 0,
       "marginH": 10,
       "marginV": 6,
@@ -453,26 +453,6 @@ enum TiebaSearchAPI {
     if let dict = value as? [String: Any] { return Array(dict.values.compactMap { $0 as? [String: Any] }) }
     return nil
   }
-
-  /// 相对时间（列表行的 time 文本；语义与 JS utils relativeTime 一致）。
-  static func relativeTime(seconds: Double) -> String {
-    let diff = max(0, Date().timeIntervalSince1970 - seconds)
-    if diff < 60 { return "刚刚" }
-    if diff < 3600 { return "\(Int(diff / 60))分钟前" }
-    if diff < 86_400 { return "\(Int(diff / 3600))小时前" }
-    if diff < 7 * 86_400 { return "\(Int(diff / 86_400))天前" }
-    return dayFormatter.string(from: Date(timeIntervalSince1970: seconds))
-  }
-
-  /// 静态复用：本函数在列表行构造路径上逐行调用，现建 DateFormatter 是纯浪费
-  ///（NSDateFormatter.h:158：iOS 7 起线程安全，建好后只读不改）。
-  private static let dayFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.dateFormat = "yyyy-MM-dd"
-    return formatter
-  }()
 
   /// 搜索摘要里的 HTML 去标签（JS htmlToText 的轻量等价：块级标签留空格 + 实体解码）。
   static func htmlToText(_ html: String) -> String {
