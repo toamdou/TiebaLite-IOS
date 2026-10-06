@@ -94,16 +94,19 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
   private func toggle(
     _ id: String, _ title: String, _ icon: String, default fallback: Bool,
     subtitle: String? = nil
-  ) -> [String: Any] {
-    var row: [String: Any] = [
-      "id": id, "kind": "toggle", "title": title, "icon": icon,
-      "value": TiebaPreferences.bool(id, default: fallback) ? "1" : "0",
-    ]
-    row["subtitle"] = subtitle
+  ) -> TiebaFormRow {
+    var row = TiebaFormRow(
+      id: id,
+      kind: .toggle,
+      title: title,
+      icon: icon,
+      value: TiebaPreferences.bool(id, default: fallback) ? "1" : "0"
+    )
+    row.subtitle = subtitle
     return row
   }
 
-  override func makeSections(dark: Bool) -> [[String: Any]] {
+  override func makeSections(dark: Bool) -> [TiebaFormSection] {
     let startTab = TiebaPreferences.string(
       "startTab", allowed: Self.startTabs.map(\.value), default: "index")
     let timestamp = TiebaPreferences.string(
@@ -115,78 +118,91 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
       "forumFabFunction", allowed: Self.fabFunctions.map(\.value), default: "refresh")
 
     return [
-      [
-        "title": "首页",
-        "rows": [
+      TiebaFormSection(
+        title: "首页",
+        rows: [
           toggle("homePageShowHistoryForum", "显示历史吧", "clock.fill", default: true),
           toggle("forumListSingle", "关注吧列表单列", "list.bullet", default: true),
-          [
-            "id": "startTab", "kind": "picker", "title": "启动默认页",
-            "value": startTab, "options": options(Self.startTabs),
-          ],
-        ],
-      ],
-      [
-        "title": "浏览",
-        "rows": [
+          TiebaFormRow(
+            id: "startTab",
+            kind: .picker,
+            title: "启动默认页",
+            value: startTab,
+            options: options(Self.startTabs)
+          ),
+        ]
+      ),
+      TiebaFormSection(
+        title: "浏览",
+        rows: [
           toggle("incognitoMode", "无痕模式", "theatermasks.fill", default: false),
           toggle("useBuiltInBrowser", "使用内置浏览器", "safari.fill", default: true),
           toggle("exploreAutoRefresh", "自动刷新动态", "arrow.clockwise", default: true),
           toggle("navBarDoubleTapToTop", "双击顶栏回顶", "arrow.up.circle", default: true),
           toggle(
             "tabBarMinimizeEnabled", "底栏滚动收纳", "menubar.rectangle", default: true,
-            subtitle: "下滑收起底部栏、上滑恢复；关闭后底栏常驻"),
-          [
-            "id": "defaultSortType", "kind": "picker", "title": "吧默认排序方式",
-            "value": sortType, "options": options(Self.sortTypes),
-          ],
+            subtitle: "上滑收起底部栏、下滑恢复；关闭后底栏常驻"),
+          TiebaFormRow(
+            id: "defaultSortType",
+            kind: .picker,
+            title: "吧默认排序方式",
+            value: sortType,
+            options: options(Self.sortTypes)
+          ),
           toggle("hideMedia", "隐藏媒体内容", "photo.on.rectangle.angled", default: false),
-        ],
-      ],
-      [
-        "title": "贴子",
-        "rows": [
+        ]
+      ),
+      TiebaFormSection(
+        title: "贴子",
+        rows: [
           toggle("showBothUsername", "显示两个用户名", "person.2.fill", default: false),
           toggle("showShortcutInThread", "贴内显示快捷按钮", "bolt.fill", default: true),
-          [
-            "id": "forumFabFunction", "kind": "picker", "title": "悬浮按钮功能",
-            "value": fabFunction, "options": options(Self.fabFunctions),
-          ],
-          [
-            "id": "timestampStyle", "kind": "picker", "title": "时间显示格式",
-            "value": timestamp, "options": options(Self.timestampStyles),
-          ],
+          TiebaFormRow(
+            id: "forumFabFunction",
+            kind: .picker,
+            title: "悬浮按钮功能",
+            value: fabFunction,
+            options: options(Self.fabFunctions)
+          ),
+          TiebaFormRow(
+            id: "timestampStyle",
+            kind: .picker,
+            title: "时间显示格式",
+            value: timestamp,
+            options: options(Self.timestampStyles)
+          ),
           toggle("showIpLocation", "显示 IP 属地", "location.fill", default: true),
           toggle("showLevelBadge", "显示等级徽标", "shield.fill", default: true),
           toggle(
             "showLevelTitle", "等级后显示头衔", "tag.fill", default: false,
             subtitle: "如「Lv.5 F2.8」；头衔取该吧自定义等级名（服务端随作者下发）"),
-        ],
-      ],
-      [
-        "title": "内容",
-        "rows": [
+        ]
+      ),
+      TiebaFormSection(
+        title: "内容",
+        rows: [
           toggle("hideBlockedContent", "隐藏屏蔽内容", "nosign", default: false),
           toggle("blockVideo", "不显示视频贴", "video.slash.fill", default: false),
           toggle(
             "filterAdThreads", "过滤广告与直播贴", "cup.and.saucer.fill", default: true,
             subtitle: "关闭后信息流与吧内的广告、直播卡片原样展示"),
-        ],
-      ],
-      [
-        "title": "收藏",
-        "rows": [
+        ]
+      ),
+      TiebaFormSection(
+        title: "收藏",
+        rows: [
           toggle("collectSeeLz", "收藏贴子只看楼主", "person.fill", default: true),
           toggle("collectDescSort", "收藏贴子倒序查看", "arrow.up.arrow.down", default: false),
-        ],
-      ],
+        ]
+      ),
     ]
   }
 
   override func handle(_ event: TiebaFormEvent) {
     switch event {
     case .toggle(let id, let value):
-      TiebaSceneHaptics.fire("toggle")
+      // 触觉不在页面层补发：行内控件（cell.toggleChanged）拨动时已经发过一次，
+      // 再补一次就是背靠背两次相同 pattern（用户口径「手感发糊」）。
       guard write(id, bool: value) else { return }
       // 底栏收纳立即生效（原生壳的唯一开关入口；JS 侧内存副本见报告）。
       if id == "tabBarMinimizeEnabled" {

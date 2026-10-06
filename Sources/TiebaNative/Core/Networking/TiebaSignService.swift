@@ -311,7 +311,7 @@ final class TiebaSignService {
     let state = activityState(
       done: done, total: total, name: name, success: success, fail: fail, exp: exp, signing: true
     )
-    Task { await TiebaLiveActivityManager.shared.update(activityId: id, state: LiveActivityKitAttributes.ContentState(raw: state)) }
+    Task { await TiebaLiveActivityManager.shared.update(activityId: id, state: TiebaLiveActivityKitAttributes.ContentState(raw: state)) }
   }
 
   /// 收尾：先把灵动岛改成完成态并**弹一条通知**（用户要的"签到完成提醒"），
@@ -357,7 +357,7 @@ final class TiebaSignService {
     Task {
       await TiebaLiveActivityManager.shared.end(
         activityId: activityId,
-        state: LiveActivityKitAttributes.ContentState(raw: state),
+        state: TiebaLiveActivityKitAttributes.ContentState(raw: state),
         dismissalPolicy: .default,
         alert: inForeground ? nil : alert
       )
@@ -424,7 +424,7 @@ final class TiebaSignService {
 // MARK: - 结果 toast（玻璃 pill）
 
 /// 签到结果 toast：尺寸沿用旧查看器 pill（圆角 18 / 图标 18 / 2.2s 自动消失），
-/// 材质走系统材质（iOS 26 液态玻璃 / 17 经典超薄材质模糊），不再手写深色底。
+/// 材质走系统玻璃（部署底线 iOS 26，UIGlassEffect 恒可用），不再手写深色底。
 /// ⚠️ TiebaPhotoBrowser 里还有同名用途的旧 pill（那个文件不在本批改动范围）。
 private final class TiebaSignToastView: UIView {
   private static let horizontalPadding: CGFloat = 16
@@ -436,11 +436,6 @@ private final class TiebaSignToastView: UIView {
   private let label = UILabel()
   private var hideWorkItem: DispatchWorkItem?
 
-  /// 底材质：iOS 26 液态玻璃；17 退回经典超薄材质模糊（最接近的旧观感）。
-  private static func makeBackdropEffect() -> UIVisualEffect {
-    if #available(iOS 26.0, *) { UIGlassEffect(style: .regular) } else { UIBlurEffect(style: .systemUltraThinMaterial) }
-  }
-
   init() {
     super.init(frame: .zero)
     layer.cornerRadius = 18
@@ -450,7 +445,7 @@ private final class TiebaSignToastView: UIView {
     isHidden = true
     alpha = 0
 
-    let backdrop = UIVisualEffectView(effect: TiebaSignToastView.makeBackdropEffect())
+    let backdrop = TiebaGlassContainerView.makeEffect()
     backdrop.translatesAutoresizingMaskIntoConstraints = false
     addSubview(backdrop)
 
@@ -495,7 +490,7 @@ private final class TiebaSignToastView: UIView {
     )
     label.text = text
     isHidden = false
-    UIView.animate(withDuration: 0.18) { self.alpha = 1 }
+    TiebaAnimation.animate(duration: 0.18) { self.alpha = 1 }
     hideWorkItem?.cancel()
     let item = DispatchWorkItem { [weak self] in self?.hideToast() }
     hideWorkItem = item
@@ -505,7 +500,7 @@ private final class TiebaSignToastView: UIView {
   private func hideToast() {
     hideWorkItem?.cancel()
     hideWorkItem = nil
-    UIView.animate(withDuration: 0.18, animations: { self.alpha = 0 }) { _ in
+    TiebaAnimation.animate(duration: 0.18, animations: { self.alpha = 0 }) { _ in
       self.isHidden = true
     }
   }

@@ -70,20 +70,18 @@ struct TiebaProtoMessage {
 
 /// protos.json 描述符注册表（2026-08-29 角色变化）：
 /// wire 解码/编码已由 SwiftProtobuf 生成代码接管（TiebaSwiftProtoCodec），
-/// 本注册表仅保留描述符模型，供解码输出的 int64/enum 归一化按 schema
-/// 还原旧解码器的输出形状（数字/枚举值），JS 映射层零改动。
+/// 本注册表仅保留描述符模型，供解码输出的 int64 归一化按 schema
+/// 还原旧解码器的输出形状（数字），JS 映射层零改动。
+/// （enum 归一化层已删除：描述符无任何 enum 节点、生成代码无 SwiftProtobuf.Enum，
+/// SwiftProtobuf JSON 对真实 schema 永远不会输出枚举值名——该分支不可达。）
 /// 并发契约：initialize 一次性建表（启动期，先于任何请求），之后只读；
-/// resolveCache/enumCache 由各自 NSLock 保护（热路径双锁）。Swift 6 下以
-/// @unchecked Sendable 声明该不变量。
+/// resolveCache 由 NSLock 保护。Swift 6 下以 @unchecked Sendable 声明该不变量。
 final class TiebaProtoRegistry: @unchecked Sendable {
   static let shared = TiebaProtoRegistry()
 
-  private var root: [String: Any] = [:]
   private var messages: [String: TiebaProtoMessage] = [:]
   private var resolveCache: [String: ResolveResult] = [:]
-  private var enumCache: [String: [String: Int]?] = [:]
   private let resolveLock = NSLock()
-  private let enumLock = NSLock()
 
   private enum ResolveResult {
     case message(TiebaProtoMessage)
@@ -97,10 +95,8 @@ final class TiebaProtoRegistry: @unchecked Sendable {
     else {
       throw TiebaProtoError.invalidDescriptor
     }
-    root = object
     messages = [:]
     resolveCache = [:]
-    enumCache = [:]
     walk(object, path: "")
   }
 
@@ -223,77 +219,5 @@ final class TiebaProtoRegistry: @unchecked Sendable {
       return message
     }
     throw TiebaProtoError.messageNotFound(typeName)
-  }
-
-  /// 枚举值表（名字 → 数值）。供 SwiftProtobuf JSON 输出的 enum 值名归一化。
-  func resolveEnumValues(typeName: String, currentPath: String) throws -> [String: Int] {
-    let trimmed = typeName.hasPrefix(".") ? String(typeName.dropFirst()) : typeName
-    let key = trimmed.contains(".") ? trimmed : "\(currentPath)|\(trimmed)"
-
-    enumLock.lock()
-    let cached = enumCache[key]
-    enumLock.unlock()
-    if let cached {
-      if let values = cached {
-        return values
-      }
-      throw TiebaProtoError.messageNotFound(trimmed)
-    }
-
-    do {
-      let values = try resolveEnumValuesUncached(typeName: trimmed, currentPath: currentPath)
-      enumLock.lock()
-      enumCache[key] = values
-      enumLock.unlock()
-      return values
-    } catch {
-      enumLock.lock()
-      enumCache[key] = nil
-      enumLock.unlock()
-      throw error
-    }
-  }
-
-  private func resolveEnumValuesUncached(typeName: String, currentPath: String) throws -> [String: Int] {
-    var namespace = currentPath
-    while true {
-      let candidate = namespace.isEmpty ? typeName : "\(namespace).\(typeName)"
-      if let values = enumValues(atPath: candidate) {
-        return values
-      }
-      guard let dot = namespace.lastIndex(of: ".") else { break }
-      namespace = String(namespace[..<dot])
-    }
-    if let values = enumValues(atPath: typeName) {
-      return values
-    }
-    throw TiebaProtoError.messageNotFound(typeName)
-  }
-
-  private func enumValues(atPath path: String) -> [String: Int]? {
-    guard let obj = nestedObject(atPath: path), let raw = obj["values"] as? [String: NSNumber] else {
-      return nil
-    }
-    var values: [String: Int] = [:]
-    for (name, number) in raw {
-      values[name] = number.intValue
-    }
-    return values
-  }
-
-  private func nestedObject(atPath path: String) -> [String: Any]? {
-    var node: [String: Any] = root
-    let parts = path.split(separator: ".").map(String.init)
-    guard !parts.isEmpty else { return nil }
-    for (i, part) in parts.enumerated() {
-      guard let nested = node["nested"] as? [String: Any], let child = nested[part] as? [String: Any] else {
-        return nil
-      }
-      if i == parts.count - 1 {
-        return child
-      }
-      node = child
-    }
-    return nil
   }
 }

@@ -42,47 +42,47 @@ final class TiebaSettingsViewController: TiebaFormPageController {
 
   private func iconRow(
     _ id: String, _ title: String, _ subtitle: String, _ icon: String, _ color: String, dark: Bool
-  ) -> [String: Any] {
-    [
-      "id": id,
-      "kind": "link",
-      "title": title,
-      "subtitle": subtitle,
-      "icon": icon,
-      "iconTint": rowTint(color, dark: dark),
-    ]
+  ) -> TiebaFormRow {
+    TiebaFormRow(
+      id: id,
+      kind: .link,
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      iconTint: TiebaFormColor.resolve(rowTint(color, dark: dark))
+    )
   }
 
   private func toggleRow(
     _ id: String, _ title: String, _ subtitle: String, _ icon: String, _ color: String,
     on: Bool, dark: Bool
-  ) -> [String: Any] {
-    [
-      "id": id,
-      "kind": "toggle",
-      "title": title,
-      "subtitle": subtitle,
-      "icon": icon,
-      "iconTint": rowTint(color, dark: dark),
-      "value": on ? "1" : "0",
-      "switchRowTap": false,
-    ]
+  ) -> TiebaFormRow {
+    TiebaFormRow(
+      id: id,
+      kind: .toggle,
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      iconTint: TiebaFormColor.resolve(rowTint(color, dark: dark)),
+      value: on ? "1" : "0",
+      switchRowTap: false
+    )
   }
 
-  override func makeSections(dark: Bool) -> [[String: Any]] {
+  override func makeSections(dark: Bool) -> [TiebaFormSection] {
     let hapticFeedback = TiebaPreferences.bool("hapticFeedback", default: true)
     let autoCheckUpdate = TiebaPreferences.bool("autoCheckUpdate", default: true)
 
     return [
-      [
-        "title": "外观",
-        "rows": [
+      TiebaFormSection(
+        title: "外观",
+        rows: [
           iconRow("/settings/theme", "个性化", "深浅色外观、字号、导航栏样式", "paintpalette.fill", "#AF52DE", dark: dark)
-        ],
-      ],
-      [
-        "title": "使用习惯",
-        "rows": [
+        ]
+      ),
+      TiebaFormSection(
+        title: "使用习惯",
+        rows: [
           iconRow("/settings/habit", "使用习惯", "首页、浏览、贴子、内容等偏好", "slider.horizontal.3", "#8E8E93", dark: dark),
           toggleRow(
             "/pref/hapticFeedback", "振动反馈", "点击、长按、成功/失败等操作反馈",
@@ -90,31 +90,31 @@ final class TiebaSettingsViewController: TiebaFormPageController {
           ),
           iconRow("/settings/haptics", "振动设置", "为每个场景单独选择振动强度", "waveform", "#FF9500", dark: dark),
           iconRow("/settings/oksign", "一键签到", "自动签到关注的贴吧", "checkmark.circle", "#34C759", dark: dark),
-        ],
-      ],
-      [
-        "title": "内容与流量",
-        "rows": [
+        ]
+      ),
+      TiebaFormSection(
+        title: "内容与流量",
+        rows: [
           iconRow("/settings/image", "图片与流量", "图片加载策略、水印、清晰度与流量", "photo.on.rectangle", "#34C759", dark: dark),
           iconRow("/settings/block", "屏蔽设置", "屏蔽词、屏蔽用户、云端黑名单", "hand.raised", "#FF9500", dark: dark),
-        ],
-      ],
-      [
-        "title": "账号与安全",
-        "rows": [
+        ]
+      ),
+      TiebaFormSection(
+        title: "账号与安全",
+        rows: [
           iconRow("/settings/account", "账号管理", "登录账号、退出登录", "person.circle", "#4477E0", dark: dark)
-        ],
-      ],
-      [
-        "title": "通用",
-        "rows": [
+        ]
+      ),
+      TiebaFormSection(
+        title: "通用",
+        rows: [
           toggleRow(
             "/pref/autoCheckUpdate", "自动检测更新", "启动时检查 GitHub 最新 Release（关于页可手动检查）",
             "arrow.triangle.2.circlepath", "#4477E0", on: autoCheckUpdate, dark: dark
           ),
           iconRow("/settings/more", "更多设置", "缓存与数据、外部链接、日志与关于", "ellipsis.circle", "#8E8E93", dark: dark),
-        ],
-      ],
+        ]
+      ),
     ]
   }
 
@@ -159,13 +159,15 @@ final class TiebaSettingsViewController: TiebaFormPageController {
       TiebaChrome.setHapticChromeHapticsEnabled(value)
       if value {
         TiebaHaptics.warmUp()
+        // 这一发必须留在页面层：写盘前触觉是关着的，cell 层那一发会被偏好闸掉，
+        // 写盘后补发才是「开启触觉时立刻能感到一下」。
         TiebaSceneHaptics.fire("toggle")
       } else {
         TiebaHaptics.shutdown()
       }
     case "/pref/autoCheckUpdate":
       guard write("autoCheckUpdate", bool: value, row: id) else { return }
-      if value { TiebaSceneHaptics.fire("toggle") }
+      // 触觉由行内控件层统一发，页面层不补发（同帧双发手感发糊）。
       TiebaToast.show(value ? "已开启自动检测更新" : "已关闭自动检测更新")
     default:
       break

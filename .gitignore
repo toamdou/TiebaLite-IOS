@@ -1,6 +1,11 @@
 # 依赖（JS 时代遗留，仓库已无 JS；留一条兜底避免误入）
 node_modules/
 
+# 本地工具/脚本目录（**永不入库**：用户口径 2026-10-07）
+# 构建与打包需要的那几段逻辑已内联进 BUILD.bazel 与 .github/workflows/build-ipa.yml，
+# 这里放本机自己的脚本不会再被同步上去。
+/Tools/
+
 # 构建产物
 dist/
 /build/
@@ -45,3 +50,9 @@ docs/alamofire/
 docs/jxsegmentedview/
 docs/swiftyjson/
 docs/texture/
+
+# Swift 编译产物（typecheck 会落在仓库根）
+*.swiftmodule
+*.swiftdoc
+*.swiftsourceinfo
+*.abi.json

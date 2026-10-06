@@ -130,23 +130,34 @@ struct TiebaFormOption {
 
 /// 行尾 UIMenu 的一项（account 行的「移除账号」；原生画成 UIAction）。
 struct TiebaFormMenuItem {
-  let id: String
-  let title: String
-  let icon: String?
-  let destructive: Bool
+  var id: String
+  var title: String
+  var icon: String?
+  var destructive: Bool = false
 }
 
 /// status 行里的一簇「图标 + 数值」（oksign 的成功/失败计数、逐吧 +经验）。
 struct TiebaFormStatusItem {
-  let icon: String
-  let text: String
-  let color: UIColor?
+  var icon: String
+  var text: String
+  var color: UIColor?
   /// medium/semibold/bold 覆盖（默认 regular）
-  let weight: String
+  var weight: String = "regular"
 }
 
-/// 一行。解析失败的行直接丢弃：宁可少画一行，也不要在表格里留半行空白
-/// （JS 侧类型已收窄，这里是最后的防御）。
+/// 一个分组：title / footer / footerSpacer 与 rows 一起下发。
+/// 以前是 [String: Any]，视图布局时还要回读 section["footer"] 取高度——同一份数据
+/// 两个事实源；现在值类型一次到位，视图不再解析字典。
+struct TiebaFormSection {
+  var title: String?
+  var footer: String?
+  /// 无 footer 文案时的空白让位高度（profile 页底栏让位）
+  var footerSpacer: Double?
+  var rows: [TiebaFormRow] = []
+}
+
+/// 一行。字段声明即构造入口（memberwise init）：默认值与 JS 解析时期逐字一致，
+/// 调用方只写自己要覆盖的字段，键名写错是编译错误（以前拼字典只在运行时静默丢行）。
 struct TiebaFormRow {
   enum Kind: String {
     case link
@@ -168,173 +179,108 @@ struct TiebaFormRow {
     case spinner
     case datePicker
     case empty
-
-    /// 行内容由 UIListContentConfiguration 画的种类（其余走专用 cell）。
-    var usesContentConfiguration: Bool {
-      switch self {
-      case .link, .toggle, .picker, .button, .confirm, .text, .color, .option, .menu:
-        return true
-      default:
-        return false
-      }
-    }
+    /// 无级滑杆行（二级字号的正文级/界面级调节杆，见 TiebaFormSliderCell）。
+    case slider
   }
 
-  let id: String
-  let kind: Kind
-  let title: String
-  let subtitle: String?
-  let icon: String?
-  let iconTint: UIColor?
+  var id: String
+  var kind: Kind
+  var title: String = ""
+  var subtitle: String?
+  var icon: String?
+  var iconTint: UIColor?
   /// 当前值。唯一可变字段：受控回推（setValue）就地在模型里改它，避免整表重解析。
   var value: String?
-  let options: [TiebaFormOption]
-  let destructive: Bool
-  let disabled: Bool
+  var options: [TiebaFormOption] = []
+  var destructive: Bool = false
+  var disabled: Bool = false
   /// 文本/图标覆盖色（button/text 行；如「崩溃与卡顿日志」的橙、错误行的次级灰）
-  let override: UIColor?
+  var override: UIColor?
   /// SwiftUI textStyle 名：body / subheadline / footnote / caption / headline / title
-  let textStyle: String
+  var textStyle: String = "body"
   /// hero 行的打包图（Bundle 相对路径，见 TiebaFormHeroCell）
-  let imageName: String?
-  let confirmTitle: String?
-  let confirmMessage: String?
-  let confirmLabel: String?
+  var imageName: String?
+  var confirmTitle: String?
+  var confirmMessage: String?
+  var confirmLabel: String?
   /// 点行内任意处是否等价于拨开关。SwiftUI 的 `Toggle` 行是（true），
   /// 而 ListItem + trailing Switch（设置首页那几行）不是——那一行没有 onPress，
   /// 点行不该动开关。默认 true（Toggle 形态更常见）。
-  let switchRowTap: Bool
+  var switchRowTap: Bool = true
   /// 只禁用开关、不灰整行文字（异步授权/写库挂起期间就是这状态：ListItem 的
   /// 标题/副标题保持正常色，只有 Switch 变灰不可点）。
-  let switchDisabled: Bool
+  var switchDisabled: Bool = false
 
   // ── 第二批（textField / segmented / option / menu / avatar / prominentButton /
   //    progress / status / spinner / datePicker / empty）──
   /// textField：占位文案（多行时由占位 UILabel 承担）
-  let placeholder: String?
+  var placeholder: String?
   /// textField：最大字符数（0 = 不限；超长在编辑回调里截断）
-  let maxLength: Int
+  var maxLength: Int = 0
   /// textField：多行（SwiftUI axis=vertical）
-  let multiline: Bool
+  var multiline: Bool = false
   /// option / menu：当前是否选中（打勾）
-  let selected: Bool
+  var selected: Bool = false
   /// menu：菜单项
-  let menuItems: [TiebaFormMenuItem]
+  var menuItems: [TiebaFormMenuItem] = []
   /// segmented：分档标题（options 复用 value/label）
   /// avatar：头像图 URL（空 = 首字占位）
-  let avatarURL: String?
+  var avatarURL: String?
   /// avatar：首字占位（无图/加载失败时）
-  let initials: String?
+  var initials: String?
   /// avatar：头像直径（默认 40）
-  let avatarSize: Double
+  var avatarSize: Double = 40
   /// avatar：尾部形态："" / "button" / "text"
-  let trailingStyle: String
+  var trailingStyle: String = ""
   /// avatar：尾部按钮标题或尾部说明文字
-  let trailingTitle: String?
+  var trailingTitle: String?
   /// avatar：尾部按钮图标（SF Symbol）
-  let trailingIcon: String?
+  var trailingIcon: String?
   /// avatar：尾部颜色（按钮着色 / 说明文字色；支持语义 token）
-  let trailingColor: UIColor?
+  var trailingColor: UIColor?
   /// avatar：尾部按钮 busy（转圈 + 禁用）
-  let trailingBusy: Bool
+  var trailingBusy: Bool = false
   /// avatar：尾部按钮禁用
-  let trailingDisabled: Bool
+  var trailingDisabled: Bool = false
   /// prominentButton：borderedProminent / bordered / glass / plain
-  let buttonStyle: String
+  var buttonStyle: String = "prominent"
   /// prominentButton：controlSize large
-  let buttonLarge: Bool
+  var buttonLarge: Bool = false
   /// prominentButton：capsule 圆角
-  let buttonCapsule: Bool
+  var buttonCapsule: Bool = false
   /// progress：0...1
-  let progress: Double
+  var progress: Double = 0
   /// status：图标 + 数值簇
-  let statusItems: [TiebaFormStatusItem]
+  var statusItems: [TiebaFormStatusItem] = []
   /// status：尾部说明文字（如「等待中」「+12 经验」）
-  let trailingText: String?
+  var trailingText: String?
   /// status：尾部文字色（支持语义 token）
-  let trailingTextColor: UIColor?
+  var trailingTextColor: UIColor?
   /// status：标题字重 regular / medium / semibold（默认 regular）
-  let titleWeight: String
+  var titleWeight: String = "regular"
   /// status：尾部转圈（「签到中」的行）
-  let showsSpinner: Bool
+  var showsSpinner: Bool = false
 
-  init?(raw: [String: Any], fallbackID: String) {
-    guard let kindRaw = raw["kind"] as? String, let kind = Kind(rawValue: kindRaw) else { return nil }
-    let rawID = raw["id"] as? String
-    self.id = (rawID?.isEmpty == false) ? (rawID ?? fallbackID) : fallbackID
-    self.kind = kind
-    self.title = raw["title"] as? String ?? ""
-    self.subtitle = raw["subtitle"] as? String
-    self.icon = raw["icon"] as? String
-    self.iconTint = TiebaFormColor.resolve(raw["iconTint"] as? String)
-    self.value = raw["value"] as? String
-    self.options = (raw["options"] as? [[String: Any]] ?? []).compactMap { option in
-      guard let value = option["value"] as? String else { return nil }
-      return TiebaFormOption(value: value, label: option["label"] as? String ?? value)
-    }
-    self.destructive = raw["destructive"] as? Bool ?? false
-    self.disabled = raw["disabled"] as? Bool ?? false
-    self.override = TiebaFormColor.resolve(raw["color"] as? String)
-    let style = raw["textStyle"] as? String ?? "body"
-    self.textStyle = style
-    self.imageName = raw["imageName"] as? String
-    self.confirmTitle = raw["confirmTitle"] as? String
-    self.confirmMessage = raw["confirmMessage"] as? String
-    self.confirmLabel = raw["confirmLabel"] as? String
-    self.switchRowTap = raw["switchRowTap"] as? Bool ?? true
-    self.switchDisabled = raw["switchDisabled"] as? Bool ?? false
+  // ── slider（无级调节）──
+  /// slider：可调下限 / 上限 / 量化步长（step = 0 = 不量化，取值连续）。
+  var minValue: Double = 0
+  var maxValue: Double = 1
+  var step: Double = 0
+  /// slider：实时示例文案（无级调节时用户要能看到字号在变）。
+  var previewText: String?
+  /// slider：默认档（「重置」按钮的目标值）。nil = 这一行没有默认档，不显示重置按钮。
+  var defaultValue: Double?
 
-    self.placeholder = raw["placeholder"] as? String
-    // NSNumber 中转：JS 数字过来是 NSNumber(double)，直接 as? Int 在非整值上会失败。
-    self.maxLength = (raw["maxLength"] as? NSNumber)?.intValue ?? 0
-    self.multiline = raw["multiline"] as? Bool ?? false
-    self.selected = raw["selected"] as? Bool ?? false
-    self.menuItems = (raw["menuItems"] as? [[String: Any]] ?? []).compactMap { item in
-      guard let id = item["id"] as? String, let title = item["title"] as? String else { return nil }
-      return TiebaFormMenuItem(
-        id: id,
-        title: title,
-        icon: item["icon"] as? String,
-        destructive: item["destructive"] as? Bool ?? false
-      )
-    }
-    self.avatarURL = raw["avatarURL"] as? String
-    self.initials = raw["initials"] as? String
-    self.avatarSize = (raw["avatarSize"] as? NSNumber)?.doubleValue ?? 40
-    self.trailingStyle = raw["trailingStyle"] as? String ?? ""
-    self.trailingTitle = raw["trailingTitle"] as? String
-    self.trailingIcon = raw["trailingIcon"] as? String
-    self.trailingColor = TiebaFormColor.resolve(raw["trailingColor"] as? String)
-    self.trailingBusy = raw["trailingBusy"] as? Bool ?? false
-    self.trailingDisabled = raw["trailingDisabled"] as? Bool ?? false
-    self.buttonStyle = raw["buttonStyle"] as? String ?? "prominent"
-    self.buttonLarge = raw["buttonLarge"] as? Bool ?? false
-    self.buttonCapsule = raw["buttonCapsule"] as? Bool ?? false
-    self.progress = (raw["progress"] as? NSNumber)?.doubleValue ?? 0
-    self.statusItems = (raw["statusItems"] as? [[String: Any]] ?? []).compactMap { item in
-      guard let icon = item["icon"] as? String, let text = item["text"] as? String else { return nil }
-      return TiebaFormStatusItem(
-        icon: icon,
-        text: text,
-        color: TiebaFormColor.resolve(item["color"] as? String),
-        weight: item["weight"] as? String ?? "regular"
-      )
-    }
-    self.trailingText = raw["trailingText"] as? String
-    self.trailingTextColor = TiebaFormColor.resolve(raw["trailingTextColor"] as? String)
-    self.titleWeight = raw["titleWeight"] as? String ?? "regular"
-    self.showsSpinner = raw["showsSpinner"] as? Bool ?? false
-  }
 
   /// 行内文字字体（SwiftUI textStyle 名 → 系统动态字体，跟随 Dynamic Type）。
   var font: UIFont {
     switch textStyle {
-    case "subheadline": return UIFont.preferredFont(forTextStyle: .subheadline)
-    case "footnote": return UIFont.preferredFont(forTextStyle: .footnote)
-    case "caption": return UIFont.preferredFont(forTextStyle: .caption1)
-    case "headline": return UIFont.preferredFont(forTextStyle: .headline)
-    case "title": return UIFont.systemFont(ofSize: 28, weight: .bold)
-    default: return UIFont.preferredFont(forTextStyle: .body)
+    case "subheadline": return TiebaSimpleText.uiFont(style: .subheadline)
+    case "footnote": return TiebaSimpleText.uiFont(style: .footnote)
+    case "caption": return TiebaSimpleText.uiFont(style: .caption1)
+    case "headline": return TiebaSimpleText.uiFont(style: .headline)
+    case "title": return TiebaSimpleText.font(size: 28, weight: .bold)
+    default: return TiebaSimpleText.uiFont(style: .body)
     }
   }
 
@@ -367,8 +313,7 @@ final class TiebaFormListView: UIView {
 
   /// 整份替换 → 重解析 + reload。结构性变化（增删行/换分组）才走这里；
   /// 单纯改值走 setValue(id:value:)。
-  /// [{ title?, footer?, rows: [row] }, …]
-  var sections: [[String: Any]] = [] {
+  var sections: [TiebaFormSection] = [] {
     didSet { rebuild() }
   }
 
@@ -403,16 +348,35 @@ final class TiebaFormListView: UIView {
   var onColorChange: ((String, String) -> Void)?
   /// 输入框每次编辑（textField 行；受控：视图不改真值，等调用方下发回来）
   var onTextChange: ((String, String) -> Void)?
+  /// 无级滑杆被拖动（slider 行；每次 valueChanged 一次，调用方自行节流落库）
+  var onSlide: ((String, Double) -> Void)?
+  /// slider 行实时示例的字体提供者（页面注入，入参 = 行 id + 当前值）。
+  /// 缺省 = 界面级：表单文本本来属于"界面"，不注入时跟界面字号走是对的。
+  var slidePreviewFont: ((String, Double) -> UIFont)?
 
   // MARK: - Private
 
   private let tableView = UITableView(frame: .zero, style: .insetGrouped)
   private var model: [[TiebaFormRow]] = []
+  /// 被隐藏的行 id（本页「界面字号跟随正文字号」= ON 时隐藏界面字号滑杆）。
+  /// 隐藏是**数据源级**的删行：这样 tableView 的插入/删除动画才能给出"杆子
+  /// 收回/展开"的高度动画，而不是瞬切（用户明确要求显隐要有动画）。
+  private var hiddenRowIDs: Set<String> = []
+  /// 拖动中被推迟的整表重排（见 reloadTableDeferringWhileTracking）。
+  private var pendingReload = false
   /// 主色（nil = 系统默认，见 tintHex）
   private var accent: UIColor?
+  /// trait 登记令牌（registerForTraitChanges 的返回值需持有）。
+  private var styleRegistration: UITraitChangeRegistration?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
+    // 行首色块图标把当时的动态色烘进位图并缓存：系统切深浅时 UITableView 只下发 trait、
+    // 不重新 cellForRow，位图不重烘就会出现「标题/底色换了、色块停旧档」。
+    styleRegistration = registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
+      (view: TiebaFormListView, _) in
+      view.invalidateIconCache()
+    }
     setUp()
   }
 
@@ -450,12 +414,83 @@ final class TiebaFormListView: UIView {
   }
 
   private func rebuild() {
-    model = sections.enumerated().map { sectionIndex, section in
-      let rows = section["rows"] as? [[String: Any]] ?? []
-      return rows.enumerated().compactMap { rowIndex, raw in
-        TiebaFormRow(raw: raw, fallbackID: "s\(sectionIndex)r\(rowIndex)")
+    model = sections.indices.map { visibleRows(inSection: $0) }
+    reloadTableDeferringWhileTracking()
+  }
+
+  /// 某分组当前应显示的行（整份 sections 减去被隐藏的 id）。
+  private func visibleRows(inSection index: Int) -> [TiebaFormRow] {
+    guard sections.indices.contains(index) else { return [] }
+    return sections[index].rows.filter { !hiddenRowIDs.contains($0.id) }
+  }
+
+  /// 显隐某一行（带系统插入/删除动画）。本页用于「界面字号跟随正文字号」开关：
+  /// ON ⇒ 界面字号滑杆收回去，OFF ⇒ 展开。行高与 alpha 由 UITableView 的
+  /// insert/delete 动画一起做，不是瞬切（用户明确要求显隐要有动画）。
+  /// ⚠️ 模型先改、再调 insert/delete（UITableView 读的是改后的行数）。
+  func setHidden(id: String, hidden: Bool, animated: Bool = true) {
+    guard sections.contains(where: { $0.rows.contains { $0.id == id } }) else { return }
+    guard hiddenRowIDs.contains(id) != hidden else { return }
+    if hidden { hiddenRowIDs.insert(id) } else { hiddenRowIDs.remove(id) }
+    guard let section = sections.firstIndex(where: { $0.rows.contains { $0.id == id } }) else {
+      rebuild()
+      return
+    }
+    let old = model.indices.contains(section) ? model[section] : []
+    let next = visibleRows(inSection: section)
+    guard animated, abs(old.count - next.count) == 1 else {
+      rebuild()
+      return
+    }
+    model[section] = next
+    if next.count > old.count {
+      let row = next.firstIndex { $0.id == id } ?? 0
+      tableView.insertRows(at: [IndexPath(row: row, section: section)], with: .fade)
+    } else {
+      let row = old.firstIndex { $0.id == id } ?? 0
+      tableView.deleteRows(at: [IndexPath(row: row, section: section)], with: .fade)
+    }
+  }
+
+  /// 字号变化后重排整表（行字体与行高都由 cell 现算）：整表 reloadData 是唯一
+  /// 能让**离屏行**也换字体的做法（reconfigure 只覆盖可见行）。设置页行数很少，
+  /// 一次 reload 的代价可忽略；调用方负责在拖动结束后再调（拖动中 reload 会把
+  /// 正在被按住的滑杆一起重建，手感直接断）。
+  func refreshTypography() {
+    reloadTableDeferringWhileTracking()
+  }
+
+  /// reloadData 的**唯一出口**：有滑杆正被手指按着时推迟到松手之后。
+  ///
+  /// 为什么必须推迟：reloadData 会把可见 cell 收回复用池，而被按住的那一格里的
+  /// UISlider **仍在跟踪**这次触摸；它一旦被复用给另一条滑杆行，后续每一格拖动
+  /// 事件都会打到另一行的字号上 —— 用户实测「拖着一个，拖着拖着变成拖动另一个」。
+  /// （拖动中 0.35s 没有新值就会触发一次字号重排，手指停一下必中。）
+  private func reloadTableDeferringWhileTracking() {
+    if isAnySliderTracking {
+      pendingReload = true
+      return
+    }
+    pendingReload = false
+    tableView.reloadData()
+  }
+
+  /// 是否有可见的滑杆行正在被拖动。
+  private var isAnySliderTracking: Bool {
+    guard let indexPaths = tableView.indexPathsForVisibleRows else { return false }
+    for indexPath in indexPaths {
+      let cell = tableView.cellForRow(at: indexPath) as? TiebaFormSliderCell
+      if cell?.isTrackingSlider == true {
+        return true
       }
     }
+    return false
+  }
+
+  /// 滑杆松手：把之前推迟的重排补上（rebuild 与 refreshTypography 共用同一出口）。
+  private func sliderTrackingChanged(_ tracking: Bool) {
+    guard !tracking, pendingReload else { return }
+    pendingReload = false
     tableView.reloadData()
   }
 
@@ -478,6 +513,12 @@ final class TiebaFormListView: UIView {
   }
 
   /// 主色变化后重配可见行（离屏行出队时本来就会按新主色配置）。
+  /// 作废行首色块位图缓存并重配可见行（外观档变化时调用；缓存键含解析后的色值）。
+  private func invalidateIconCache() {
+    TiebaFormRowCell.iconCache.removeAll()
+    reconfigureVisibleRows()
+  }
+
   private func reconfigureVisibleRows() {
     guard let indexPaths = tableView.indexPathsForVisibleRows, !indexPaths.isEmpty else { return }
     tableView.reconfigureRows(at: indexPaths)
@@ -573,31 +614,27 @@ extension TiebaFormListView: UITableViewDataSource, UITableViewDelegate {
       onRowPress: { [weak self] in self?.onRowPress?(row.id) },
       onMenuPick: { [weak self] menuID in self?.onPick?(row.id, menuID) },
       onTextChange: { [weak self] text in self?.onTextChange?(row.id, text) },
-      onColorChange: { [weak self] hex in self?.onColorChange?(row.id, hex) }
+      onColorChange: { [weak self] hex in self?.onColorChange?(row.id, hex) },
+      onSlide: { [weak self] value in self?.onSlide?(row.id, value) },
+      previewFont: { [weak self] value in
+        self?.slidePreviewFont?(row.id, value)
+          ?? TiebaSimpleText.scaledFont(
+            size: CGFloat(value), weight: .regular, scale: TiebaTypography.uiScale())
+      }
     )
-    switch cell {
-    case let cell as TiebaFormRowCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormInputCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormSegmentedCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormAvatarCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormActionCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormProgressCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormStatusCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormSpinnerCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormDateCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormEmptyCell:
-      cell.apply(row, context: context)
-    default:
-      break
+    // 一次协议转换代替原来的 10 分支 switch：注册表保证 dequeue 出来的就是映射表里的类，
+    // 而映射表里的类全部实现协议（见文件下方一致性扩展）。
+    // 滑杆行：拖动起止回报给列表层（决定 reloadData 能不能现在做）。
+    // 每次出队都重设：cell 是复用的，上一次的闭包可能指向别的行。
+    (cell as? TiebaFormSliderCell)?.onTrackingChanged = { [weak self] tracking in
+      self?.sliderTrackingChanged(tracking)
+    }
+    if let configuring = cell as? TiebaFormCellConfiguring {
+      configuring.apply(row, context: context)
+    } else {
+      // 走到这里 = 新增行类型时漏了协议一致性（改动前这里是静默 break：cell 拿到却不配置，
+      // 用户看到一行空白且没有任何线索）。DEBUG 下直接暴露，Release 下保持不崩。
+      assertionFailure("cell \(type(of: cell)) 未实现 TiebaFormCellConfiguring")
     }
     return cell
   }
@@ -627,30 +664,32 @@ extension TiebaFormListView: UITableViewDataSource, UITableViewDelegate {
   /// 定高 View）。仅在**没有** footer 文案时生效；有文案时走系统 footer 排版。
   public func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
     guard section < sections.count else { return UITableView.automaticDimension }
-    let footer = sections[section]["footer"] as? String
-    if footer?.isEmpty == false { return UITableView.automaticDimension }
-    if let spacer = (sections[section]["footerSpacer"] as? NSNumber)?.doubleValue {
+    if sections[section].footer?.isEmpty == false { return UITableView.automaticDimension }
+    if let spacer = sections[section].footerSpacer {
       return CGFloat(spacer)
     }
     return UITableView.automaticDimension
   }
 
   public func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-    guard section < sections.count, let title = sections[section]["title"] as? String, !title.isEmpty else {
+    guard section < sections.count, let title = sections[section].title, !title.isEmpty else {
       return nil
     }
     let view = headerFooter(tableView: tableView)
     var config = UIListContentConfiguration.groupedHeader()
     config.text = title
+    // 分组标题也属界面级（用户口径：界面字号管设置页与列表标题）。
+    // 系统 groupedHeader 的默认字体只跟 Dynamic Type，不跟应用内界面字号。
+    config.textProperties.font = TiebaSimpleText.uiFont(style: .footnote)
     view.contentConfiguration = config
     return view
   }
 
   public func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
-    guard section < sections.count, let footer = sections[section]["footer"] as? String, !footer.isEmpty else {
+    guard section < sections.count, let footer = sections[section].footer, !footer.isEmpty else {
       // 无 footer 文案但声明了 footerSpacer：给一个空 view，高度由
       // heightForFooterInSection 给（否则 UITableView 可能把这段空白吃掉）。
-      if section < sections.count, sections[section]["footerSpacer"] != nil {
+      if section < sections.count, sections[section].footerSpacer != nil {
         let view = headerFooter(tableView: tableView)
         view.contentConfiguration = nil
         return view
@@ -660,6 +699,8 @@ extension TiebaFormListView: UITableViewDataSource, UITableViewDelegate {
     let view = headerFooter(tableView: tableView)
     var config = UIListContentConfiguration.groupedFooter()
     config.text = footer
+    // 同上：脚注说明文字跟界面字号（系统默认只跟 Dynamic Type）。
+    config.textProperties.font = TiebaSimpleText.uiFont(style: .footnote)
     view.contentConfiguration = config
     return view
   }
@@ -693,56 +734,80 @@ struct TiebaFormCellContext {
   let onTextChange: (String) -> Void
   /// color 行选了颜色（参数 = #RRGGBB 大写）
   let onColorChange: (String) -> Void
+  /// slider 行被拖动（参数 = 当前值）。**每次变化都上报**：调用方负责节流落库，
+  /// 而 cell 自己的实时示例不等落库（见 TiebaFormSliderCell）。
+  let onSlide: (Double) -> Void
+  /// slider 行的实时示例字体：入参 = 当前值，出参 = 示例字体。
+  /// 由页面决定是正文级还是界面级（表单层不认识字号体系）。
+  let previewFont: (Double) -> UIFont
 }
 
-/// 行种类 → cell 类 / 复用 id。集中在注册表里，tableView 注册与 cellForRow 共用一份。
-/// @MainActor：cell 类的 reuseID 是主 actor 隔离的（UIKit 类），注册表跟着隔离。
+/// 表单行 cell 的统一契约。存在的理由是**消除第四份分发事实**：
+/// cellForRowAt 原先用 10 分支 switch 逐个做条件转换再调同一个 apply（default 静默 break），
+/// 与注册表里的 kind→类、类→复用 id 两张 switch 表互为副本——新增一种行类型要同步改 6 处，
+/// 漏一处就是"cell 拿到却不配置"的静默空白。
+/// 现在 cellForRowAt 只做一次协议转换；复用 id 由**类自己**给出。
+/// @MainActor：UIKit 类的静态成员是主 actor 隔离的，协议跟着隔离。
+@MainActor
+protocol TiebaFormCellConfiguring: AnyObject {
+  static var reuseID: String { get }
+  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext)
+}
+
+/// 行种类 → cell 类。**唯一**一张映射表：注册（allReuseIDs）、按复用 id 取类
+/// （cellClass(for:)）、按种类取复用 id（reuseID(for:)）全部由它派生。
+/// 加一种行类型只需要动三处：Kind 加 case、这张表加一行、新 cell 实现协议。
 @MainActor
 enum TiebaFormCellRegistry {
-  static let allReuseIDs: [String] = [
-    TiebaFormRowCell.reuseID,
-    TiebaFormInputCell.reuseID,
-    TiebaFormSegmentedCell.reuseID,
-    TiebaFormAvatarCell.reuseID,
-    TiebaFormActionCell.reuseID,
-    TiebaFormProgressCell.reuseID,
-    TiebaFormStatusCell.reuseID,
-    TiebaFormSpinnerCell.reuseID,
-    TiebaFormDateCell.reuseID,
-    TiebaFormEmptyCell.reuseID,
+  /// 未显式映射的种类走通用行 cell（与改动前 default 分支的目标一致）。
+  static let fallbackCellType: TiebaFormCellConfiguring.Type = TiebaFormRowCell.self
+
+  static let mapping: [TiebaFormRow.Kind: TiebaFormCellConfiguring.Type] = [
+    .textField: TiebaFormInputCell.self,
+    .segmented: TiebaFormSegmentedCell.self,
+    .avatar: TiebaFormAvatarCell.self,
+    .prominentButton: TiebaFormActionCell.self,
+    .progress: TiebaFormProgressCell.self,
+    .status: TiebaFormStatusCell.self,
+    .spinner: TiebaFormSpinnerCell.self,
+    .datePicker: TiebaFormDateCell.self,
+    .empty: TiebaFormEmptyCell.self,
+    .slider: TiebaFormSliderCell.self,
   ]
 
-  static func cellClass(for reuseID: String) -> UITableViewCell.Type {
-    switch reuseID {
-    case TiebaFormInputCell.reuseID: return TiebaFormInputCell.self
-    case TiebaFormSegmentedCell.reuseID: return TiebaFormSegmentedCell.self
-    case TiebaFormAvatarCell.reuseID: return TiebaFormAvatarCell.self
-    case TiebaFormActionCell.reuseID: return TiebaFormActionCell.self
-    case TiebaFormProgressCell.reuseID: return TiebaFormProgressCell.self
-    case TiebaFormStatusCell.reuseID: return TiebaFormStatusCell.self
-    case TiebaFormSpinnerCell.reuseID: return TiebaFormSpinnerCell.self
-    case TiebaFormDateCell.reuseID: return TiebaFormDateCell.self
-    case TiebaFormEmptyCell.reuseID: return TiebaFormEmptyCell.self
-    default: return TiebaFormRowCell.self
-    }
+  static func cellType(for kind: TiebaFormRow.Kind) -> TiebaFormCellConfiguring.Type {
+    mapping[kind] ?? fallbackCellType
   }
 
-  /// 行种类 → 复用 id。
+  /// 行种类 → 复用 id（由 cell 类派生，不再手抄）。
   static func reuseID(for kind: TiebaFormRow.Kind) -> String {
-    switch kind {
-    case .textField: return TiebaFormInputCell.reuseID
-    case .segmented: return TiebaFormSegmentedCell.reuseID
-    case .avatar: return TiebaFormAvatarCell.reuseID
-    case .prominentButton: return TiebaFormActionCell.reuseID
-    case .progress: return TiebaFormProgressCell.reuseID
-    case .status: return TiebaFormStatusCell.reuseID
-    case .spinner: return TiebaFormSpinnerCell.reuseID
-    case .datePicker: return TiebaFormDateCell.reuseID
-    case .empty: return TiebaFormEmptyCell.reuseID
-    default: return TiebaFormRowCell.reuseID
-    }
+    cellType(for: kind).reuseID
+  }
+
+  /// 注册用清单：映射表里的全部 + 兜底（兜底那类也要注册，否则 dequeue 会拿到未注册 id）。
+  static var allReuseIDs: [String] {
+    var ids = mapping.values.map { $0.reuseID }
+    ids.append(fallbackCellType.reuseID)
+    // 去重后排序：注册顺序无意义，排序只为输出稳定（便于对拍）。
+    return Array(Set(ids)).sorted()
+  }
+
+  static func cellClass(for reuseID: String) -> TiebaFormCellConfiguring.Type {
+    mapping.values.first { $0.reuseID == reuseID } ?? fallbackCellType
   }
 }
+
+// 十种 cell 的协议一致性（apply 签名本来就一致，这里只是把"事实"声明出来）。
+extension TiebaFormRowCell: TiebaFormCellConfiguring {}
+extension TiebaFormInputCell: TiebaFormCellConfiguring {}
+extension TiebaFormSegmentedCell: TiebaFormCellConfiguring {}
+extension TiebaFormAvatarCell: TiebaFormCellConfiguring {}
+extension TiebaFormActionCell: TiebaFormCellConfiguring {}
+extension TiebaFormProgressCell: TiebaFormCellConfiguring {}
+extension TiebaFormStatusCell: TiebaFormCellConfiguring {}
+extension TiebaFormSpinnerCell: TiebaFormCellConfiguring {}
+extension TiebaFormDateCell: TiebaFormCellConfiguring {}
+extension TiebaFormEmptyCell: TiebaFormCellConfiguring {}
 
 /// 系统表单行的共用底座：卡片底色 + 内容视图透明 + 行高下限 44
 /// （Dynamic Type 放大时内容更高、自然被撑开——行高仍由内容/系统给）。
@@ -778,1240 +843,3 @@ class TiebaFormBaseCell: UITableViewCell {
 /// 槽不支持"底色 + 符号"的富图标，而 RN 侧 RowIcon 就是色块+白符号的合成视图，
 /// 所以用系统绘图 API（UIGraphicsImageRenderer + UIImage(systemName:)）合成一张
 /// 30x30 的图交给 image 槽，按 (symbol, 色) 缓存。不引入任何图片资源。
-final class TiebaFormRowCell: UITableViewCell {
-  static let reuseID = "TiebaFormRowCell"
-
-  /// 系统表单行的最小行高（与 SwiftUI List 行一致；系统对分组行也是 44 起）。
-  static let minimumHeight: CGFloat = 44
-
-  /// (symbol|色) → 合成图。主 actor 隔离（cell 只在主线程配置），滚动时不重绘。
-  private static var iconCache: [String: UIImage] = [:]
-
-  private let toggle = UISwitch()
-  /// picker 行的系统菜单按钮：**铺满整行**（点行内任意处都弹菜单，与系统设置一致），
-  /// 箭头靠配置右对齐画在尾随边。
-  /// ⚠️ 不再当 `accessoryView`：真机上它被画到了行首、半掩在卡片圆角外，命中区
-  /// 也跟着跑偏 —— 整页 picker 都点不动（用户实证）。覆盖层的 frame 由我们说了算。
-  private let pickerMenuButton = UIButton(type: .system)
-  /// 取色行的系统色井（自带色环外观与取色浮层，点击回调 .valueChanged）
-  private let colorWell = UIColorWell()
-
-  private var onToggle: ((Bool) -> Void)?
-  private var onPick: ((String) -> Void)?
-  private var onMenuPick: ((String) -> Void)?
-  private var onColorChange: ((String) -> Void)?
-  /// 模型值（受控回弹的落点）
-  private var modelToggleValue = false
-  /// apply 算好的分隔线内缩（nil = 不动，保持系统默认）。系统会在布局时重置
-  /// separatorInset，所以留到 layoutSubviews 重申一次——不再翻视图树量 label。
-  private var resolvedSeparatorInset: UIEdgeInsets?
-
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    selectionStyle = .none
-    backgroundColor = .secondarySystemGroupedBackground
-    contentView.backgroundColor = .clear
-
-    toggle.addTarget(self, action: #selector(toggleChanged), for: .valueChanged)
-    colorWell.supportsAlpha = false
-    colorWell.addTarget(self, action: #selector(colorWellChanged), for: .valueChanged)
-
-    // 行高的下限由系统给（内容配置自带行度量），这里只兜底 44（与系统表单一致，
-    // Dynamic Type 放大时内容更高、自然被撑开）。
-    let minHeight = contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: Self.minimumHeight)
-    minHeight.priority = .required
-    minHeight.isActive = true
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-  /// picker 行把菜单按钮铺满 contentView（幂等：同一 cell 复用多次只挂一次）。
-  private func attachPickerOverlay() {
-    guard pickerMenuButton.superview !== contentView else { return }
-    pickerMenuButton.translatesAutoresizingMaskIntoConstraints = false
-    contentView.addSubview(pickerMenuButton)
-    NSLayoutConstraint.activate([
-      pickerMenuButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-      pickerMenuButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-      pickerMenuButton.topAnchor.constraint(equalTo: contentView.topAnchor),
-      pickerMenuButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-    ])
-  }
-
-  /// 配置一行（上下文见 TiebaFormCellContext）。
-  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
-    self.onToggle = context.onToggle
-    self.onPick = context.onPick
-    self.onMenuPick = context.onMenuPick
-    self.onColorChange = context.onColorChange
-    let tint = context.tint
-    let explicitTint = context.explicitTint
-
-    // ── 复用重置 ──
-    accessoryView = nil
-    accessoryType = .none
-    selectionStyle = .none
-    toggle.isHidden = true
-    toggle.isEnabled = true
-    var pickerConfig = UIButton.Configuration.plain()
-    pickerConfig.image = UIImage(systemName: "chevron.up.chevron.down")
-    pickerConfig.imagePlacement = .trailing
-    // 「值 + 箭头」整块靠右：箭头恒在文字右边（各自排布，不会叠字）。
-    pickerConfig.imagePadding = 6
-    pickerConfig.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 16)
-    pickerMenuButton.configuration = pickerConfig
-    pickerMenuButton.contentHorizontalAlignment = .trailing
-    pickerMenuButton.showsMenuAsPrimaryAction = true
-    // 浮层展开触觉（iOS 14+ 的 menuActionTriggered：只在菜单真的弹出时发）。
-    pickerMenuButton.addAction(
-      UIAction { _ in TiebaSceneHaptics.fire("sheet-present") },
-      for: .menuActionTriggered
-    )
-
-    pickerMenuButton.isHidden = true
-    pickerMenuButton.isEnabled = true
-    colorWell.isHidden = true
-    resolvedSeparatorInset = nil
-    var hasImage = false
-
-    let disabledColor = UIColor.tertiaryLabel
-    let emphasized: UIColor = row.destructive ? .systemRed : (row.override ?? tint)
-
-    // ── 内容配置（系统行度量）──
-    var config: UIListContentConfiguration
-    switch row.kind {
-    case .picker:
-      config = .valueCell()     // 标题 + 尾部当前值（右对齐、基线与标题对齐）
-    case .link, .toggle, .menu:
-      config = .subtitleCell()  // 标题 + 次行说明
-    default:
-      config = .cell()
-    }
-
-    if let icon = row.icon, row.kind != .hero {
-      if let iconTint = row.iconTint {
-        config.image = Self.squareIconImage(symbol: icon, color: row.disabled ? .systemGray3 : iconTint)
-        config.imageProperties.maximumSize = CGSize(width: 30, height: 30)
-        config.imageProperties.reservedLayoutSize = CGSize(width: 30, height: 30)
-      } else {
-        // 裸符号（Toggle/Picker/Button 的 systemImage）：随主色染色。
-        config.image = UIImage(
-          systemName: icon,
-          withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .regular)
-        )
-        config.imageProperties.tintColor = row.disabled ? disabledColor : emphasized
-        config.imageProperties.maximumSize = CGSize(width: 24, height: 24)
-        // 图槽宽度固定 24：文字起点可算（分隔线对齐），不靠翻视图树量实际 label。
-        config.imageProperties.reservedLayoutSize = CGSize(width: 24, height: 24)
-      }
-      hasImage = true
-    }
-
-    config.text = row.title
-    config.textProperties.color = row.disabled
-      ? disabledColor
-      : (row.kind == .button || row.kind == .confirm ? emphasized : .label)
-    config.textProperties.numberOfLines = 0
-
-    // 副标题：ListItem 的 supportingText / Toggle 的子 Text / Button 的说明。
-    if row.kind == .link || row.kind == .toggle || row.kind == .button || row.kind == .confirm
-      || row.kind == .menu {
-      config.secondaryText = row.subtitle
-      // ⚠️ 字号必须显式对齐：系统 .subtitleCell 的次行是 subheadline(15)，
-      // 而迁移前 ListItem 的 supportingText 是 SwiftUI 行内默认 body(17)；
-      // Button 的子 Text 在 SwiftUI 里也是行内默认字号（这里跟 body）。
-      config.secondaryTextProperties.font = UIFont.preferredFont(forTextStyle: .body)
-      config.secondaryTextProperties.color = row.disabled ? disabledColor : .secondaryLabel
-      config.secondaryTextProperties.numberOfLines = 0
-    }
-    if row.kind == .text {
-      config.textProperties.font = row.resolvedTitleWeight == .regular
-        ? row.font
-        : UIFont.tiebaFormFont(row.font, weight: row.resolvedTitleWeight)
-      // 颜色规则与 SwiftUI 的 foregroundStyle 一致：JS 给了就用 JS 的，
-      // 否则 .label（要次级灰时 JS 传 secondaryLabel token）。
-      config.textProperties.color = row.override ?? .label
-    }
-    contentConfiguration = config
-
-    // 分隔线对齐文字（跳过图标）：图槽宽由 imageProperties.reservedLayoutSize 固定，
-    // 文字起点 = 内容左内边距 + 图槽宽 + imageToTextPadding，直接算，不翻视图树。
-    if hasImage {
-      let margins = config.directionalLayoutMargins
-      resolvedSeparatorInset = UIEdgeInsets(
-        top: 0,
-        left: margins.leading + config.imageProperties.reservedLayoutSize.width + config.imageToTextPadding,
-        bottom: 0,
-        right: 0
-      )
-    }
-
-    // ── 附件 / 行形态 ──
-    switch row.kind {
-    case .link:
-      selectionStyle = row.disabled ? .none : .default
-
-    case .toggle:
-      toggle.isHidden = false
-      modelToggleValue = row.value == "1" || row.value?.lowercased() == "true"
-      toggle.isOn = modelToggleValue
-      toggle.isEnabled = !row.disabled && !row.switchDisabled
-      // 「默认」主题（explicitTint = false）不写 onTintColor：UISwitch 出厂就是
-      // 系统绿，与设置页现状（默认主题下开关为绿）一致。
-      toggle.onTintColor = (explicitTint && !row.disabled) ? (row.override ?? tint) : nil
-      accessoryView = toggle
-      selectionStyle = .none
-
-    case .picker:
-      // 整行可点：按钮铺满 contentView（自带弹菜单），并**自己画**「选中项文字 + 箭头」。
-      // ⚠️ 值文本不能走 content 的 secondaryText：它是原始 value（"default"/"1"），
-      // 菜单里却是 label（"默认"/"标准"），两者对不上（用户实证）；而且 secondaryText
-      // 固定贴尾随边，会和覆盖层的箭头叠在一起。
-      selectionStyle = .none
-      if !row.options.isEmpty {
-        attachPickerOverlay()
-        pickerMenuButton.isHidden = false
-        pickerMenuButton.isEnabled = !row.disabled
-        pickerMenuButton.menu = buildMenu(row: row)
-        var buttonConfig = pickerMenuButton.configuration ?? .plain()
-        buttonConfig.title = row.options.first { $0.value == row.value }?.label ?? row.value
-        buttonConfig.baseForegroundColor = row.disabled
-          ? .tertiaryLabel
-          : (explicitTint ? emphasized : .secondaryLabel)
-        pickerMenuButton.configuration = buttonConfig
-      }
-
-    case .button, .confirm:
-      selectionStyle = row.disabled ? .none : .default
-
-    case .option:
-      // Picker(.inline) 的一档：标题 + 系统打勾（accessoryType，行不是按钮形态）。
-      accessoryType = row.selected ? .checkmark : .none
-      selectionStyle = row.disabled ? .none : .default
-
-    case .menu:
-      // 行尾 ellipsis UIMenu（account 每行「移除账号」）；行本体可点（切换账号）。
-      // 选中态（当前账号）用系统打勾放在 ellipsis 之前（accessoryView 里横排）。
-      accessoryView = menuAccessory(row: row)
-      selectionStyle = row.disabled ? .none : .default
-
-    case .text:
-      selectionStyle = .none
-
-    case .color:
-      // 系统 UIColorWell：色井外观 + 点击弹取色器，都是系统给的（原来是自绘色环
-      // + 表单持有取色器 delegate 回传，那套整体删掉）。
-      colorWell.isHidden = false
-      colorWell.isEnabled = !row.disabled
-      colorWell.selectedColor = row.value.flatMap { TiebaFormColor.hex($0) } ?? .systemBlue
-      accessoryView = colorWell
-      selectionStyle = .none
-
-    case .hero, .textField, .segmented, .avatar, .prominentButton, .progress, .status,
-      .spinner, .datePicker, .empty:
-      // 这些种类走各自的专用 cell（见 TiebaFormCellRegistry.reuseID(for:)），
-      // 不会落到本 cell；列在这里只为穷尽 switch。
-      break
-    }
-  }
-
-  /// RowIcon 形态图标：30x30 圆角色块 + 15pt semibold 白色系统符号。
-  /// 用系统绘图 API 合成（不引资源、不画贝塞尔字形），按 (symbol|色) 缓存。
-  private static func squareIconImage(symbol: String, color: UIColor) -> UIImage? {
-    let key = symbol + "|" + TiebaFormListView.hexString(from: color)
-    if let cached = iconCache[key] { return cached }
-    let size = CGSize(width: 30, height: 30)
-    let renderer = UIGraphicsImageRenderer(size: size)
-    let image = renderer.image { _ in
-      color.setFill()
-      UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 8).fill()
-      guard let glyph = UIImage(
-        systemName: symbol,
-        withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
-      )?.withTintColor(.white, renderingMode: .alwaysOriginal) else { return }
-      glyph.draw(at: CGPoint(
-        x: (size.width - glyph.size.width) / 2,
-        y: (size.height - glyph.size.height) / 2
-      ))
-    }
-    iconCache[key] = image
-    return image
-  }
-
-  private func buildMenu(row: TiebaFormRow) -> UIMenu {
-    let actions = row.options.map { option in
-      UIAction(
-        title: option.label,
-        state: option.value == row.value ? .on : .off,
-        handler: { [weak self] _ in self?.onPick?(option.value) }
-      )
-    }
-    // .singleSelection：单选菜单（系统保证同时只有一个 on 项 + 画打勾）。
-    return UIMenu(title: row.title, options: .singleSelection, children: actions)
-  }
-
-  /// menu 行的行尾附件：可选打勾（当前账号）+ 行尾 ellipsis 菜单按钮。
-  /// ellipsis 的形态对应迁移前的 `Menu(label:"", systemImage:"ellipsis",
-  /// labelStyle: iconOnly, buttonStyle: plain)`：一个纯图标按钮，着色跟主色。
-  private func menuAccessory(row: TiebaFormRow) -> UIView {
-    let stack = UIStackView()
-    stack.axis = .horizontal
-    stack.alignment = .center
-    stack.spacing = 8
-
-    if row.selected {
-      let check = UIImageView(image: UIImage(
-        systemName: "checkmark",
-        withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-      ))
-      check.tintColor = row.trailingColor ?? .systemGreen
-      stack.addArrangedSubview(check)
-    }
-
-    let button = UIButton(type: .system)
-    button.setImage(
-      UIImage(
-        systemName: "ellipsis",
-        withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)
-      ),
-      for: .normal
-    )
-    button.tintColor = row.disabled ? .tertiaryLabel : (row.override ?? .tintColor)
-    button.isEnabled = !row.disabled && !row.menuItems.isEmpty
-    if button.isEnabled {
-      button.showsMenuAsPrimaryAction = true
-      button.menu = buildMenuItemMenu(row: row)
-      button.addAction(
-        UIAction { _ in TiebaSceneHaptics.fire("sheet-present") },
-        for: .menuActionTriggered
-      )
-    }
-    // 纯图标按钮的命中区：图标本身约 17pt，给到 44 的行高（不改变布局宽度）。
-    button.widthAnchor.constraint(greaterThanOrEqualToConstant: 30).isActive = true
-    stack.addArrangedSubview(button)
-
-    stack.translatesAutoresizingMaskIntoConstraints = true
-    let size = stack.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
-    stack.frame = CGRect(origin: .zero, size: size)
-    return stack
-  }
-
-  private func buildMenuItemMenu(row: TiebaFormRow) -> UIMenu {
-    let actions = row.menuItems.map { item in
-      UIAction(
-        title: item.title,
-        image: item.icon.flatMap { UIImage(systemName: $0) },
-        attributes: item.destructive ? .destructive : [],
-        handler: { [weak self] _ in self?.onMenuPick?(item.id) }
-      )
-    }
-    return UIMenu(children: actions)
-  }
-
-  @objc private func toggleChanged() {
-    TiebaSceneHaptics.fire("toggle")
-    // 不做"先拨回模型值、等回推"：那会让一次点击连播两段动画（弹回 → 再弹过去），
-    // 用户实证"开关动画非常差、完全不顺滑"。新值直接交给调用方，写库成功由
-    // setValue 就地确认（值相同不重播动画）；写失败由写库侧拨回真实档位
-    //（TiebaFormPageController 的失败分支）——那时的一次回弹才是语义本身。
-    onToggle?(toggle.isOn)
-  }
-
-  /// 供 didSelectRow 使用：点行内任意处 = 拨一次开关（SwiftUI 开关行的行为）。
-  func flipToggle() {
-    guard !toggle.isHidden, toggle.isEnabled else { return }
-    toggle.setOn(!toggle.isOn, animated: true)
-    toggleChanged()
-  }
-
-  /// 系统会在布局阶段重置 separatorInset，这里把 apply 算好的值重申一次
-  /// （值由内容配置的度量算出，不做视图树递归；无图标行不动，保持系统默认）。
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    guard let inset = resolvedSeparatorInset, separatorInset != inset else { return }
-    separatorInset = inset
-  }
-
-  @objc private func colorWellChanged() {
-    guard let color = colorWell.selectedColor else { return }
-    TiebaSceneHaptics.fire("toggle")
-    onColorChange?(TiebaFormListView.hexString(from: color))
-  }
-}
-
-// MARK: - hero cell（关于页首块：图标 + 名称 + 版本）
-
-final class TiebaFormHeroCell: UITableViewCell {
-  static let reuseID = "TiebaFormHeroCell"
-
-  /// Bundle 相对路径 → 图。滚动期反复读盘/解码的分配省掉（同图在同页多次出现）。
-  private static var imageCache: [String: UIImage] = [:]
-
-  private let stack = UIStackView()
-  private let heroImage = UIImageView()
-  private let titleLabel = UILabel()
-  private let subtitleLabel = UILabel()
-
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    selectionStyle = .none
-    backgroundColor = .secondarySystemGroupedBackground
-    contentView.backgroundColor = .clear
-
-    stack.axis = .vertical
-    stack.alignment = .center
-    // VStack spacing Spacing.xs(4) + padding vertical Spacing.lg(16)
-    stack.spacing = 4
-    stack.translatesAutoresizingMaskIntoConstraints = false
-
-    heroImage.contentMode = .scaleAspectFill
-    heroImage.clipsToBounds = true
-    // RN 侧是 { width: 64, height: 64, borderRadius: 14 }（未声明 borderCurve
-    // → 圆形圆角），保持一致，不要补 continuous。
-    heroImage.layer.cornerRadius = 14
-    heroImage.translatesAutoresizingMaskIntoConstraints = false
-
-    titleLabel.textAlignment = .center
-    titleLabel.numberOfLines = 0
-    subtitleLabel.textAlignment = .center
-    subtitleLabel.numberOfLines = 0
-
-    stack.addArrangedSubview(heroImage)
-    stack.addArrangedSubview(titleLabel)
-    stack.addArrangedSubview(subtitleLabel)
-    contentView.addSubview(stack)
-
-    NSLayoutConstraint.activate([
-      stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-      stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-      stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
-      stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
-      heroImage.widthAnchor.constraint(equalToConstant: 64),
-      heroImage.heightAnchor.constraint(equalToConstant: 64),
-    ])
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-  func apply(_ row: TiebaFormRow) {
-    heroImage.isHidden = row.imageName == nil
-    if let name = row.imageName {
-      // 打包图（Bundle 相对路径，如 "expo.icon/Assets/icon-light.png"）：与 RN
-      // 侧 require('@/assets/images/icon.png') 是同一张图（同 md5），走 Bundle
-      // 直读，不进 Metro/网络（开发档也必须能显示，见 about.tsx 的缺口注释）。
-      if let cached = Self.imageCache[name] {
-        heroImage.image = cached
-      } else if let image = UIImage(contentsOfFile: Bundle.main.bundlePath + "/" + name) {
-        Self.imageCache[name] = image
-        heroImage.image = image
-      } else {
-        heroImage.image = nil
-      }
-    }
-    titleLabel.text = row.title
-    titleLabel.font = row.font
-    titleLabel.textColor = .label
-    subtitleLabel.text = row.subtitle
-    subtitleLabel.font = UIFont.preferredFont(forTextStyle: .subheadline)
-    subtitleLabel.textColor = .secondaryLabel
-  }
-}
-
-// MARK: - 系统符号小工具
-
-/// SF Symbol → 配置好的 UIImage（cell 内共用；无效名返回 nil，UIKit 画占位不崩）。
-enum TiebaFormSymbol {
-  static func image(_ name: String?, pointSize: CGFloat, weight: UIImage.SymbolWeight = .regular) -> UIImage? {
-    guard let name, !name.isEmpty else { return nil }
-    return UIImage(
-      systemName: name,
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: pointSize, weight: weight)
-    )
-  }
-}
-
-// MARK: - 输入行（textField：UITextField / UITextView）
-
-/// TextField 行。单行走 UITextField（placeholder/return 收键盘），多行走
-/// UITextView（SwiftUI `TextField(axis: .vertical)`：内容增高、行随内容长）。
-/// 受控语义：值由调用方下发（value）；每次编辑只上报 onTextChange。
-/// 行高：多行按内容自撑（isScrollEnabled = false + 内容尺寸变化时刷一次表），
-/// 与 SwiftUI 竖直输入框在 Form 里"随输入长高"的行为一致。
-final class TiebaFormInputCell: TiebaFormBaseCell {
-  static let reuseID = "TiebaFormInputCell"
-
-  private let field = UITextField()
-  private let textView = UITextView()
-  private let placeholderLabel = UILabel()
-  private var singleLineConstraints: [NSLayoutConstraint] = []
-  private var multiLineConstraints: [NSLayoutConstraint] = []
-  private var onTextChange: ((String) -> Void)?
-  private var maxLength = 0
-  private var isMultiline = false
-  private var heightRefreshScheduled = false
-  private weak var owningTableView: UITableView?
-
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    let margins = Self.rowMargins
-
-    field.font = .preferredFont(forTextStyle: .body)
-    field.adjustsFontForContentSizeCategory = true
-    field.textColor = .label
-    field.borderStyle = .none
-    field.returnKeyType = .done
-    field.delegate = self
-    field.addTarget(self, action: #selector(fieldChanged), for: .editingChanged)
-    field.translatesAutoresizingMaskIntoConstraints = false
-    contentView.addSubview(field)
-
-    textView.font = .preferredFont(forTextStyle: .body)
-    textView.adjustsFontForContentSizeCategory = true
-    textView.textColor = .label
-    textView.backgroundColor = .clear
-    textView.isScrollEnabled = false
-    textView.textContainerInset = .zero
-    textView.textContainer.lineFragmentPadding = 0
-    textView.delegate = self
-    textView.translatesAutoresizingMaskIntoConstraints = false
-    contentView.addSubview(textView)
-
-    placeholderLabel.font = .preferredFont(forTextStyle: .body)
-    placeholderLabel.adjustsFontForContentSizeCategory = true
-    placeholderLabel.textColor = .placeholderText
-    placeholderLabel.numberOfLines = 0
-    placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
-    contentView.addSubview(placeholderLabel)
-
-    singleLineConstraints = [
-      field.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: margins.leading),
-      field.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -margins.trailing),
-      field.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 11),
-      field.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -11),
-    ]
-    multiLineConstraints = [
-      textView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: margins.leading),
-      textView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -margins.trailing),
-      textView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
-      textView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -10),
-      textView.heightAnchor.constraint(greaterThanOrEqualToConstant: 24),
-      placeholderLabel.leadingAnchor.constraint(equalTo: textView.leadingAnchor),
-      placeholderLabel.trailingAnchor.constraint(lessThanOrEqualTo: textView.trailingAnchor),
-      placeholderLabel.topAnchor.constraint(equalTo: textView.topAnchor),
-    ]
-    NSLayoutConstraint.activate(singleLineConstraints)
-  }
-
-  override func didMoveToSuperview() {
-    super.didMoveToSuperview()
-    owningTableView = Self.nearestTableView(from: self)
-  }
-
-  private static func nearestTableView(from cell: UITableViewCell) -> UITableView? {
-    var view: UIView? = cell.superview
-    while let current = view {
-      if let table = current as? UITableView { return table }
-      view = current.superview
-    }
-    return nil
-  }
-
-  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
-    onTextChange = context.onTextChange
-    maxLength = row.maxLength
-    isMultiline = row.multiline
-
-    field.isHidden = isMultiline
-    textView.isHidden = !isMultiline
-    NSLayoutConstraint.deactivate(isMultiline ? singleLineConstraints : multiLineConstraints)
-    NSLayoutConstraint.activate(isMultiline ? multiLineConstraints : singleLineConstraints)
-
-    field.isEnabled = !row.disabled
-    textView.isEditable = !row.disabled
-    field.placeholder = isMultiline ? nil : row.placeholder
-    placeholderLabel.text = row.placeholder
-
-    // 受控值：**用户没有正在编辑**且文本确实不同才写回。
-    // 光比较文本不够——JS 侧打字期间不重渲染，一旦它因别的状态重渲染（上传中、
-    // 保存中、性别切换…），下发的仍是打字前的旧值，会把用户刚打的字覆盖掉。
-    let value = row.value ?? ""
-    if isMultiline {
-      if !textView.isFirstResponder, textView.text != value { textView.text = value }
-    } else if !field.isFirstResponder, field.text != value {
-      field.text = value
-    }
-    updatePlaceholderVisibility()
-    // 复用回来时高度按新内容收敛一次。cellForRow 内不能动表格（嵌套 beginUpdates），
-    // 所以这里只登记一次，等本轮 runloop 结束再算。
-    if isMultiline { scheduleHeightRefresh() }
-  }
-
-  private func updatePlaceholderVisibility() {
-    guard isMultiline else {
-      placeholderLabel.isHidden = true
-      return
-    }
-    placeholderLabel.isHidden = !(textView.text ?? "").isEmpty
-  }
-
-  @objc private func fieldChanged() {
-    onTextChange?(field.text ?? "")
-  }
-
-  /// 多行内容变化后让表格重算行高（自撑行；内容尺寸变了要显式失效一次）。
-  /// ⚠️ 只能在 cellForRow 之外调用（apply 期间动表格会嵌套 beginUpdates），
-  /// 且宽度要等布局完（未布局时 bounds.width = 0 会把高度算成无限大）。
-  private func scheduleHeightRefresh() {
-    guard !heightRefreshScheduled else { return }
-    heightRefreshScheduled = true
-    DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
-      self.heightRefreshScheduled = false
-      self.refreshHeightIfNeeded()
-    }
-  }
-
-  private func refreshHeightIfNeeded() {
-    guard let table = owningTableView else { return }
-    let width = textView.bounds.width
-    guard width > 0 else { return }
-    let target = textView.sizeThatFits(
-      CGSize(width: width, height: .greatestFiniteMagnitude)
-    ).height
-    guard abs(target - textView.bounds.height) >= 0.5 else { return }
-    UIView.performWithoutAnimation {
-      table.beginUpdates()
-      table.endUpdates()
-    }
-  }
-
-  /// 截断到 maxLength（0 = 不限）。
-  private func clamp(_ text: String) -> String {
-    guard maxLength > 0, text.count > maxLength else { return text }
-    return String(text.prefix(maxLength))
-  }
-}
-
-extension TiebaFormInputCell: UITextFieldDelegate {
-  func textField(
-    _ textField: UITextField,
-    shouldChangeCharactersIn range: NSRange,
-    replacementString string: String
-  ) -> Bool {
-    guard maxLength > 0 else { return true }
-    let current = (textField.text ?? "") as NSString
-    let next = current.replacingCharacters(in: range, with: string)
-    if next.count > maxLength {
-      textField.text = String(next.prefix(maxLength))
-      onTextChange?(textField.text ?? "")
-      return false
-    }
-    return true
-  }
-
-  func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-    // SwiftUI 单行 TextField 回车 = 提交并收键盘（不触发任何业务回调）。
-    textField.resignFirstResponder()
-    return false
-  }
-}
-
-extension TiebaFormInputCell: UITextViewDelegate {
-  func textViewDidChange(_ textView: UITextView) {
-    updatePlaceholderVisibility()
-    if maxLength > 0, textView.text.count > maxLength {
-      textView.text = String(textView.text.prefix(maxLength))
-    }
-    scheduleHeightRefresh()
-    onTextChange?(textView.text ?? "")
-  }
-
-  func textView(
-    _ textView: UITextView,
-    shouldChangeTextIn range: NSRange,
-    replacementText text: String
-  ) -> Bool {
-    guard maxLength > 0 else { return true }
-    let current = (textView.text ?? "") as NSString
-    let next = current.replacingCharacters(in: range, with: text)
-    if next.count > maxLength {
-      textView.text = String(next.prefix(maxLength))
-      updatePlaceholderVisibility()
-      scheduleHeightRefresh()
-      onTextChange?(textView.text ?? "")
-      return false
-    }
-    return true
-  }
-}
-
-// MARK: - 分段行（segmented：UISegmentedControl）
-
-/// Picker(.segmented) 行：系统分段控件，选中即上报（受控：值由 sections 下发）。
-final class TiebaFormSegmentedCell: TiebaFormBaseCell {
-  static let reuseID = "TiebaFormSegmentedCell"
-
-  private let control = UISegmentedControl()
-  private var onPick: ((String) -> Void)?
-  private var values: [String] = []
-
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    let margins = Self.rowMargins
-    control.translatesAutoresizingMaskIntoConstraints = false
-    control.addTarget(self, action: #selector(segmentChanged), for: .valueChanged)
-    contentView.addSubview(control)
-    NSLayoutConstraint.activate([
-      control.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: margins.leading),
-      control.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -margins.trailing),
-      control.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-      control.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
-    ])
-  }
-
-  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
-    onPick = context.onPick
-    values = row.options.map(\.value)
-    control.removeAllSegments()
-    for (index, option) in row.options.enumerated() {
-      control.insertSegment(withTitle: option.label, at: index, animated: false)
-    }
-    if let selected = values.firstIndex(of: row.value ?? "") {
-      control.selectedSegmentIndex = selected
-    } else {
-      control.selectedSegmentIndex = UISegmentedControl.noSegment
-    }
-    control.isEnabled = !row.disabled
-  }
-
-  @objc private func segmentChanged() {
-    TiebaSceneHaptics.fire("segment")
-    let index = control.selectedSegmentIndex
-    guard index >= 0, index < values.count else { return }
-    onPick?(values[index])
-  }
-}
-
-// MARK: - 头像行（avatar）
-
-/// 头像行：圆头像（复用仓内 TiebaForumAvatarView：Nuke 加载 + 首字占位）
-/// + 标题/副标题 + 尾部按钮或说明文字。用于「编辑资料」的头像块（尾部 = 更换头像
-/// 按钮）与屏蔽页的云端黑名单/屏蔽吧。
-final class TiebaFormAvatarCell: TiebaFormBaseCell {
-  static let reuseID = "TiebaFormAvatarCell"
-
-  /// 头像容器：尺寸随行变化（TiebaForumAvatarView 的尺寸在 init 固定，换尺寸才重建）。
-  private let avatarBox = UIView()
-  private var avatar: TiebaForumAvatarView?
-  /// 当前行的头像尺寸（容器约束）
-  private var avatarSize: CGFloat = 0
-  /// 已建头像的尺寸（两者不同才重建头像视图）
-  private var builtAvatarSize: CGFloat = 0
-  private var avatarBoxWidth: NSLayoutConstraint?
-  private var avatarBoxHeight: NSLayoutConstraint?
-  private let titleLabel = UILabel()
-  private let subtitleLabel = UILabel()
-  private let textStack = UIStackView()
-  private let rowStack = UIStackView()
-  private let trailingButton = UIButton(type: .system)
-  private let trailingLabel = UILabel()
-  private let spinner = UIActivityIndicatorView(style: .medium)
-  private var onPress: (() -> Void)?
-
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    let margins = Self.rowMargins
-
-    avatarBox.translatesAutoresizingMaskIntoConstraints = false
-    avatarBox.clipsToBounds = true
-
-    titleLabel.font = .preferredFont(forTextStyle: .body)
-    titleLabel.adjustsFontForContentSizeCategory = true
-    titleLabel.textColor = .label
-    titleLabel.numberOfLines = 1
-    subtitleLabel.font = .preferredFont(forTextStyle: .footnote)
-    subtitleLabel.adjustsFontForContentSizeCategory = true
-    subtitleLabel.textColor = .secondaryLabel
-    subtitleLabel.numberOfLines = 1
-
-    textStack.axis = .vertical
-    textStack.alignment = .leading
-    textStack.spacing = 2
-    textStack.addArrangedSubview(titleLabel)
-    textStack.addArrangedSubview(subtitleLabel)
-
-    trailingButton.titleLabel?.font = .preferredFont(forTextStyle: .body)
-    trailingButton.addTarget(self, action: #selector(trailingPressed), for: .touchUpInside)
-    trailingLabel.font = .preferredFont(forTextStyle: .footnote)
-    trailingLabel.textColor = .tertiaryLabel
-    trailingLabel.numberOfLines = 1
-
-    rowStack.axis = .horizontal
-    rowStack.alignment = .center
-    rowStack.spacing = 12
-    rowStack.translatesAutoresizingMaskIntoConstraints = false
-    contentView.addSubview(rowStack)
-    contentView.addSubview(avatarBox)
-    rowStack.addArrangedSubview(textStack)
-    rowStack.addArrangedSubview(trailingButton)
-    rowStack.addArrangedSubview(trailingLabel)
-    rowStack.addArrangedSubview(spinner)
-    // 文本列吃掉多余宽度（尾部控件贴右）
-    textStack.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    trailingButton.setContentHuggingPriority(.required, for: .horizontal)
-    trailingLabel.setContentHuggingPriority(.required, for: .horizontal)
-
-    avatarBoxWidth = avatarBox.widthAnchor.constraint(equalToConstant: 40)
-    avatarBoxHeight = avatarBox.heightAnchor.constraint(equalToConstant: 40)
-    avatarBoxWidth?.isActive = true
-    avatarBoxHeight?.isActive = true
-
-    NSLayoutConstraint.activate([
-      avatarBox.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: margins.leading),
-      avatarBox.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-      avatarBox.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 8),
-      avatarBox.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -8),
-      rowStack.leadingAnchor.constraint(equalTo: avatarBox.trailingAnchor, constant: 12),
-      rowStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -margins.trailing),
-      rowStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-      rowStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
-    ])
-  }
-
-  override func prepareForReuse() {
-    super.prepareForReuse()
-    // 复用即取消在途头像请求并清图（TiebaForumAvatarView 没暴露 cancel：空 URL 走同一条）。
-    avatar?.configure(url: "", initial: "")
-  }
-
-  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
-    onPress = context.onRowPress
-    avatarSize = CGFloat(row.avatarSize)
-    avatarBoxWidth?.constant = avatarSize
-    avatarBoxHeight?.constant = avatarSize
-
-    titleLabel.text = row.title
-    titleLabel.isHidden = row.title.isEmpty
-    subtitleLabel.text = row.subtitle
-    subtitleLabel.isHidden = row.subtitle?.isEmpty ?? true
-    // 只有头像 + 尾部控件（编辑资料的头像块）：文本列整列移除，尾部按钮紧贴头像
-    // （原 RN 布局 avatarActions 是 flex:1 + alignItems:flex-start）。
-    textStack.isHidden = row.title.isEmpty && (row.subtitle?.isEmpty ?? true)
-
-    avatarView(size: avatarSize).configure(url: row.avatarURL ?? "", initial: row.initials ?? "")
-
-    // 尾部形态
-    switch row.trailingStyle {
-    case "button", "filledButton":
-      trailingButton.isHidden = false
-      trailingLabel.isHidden = true
-      var config: UIButton.Configuration = row.trailingStyle == "filledButton"
-        ? .filled()
-        : .plain()
-      config.title = row.trailingTitle
-      config.image = TiebaFormSymbol.image(row.trailingIcon, pointSize: 16, weight: .medium)
-      config.imagePadding = row.trailingTitle?.isEmpty == false ? 6 : 0
-      config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
-      if row.trailingStyle == "filledButton" {
-        // 原 UIButton variant="filled"：实心主色 + 白字（主色由调用方给）。
-        let background = row.trailingColor ?? context.tint
-        config.baseBackgroundColor = background
-        config.baseForegroundColor = .white
-        config.cornerStyle = .medium
-      }
-      trailingButton.configuration = config
-      if row.trailingStyle == "button" {
-        trailingButton.tintColor = row.trailingColor ?? context.tint
-      }
-      trailingButton.isEnabled = !row.disabled && !row.trailingDisabled
-    case "text":
-      trailingButton.isHidden = true
-      trailingLabel.isHidden = false
-      trailingLabel.text = row.trailingTitle
-      trailingLabel.textColor = row.trailingColor ?? .tertiaryLabel
-    default:
-      trailingButton.isHidden = true
-      trailingLabel.isHidden = true
-    }
-    // busy 转圈：原「更换头像」在上传中显示按钮右侧的 ProgressView（按钮文案由 JS
-    // 换成「上传中…」并 disabled），这里保持同一形态。
-    if row.trailingBusy {
-      spinner.isHidden = false
-      spinner.startAnimating()
-    } else {
-      spinner.stopAnimating()
-      spinner.isHidden = true
-    }
-  }
-
-  /// 尺寸变了才重建（头像的尺寸是 init 常量；同一页内尺寸恒定，等于只建一次）。
-  private func avatarView(size: CGFloat) -> TiebaForumAvatarView {
-    if let avatar, builtAvatarSize == size { return avatar }
-    avatar?.removeFromSuperview()
-    let view = TiebaForumAvatarView(size: size)
-    view.translatesAutoresizingMaskIntoConstraints = false
-    avatarBox.addSubview(view)
-    NSLayoutConstraint.activate([
-      view.centerXAnchor.constraint(equalTo: avatarBox.centerXAnchor),
-      view.centerYAnchor.constraint(equalTo: avatarBox.centerYAnchor),
-    ])
-    avatar = view
-    builtAvatarSize = size
-    return view
-  }
-
-  @objc private func trailingPressed() {
-    TiebaSceneHaptics.fire("press")
-    onPress?()
-  }
-}
-
-// MARK: - 系统按钮行（prominentButton）
-
-/// Form 内的系统按钮（整行宽）：UIButton.Configuration 的玻璃配置
-/// （glassButtonConfiguration / prominentGlassButtonConfiguration，iOS 26 起可用；
-/// 17 上退回 gray/filled）与 plain；JS 的 borderedProminent/bordered/glass/plain 逐名对位。
-final class TiebaFormActionCell: TiebaFormBaseCell {
-  static let reuseID = "TiebaFormActionCell"
-
-  private let button = UIButton(type: .system)
-  private var onPress: (() -> Void)?
-
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    let margins = Self.rowMargins
-    button.translatesAutoresizingMaskIntoConstraints = false
-    button.addTarget(self, action: #selector(buttonPressed), for: .touchUpInside)
-    contentView.addSubview(button)
-    NSLayoutConstraint.activate([
-      button.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: margins.leading),
-      button.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -margins.trailing),
-      button.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-      button.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
-    ])
-  }
-
-  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
-    onPress = context.onRowPress
-    var config: UIButton.Configuration
-    switch row.buttonStyle {
-    case "bordered":
-      // iOS 26 玻璃；17 退回经典 gray（同为无边框浅底，不重建玻璃观感）。
-      config = if #available(iOS 26.0, *) { .glass() } else { .gray() }
-    case "plain":
-      config = .plain()
-    default:
-      // borderedProminent / glass：iOS 26 玻璃主按钮；17 退回经典 filled。
-      config = if #available(iOS 26.0, *) { .prominentGlass() } else { .filled() }
-    }
-    config.title = row.title
-    config.image = TiebaFormSymbol.image(row.icon, pointSize: 17, weight: .regular)
-    config.imagePadding = row.icon == nil ? 0 : 6
-    config.buttonSize = row.buttonLarge ? .large : .medium
-    config.cornerStyle = row.buttonCapsule ? .capsule : .dynamic
-    if let color = row.override ?? (context.explicitTint ? context.tint : nil) {
-      switch row.buttonStyle {
-      case "bordered", "plain":
-        config.baseForegroundColor = color
-      default:
-        config.baseBackgroundColor = color
-      }
-    }
-    button.configuration = config
-    button.isEnabled = !row.disabled
-  }
-
-  @objc private func buttonPressed() {
-    TiebaSceneHaptics.fire("press")
-    onPress?()
-  }
-}
-
-// MARK: - 进度条行（progress）
-
-/// 线性进度（SwiftUI `ProgressView(value:)` 的 linear 形态）：系统 UIProgressView。
-final class TiebaFormProgressCell: TiebaFormBaseCell {
-  static let reuseID = "TiebaFormProgressCell"
-
-  private let bar = UIProgressView(progressViewStyle: .default)
-
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    let margins = Self.rowMargins
-    bar.translatesAutoresizingMaskIntoConstraints = false
-    contentView.addSubview(bar)
-    NSLayoutConstraint.activate([
-      bar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: margins.leading),
-      bar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -margins.trailing),
-      bar.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-      bar.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 8),
-    ])
-  }
-
-  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
-    let value = Float(min(max(row.progress, 0), 1))
-    bar.setProgress(value, animated: true)
-    bar.progressTintColor = row.override ?? context.tint
-  }
-}
-
-// MARK: - 状态行（status）
-
-/// 「图标 + 数值」簇行：oksign 的签到统计（✔ 12 ✖ 3 +经验）与逐吧进度
-/// （吧名 …… ✔ +3 / 转圈 / 等待中）。左标题、右簇（HStack + Spacer 的原形态）。
-/// 子视图在 init 建好（簇用多少建多少并留池复用），apply 只改值——签到进度每次
-/// 刷新都走 apply，重建整行子视图/图片是滚动与进度期的纯浪费。
-final class TiebaFormStatusCell: TiebaFormBaseCell {
-  static let reuseID = "TiebaFormStatusCell"
-
-  private let titleLabel = UILabel()
-  private let trailingLabel = UILabel()
-  private let spinner = UIActivityIndicatorView(style: .medium)
-  private let rowStack = UIStackView()
-  private let itemsStack = UIStackView()
-  private let filler = UIView()
-  /// 「图标 + 数值」对（按需增长，之后只改值）
-  private var itemViews: [(icon: UIImageView, label: UILabel)] = []
-
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    let margins = Self.rowMargins
-    titleLabel.font = .preferredFont(forTextStyle: .body)
-    titleLabel.adjustsFontForContentSizeCategory = true
-    titleLabel.textColor = .label
-    titleLabel.numberOfLines = 0
-    trailingLabel.font = .preferredFont(forTextStyle: .body)
-    trailingLabel.adjustsFontForContentSizeCategory = true
-    trailingLabel.textColor = .secondaryLabel
-    trailingLabel.numberOfLines = 1
-    itemsStack.axis = .horizontal
-    itemsStack.alignment = .center
-    itemsStack.spacing = 8
-    // 簇不吸余量：余量只由标题（有标题时）或 filler（无标题时）吃掉。
-    itemsStack.setContentHuggingPriority(.required, for: .horizontal)
-    filler.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    rowStack.axis = .horizontal
-    rowStack.alignment = .center
-    rowStack.spacing = 8
-    rowStack.translatesAutoresizingMaskIntoConstraints = false
-    contentView.addSubview(rowStack)
-    // 旧布局是 HStack[Text?, Spacer?, 簇/状态]：
-    //   - 有标题（逐吧进度行）：标题在左、状态贴右 → 标题低 hugging 吃掉余量；
-    //   - 无标题（签到统计）：整簇贴左 → 尾部加一个弹性占位吃掉余量。
-    rowStack.addArrangedSubview(titleLabel)
-    rowStack.addArrangedSubview(itemsStack)
-    rowStack.addArrangedSubview(trailingLabel)
-    rowStack.addArrangedSubview(filler)
-    rowStack.addArrangedSubview(spinner)
-    titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    trailingLabel.setContentHuggingPriority(.required, for: .horizontal)
-    NSLayoutConstraint.activate([
-      rowStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: margins.leading),
-      rowStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -margins.trailing),
-      rowStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
-      rowStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -10),
-    ])
-  }
-
-  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
-    let hasTitle = !row.title.isEmpty
-    titleLabel.isHidden = !hasTitle
-    if hasTitle {
-      titleLabel.text = row.title
-      titleLabel.font = .systemFont(
-        ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize,
-        weight: row.resolvedTitleWeight
-      )
-    }
-    while itemViews.count < row.statusItems.count { itemViews.append(makeItemPair()) }
-    for (index, pair) in itemViews.enumerated() {
-      let item = index < row.statusItems.count ? row.statusItems[index] : nil
-      pair.icon.isHidden = item == nil
-      pair.label.isHidden = item == nil
-      guard let item else { continue }
-      pair.icon.image = TiebaFormSymbol.image(item.icon, pointSize: 15, weight: .regular)
-      pair.icon.tintColor = item.color ?? context.tint
-      pair.label.text = item.text
-      pair.label.font = .systemFont(
-        ofSize: UIFont.preferredFont(forTextStyle: .subheadline).pointSize,
-        weight: Self.weight(item.weight)
-      )
-      pair.label.textColor = item.color ?? .label
-    }
-    trailingLabel.text = row.trailingText
-    trailingLabel.textColor = row.trailingTextColor ?? .secondaryLabel
-    trailingLabel.isHidden = row.trailingText?.isEmpty != false
-    filler.isHidden = hasTitle
-    if row.showsSpinner {
-      spinner.isHidden = false
-      spinner.startAnimating()
-    } else {
-      spinner.stopAnimating()
-      spinner.isHidden = true
-    }
-  }
-
-  private func makeItemPair() -> (icon: UIImageView, label: UILabel) {
-    let icon = UIImageView()
-    icon.setContentHuggingPriority(.required, for: .horizontal)
-    let label = UILabel()
-    label.setContentHuggingPriority(.required, for: .horizontal)
-    itemsStack.addArrangedSubview(icon)
-    itemsStack.addArrangedSubview(label)
-    return (icon, label)
-  }
-
-  private static func weight(_ raw: String) -> UIFont.Weight {
-    switch raw {
-    case "semibold": return .semibold
-    case "bold": return .bold
-    case "medium": return .medium
-    default: return .regular
-    }
-  }
-}
-
-// MARK: - 转圈行（spinner）
-
-/// 加载行：系统 UIActivityIndicatorView（edit-profile 的资料加载 / 保存中占位）。
-final class TiebaFormSpinnerCell: TiebaFormBaseCell {
-  static let reuseID = "TiebaFormSpinnerCell"
-
-  private let spinner = UIActivityIndicatorView(style: .medium)
-
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    spinner.translatesAutoresizingMaskIntoConstraints = false
-    spinner.hidesWhenStopped = false
-    contentView.addSubview(spinner)
-    NSLayoutConstraint.activate([
-      spinner.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-      spinner.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-      spinner.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 12),
-      contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 48),
-    ])
-  }
-
-  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
-    spinner.color = row.override ?? context.tint
-    spinner.startAnimating()
-  }
-}
-
-// MARK: - 时间行（datePicker）
-
-/// DatePicker(displayedComponents: hourAndMinute)：UIDatePicker 的 `.compact` +
-/// `.time` 形态（SwiftUI 的 compact 日期选择器底层就是它，点开是系统时间选择浮层）。
-/// 值以 "HH:mm" 上报（与原 Date 的 getHours/getMinutes 同语义）。
-final class TiebaFormDateCell: TiebaFormBaseCell {
-  static let reuseID = "TiebaFormDateCell"
-
-  private let titleLabel = UILabel()
-  private let picker = UIDatePicker()
-  private var onPick: ((String) -> Void)?
-  private var reported = ""
-
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    let margins = Self.rowMargins
-    titleLabel.font = .preferredFont(forTextStyle: .body)
-    titleLabel.adjustsFontForContentSizeCategory = true
-    titleLabel.textColor = .label
-    titleLabel.translatesAutoresizingMaskIntoConstraints = false
-    picker.preferredDatePickerStyle = .compact
-    picker.datePickerMode = .time
-    picker.minuteInterval = 1
-    picker.addTarget(self, action: #selector(dateChanged), for: .valueChanged)
-    picker.translatesAutoresizingMaskIntoConstraints = false
-    contentView.addSubview(titleLabel)
-    contentView.addSubview(picker)
-    NSLayoutConstraint.activate([
-      titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: margins.leading),
-      titleLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-      picker.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -margins.trailing),
-      picker.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-      picker.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 8),
-      picker.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
-      picker.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
-    ])
-  }
-
-  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
-    onPick = context.onPick
-    titleLabel.text = row.title
-    titleLabel.isHidden = row.title.isEmpty
-    picker.isEnabled = !row.disabled
-    let value = row.value ?? ""
-    if value != reported {
-      reported = value
-      picker.date = Self.date(from: value)
-    }
-  }
-
-  @objc private func dateChanged() {
-    TiebaSceneHaptics.fire("toggle")
-    let formatter = Self.formatter
-    let next = formatter.string(from: picker.date)
-    reported = next
-    onPick?(next)
-  }
-
-  /// "HH:mm" → 今天的该时刻（缺省 08:00，与旧 parseTimeToDate 的兜底一致）。
-  private static func date(from value: String) -> Date {
-    let parts = value.split(separator: ":").compactMap { Int($0) }
-    let hour = parts.count == 2 ? parts[0] : 8
-    let minute = parts.count == 2 ? parts[1] : 0
-    var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
-    components.hour = hour
-    components.minute = minute
-    components.second = 0
-    return Calendar.current.date(from: components) ?? Date()
-  }
-
-  private static let formatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.dateFormat = "HH:mm"
-    return formatter
-  }()
-}
-
-// MARK: - 空态行（empty）
-
-/// 区块内空态：系统的 UIContentUnavailableView（排版/字号/次级色全由系统给，
-/// 与迁移前 SwiftUI 的 ContentUnavailableView 同源）。视图 init 建好，apply 只换配置。
-final class TiebaFormEmptyCell: TiebaFormBaseCell {
-  static let reuseID = "TiebaFormEmptyCell"
-
-  private let content = UIView()
-  private let emptyView = UIContentUnavailableView(configuration: .empty())
-
-  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-    super.init(style: style, reuseIdentifier: reuseIdentifier)
-    content.translatesAutoresizingMaskIntoConstraints = false
-    emptyView.translatesAutoresizingMaskIntoConstraints = false
-    contentView.addSubview(content)
-    content.addSubview(emptyView)
-    NSLayoutConstraint.activate([
-      content.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-      content.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-      content.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
-      content.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
-      content.heightAnchor.constraint(greaterThanOrEqualToConstant: 120),
-      emptyView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-      emptyView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-      emptyView.topAnchor.constraint(equalTo: content.topAnchor),
-      emptyView.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-    ])
-  }
-
-  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
-    var config = UIContentUnavailableConfiguration.empty()
-    config.image = TiebaFormSymbol.image(row.icon ?? "tray", pointSize: 26, weight: .regular)
-    config.text = row.title
-    config.secondaryText = row.subtitle
-    emptyView.configuration = config
-  }
-}

@@ -46,6 +46,18 @@
 // 并发：SQLite 系统库是 serialized 线程模式，这里再用一把 NSLock 串行化
 // 「同一条连接上的语句执行」。@JS 同步成员在 JS 线程被调用，读是主键索引点查
 // （微秒级），不需要 MMKV 那样的 mmap 常驻。
+// （这里保留 NSLock + @unchecked Sendable：写路径的「等旧库导入完成」需要
+//   unlock → DispatchGroup.wait → 重新 lock，Mutex 的闭包模型表达不了这个
+//   释放-重入序列；见 22-接线报告的说明。）
+//
+// 大值压缩（本次接线）：kv 值 ≥512 字节、且 gzip+base64 确实比原文更小时，
+// 存成 "\u{01}gz:" + base64(gzip(utf8))，读侧按前缀识别后解压。
+// 没有前缀 = 明文（旧版本写的就是明文，这条读路径是老数据的命）；有前缀却解不开
+// = 这一行坏了：get 如实返回 nil，lookup 报 .unavailable（**不** fail-open 当明文
+// 返回，也不报成「确证为空」——破坏性调用方会拿空数据覆盖用户那一份）。
+// 标记是控制字符，业务值不会以它开头，因此不动 schema、不加列；
+// 小值与压不动的值字节完全不变，旧数据与旧 MMKV 导入照读。
+// ⚠️ 单向兼容：新版写的压缩值，降级回旧版本会读成乱码（22-接线报告已注明）。
 // ============================================================
 import Foundation
 import SQLite3
@@ -153,7 +165,17 @@ final class TiebaKvStore: @unchecked Sendable {
       guard let db = openLocked() else {
         return .unavailable(openFailure ?? "database unavailable")
       }
-      if let value = queryStringLocked(db, key: key) { return .value(value) }
+      switch readKeyLocked(db, key: key) {
+      case .value(let value):
+        return .value(value)
+      case .unreadable(let reason):
+        // 行在、值解不开（压缩值坏了 / 语句失败）：这**不是**「确证为空」。
+        // 消费方的破坏性决策（账号列表重写、孤儿登录态清理）必须看到「读不出来」，
+        // 否则会拿空数据覆盖掉用户真正的那一份（112 的教训）。
+        return .unavailable(reason)
+      case .missing:
+        break
+      }
       switch legacyImportState {
       case .running:
         return .unavailable("legacy mmkv import in progress")
@@ -203,6 +225,34 @@ final class TiebaKvStore: @unchecked Sendable {
         TiebaSQLiteCore.bind(statement, 1, prefix.unicodeScalars.count)
         TiebaSQLiteCore.bind(statement, 2, prefix)
       }
+    }
+  }
+
+  /// 前缀键值对一次取回（屏蔽列表读取的主路径）：GLOB 'prefix*' 前缀模式会被
+  /// 查询计划器转成主键索引的 range 扫描（BINARY 排序），一条语句替代
+  /// keys(prefix:) + 逐键 get 的 N+1（每次 get 一轮 prepare/step/finalize）。
+  /// prefix 不得含 GLOB 通配符（*?[，当前调用方都是固定 ASCII 前缀）。
+  /// 库不可用/导入未完成 → 空数组。
+  func scan(prefix: String) -> [(key: String, value: String)] {
+    lock.withLock {
+      guard let db = openLocked() else { return [] }
+      guard let statement = TiebaSQLiteCore.prepare(
+        db,
+        "SELECT key, value FROM kv WHERE key GLOB ?1 ORDER BY key;"
+      ) else { return [] }
+      defer { sqlite3_finalize(statement) }
+      TiebaSQLiteCore.bind(statement, 1, prefix + "*")
+      var result: [(key: String, value: String)] = []
+      while sqlite3_step(statement) == SQLITE_ROW {
+        // 解不开的行直接跳过（scan 的契约是"可用的键值对"）。
+        if let key = TiebaSQLiteCore.columnString(statement, 0),
+          let raw = TiebaSQLiteCore.columnString(statement, 1),
+          let value = Self.decodeValue(raw)
+        {
+          result.append((key, value))
+        }
+      }
+      return result
     }
   }
 
@@ -261,26 +311,6 @@ final class TiebaKvStore: @unchecked Sendable {
     guard sqlite3_step(statement) == SQLITE_DONE else {
       throw TiebaKvError.statementFailed(TiebaSQLiteCore.errorMessage(db))
     }
-  }
-
-  /// 旧 MMKV 文件 → kv 表（一次性、幂等、非破坏）。首次 kv 访问时自动排入后台
-  /// 导入；显式调用会等待完成再返回，便于验证迁移结果（重复调用只是查一次标记）。
-  /// 返回 true = 已完成（含「旧文件本来就不存在」）。
-  @discardableResult
-  func importLegacyMmkvIfNeeded() -> Bool {
-    lock.lock()
-    guard openLocked() != nil else {
-      lock.unlock()
-      return false
-    }
-    if legacyImportState == .running {
-      lock.unlock()
-      legacyImportGate.wait()
-      lock.lock()
-    }
-    let done = legacyImportState == .done
-    lock.unlock()
-    return done
   }
 
   // MARK: - 打开 / 建表 / WAL / 导入调度
@@ -344,6 +374,9 @@ final class TiebaKvStore: @unchecked Sendable {
 
   /// WAL：两条连接读写同一库时读不阻塞写。单条 PRAGMA，失败只记日志——
   /// 回滚日志模式下靠 busy_timeout 也能跑，只是写-写撞车时表现为等待。
+  /// synchronous=NORMAL 是 WAL 的标准搭配（缺省 FULL 让每次 COMMIT 都 fsync
+  /// WAL）：app 崩溃仍一致（WAL 未 checkpoint 的数据可恢复），只有掉电可能丢
+  /// 最后一笔——kv 里全是可重建的缓存/快照/偏好，这个代价换掉每次提交的 fsync。
   private func enableWALLocked(_ db: OpaquePointer) {
     var statement: OpaquePointer?
     guard sqlite3_prepare_v2(db, "PRAGMA journal_mode = WAL;", -1, &statement, nil) == SQLITE_OK,
@@ -354,6 +387,11 @@ final class TiebaKvStore: @unchecked Sendable {
       if mode.lowercased() != "wal" {
         Self.log.notice("journal_mode=\(mode, privacy: .public) (WAL 未生效，并发写可能等待)")
       }
+    }
+    let syncStatement: OpaquePointer? = TiebaSQLiteCore.prepare(db, "PRAGMA synchronous = NORMAL;")
+    if let syncStatement {
+      defer { sqlite3_finalize(syncStatement) }
+      _ = sqlite3_step(syncStatement)
     }
   }
 
@@ -446,16 +484,75 @@ final class TiebaKvStore: @unchecked Sendable {
     }
   }
 
+  // MARK: - 值编解码（大值压缩）
+
+  /// 压缩值的前缀标记。`\u{01}` 是控制字符，正常业务值（JSON / 文本 / 数字串）
+  /// 不会以它开头，所以不需要新增列、也不动 schema 就能区分明文与压缩值。
+  private static let compressedValuePrefix = "\u{01}gz:"
+  /// 低于这个长度不值得压：gzip 头 + base64 的 33% 膨胀赚不回来。
+  private static let compressionThreshold = 512
+
+  /// 写入前的值编码：够大、且 gzip+base64 **确实更小**时才换格式，否则原样返回。
+  /// 绝大多数键值（偏好、账号元数据、逐项键）字节完全不变——旧版本写的数据、
+  /// 旧 MMKV 导入的数据都不受影响。
+  static func encodeValue(_ value: String) -> String {
+    guard value.utf8.count >= compressionThreshold else { return value }
+    guard let compressed = TiebaGZip.compress(Data(value.utf8)), !compressed.isEmpty else {
+      return value
+    }
+    let encoded = compressedValuePrefix + compressed.base64EncodedString()
+    guard encoded.utf8.count < value.utf8.count else { return value }
+    return encoded
+  }
+
+  /// 读取后的值解码。
+  /// - 没有标记 = 明文（**真实的旧数据兼容**：旧版本写的就是明文，删了会丢用户数据）；
+  /// - 有标记却解不开 = 这一行坏了 → 返回 nil，如实报"读不出来"。
+  ///   ⚠️ 刻意**没有** fail-open 兜底：把坏数据当明文返回，调用方会拿到一段垃圾却以为
+  ///   读成功（写回缓存 / 回填 UI 都是错的），比读失败危险得多。
+  static func decodeValue(_ value: String) -> String? {
+    guard value.hasPrefix(compressedValuePrefix) else { return value }
+    let payload = value.dropFirst(compressedValuePrefix.count)
+    guard let compressed = Data(base64Encoded: String(payload)),
+          let raw = TiebaGZip.decompress(compressed),
+          let text = String(data: raw, encoding: .utf8) else {
+      return nil
+    }
+    return text
+  }
+
   // MARK: - SQLite 原语（调用方须已持有 lock）
 
-  private func queryStringLocked(_ db: OpaquePointer, key: String) -> String? {
+  /// 单键读取的结果：行不在 / 值可解 / **行在但值解不开**。
+  /// 第三态只给 lookup 用（见下）；get 只关心「能不能给出值」。
+  private enum KeyReadOutcome {
+    case missing
+    case value(String)
+    case unreadable(String)
+  }
+
+  /// 单键读取。区分「确证没有这一行」与「这一行读不出来」——压缩值（\u{01}gz: 前缀）
+  /// 解不开时若报成前者，破坏性调用方会把坏行当空数据写回（丢的是用户数据）。
+  private func readKeyLocked(_ db: OpaquePointer, key: String) -> KeyReadOutcome {
     guard let statement = TiebaSQLiteCore.prepare(db, "SELECT value FROM kv WHERE key = ?1;") else {
-      return nil
+      return .unreadable("prepare failed: \(TiebaSQLiteCore.errorMessage(db))")
     }
     defer { sqlite3_finalize(statement) }
     TiebaSQLiteCore.bind(statement, 1, key)
-    guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
-    return TiebaSQLiteCore.columnString(statement, 0)
+    guard sqlite3_step(statement) == SQLITE_ROW else { return .missing }
+    guard let raw = TiebaSQLiteCore.columnString(statement, 0) else {
+      return .unreadable("value column is not text")
+    }
+    guard let value = Self.decodeValue(raw) else {
+      return .unreadable("stored value failed to decode (corrupted compressed row)")
+    }
+    return .value(value)
+  }
+
+  /// 单键读取（只要值）。读不出来（行在但解不开 / 语句失败）一律 nil，与旧行为一致。
+  private func queryStringLocked(_ db: OpaquePointer, key: String) -> String? {
+    if case .value(let value) = readKeyLocked(db, key: key) { return value }
+    return nil
   }
 
   private func keysLocked(
@@ -479,7 +576,7 @@ final class TiebaKvStore: @unchecked Sendable {
       "INSERT OR REPLACE INTO kv (key, value) VALUES (?1, ?2);",
       bind: { statement in
         TiebaSQLiteCore.bind(statement, 1, key)
-        TiebaSQLiteCore.bind(statement, 2, value)
+        TiebaSQLiteCore.bind(statement, 2, Self.encodeValue(value))
       }
     )
     if let failure { throw TiebaKvError.statementFailed(failure) }
@@ -577,7 +674,14 @@ private enum LegacyMmkvFile {
     for candidate in candidates {
       let size = candidate.size
       guard size > 0, size + dataOffset <= main.count else { continue }
-      guard crc32(main, offset: dataOffset, length: size) == candidate.crc else { continue }
+      // TiebaCrc32 就是 zlib 的 crc32(初始 0)，与 MMKV::checkFileCRCValid 同算法。
+      // 切片用 rebasing 包一层，不复制数据（数据区可能有几十 MB）。
+      let matches = main.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> Bool in
+        TiebaCrc32.checksum(
+          UnsafeRawBufferPointer(rebasing: raw[dataOffset ..< (dataOffset + size)])
+        ) == candidate.crc
+      }
+      guard matches else { continue }
       return decodePayload(main, offset: dataOffset, length: size)
     }
     return nil
@@ -608,30 +712,9 @@ private enum LegacyMmkvFile {
     UInt32(littleEndian: data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt32.self) })
   }
 
-  // MARK: CRC32（zlib 算法：反射多项式 0xEDB88320，init/xorout 全 1）
-
-  private static let crc32Table: [UInt32] = {
-    var table = [UInt32](repeating: 0, count: 256)
-    for index in 0..<256 {
-      var value = UInt32(index)
-      for _ in 0..<8 {
-        value = (value & 1) != 0 ? (0xEDB8_8320 ^ (value >> 1)) : (value >> 1)
-      }
-      table[index] = value
-    }
-    return table
-  }()
-
-  static func crc32(_ data: Data, offset: Int, length: Int) -> UInt32 {
-    var crc: UInt32 = 0xFFFF_FFFF
-    data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
-      guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return }
-      for index in offset..<(offset + length) {
-        crc = (crc >> 8) ^ crc32Table[Int((crc ^ UInt32(base[index])) & 0xFF)]
-      }
-    }
-    return crc ^ 0xFFFF_FFFF
-  }
+  // 这里原先有一张手写的 CRC32 查表（0xEDB88320 + init/xorout 全 1），
+  // 已删除并改用 Core/Binary/TiebaCrc32（zlib crc32，同一算法、同一起始值 0）。
+  // 等价性用 4004 组随机向量逐位对拍过（见 docs/uikit-migration/22-接线-crypto-binary.md）。
 
   /// protobuf 风格 varint（CodedInputData::readRawVarint32 同款）。
   private struct VarintReader {

@@ -85,7 +85,7 @@ final class TiebaSearchHistoryView: UIView {
     cloud.setPills(visible.map { item in
       makePill(
         text: item.keyword,
-        time: TiebaTimeLabel.label(millis: item.timestamp),
+        time: TiebaTimeText.label(ms: item.timestamp),
         maxWidth: Self.historyMaxWidth,
         deletable: true
       )
@@ -104,7 +104,9 @@ final class TiebaSearchHistoryView: UIView {
   private func sectionTitle(_ text: String) -> UILabel {
     let label = UILabel()
     label.text = text
-    label.font = .systemFont(ofSize: 18, weight: .bold)
+    // 定值 systemFont 不随 Dynamic Type：历史区会变成全屏唯一不缩放的区域（同屏空态
+    // 文案用 preferredFont）。用 UIFontMetrics 按固定基准字号缩放。
+    label.font = UIFontMetrics(forTextStyle: .headline).scaledFont(for: .systemFont(ofSize: 18, weight: .bold))
     label.textColor = palette.base.text
     return label
   }
@@ -131,7 +133,7 @@ final class TiebaSearchHistoryView: UIView {
   /// 标题与 chevron 同属一个按钮：整块可点切换展开（原 historyTitleRow）。
   private func expandToggle() -> UIButton {
     var container = AttributeContainer()
-    container.font = UIFont.systemFont(ofSize: 18, weight: .bold)
+    container.font = UIFontMetrics(forTextStyle: .headline).scaledFont(for: .systemFont(ofSize: 18, weight: .bold))
     container.foregroundColor = palette.base.text
     var config = UIButton.Configuration.plain()
     config.contentInsets = .zero
@@ -212,20 +214,16 @@ final class TiebaSearchHistoryView: UIView {
       self?.onSelect?(text)
     }, for: .touchUpInside)
     if deletable {
-      let longPress = UILongPressGestureRecognizer(
-        target: self,
-        action: #selector(handleLongPress(_:))
-      )
-      longPress.minimumPressDuration = 0.4
-      pill.addGestureRecognizer(longPress)
+      // [接线 UI/Context] 长按不再用药丸自己的 UILongPressGestureRecognizer（固定 0.4s + 硬切），
+      // 改由 TiebaPillCloudView 包一层 TiebaContextControllerSourceView：那套手势把 0→1 的激活
+      // 进度透出来给药丸做「绕内容中点缩放」，走满 1 才回调这里。观感 = 按住时药丸连续缩小，
+      // 到点触发删除（同视图两套长按准入会互相抢手势，故旧识别器已删）。
+      pill.onLongPress = { [weak self] in
+        TiebaSceneHaptics.fire("long-press")
+        self?.onDelete?(text)
+      }
     }
     return pill
-  }
-
-  @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-    guard gesture.state == .began, let pill = gesture.view as? TiebaSearchPill else { return }
-    TiebaSceneHaptics.fire("long-press")
-    onDelete?(pill.keyword)
   }
 }
 
@@ -236,6 +234,9 @@ final class TiebaSearchHistoryView: UIView {
 final class TiebaSearchPill: UIControl {
   /// 长按删除回调要拿回原文（占用 accessibilityValue 会污染朗读）。
   let keyword: String
+  /// 长按（由外层 TiebaContextControllerSourceView 的手势驱动，走满激活进度才回调）。
+  /// nil = 本药丸没有长按语义，外层容器会把手势关掉（建议药丸就是这一类）。
+  var onLongPress: (() -> Void)?
 
   private let palette = TiebaSimpleRowPalette.default
   private let label = UILabel()
@@ -249,7 +250,8 @@ final class TiebaSearchPill: UIControl {
     accessibilityLabel = text
     accessibilityTraits = .button
     label.text = text
-    label.font = .systemFont(ofSize: 14)
+    label.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(for: .systemFont(ofSize: 14))
+    label.adjustsFontForContentSizeCategory = true
     label.textColor = palette.base.text
     label.numberOfLines = 1
     label.lineBreakMode = .byTruncatingTail
@@ -262,7 +264,8 @@ final class TiebaSearchPill: UIControl {
     row.isUserInteractionEnabled = false
     if !time.isEmpty {
       timeLabel.text = time
-      timeLabel.font = .systemFont(ofSize: 10)
+      timeLabel.font = UIFontMetrics(forTextStyle: .caption2).scaledFont(for: .systemFont(ofSize: 10))
+      timeLabel.adjustsFontForContentSizeCategory = true
       timeLabel.textColor = palette.base.textTertiary
       timeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
       row.addArrangedSubview(timeLabel)
@@ -281,8 +284,20 @@ final class TiebaSearchPill: UIControl {
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+  /// C2（报告 37）：按下**即时**、松开才走 0.2s 缓出（配方见 TiebaPhotoBrowserCircleButton）。
+  /// 按下先 removeAnimation("opacity") —— 上一次松开的回弹还在跑时会把 alpha 拉回去，
+  /// 表现就是"按了不变暗"；按压档位 0.6 保持本仓原值，只改时序。
+  /// （报告 40 C2 的第二个落点原是列表段头按钮，该文件已被零调用方清理删除，这里重建。）
   override var isHighlighted: Bool {
-    didSet { alpha = isHighlighted ? 0.6 : 1 }
+    didSet {
+      if isHighlighted {
+        layer.removeAnimation(forKey: "opacity")
+        alpha = 0.6
+      } else {
+        alpha = 1.0
+        layer.animateAlpha(from: 0.6, to: 1.0, duration: TiebaAnimationDuration.tapFeedback)
+      }
+    }
   }
 
   override func layoutSubviews() {
@@ -297,11 +312,21 @@ final class TiebaSearchPill: UIControl {
 /// 自动换行的药丸云（原 tagWrap：row + wrap + gap）。
 /// 药丸压缩尺寸在 setPills 时量一次，布局期只做宽度夹取与按行摆放；高度经
 /// intrinsicContentSize 上报给外层竖向栈。
+///
+/// [接线 UI/Context] 每颗药丸外面包一层 TiebaContextControllerSourceView：
+/// 长按准入、0.12s 起手、0→1 激活进度、**绕内容中点**缩放全在那一层里，
+/// 走满进度才回调 pill.onLongPress。没有长按语义的药丸（搜索建议）把手势直接关掉，
+/// 行为与接线前一致（点一下即选中）。药丸本身仍是 UIControl，tap 不受影响
+/// （手势 0.32s 才 .began，轻点在此之前就抬手了）。
 final class TiebaPillCloudView: UIView {
   private let gap: CGFloat
   private var pills: [TiebaSearchPill] = []
+  /// 与 pills 一一对应的长按宿主（见类型注释）。
+  private var holders: [TiebaContextControllerSourceView] = []
   private var sizes: [CGSize] = []
   private var measuredHeight: CGFloat = 0
+  /// 上次测量时的内容尺寸档：档位变化后 sizes 必须重测（标签字体已随档重缩放）。
+  private var measuredCategory: UIContentSizeCategory?
 
   init(gap: CGFloat) {
     self.gap = gap
@@ -312,10 +337,30 @@ final class TiebaPillCloudView: UIView {
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   func setPills(_ pills: [TiebaSearchPill]) {
-    for pill in self.pills { pill.removeFromSuperview() }
+    for holder in holders { holder.removeFromSuperview() }
+    holders = []
     self.pills = pills
     sizes = pills.map { $0.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize) }
-    for pill in pills { addSubview(pill) }
+    measuredCategory = traitCollection.preferredContentSizeCategory
+    for pill in pills {
+      let holder = TiebaContextControllerSourceView(frame: .zero)
+      holder.isGestureEnabled = pill.onLongPress != nil
+      // 内容 = 药丸自身（容器与药丸同尺寸）：缩放的「内容中点」就是药丸中点。
+      holder.targetViewForActivationProgress = pill
+      holder.activated = { [weak pill] gesture, _ in
+        guard let onLongPress = pill?.onLongPress else {
+          // 没有长按语义：自己取消，进度带着回弹收回去（与容器默认行为一致）。
+          gesture.cancel()
+          return
+        }
+        onLongPress()
+      }
+      pill.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      pill.frame = holder.bounds
+      holder.addSubview(pill)
+      holders.append(holder)
+      addSubview(holder)
+    }
     measuredHeight = 0
     setNeedsLayout()
     invalidateIntrinsicContentSize()
@@ -327,12 +372,18 @@ final class TiebaPillCloudView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
+    // 字号档变了（药丸标签字体由 adjustsFontForContentSizeCategory 重缩放）：框尺寸要跟着
+    // 重测，否则字号变大而药丸框不变、文字被裁。
+    if measuredCategory != traitCollection.preferredContentSizeCategory {
+      measuredCategory = traitCollection.preferredContentSizeCategory
+      sizes = pills.map { $0.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize) }
+    }
     let width = bounds.width
     guard width > 0, !pills.isEmpty else { return }
     var x: CGFloat = 0
     var y: CGFloat = 0
     var rowHeight: CGFloat = 0
-    for (index, pill) in pills.enumerated() {
+    for index in pills.indices {
       let size = sizes[index]
       let w = min(size.width, width)
       if x > 0, x + w > width {
@@ -340,7 +391,8 @@ final class TiebaPillCloudView: UIView {
         y += rowHeight + gap
         rowHeight = 0
       }
-      pill.frame = CGRect(x: x, y: y, width: w, height: size.height)
+      // 宿主与药丸同框：药丸靠 autoresizing 跟着宿主走（见 setPills）。
+      holders[index].frame = CGRect(x: x, y: y, width: w, height: size.height)
       x += w + gap
       rowHeight = max(rowHeight, size.height)
     }

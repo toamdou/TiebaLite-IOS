@@ -161,7 +161,7 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     icon.contentMode = .scaleAspectFit
     icon.translatesAutoresizingMaskIntoConstraints = false
     noticeLabel.text = "登录凭据仅保存在本机安全存储（Keychain）与 Cookie 存储中，仅用于请求百度接口。"
-    noticeLabel.font = UIFont.preferredFont(forTextStyle: .caption1)
+    noticeLabel.font = TiebaSimpleText.uiFont(style: .caption1)
     noticeLabel.textColor = .secondaryLabel
     noticeLabel.numberOfLines = 0
     noticeRow.axis = .horizontal
@@ -390,7 +390,9 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     loginProcessed = false
     phase = .loading
     startTimeout()
-    webView.reload()
+    // 首载失败（离线进页等连接级失败）时 WKWebView 没有已提交导航，reload() 什么都不做、
+    // 也不发导航回调——页面停在加载遮罩直到超时。登录页单一用途，显式重载同一 URL。
+    webView.load(URLRequest(url: Self.loginURL))
   }
 
   private func handleClose() {

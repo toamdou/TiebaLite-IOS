@@ -33,8 +33,6 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   private var isUserRefresh = false
   private var lastLoadedAt = Date.distantPast
   private var lastRowSignature = ""
-  /// 回顶刷新在途（回顶动画结束才消费，避免无回顶的程序化滚动触发刷新）。
-  private var pendingTopRefresh = false
   private nonisolated(unsafe) var prefToken: NSObjectProtocol?
 
   deinit {
@@ -64,12 +62,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     prefToken = TiebaPreferenceChange.observe(key: "entranceAnimation") { [weak self] in
       MainActor.assumeIsolated { self?.applyEntrancePreference() }
     }
-    list.onScrollAnimationEnd = { [weak self] in
-      guard let self, self.pendingTopRefresh else { return }
-      self.pendingTopRefresh = false
-      self.isUserRefresh = true
-      self.reload()
-    }
+    // 底栏重复点击走 tabReselected（用户口径：先回顶不刷新，顶部再按才刷新）。
     stateView.isHidden = true
     stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
     // 信息流骨架：thread 卡片、半数带图（原 FeedContent.tsx variant="thread" count={8}）
@@ -102,7 +95,13 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     } else {
       showState(.loading)
     }
-    reload()
+    // 首屏数据：正常冷启动照旧拉（SWR 快照只是先画出来）。
+    // 「从后台返回」的冷启动（进程被系统回收过，判据见 TiebaAppBootstrap）不自动拉：
+    // 否则用户看到的仍是「回前台就刷一下」——只是换成了重启这条路。
+    // ⚠️ 快照也没有（items 为空）时必须照拉：那否则是骨架屏挂死，不叫「不自动刷新」。
+    if items.isEmpty || !TiebaAppBootstrap.isReturningFromBackground {
+      reload()
+    }
   }
 
   override func viewDidLayoutSubviews() {
@@ -142,10 +141,15 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   // MARK: - 外部驱动（tab 根屏）
 
   /// 聚焦（tab 选中）：stale-while-revalidate，遵循 exploreAutoRefresh 偏好。
-  func handleFocus() {
+  /// - Parameter autoRefresh: false = 本次是「从后台返回」（判据唯一在 TiebaAppBootstrap）。
+  ///   这时只走零网络的轻量分支（偏好指纹变了才重测），**不拉网络**；
+  ///   设置语义不变：前台停留后切 tab / 从二级页返回，stale + exploreAutoRefresh 照旧刷。
+  func handleFocus(autoRefresh: Bool = true) {
     guard segment != .concern || isLoggedIn else { return }
     let stale = Date().timeIntervalSince(lastLoadedAt) > 300
-    if stale, TiebaPreferenceSnapshot.bool("exploreAutoRefresh", default: true) || items.isEmpty {
+    if autoRefresh, stale,
+      TiebaPreferenceSnapshot.bool("exploreAutoRefresh", default: true) || items.isEmpty
+    {
       reload()
     } else {
       // 偏好（字号/隐藏媒体/时间格式）可能已变：行指纹变了才整页重测。
@@ -162,16 +166,16 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     }
   }
 
-  /// 底栏重复点击：先回顶，回顶动画结束（scrollViewDidEndScrollingAnimation）再
-  /// 刷新——不再用 260ms 定时器近似；已在顶部则没有滚动动画可等，直接刷新。
+  /// 底栏重复点击（用户口径）：不在顶部 → 只回顶，不刷新；已在顶部 → 顶部
+  /// 展示刷新动画并重拉。
   func tabReselected() {
-    guard !list.isAtTop else {
-      isUserRefresh = true
-      reload()
+    guard list.isAtTop else {
+      list.scrollToTop(animated: true)
       return
     }
-    pendingTopRefresh = true
-    list.scrollToTop(animated: true)
+    isUserRefresh = true
+    list.beginRefreshing()
+    reload()
   }
 
   // MARK: - 状态
@@ -261,9 +265,12 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     isLoadingMore = true
     list.footerState = .loading
     Task { @MainActor in
+      // [用户口径 2026-10-06] 正常态（.more）不显示「加载更多」药丸（触底即自动加载，
+      // 见 TiebaKindFooterState）；只有这次翻页失败才留一颗可点的「重试」。
+      var didFail = false
       defer {
         isLoadingMore = false
-        list.footerState = hasMore ? .more : .none
+        list.footerState = didFail ? .retry : (hasMore ? .more : .none)
       }
       do {
         let result = try await fetch(page: page)
@@ -272,6 +279,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
         items.append(contentsOf: result.items)
         publishFresh()
       } catch {
+        didFail = true
         pill.showResult(success: false, text: "加载失败")
       }
     }
@@ -336,18 +344,21 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   /// 换新页键（数据/展开态变了，整页重测），并记下当时的行指纹。
   private func publishFresh() {
     lastRowSignature = rowSignature()
-    driver.publish(fresh: true, makeRows: makeRows)
+    driver.publish(fresh: true, makeRows: { [weak self] in self?.makeRows() ?? [] })
   }
 
   /// 同页原地重测（点赞态，不跳滚动位置）。
   private func publishInPlace() {
-    driver.publish(fresh: false, makeRows: makeRows)
+    driver.publish(fresh: false, makeRows: { [weak self] in self?.makeRows() ?? [] })
   }
 
   private func makeRows() -> [[String: Any]] {
     var options = TiebaFeedRowBuilder.Options.current()
     options.closeMenuOptions = ["dislike", "block", "block-forum", "copy-title"]
     options.imageContextMenu = true
+    // 卡片长按菜单（分享帖子/复制帖子内容/不感兴趣/屏蔽作者）：四个动作的接线就在
+    // 本页 handleMenuAction —— 行字典开关与页面处理必须同生同灭（见 TiebaFeedRowModel）。
+    options.cardContextMenu = true
     return items.map { item in
       guard let thread = item["threadInfo"] as? [String: Any] else { return [:] }
       let id = TiebaSimpleRowParser.string(thread["id"]) ?? ""
@@ -405,7 +416,9 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
       let id = value(thread, "id")
       guard !id.isEmpty, expandedIds.insert(id).inserted else { return }
       TiebaSceneHaptics.fire("toggle")
-      publishFresh()
+      // 只改了一行的展开态：换页键会让全部行标识失效 → 整页 reload 重建（位图/图片全重贴）。
+      // 与话题页同动作、以及本页 applyLike 一致，走同页键 diff 只重配这一行。
+      publishInPlace()
     case "action":
       switch actionIndex {
       case 0: openThread(thread)
@@ -417,6 +430,14 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
       // 真图点击已由原生查看器直开；到这里的只有视频 poster（进帖）。
       guard !hasImageMedia(thread) else { return }
       openThread(thread)
+    case "quote":
+      // 转发引用卡 → 原帖；老数据缺 tid 退回整卡进帖。
+      if let quoteId = TiebaFeedRowInteraction.quotedThreadId(in: thread) {
+        TiebaSceneHaptics.fire("press")
+        TiebaNavigator.shared.navigate(.thread(id: quoteId))
+      } else {
+        openThread(thread)
+      }
     default:
       openThread(thread)
     }
@@ -425,6 +446,11 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   private func handleMenuAction(index: Int, action: String) {
     guard let thread = thread(at: index) else { return }
     switch action {
+    case "share":
+      // 长按卡片菜单的「分享帖子」：与操作栏分享同一份实现（同一入口，不另写一套）。
+      shareThread(thread)
+    case "copy-content":
+      copyPostContent(thread)
     case "dislike":
       presentDislikeSheet(thread)
     case "block":
@@ -461,25 +487,58 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
 
   // MARK: - 动作
 
-  private func openThread(_ thread: [String: Any]) {
-    // 回复类推荐卡（"回复了xxx"）：ThreadInfo.id 装的是回复 pid，threadId 才是帖子
-    // 本体，拿 id 导航服务端按"帖子已删除"回错（用户实证）。有 postId 顺路带上，
-    // 进帖直接落到被推荐的那一楼；普通帖卡的 post_id 是首楼 pid，不跳。
-    let threadId = value(thread, "threadId").isEmpty ? value(thread, "id") : value(thread, "threadId")
-    guard !threadId.isEmpty else { return }
+  /// 推荐卡的 **id 通道**解析：回复类卡片的 id(1) 是**回复 pid**、threadId(2) 才是帖子本体；
+  /// 普通卡片的 id 与 threadId 是同一个对象。点击与点赞共用这一处，避免两边各判一次
+  /// （判错一次就是"帖子已被删除"或赞错对象）。
+  ///
+  /// - Returns: threadId 为空 = 解析不出帖子本体。**绝不退回 id**：把 pid 当帖子 id 请求，
+  ///   服务端只会回"帖子不存在"，前端就显示"帖子已被删除"——正是用户报的那个 bug。
+  ///   replyPostId 非空 = 要定位到的那一楼（有它进帖直接落楼）。
+  private func resolvedThreadTarget(_ thread: [String: Any]) -> (threadId: String, replyPostId: String?) {
     let postId = value(thread, "postId")
-    let jumpsToReply = !postId.isEmpty && postId != value(thread, "firstPostId")
+    // 回复卡判据：被推荐回复的 pid 与首楼 pid 不同（普通帖卡的 post_id 就是首楼 pid）。
+    let isReplyCard = !postId.isEmpty && postId != value(thread, "firstPostId")
+    // ① 首选：threadId 字段（回复卡上它才是帖子本体）。带 pid 锚点 → 进帖直接落到那一楼。
+    let threadId = value(thread, "threadId")
+    if !threadId.isEmpty { return (threadId, isReplyCard ? postId : nil) }
+    if isReplyCard {
+      // ② 次选：被回复的主题帖（mapper 的 originThreadInfo.threadId，"回复：xxx" 的 xxx）。
+      //    能点开就行；**不带 pid 锚点**——无法确认被推荐的那条回复就在这张帖里
+      //    （origin 可能是"引用"的那张帖），带错 pid 只会让帖子页白找一趟。
+      let origin = thread["originThreadInfo"] as? [String: Any]
+      let originThreadId = TiebaSimpleRowParser.string(origin?["threadId"]) ?? ""
+      return (originThreadId, nil)
+    }
+    // ③ 普通卡：id 与 threadId 是同一个对象，允许用 id。
+    return (value(thread, "id"), nil)
+  }
+
+  private func openThread(_ thread: [String: Any]) {
+    let target = resolvedThreadTarget(thread)
+    guard !target.threadId.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(.thread(id: threadId, postId: jumpsToReply ? postId : nil))
+    TiebaNavigator.shared.navigate(.thread(id: target.threadId, postId: target.replyPostId))
   }
 
   private func shareThread(_ thread: [String: Any]) {
-    let id = value(thread, "id")
+    // 帖子本体 id 必须走与导航/点赞**同一个**解析：回复推荐卡的 id 是回复 pid，
+    // 拿它拼 /p/<pid> 只会分享出一个打不开的链接（分享按钮此前就是这条路径）。
+    let id = resolvedThreadTarget(thread).threadId
     guard !id.isEmpty else { return }
     TiebaSceneHaptics.fire("press")
     let url = "https://tieba.baidu.com/p/\(id)"
     let title = value(thread, "title")
     TiebaShareSheet.present(text: title.isEmpty ? url : "\(title)\n\(url)", from: self)
+  }
+
+  /// 复制帖子内容（长按卡片菜单）：标题 + 正文纯文本，**不含图片**。
+  /// 取段与拼接的唯一定义在 TiebaFeedRowInteraction.postPlainText（吧页共用）。
+  private func copyPostContent(_ thread: [String: Any]) {
+    let text = TiebaFeedRowInteraction.postPlainText(thread)
+    guard !text.isEmpty else { return }
+    TiebaClipboard.setString(text)
+    TiebaSceneHaptics.fire("action-success")
+    pill.showResult(success: true, text: "已复制帖子内容")
   }
 
   /// 点赞：乐观翻转 + 失败回滚（与帖子页/话题页同一竞态策略，镜像表防连点）。
@@ -498,13 +557,19 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     TiebaSceneHaptics.fire("like")
     applyLike(index, next)
 
-    let threadId = value(thread, "threadId")
+    // 与点击同一处解析：回复卡上 id 是 pid，不能当 threadId 发出去（否则赞错对象/请求失败）。
+    let target = resolvedThreadTarget(thread)
     let firstPostId = value(thread, "firstPostId")
+    guard !target.threadId.isEmpty else { return }
+    // 首楼 pid：普通卡缺字段时可用 id 兜（贴吧惯例 tid == 首楼 pid）；回复卡的 id 是**回复 pid**，
+    // 拿它当首楼 pid 会赞错楼 → 这种情况宁可不发这次点赞。
+    let likePostId = firstPostId.isEmpty ? (target.replyPostId == nil ? value(thread, "id") : "") : firstPostId
+    guard !likePostId.isEmpty else { return }
     Task { @MainActor in
       do {
         try await TiebaThreadActionAPI.setAgree(
-          threadId: threadId.isEmpty ? id : threadId,
-          postId: firstPostId.isEmpty ? id : firstPostId,
+          threadId: target.threadId,
+          postId: likePostId,
           agree: next
         )
         TiebaSceneHaptics.fire("action-success")
@@ -516,7 +581,13 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
         }
         TiebaSceneHaptics.fire("action-fail")
         likeMirror[id] = latest
-        applyLike(index, latest)
+        // 回包期间 blockAuthor / removeForumRows / submitDislike 会删行、成功 reload 会整页
+        // 替换：捕获时的 index 可能已指向别行（indices.contains 挡不住）→ 按 id 现查再回滚。
+        if let current = items.firstIndex(where: {
+          TiebaSimpleRowParser.string(($0["threadInfo"] as? [String: Any])?["id"]) == id
+        }) {
+          applyLike(current, latest)
+        }
         pill.showResult(success: false, text: "点赞失败，请稍后重试")
       }
     }
@@ -714,8 +785,7 @@ final class TiebaDislikeSheetViewController: UIViewController {
     table.delegate = self
     table.backgroundColor = .clear
     table.register(UITableViewCell.self, forCellReuseIdentifier: "reason")
-    // 旧页面是玻璃主按钮：iOS 26 玻璃；17 退回经典 filled（其余属性不变）。
-    var config: UIButton.Configuration = if #available(iOS 26.0, *) { .prominentGlass() } else { .filled() }
+    var config: UIButton.Configuration = .prominentGlass()
     config.title = "提交"
     config.image = UIImage(systemName: "hand.thumbsdown.fill")
     config.imagePadding = 8
@@ -730,7 +800,7 @@ final class TiebaDislikeSheetViewController: UIViewController {
     }, for: .touchUpInside)
     let header = UILabel()
     header.text = "我们会减少这类内容的推荐"
-    header.font = .preferredFont(forTextStyle: .footnote)
+    header.font = TiebaSimpleText.uiFont(style: .footnote)
     header.textColor = .secondaryLabel
     header.textAlignment = .center
     header.frame = CGRect(x: 0, y: 0, width: 0, height: 44)

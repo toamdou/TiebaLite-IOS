@@ -225,29 +225,6 @@ enum TiebaHaptics {
     }
   }
 
-  static func updateContinuousPlayer(
-    playerId: String,
-    intensityControl: Double,
-    sharpnessControl: Double
-  ) {
-    onMain {
-      guard let player = TiebaHapticState.continuousPlayers[playerId] else { return }
-      let parameters = [
-        CHHapticDynamicParameter(
-          parameterID: .hapticIntensityControl,
-          value: Float(intensityControl),
-          relativeTime: 0
-        ),
-        CHHapticDynamicParameter(
-          parameterID: .hapticSharpnessControl,
-          value: Float(sharpnessControl),
-          relativeTime: 0
-        ),
-      ]
-      try? player.sendParameters(parameters, atTime: 0)
-    }
-  }
-
   static func stopContinuousPlayer(playerId: String) {
     onMain {
       guard let player = TiebaHapticState.continuousPlayers[playerId] else { return }

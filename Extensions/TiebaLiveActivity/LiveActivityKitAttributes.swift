@@ -1,7 +1,7 @@
 import ActivityKit
 import Foundation
 
-public struct LiveActivityKitAttributes: ActivityAttributes {
+public struct TiebaLiveActivityKitAttributes: ActivityAttributes {
   public struct ContentState: Codable, Hashable {
     public var title: String
     public var subtitle: String?

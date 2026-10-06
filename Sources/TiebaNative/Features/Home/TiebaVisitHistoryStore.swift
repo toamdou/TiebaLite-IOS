@@ -249,10 +249,6 @@ enum TiebaVisitHistoryStore {
 
   private static let favoriteImagesKey = "@tiebalite:favorite_images_v1"
 
-  static func favoriteImages(tid: String) -> [String] {
-    favoriteImagesMap()[tid] ?? []
-  }
-
   /// 全量快照（一次读、按需取，避免逐行重复解析 JSON）。
   static func favoriteImagesMap() -> [String: [String]] {
     guard let raw = TiebaKvStore.shared.get(key: favoriteImagesKey),

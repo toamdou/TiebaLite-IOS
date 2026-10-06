@@ -20,7 +20,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private let threadId: String
   private let postId: String?
   private let fromFavorites: Bool
-  private let knownSnapshot: TiebaThreadSnapshot?
+  let knownSnapshot: TiebaThreadSnapshot?
   private var knownPostView: TiebaThreadKnownPostView?
   private var seeLz: Bool
   /// 回复排序（三档：热门/正序/倒序）。默认热门——服务端三档里热门是"按热度看帖"
@@ -30,17 +30,24 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
 
   private let floatingBar = TiebaThreadFloatingBar()
 
-  private var thread: TiebaThreadInfo?
+  var thread: TiebaThreadInfo?
   /// 回复（不含主贴）。
   private var posts: [TiebaThreadPost] = []
   /// 钉住的主贴（原 JS 的 pinnedMainPost）：正序/倒序、只看楼主、翻页都不动它，
   /// 只有整页跳转/首包才更新；否则"切排序"会把主贴卡一起换掉甚至换没。
-  private var mainPost: TiebaThreadPost?
+  var mainPost: TiebaThreadPost?
   private var totalPages = 0
-  private var recordedVisit = false
+  var recordedVisit = false
   private var moreSignalToken: UUID?
   /// 长帖保留上限（原 MAX_POSTS）：头楼保留，其余丢弃最早追加的尾部之外的头。
   private static let maxPosts = 400
+  /// 上一轮 publish 的模型 + 行指纹（键 = post id）：行内容未变的行直接复用
+  /// 模型实例——feed 族有 isSameRaw 逐行复用，post 族此前每次 publish 都全量
+  /// 重造整页（触底加载 400 楼全部重测，后台数百 ms 与滚动抢 CPU）。
+  private var lastPublishedModels: [TiebaPostRowModel] = []
+  private var lastPublishedFingerprints: [String: String] = [:]
+  private var lastPublishedWidth: CGFloat = 0
+  private var lastPublishedToolbar = ""
   /// 显示设置（现读偏好；布局路径不重复查 KV）。
   private var showShortcut = true
 
@@ -101,6 +108,16 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     // 「原地换内容」，而不是行从下往上滑 10pt（用户报的"加载完突然往上瞬移"）。
     if knownSnapshot != nil { list.entranceAnimationEnabled = false }
     list.onScroll = { [weak self] scrollView in self?.handleScroll(scrollView) }
+    // C1：松手落点若停在"顶部静止位往下 8pt"之内，直接落到静止位。
+    // 移植自上游 submodules/ScrollComponent/Sources/ScrollComponent.swift:100-105（contentOffsetWillCommit）：
+    // 本页两处判据都是"是否已在顶部"——浮动栏的 y < contentInset.top + 10 与回顶刷新的
+    // isAtTop——落点差几 pt 就会"内容看着到顶了、状态却没到"。8pt 是吸合带宽，只朝顶部生效。
+    list.contentOffsetWillCommit = { scrollView, target in
+      let top = -scrollView.adjustedContentInset.top
+      if target.y > top, target.y - top <= 8 {
+        target.y = top
+      }
+    }
     floatingBar.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(floatingBar)
     // 手机维持屏宽 72%（iPhone 375 → 270）；iPad 上 72% 会到 737pt（四个 184pt
@@ -312,6 +329,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     keepMain: Bool = false
   ) {
     guard generation == loadGeneration else { return }
+    var trimmed = false
     if replacing {
       thread = page.thread ?? thread
       // 楼主楼恒按 floor == 1 定位；倒序/只看楼主时服务端可能整页都不回吐楼主楼，
@@ -329,6 +347,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       posts.append(contentsOf: page.posts.filter { !existing.contains($0.id) && $0.id != mainPost?.id })
       if posts.count > Self.maxPosts {
         posts = Array(posts.suffix(Self.maxPosts))
+        // 裁尾丢头会整体前移既有行下标，而快照标识是位置身份 (pageKey#index)：必须视同
+        // 整页替换（换页键重测），否则屏上 cell 还显旧楼、行内事件已指向别的楼。
+        trimmed = true
       }
     }
     currentPage = page.current
@@ -344,7 +365,13 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     } else {
       showList()
       list.footerState = posts.isEmpty ? .empty : (hasMore ? .more : .none)
-      publish(fresh: !keepMain)
+      // ⚠️ 只有"整页替换"才换页键。loadMore 是**追加**：换键 = 快照里所有
+      // item 标识 (pageKey#index) 全变 → TiebaKindListView 走 applySnapshotUsingReloadData，
+      // 可见楼层 cell 全部回收重建（每行 UITextView 全文重排 10-30ms、图片请求重发、
+      // 可见 GIF 从第 0 帧重播、滚动位置可能弹动）。
+      // 同页键 + 行数变化走的是另一条路（TiebaKindListView.setPage 的 isSamePage 分支）：
+      // diff 追加 + 可见行重配 → 页码等行内内容照样刷新，但 cell 不重建。
+      publish(fresh: (replacing && !keepMain) || trimmed)
     }
     floatingBar.configure(
       hasAgree: thread?.hasAgree ?? false,
@@ -383,9 +410,24 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     let palette = list.palette.base
     let accountUid = TiebaBackgroundSnapshot.shared.uid
     let hideBlocked = TiebaPreferenceSnapshot.bool("hideBlockedContent", default: false)
+    // 行复用输入：上一轮模型/指纹 + 宽度/工具栏（变化即全量重造）。
+    // 工具栏指纹**不含页码**：翻页只刷工具栏，见下面 toolbarFingerprint 的注释。
+    let previousById = Dictionary(
+      lastPublishedModels.map { ($0.post.id, $0) },
+      uniquingKeysWith: { first, _ in first }
+    )
+    let previousFingerprints = lastPublishedFingerprints
+    let previousWidth = lastPublishedWidth
+    let previousToolbar = lastPublishedToolbar
+    // 页码**不进**指纹：翻页只改工具栏那行文案，主贴行的行高/plan/正文都不变。
+    // 进了指纹就是每翻一页把主贴卡重建 + 重测一次（正文一次完整 CoreText 排版）。
+    let toolbarFingerprint = "\(toolbar.replyNum)|\(toolbar.seeLz)|\(toolbar.sort.rawValue)"
 
     Task { @MainActor in
-      let box = await Task.detached(priority: .userInitiated) { () -> (models: [TiebaPostRowModel], posts: [TiebaThreadPost]) in
+      // 离屏（被 push 盖住 / 还没上屏）时降档 .utility：与 TiebaRowPageDriver 同判据——
+      // 用户看不见的页没必要和滚动抢 CPU（改前一律 .userInitiated）。
+      let measurementPriority: TaskPriority = view.window == nil ? .utility : .userInitiated
+      let box = await Task.detached(priority: measurementPriority) { () -> (models: [TiebaPostRowModel], posts: [TiebaThreadPost]) in
         var models: [TiebaPostRowModel] = []
         var kept: [TiebaThreadPost] = []
         for (index, post) in source.enumerated() {
@@ -393,6 +435,17 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           if hideBlocked, !isMain {
             if blockFilter.isUserBlocked(uid: post.authorId, name: post.authorName) { continue }
             if blockFilter.isContentBlocked(post.plainText) { continue }
+          }
+          // 未变行复用：同一 id、行指纹相同、宽度与主贴工具栏未变 → 上一份模型
+          // 原样复用（emoji 升级缓存/plan/测量全部继承，零重测）。
+          if width == previousWidth,
+             let prev = previousById[post.id],
+             previousFingerprints[post.id] == Self.postFingerprint(post),
+             (!isMain || toolbarFingerprint == previousToolbar)
+          {
+            models.append(prev)
+            kept.append(post)
+            continue
           }
           models.append(TiebaPostRowModel(
             pageKey: key,
@@ -418,11 +471,36 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       }.value
       guard self.pageKey == key else { return }
       self.rowPosts = box.posts
+      self.lastPublishedModels = box.models
+      self.lastPublishedFingerprints = Dictionary(
+        uniqueKeysWithValues: box.posts.map { ($0.id, Self.postFingerprint($0)) }
+      )
+      self.lastPublishedWidth = width
+      self.lastPublishedToolbar = toolbarFingerprint
+      // 复用主贴行时把新页码就地写回模型：主贴行沿用同一实例，行视图的 apply 会按身份
+      // 提前返回，页码只能走「就地更新 + 只刷工具栏」；写回放在 MainActor 上，
+      // 避免后台测量线程去动行视图已经持有的模型。
+      if let main = box.models.first(where: { $0.isMain }) { main.updateToolbar(toolbar) }
       TiebaPostRowMetrics.shared.prepare(pageKey: key, models: box.models)
       TiebaKindRowPages.shared.publish(pageKey: key, kinds: Array(repeating: .post, count: box.models.count))
       self.list.setPage(pageKey: key)
+      // 主贴行（下标 0）的模型实例没换，重配时 apply 直接返回 —— 页码必须显式只刷工具栏，
+      // 否则翻页后工具栏还停在上一个页码。
+      self.list.refreshToolbar(index: 0)
       self.refreshMediaVisibility()
     }
+  }
+
+  /// 行模型输入指纹：作者族 + 计数 + 内容段数/纯文本/图片档。不逐字段 Equatable
+  /// （content 枚举带关联值），这些键覆盖行视图消费的一切。
+  nonisolated private static func postFingerprint(_ post: TiebaThreadPost) -> String {
+    var images = ""
+    for segment in post.content {
+      if case .image(let img) = segment {
+        images += "|\(img.src)|\(img.bigSrc)|\(img.originSrc)|\(img.width)|\(img.height)"
+      }
+    }
+    return "\(post.id)|\(post.floor)|\(post.authorId)|\(post.authorName)|\(post.authorNameShow)|\(post.authorPortrait)|\(post.authorLevel)|\(post.authorLevelName)|\(post.ipLocation)|\(post.createTimeMs)|\(post.agreeNum)|\(post.isAgree)|\(post.subPostNum)|\(post.content.count)|\(images)|\(post.plainText)"
   }
 
   private func toolbarModel() -> TiebaPostToolbarModel {
@@ -540,33 +618,31 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     return (fromThread.isEmpty || fromThread == threadId) ? "" : fromThread
   }
 
-  /// 收藏/取消（乐观态在服务端成功后再翻转；图片快照写收藏页缩略图 KV）。
+  /// 收藏/取消：**乐观翻转 + 失败回滚**（先翻星标、先弹提示，不等网络）。
+  /// 图片快照（收藏页缩略图 KV）仍在服务端确认后才写——那写的是本地缓存，
+  /// 失败时留在里面等于把"没收藏成功"的帖子塞进收藏页。
   private func toggleCollect() {
     guard requireLogin(), runOnce("collect") else { return }
     let wasCollected = isCollected
+    let next = !wasCollected
+    applyCollectedState(next)
+    pill.showResult(success: true, text: next ? "已收藏" : "已取消收藏")
     Task { @MainActor in
       defer { finishOnce("collect") }
       do {
         try await TiebaThreadActionAPI.setStore(
           threadId: threadId,
           firstPostId: firstFloorPostId,
-          store: !wasCollected
+          store: next
         )
-        if wasCollected {
-          removeFavoriteImages(threadId: threadId)
-        } else {
+        if next {
           saveFavoriteImages(threadId: threadId)
+        } else {
+          removeFavoriteImages(threadId: threadId)
         }
-        isCollected.toggle()
-        floatingBar.configure(
-          hasAgree: thread?.hasAgree ?? false,
-          zanNum: thread?.zanNum ?? 0,
-          isCollected: isCollected,
-          palette: list.palette.base
-        )
         TiebaSceneHaptics.fire("action-success")
-        pill.showResult(success: true, text: wasCollected ? "已取消收藏" : "已收藏")
       } catch {
+        applyCollectedState(wasCollected)
         TiebaSceneHaptics.fire("action-fail")
         // 透出真实原因：LocalizedError 的文案优先；网络层错误（超时/断连）不是
         // LocalizedError，只有 localizedDescription 有内容——只读前者会让失败一律
@@ -576,6 +652,17 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
         pill.showResult(success: false, text: detail.isEmpty ? fallback : detail)
       }
     }
+  }
+
+  /// 收藏态落 UI（乐观写入与失败回滚**同一份**）：isCollected + 浮条星标。
+  private func applyCollectedState(_ value: Bool) {
+    isCollected = value
+    floatingBar.configure(
+      hasAgree: thread?.hasAgree ?? false,
+      zanNum: thread?.zanNum ?? 0,
+      isCollected: value,
+      palette: list.palette.base
+    )
   }
 
   private func toggleAgree(_ post: TiebaThreadPost) {
@@ -614,7 +701,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private func republishRow(postId: String) {
     guard let index = rowPosts.firstIndex(where: { $0.id == postId }),
           let current = TiebaPostRowMetrics.shared.row(pageKey: pageKey, index: index),
-          let updated = posts.first(where: { $0.id == postId })
+          let updated = sourcePost(id: postId)
     else { return }
     rowPosts[index] = updated
     let key = pageKey
@@ -630,6 +717,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
 
   private func agreeThread(_ thread: TiebaThreadInfo) {
     guard requireLogin(), runOnce("threadAgree") else { return }
+    // 触觉在**触摸回调里同步发**（改前在下面的 Task 体内：主 actor 调度一跳才振，
+    // 且排在乐观更新之后——主线程正忙时这一跳就是可感的延迟）。
+    TiebaSceneHaptics.fire("like")
     let next = !thread.hasAgree
     var updated = thread
     updated.hasAgree = next
@@ -641,11 +731,12 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       isCollected: isCollected,
       palette: list.palette.base
     )
-    publish(fresh: false)
+    // 行内容不读 thread.hasAgree/zanNum（浮条是唯一显示面，已在上面 configure），
+    // 此前这里的 publish 会触发整页重发布：可见行逐行重贴 attributedText（每个
+    // UITextView 一次全文排版，主线程 10-30ms 一卡）——两处 publish 全删。
     Task { @MainActor in
       defer { finishOnce("threadAgree") }
       do {
-        TiebaSceneHaptics.fire("like")
         try await TiebaThreadActionAPI.setAgree(
           threadId: threadId,
           // 拿不到首楼 id 时退回帖子 id（旧 JS 同判据 `firstPostId || id`；帖子页
@@ -673,16 +764,26 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           isCollected: isCollected,
           palette: list.palette.base
         )
-        publish(fresh: false)
         TiebaSceneHaptics.fire("action-fail")
         pill.showResult(success: false, text: "点赞失败，请稍后重试")
       }
     }
   }
 
+  /// 按 id 取当前楼：主贴钉在 mainPost、回复在 posts。
+  /// 主贴被排除出 posts（第 0 行单独发布），只查一个集合会让主贴的乐观更新、
+  /// 失败回滚、单行重建三条链路一起空转（点红心不动、失败也不回滚）。
+  private func sourcePost(id: String) -> TiebaThreadPost? {
+    if let parent = mainPost, parent.id == id { return parent }
+    return posts.first { $0.id == id }
+  }
+
   private func patchPost(_ postId: String, _ patch: (inout TiebaThreadPost) -> Void) {
     if let index = posts.firstIndex(where: { $0.id == postId }) {
       patch(&posts[index])
+    } else if var parent = mainPost, parent.id == postId {
+      patch(&parent)
+      mainPost = parent
     }
   }
 
@@ -795,324 +896,5 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       self.jump(to: page)
     })
     presenterViewController.present(alert, animated: true)
-  }
-
-  private func forumBarItems() -> [UIBarButtonItem]? {
-    // 数据没落地时用快照（点卡片进帖必写）：否则首包前右侧是空的，首包一到吧按钮
-    // 才"突然"出现（用户实证）。深链无快照时仍等首包。
-    let forumName = thread?.forumName ?? knownSnapshot?.forumName ?? ""
-    guard !forumName.isEmpty else { return nil }
-    let label = "进入\(forumName)吧"
-    let avatar = thread?.forumAvatar ?? knownSnapshot?.forumAvatarURL?.absoluteString ?? ""
-    guard !avatar.isEmpty, let url = URL(string: avatar) else {
-      // 缺吧头像：退化成通用头像符号（与原 headerRight 的 symbolItem 分支同语义）。
-      let item = UIBarButtonItem(
-        image: UIImage(systemName: "person.crop.circle"),
-        style: .plain,
-        target: nil,
-        action: nil
-      )
-      item.accessibilityLabel = label
-      item.primaryAction = UIAction { [weak self] _ in self?.openForum() }
-      item.tintColor = TiebaNavigator.shared.chromeTheme.navTint
-      return [item]
-    }
-    let item = TiebaThreadForumAvatarItem(frame: CGRect(x: 0, y: 0, width: 30, height: 30))
-    let button = item.button
-    button.accessibilityLabel = label
-    button.load(url: url)
-    button.onTap = { [weak self] in self?.openForum() }
-    return [UIBarButtonItem(customView: item)]
-  }
-
-  private func openForum() {
-    let name = thread?.forumName ?? knownSnapshot?.forumName ?? ""
-    guard !name.isEmpty else { return }
-    TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.navigate(.forum(name: name, forumId: thread?.forumId ?? ""))
-  }
-
-  // MARK: - 浏览记录 / 收藏图片快照（原生 KV / SQLite，与 JS 同一份存储）
-
-  private func recordVisitIfNeeded() {
-    guard !recordedVisit, let thread, !thread.id.isEmpty else { return }
-    guard !TiebaPreferenceSnapshot.bool("incognitoMode", default: false) else { return }
-    recordedVisit = true
-    let now = Int(Date().timeIntervalSince1970 * 1000)
-    let values: [[String: Any]] = [
-      ["v": "thread"], ["v": thread.id], ["v": thread.forumId],
-      ["v": thread.forumName], ["v": ""], ["v": thread.title],
-      ["v": thread.authorName], ["v": thread.authorPortrait], ["v": now],
-    ]
-    Task.detached(priority: .utility) {
-      let database = TiebaSQLite.mainDatabase
-      _ = try? TiebaSQLite.shared.run(
-        database: database,
-        sql: "DELETE FROM visit_history WHERE type = ? AND thread_id = ?",
-        params: [["v": "thread"], ["v": thread.id]]
-      )
-      _ = try? TiebaSQLite.shared.run(
-        database: database,
-        sql: """
-          INSERT INTO visit_history (
-            type, thread_id, forum_id, forum_name, avatar, title, author_name, author_portrait, timestamp
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          """,
-        params: values
-      )
-      _ = try? TiebaSQLite.shared.run(
-        database: database,
-        sql: """
-          DELETE FROM visit_history WHERE id NOT IN (
-            SELECT id FROM visit_history ORDER BY timestamp DESC, id DESC LIMIT ?
-          )
-          """,
-        params: [["v": 200]]
-      )
-    }
-  }
-
-  private static let favoriteImagesKey = "@tiebalite:favorite_images_v1"
-
-  private func saveFavoriteImages(threadId: String) {
-    let images = (mainPost?.images ?? [])
-      .map { $0.src.isEmpty ? $0.originSrc : $0.src }
-      .filter { !$0.isEmpty }
-      .prefix(6)
-    guard !images.isEmpty else { return }
-    var map = favoriteImagesMap()
-    map[threadId] = Array(images)
-    if map.count > 200 {
-      for key in map.keys.prefix(map.count - 200) { map.removeValue(forKey: key) }
-    }
-    guard let data = try? JSONSerialization.data(withJSONObject: map),
-          let text = String(data: data, encoding: .utf8) else { return }
-    try? TiebaKvStore.shared.set(key: Self.favoriteImagesKey, value: text)
-  }
-
-  private func removeFavoriteImages(threadId: String) {
-    var map = favoriteImagesMap()
-    guard map[threadId] != nil else { return }
-    map.removeValue(forKey: threadId)
-    guard let data = try? JSONSerialization.data(withJSONObject: map),
-          let text = String(data: data, encoding: .utf8) else { return }
-    try? TiebaKvStore.shared.set(key: Self.favoriteImagesKey, value: text)
-  }
-
-  private func favoriteImagesMap() -> [String: [String]] {
-    guard let raw = TiebaKvStore.shared.get(key: Self.favoriteImagesKey),
-          let data = raw.data(using: .utf8),
-          let object = try? JSONSerialization.jsonObject(with: data) as? [String: [String]]
-    else { return [:] }
-    return object
-  }
-}
-
-// MARK: - 顶栏吧头像（方形外壳：customView 被系统按条形拉伸时头像也不会变胶囊）
-
-/// TiebaBarAvatarButton 的圆角按 init 尺寸（30/2）一次算好，栏内 customView 在
-/// iOS 26 会被拉伸（宽 > 高）→ 圆角 15 < 宽/2 即药丸。外壳自己可被拉伸，但把按钮
-/// 恒钉在 30×30 正方里，头像永远是正圆。
-private final class TiebaThreadForumAvatarItem: UIView {
-  let button = TiebaBarAvatarButton(frame: CGRect(x: 0, y: 0, width: 30, height: 30))
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    addSubview(button)
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-  override var intrinsicContentSize: CGSize { CGSize(width: 30, height: 30) }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    let side: CGFloat = 30
-    button.frame = CGRect(
-      x: (bounds.width - side) / 2,
-      y: (bounds.height - side) / 2,
-      width: side,
-      height: side
-    )
-  }
-}
-
-// MARK: - 底部浮动胶囊（原 ThreadFloatingBar：复制链接 / 帖点赞 / 收藏 / 更多）
-
-final class TiebaThreadFloatingBar: UIView {
-  enum Action {
-    case copyLink
-    case agree
-    case collect
-    case more
-  }
-
-  var onAction: ((Action) -> Void)?
-
-  /// 浮动栏底色：纯色卡片色 + 一点阴影（原 JS 的液态玻璃 .clear 太花，用户要求
-  /// 照系统浮动条的观感来：实底、轻微投影）。
-  private let background = UIView()
-  private let copyButton = TiebaThreadFloatingBar.makeButton("link")
-  // 点赞图标与计数分开摆（计数在图标正上方，不再画进按钮里当角标）。
-  private let agreeButton = TiebaThreadFloatingBar.makeButton(nil)
-  private let agreeIcon = UIImageView()
-  private let agreeCount = UILabel()
-  private let collectButton = TiebaThreadFloatingBar.makeButton("star")
-  private let moreButton = TiebaThreadFloatingBar.makeButton("ellipsis")
-  private let buttonStack = UIStackView()
-  private var palette: TiebaFeedRowPalette = .default
-
-  private var barHidden = false
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    // 不自裁：投影画在本层，圆角由 background 自己裁（子视图都在界内）。
-    clipsToBounds = false
-    layer.cornerRadius = 27
-    layer.cornerCurve = .continuous
-    layer.shadowColor = UIColor.black.cgColor
-    layer.shadowOpacity = 0.10
-    layer.shadowRadius = 8
-    layer.shadowOffset = CGSize(width: 0, height: 2)
-    background.layer.cornerRadius = 27
-    background.layer.cornerCurve = .continuous
-    background.clipsToBounds = true
-    addSubview(background)
-    // 四个按钮等宽排布（原手摆 frame 的等价）：fillEqually 的槽心 = 原 itemWidth 槽心，
-    // 高度锁 44 后垂直居中，图标位置与手摆完全一致。
-    buttonStack.axis = .horizontal
-    buttonStack.distribution = .fillEqually
-    buttonStack.alignment = .center
-    for button in [copyButton, agreeButton, collectButton, moreButton] {
-      button.heightAnchor.constraint(equalToConstant: 44).isActive = true
-      buttonStack.addArrangedSubview(button)
-    }
-    addSubview(buttonStack)
-    agreeIcon.contentMode = .scaleAspectFit
-    agreeIcon.isUserInteractionEnabled = false
-    addSubview(agreeIcon)
-    agreeCount.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-    agreeCount.textAlignment = .center
-    agreeCount.isUserInteractionEnabled = false
-    addSubview(agreeCount)
-    copyButton.addTarget(self, action: #selector(handleCopy), for: .touchUpInside)
-    agreeButton.addTarget(self, action: #selector(handleAgree), for: .touchUpInside)
-    collectButton.addTarget(self, action: #selector(handleCollect), for: .touchUpInside)
-    moreButton.addTarget(self, action: #selector(handleMore), for: .touchUpInside)
-  }
-
-  required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-  func configure(hasAgree: Bool, zanNum: Int, isCollected: Bool, palette: TiebaFeedRowPalette) {
-    self.palette = palette
-    background.backgroundColor = palette.card
-    agreeIcon.image = UIImage(
-      systemName: hasAgree ? "heart.fill" : "heart",
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
-    )
-    agreeIcon.tintColor = hasAgree ? palette.liked : palette.text
-    collectButton.setImage(UIImage(systemName: isCollected ? "star.fill" : "star"), for: .normal)
-    collectButton.tintColor = isCollected ? UIColor.systemYellow : palette.text
-    copyButton.tintColor = palette.text
-    moreButton.tintColor = palette.text
-    agreeCount.text = zanNum > 0 ? TiebaForumFormat.count(zanNum) : ""
-    agreeCount.textColor = hasAgree ? palette.liked : palette.textSecondary
-    setNeedsLayout()
-  }
-
-  /// 滚动自动隐藏（原 useFloatingBarAutoHide 的上下阈值 ±0.3）。
-  ///
-  /// ⚠️ 方向按**手指**判，而 pan 手势的 velocity 与 contentOffset 增量符号相反：
-  /// 手指上滑（翻看后面的楼）⇒ velocity.y < 0，此时收起；手指下滑（往回翻）⇒
-  /// velocity.y > 0，此时露出。旧 JS 判的是 contentOffset 增量（上滑为正），
-  /// 原生照抄阈值时用了 pan 速度却没翻符号，方向正好是反的（2026-09-17 修）。
-  func handleScroll(_ scrollView: UIScrollView) {
-    let y = scrollView.contentOffset.y
-    let threshold = max(scrollView.adjustedContentInset.top, 0) + 10
-    if y < threshold {
-      if barHidden { setBarHidden(false) }
-      return
-    }
-    let velocity = scrollView.panGestureRecognizer.velocity(in: scrollView).y
-    if velocity < -0.3, !barHidden {
-      setBarHidden(true)
-    } else if velocity > 0.3, barHidden {
-      setBarHidden(false)
-    }
-  }
-
-  private func setBarHidden(_ value: Bool) {
-    barHidden = value
-    let offset: CGFloat = value ? 120 : 0
-    if UIAccessibility.isReduceMotionEnabled {
-      transform = CGAffineTransform(translationX: 0, y: offset)
-      return
-    }
-    UIView.animate(
-      withDuration: value ? 0.18 : 0.22,
-      delay: 0,
-      options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction]
-    ) {
-      self.transform = CGAffineTransform(translationX: 0, y: offset)
-    }
-  }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    background.frame = bounds
-    // 投影轮廓按实际尺寸给（没有它 Core Animation 每帧从图层内容算轮廓）。
-    layer.shadowPath = UIBezierPath(
-      roundedRect: bounds,
-      cornerRadius: layer.cornerRadius
-    ).cgPath
-    // 先让 stack 落位：下面 layoutAgreeContent 读的是 agreeButton.frame（箭头/计数）。
-    buttonStack.frame = bounds
-    buttonStack.layoutIfNeeded()
-    layoutAgreeContent()
-  }
-
-  /// 点赞计数居中在图标正上方（ThreadFloatingBar 同排布的正上方版；原为按钮右上角角标）。
-  private func layoutAgreeContent() {
-    let iconSide: CGFloat = 20
-    let hasCount = !(agreeCount.text ?? "").isEmpty
-    let countHeight = hasCount ? ceil(agreeCount.font.lineHeight) : 0
-    let gap: CGFloat = hasCount ? 2 : 0
-    let stackHeight = countHeight + gap + iconSide
-    let top = agreeButton.frame.minY + max((agreeButton.frame.height - stackHeight) / 2, 0)
-    let iconFrame = hasCount
-      ? CGRect(x: agreeButton.frame.midX - iconSide / 2, y: top + countHeight + gap, width: iconSide, height: iconSide)
-      : CGRect(x: agreeButton.frame.midX - iconSide / 2, y: agreeButton.frame.midY - iconSide / 2, width: iconSide, height: iconSide)
-    agreeIcon.frame = iconFrame.integral
-    agreeCount.isHidden = !hasCount
-    if hasCount {
-      agreeCount.sizeToFit()
-      let width = ceil(agreeCount.bounds.width) + 2
-      agreeCount.frame = CGRect(
-        x: agreeButton.frame.midX - width / 2,
-        y: top,
-        width: width,
-        height: countHeight
-      )
-    }
-  }
-
-  @objc private func handleCopy() { onAction?(.copyLink) }
-  @objc private func handleAgree() { onAction?(.agree) }
-  @objc private func handleCollect() { onAction?(.collect) }
-  @objc private func handleMore() { onAction?(.more) }
-
-  private static func makeButton(_ symbol: String?) -> UIButton {
-    let button = UIButton(type: .system)
-    if let symbol {
-      button.setImage(
-        UIImage(
-          systemName: symbol,
-          withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
-        ),
-        for: .normal
-      )
-    }
-    return button
   }
 }

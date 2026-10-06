@@ -43,7 +43,9 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
   private let introLabel = UILabel()
   private let introWrap = UIView()
   // 分段 + 排序/分类行
-  private let segment = UISegmentedControl(items: ["热门", "最新", "精品"])
+  /// 分段 = TiebaTabSelector：选中/未选中两份预排版文本按 fraction 交叉淡化 + 指示器跨项
+  /// 矩形 lerp（见 UI/Components/TiebaTabSelector.swift）。系统 chrome（材质/圆角/命中/无障碍）不变。
+  private let segment = TiebaTabSelector(items: ["热门", "最新", "精品"])
   private let sortRow = UIStackView()
   private let sortButton = UIButton(type: .system)
   private let classifyRow = UIStackView()
@@ -153,13 +155,13 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
 
     titleColumn.isUserInteractionEnabled = true
     titleColumn.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleCardTap)))
-    nameLabel.font = .systemFont(ofSize: 20, weight: .heavy)
+    nameLabel.font = TiebaSimpleText.font(size: 20, weight: .heavy)
     nameLabel.numberOfLines = 1
     nameLabel.lineBreakMode = .byTruncatingTail
-    metaLabel.font = .systemFont(ofSize: 12, weight: .medium)
+    metaLabel.font = TiebaSimpleText.font(size: 12, weight: .medium)
     metaLabel.numberOfLines = 1
     metaLabel.lineBreakMode = .byTruncatingTail
-    levelBadge.font = .systemFont(ofSize: 11, weight: .heavy)
+    levelBadge.font = TiebaSimpleText.font(size: 11, weight: .heavy)
     levelBadge.contentInsets = UIEdgeInsets(top: 2, left: 6, bottom: 2, right: 6)
     levelBadge.layer.cornerRadius = 5
     levelBadge.layer.cornerCurve = .continuous
@@ -224,7 +226,7 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     levelRow.insetsLayoutMarginsFromSafeArea = false
     cardStack.addArrangedSubview(levelRow)
 
-    introLabel.font = .systemFont(ofSize: 13, weight: .regular)
+    introLabel.font = TiebaSimpleText.font(size: 13, weight: .regular)
     introLabel.numberOfLines = 2
     introLabel.lineBreakMode = .byTruncatingTail
     introLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -238,8 +240,12 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     cardStack.addArrangedSubview(introWrap)
 
     // ── 分段（UIKit 同源组件）──
-    segment.selectedSegmentIndex = 0
-    segment.addTarget(self, action: #selector(handleSegmentChange), for: .valueChanged)
+    segment.select(0, animated: false)
+    segment.onSelect = { [weak self] index in
+      guard let self else { return }
+      TiebaSceneHaptics.fire("toggle")
+      self.onAction?(.forum(.segment(index: index)), [:])
+    }
     segment.translatesAutoresizingMaskIntoConstraints = false
     let segmentWrap = UIView()
     segmentWrap.addSubview(segment)
@@ -247,7 +253,9 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
       segment.leadingAnchor.constraint(equalTo: segmentWrap.leadingAnchor),
       segment.trailingAnchor.constraint(equalTo: segmentWrap.trailingAnchor),
       segment.centerYAnchor.constraint(equalTo: segmentWrap.centerYAnchor),
-      segmentWrap.heightAnchor.constraint(equalToConstant: 32),
+      // 下限而不是定高：UISegmentedControl 自身随 Dynamic Type 放大，钉死 32 会上下溢出、
+      // 与名片/排序行重叠。
+      segmentWrap.heightAnchor.constraint(greaterThanOrEqualToConstant: 32),
     ])
     root.addArrangedSubview(segmentWrap)
     root.setCustomSpacing(6, after: segmentWrap)
@@ -281,7 +289,7 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     classifyConfig.buttonSize = .small
     classifyConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
       var out = incoming
-      out.font = .systemFont(ofSize: 13, weight: .medium)
+      out.font = TiebaSimpleText.font(size: 13, weight: .medium)
       return out
     }
     classifyButton.configuration = classifyConfig
@@ -326,7 +334,7 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     )
     config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
       var out = incoming
-      out.font = .systemFont(ofSize: 13, weight: .semibold)
+      out.font = TiebaSimpleText.font(size: 13, weight: .semibold)
       return out
     }
     config.titleLineBreakMode = .byTruncatingTail
@@ -420,7 +428,8 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
     introLabel.text = intro
     introLabel.textColor = secondary
 
-    segment.selectedSegmentIndex = max(0, min(tab, segment.numberOfSegments - 1))
+    // 数据驱动（刷新/切排序都会带 tab 回来）：不播滑动，直接就位。
+    segment.select(max(0, min(tab, segment.numberOfSegments - 1)), animated: false)
     sortRow.isHidden = tab != 1
     classifyRow.isHidden = tab != 2
     if tab == 1 {
@@ -448,7 +457,7 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
       chipConfig.baseForegroundColor = palette.base.primary
       chipConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
         var out = incoming
-        out.font = .systemFont(ofSize: 13, weight: .semibold)
+        out.font = TiebaSimpleText.font(size: 13, weight: .semibold)
         return out
       }
       classifyChip.configuration = chipConfig
@@ -485,10 +494,5 @@ final class TiebaForumHeaderView: UIView, TiebaKindListHeaderView {
 
   @objc private func handleCardTap() {
     onAction?(.forum(.card), [:])
-  }
-
-  @objc private func handleSegmentChange() {
-    TiebaSceneHaptics.fire("toggle")
-    onAction?(.forum(.segment(index: segment.selectedSegmentIndex)), [:])
   }
 }

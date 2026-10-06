@@ -371,21 +371,6 @@ enum TiebaSession {
     return account
   }
 
-  /// 头像上传成功后的就地回写（账号页/编辑资料页头像立即更新）。落盘失败只记日志
-  /// 并放弃本次回写：调用点（编辑资料页）不接受 throws，但绝不假装已保存。
-  static func updatePortrait(_ portrait: String) {
-    guard !portrait.isEmpty, var account = currentAccount() else { return }
-    account.portrait = portrait
-    do {
-      try saveMetadata(account)
-    } catch {
-      sessionLog.error("头像回写持久化失败：\(error.localizedDescription, privacy: .public)")
-      return
-    }
-    saveProfileCache(account)
-    NotificationCenter.default.post(name: didChangeNotification, object: nil)
-  }
-
   // MARK: - 持久化（JS saveAccountSync / deleteAccountSync 同形）
 
   /// 凭据 + 元数据全量落盘。任何一步失败都抛出 → activate 整体失败（111）。

@@ -4,9 +4,10 @@
 // 迁移前 src/components/ui/Skeleton.tsx 的 UIKit 重建：thread/post/card/row
 // 四种变体逐值复刻其 StyleSheet 几何（「同形」原则——尺寸不对的骨架比没有
 // 更糟，真数据落地时页面会跳）；thread/post 行高由内容自然撑出，card/row 用
-// 真实行高（232/88）。呼吸 opacity 0.45 → 0.9 每段 500ms 无限往返，Reduce
-// Motion 时静态 0.9，且只在骨架真正可见（窗口 + 未隐藏 + 前台）时运行
-// （JS 2026-09-12 发热审查的同款治理，避免后台 60fps 空转）。
+// 真实行高（232/88）。**高光扫过**（原 JS 的呼吸 opacity 已换掉，见
+// TiebaSkeletonBoneView）：每格骨块自带一条斜向光带横掠，相邻格错开 0.12s
+// 连成一道光波；Reduce Motion 时静态，且只在骨架真正可见（窗口 + 未隐藏 +
+// 前台）时运行（JS 2026-09-12 发热审查的同款治理，避免后台空转）。
 //
 // 占位色 = surfaceTertiary（systemGray5）。禁用 surfaceSecondary /
 // secondarySystemBackground —— 亮色下两者与页面背景同为 #F2F2F7，骨架块
@@ -69,14 +70,86 @@ private enum TiebaSkeletonMetrics {
   }
 }
 
+// MARK: - 骨块（高光扫过）
+
+/// 骨架占位块。高光扫过 = 每个骨块自带一条斜向白带横掠而过：动画走 `locations`
+/// （比例坐标，与骨块尺寸无关，旋转/换变体不必重启动画），全程在渲染服务器侧，
+/// 主线程零参与。不可见 / Reduce Motion / 进后台时整组停掉（见 TiebaSkeletonList）。
+///
+/// 光带是 sublayer，只有 `masksToBounds` 能把它裁进圆角（含连续曲率）——本文件唯一
+/// 裁切点。骨块是纯色小块、无位图内容，且骨架只在首屏加载期可见，代价可忽略。
+final class TiebaSkeletonBoneView: UIView {
+  /// 光带：clear → 高光 → clear；起点/终点落在骨块之外，末段停在画外 = 两次之间的间隔。
+  private let shimmer = CAGradientLayer()
+  private var isShimmering = false
+  private var shimmerDelay: CFTimeInterval = 0
+  private var shimmerHighlight: UIColor = .white
+
+  init(radius: CGFloat) {
+    super.init(frame: .zero)
+    layer.cornerRadius = radius
+    layer.cornerCurve = .continuous
+    layer.masksToBounds = true
+    shimmer.startPoint = CGPoint(x: 0, y: 0)
+    shimmer.endPoint = CGPoint(x: 1, y: 0.55) // 斜向扫过
+    shimmer.locations = [-0.6, -0.44, -0.28]
+    layer.addSublayer(shimmer)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    shimmer.frame = bounds
+  }
+
+  /// 高光色（动态色：CGColor 不随外观走，trait 变化时由调用方重解析）。
+  func setShimmerHighlight(_ color: UIColor) {
+    shimmerHighlight = color
+    refreshShimmerColors()
+  }
+
+  func refreshShimmerColors() {
+    shimmer.colors = [
+      UIColor.clear.cgColor,
+      shimmerHighlight.resolvedColor(with: traitCollection).cgColor,
+      UIColor.clear.cgColor,
+    ]
+  }
+
+  /// 可见才扫。delay 用于让相邻骨架格错开一点，看着像一道光波往下走。
+  func setShimmering(_ on: Bool, delay: CFTimeInterval = 0) {
+    guard on != isShimmering || (on && delay != shimmerDelay) else { return }
+    isShimmering = on
+    shimmerDelay = delay
+    shimmer.removeAnimation(forKey: "shimmer")
+    guard on else { return }
+    let sweep = CAKeyframeAnimation(keyPath: "locations")
+    sweep.values = [
+      [-0.6, -0.44, -0.28] as [NSNumber],
+      [1.28, 1.44, 1.6] as [NSNumber],
+      [1.28, 1.44, 1.6] as [NSNumber],
+    ]
+    sweep.keyTimes = [0, 0.78, 1]
+    sweep.duration = 1.6
+    sweep.repeatCount = .infinity
+    sweep.timingFunctions = [
+      CAMediaTimingFunction(name: .easeInEaseOut),
+      CAMediaTimingFunction(name: .linear),
+    ]
+    sweep.beginTime = CACurrentMediaTime() + delay
+    shimmer.add(sweep, forKey: "shimmer")
+  }
+}
+
 // MARK: - 单个骨架单元
 
 /// 单个骨架单元（对齐 Skeleton.tsx 的 SkeletonCell）。
 final class TiebaSkeletonCellView: UIView {
   let variant: TiebaSkeletonVariant
-  /// 呼吸动画宿主：每格只有这一个视图在动（整格数百个占位块一次 alpha 全变），
-  /// = 只含占位块的最近公共祖先（卡片面/描边在它之外，不闪）。
-  private(set) var pulseHost: UIView! = nil
+  /// 全部占位块（每块自带扫光；卡面/描边不在其中，不闪）。
+  private var bones: [TiebaSkeletonBoneView] = []
 
   private let placeholderColor: UIColor
   private let cardColor: UIColor
@@ -86,6 +159,13 @@ final class TiebaSkeletonCellView: UIView {
   private var mediaHeightConstraint: NSLayoutConstraint?
   /// 外观档变化登记（registerForTraitChanges；traitCollectionDidChange 已废弃）。
   private var styleRegistration: UITraitChangeRegistration?
+
+  /// 扫光高光色：浅色下白带压在 #E5E5EA 骨块上；深色下只给极淡一档。
+  private static let shimmerHighlight = UIColor { traits in
+    traits.userInterfaceStyle == .dark
+      ? UIColor.white.withAlphaComponent(0.14)
+      : UIColor.white.withAlphaComponent(0.55)
+  }
 
   init(
     variant: TiebaSkeletonVariant,
@@ -111,6 +191,7 @@ final class TiebaSkeletonCellView: UIView {
     styleRegistration = registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
       (view: TiebaSkeletonCellView, _) in
       view.refreshBorderColors()
+      view.refreshShimmerColors()
     }
     refreshBorderColors()
   }
@@ -135,12 +216,24 @@ final class TiebaSkeletonCellView: UIView {
 
   // MARK: 块工厂
 
-  private func makeBlock(radius: CGFloat, continuous: Bool = true) -> UIView {
-    let view = UIView()
+  func setShimmering(_ on: Bool, delay: CFTimeInterval = 0) {
+    for bone in bones {
+      bone.setShimmering(on, delay: delay)
+    }
+  }
+
+  private func refreshShimmerColors() {
+    for bone in bones {
+      bone.refreshShimmerColors()
+    }
+  }
+
+  private func makeBlock(radius: CGFloat) -> UIView {
+    let view = TiebaSkeletonBoneView(radius: radius)
     view.backgroundColor = placeholderColor
-    view.layer.cornerRadius = radius
-    if continuous { view.layer.cornerCurve = .continuous }
+    view.setShimmerHighlight(Self.shimmerHighlight)
     view.translatesAutoresizingMaskIntoConstraints = false
+    bones.append(view)
     return view
   }
 
@@ -257,8 +350,6 @@ final class TiebaSkeletonCellView: UIView {
     actions.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
     // 操作栏 marginTop 2（叠加 contentCol gap 6）
     content.setCustomSpacing(TiebaFeedRowLayout.contentColumnGap + 2, after: lastBodyBlock)
-    // inner 内只有占位块（卡片面/描边在 surface 上），整格一个呼吸动画。
-    pulseHost = inner
   }
 
   /// 操作栏：三等分，每组 17 圆图标 + 30×9 文本条（水平居中）。
@@ -293,16 +384,21 @@ final class TiebaSkeletonCellView: UIView {
   // MARK: post（PostCard 同形）
 
   private func buildPost() {
-    let surface = makeSurface(radius: TiebaSkeletonMetrics.cardRadius)
+    // 评审 H8：帖子骨架卡必须用**帖子**那一族的几何（TiebaPostRowLayout），不能借信息流族的常量。
+    // 改前症状：真实楼层卡是 marginH 10 / radius 16（用户反馈"与屏幕两边距离太大"从 16 收到 10），
+    // 骨架却用 feed 族的 16 / 20 ⇒ ① 有快照进帖时，页头里已加载的主贴占位卡（正确用 10）与下方
+    // 5 条骨架行（16）同屏左右边缘不齐；② 无快照/深链进帖时首包落地整块卡每边横移 6pt、圆角收窄。
+    // 改后行为：同一常量源，骨架与真实楼层卡边缘、圆角严丝合缝，落地不再横移。
+    let surface = makeSurface(radius: TiebaPostRowLayout.cardRadius)
     addSubview(surface)
     let inner = UIView()
     inner.translatesAutoresizingMaskIntoConstraints = false
     surface.addSubview(inner)
     NSLayoutConstraint.activate([
-      surface.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TiebaFeedRowLayout.cardMarginH),
-      surface.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -TiebaFeedRowLayout.cardMarginH),
-      surface.topAnchor.constraint(equalTo: topAnchor, constant: TiebaFeedRowLayout.cardMarginV),
-      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -TiebaFeedRowLayout.cardMarginV),
+      surface.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TiebaPostRowLayout.cardMarginH),
+      surface.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -TiebaPostRowLayout.cardMarginH),
+      surface.topAnchor.constraint(equalTo: topAnchor, constant: TiebaPostRowLayout.cardMarginV),
+      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -TiebaPostRowLayout.cardMarginV),
       inner.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: TiebaSkeletonMetrics.postPadding),
       inner.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -TiebaSkeletonMetrics.postPadding),
       inner.topAnchor.constraint(equalTo: surface.topAnchor, constant: TiebaSkeletonMetrics.postPadding),
@@ -355,7 +451,6 @@ final class TiebaSkeletonCellView: UIView {
       ),
       actionBar.bottomAnchor.constraint(equalTo: inner.bottomAnchor),
     ])
-    pulseHost = inner
   }
 
   // MARK: card（大图 + 标题 + 两行；行高由列表的 itemHeight 固定）
@@ -391,7 +486,6 @@ final class TiebaSkeletonCellView: UIView {
       line2.topAnchor.constraint(equalTo: line1.bottomAnchor, constant: TiebaSkeletonMetrics.gapTiny),
       container.bottomAnchor.constraint(equalTo: line2.bottomAnchor),
     ])
-    pulseHost = container
   }
 
   // MARK: row（36 圆头像 + 两行；行高由列表的 itemHeight 固定）
@@ -430,7 +524,6 @@ final class TiebaSkeletonCellView: UIView {
       column.trailingAnchor.constraint(equalTo: container.trailingAnchor),
       column.centerYAnchor.constraint(equalTo: container.centerYAnchor),
     ])
-    pulseHost = container
   }
 }
 
@@ -474,8 +567,8 @@ final class TiebaSkeletonList: UIView {
   }
 
   private let stack = UIStackView()
-  /// 每格一个呼吸宿主（8 格 = 8 个动画，不是每格上百个占位块各一个）。
-  private var pulseHosts: [UIView] = []
+  /// 每格一个扫光开关（动画在渲染服务器侧，主线程零参与）。
+  private var pulseHosts: [TiebaSkeletonCellView] = []
   private var isPulsing = false
 
   init(
@@ -589,13 +682,13 @@ final class TiebaSkeletonList: UIView {
         cell.heightAnchor.constraint(equalToConstant: height).isActive = true
       }
       stack.addArrangedSubview(cell)
-      pulseHosts.append(cell.pulseHost)
+      pulseHosts.append(cell)
     }
     applyInsets()
     updatePulse()
   }
 
-  // MARK: 呼吸（可见才跑）
+  // MARK: 扫光（可见才跑）
 
   private func updatePulse() {
     let shouldRun = !UIAccessibility.isReduceMotionEnabled
@@ -609,25 +702,17 @@ final class TiebaSkeletonList: UIView {
     }
     guard !isPulsing else { return }
     isPulsing = true
-    for host in pulseHosts { host.alpha = 0.45 }
-    // 0.45 → 0.9 → 0.45，每段 500ms，无限往返；整格一个动画（容器 alpha 一次
-    // 作用到全部占位块）。
-    UIView.animate(
-      withDuration: 0.5,
-      delay: 0,
-      options: [.autoreverse, .repeat, .curveEaseInOut, .allowUserInteraction]
-    ) { [weak self] in
-      guard let self else { return }
-      for host in self.pulseHosts { host.alpha = 0.9 }
+    for (index, cell) in pulseHosts.enumerated() {
+      // 每格错开 0.12s：一道光波自上而下走过整个骨架列表，而不是所有格子同时闪。
+      cell.setShimmering(true, delay: Double(index) * 0.12)
     }
   }
 
-  /// 停止：清动画并复位 0.9（Reduce Motion / 不可见的静态占位值）。
+  /// 停止：撤销动画。Reduce Motion / 不可见的静态占位值就是骨块底色本身。
   private func stopPulse() {
     isPulsing = false
-    for host in pulseHosts {
-      host.layer.removeAllAnimations()
-      host.alpha = 0.9
+    for cell in pulseHosts {
+      cell.setShimmering(false)
     }
   }
 

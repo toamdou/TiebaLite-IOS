@@ -77,8 +77,9 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private var isLoading = false
   private var requestSeq = 0
   private var pageKey = ""
-  /// 上次"缺页自愈重推"的时刻（节流用）。
-  private var lastRepublishAt: TimeInterval = 0
+  /// 缺页自愈重推的节流（与帖子页、列表侧**同一套** TiebaAdaptiveThrottle：连续缺页退避到 2s、
+  /// 静默后回到 0.5s、离屏直接用最大间隔）。改前是硬编码 0.5s 的第二套机制。
+  private var republishThrottle = TiebaAdaptiveThrottle()
   private var pageSeq = 0
   private var lastWidth: CGFloat = 0
   private var needsPublish = false
@@ -180,7 +181,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     // 宽度量化仍走全仓唯一实现。行宽契约 = 列表宽 − 2×horizontalInset（内缩含居中留白）。
     let width = TiebaLayout.quantize(list.bounds.width - list.horizontalInset * 2)
     // 宽度变化（旋转/分屏）必须按新宽度重测重推：行高按精确宽度键控，旧宽度的度量
-    // 会被宽度闸门拒绝、整列表退回兜底高。
+    // 会被宽度闸门拒绝（新宽度下只有可见窗口能当场同步补测，其余行等本轮重推落地）。
     if width != lastWidth, lastWidth > 0 { needsPublish = true }
     lastWidth = width
     // 转场未结束时只记账（见 viewDidAppear）：transitionCoordinator 非 nil 期间
@@ -280,7 +281,15 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     let text = (searchBar.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { return [] }
     // 服务端联想词直接采信（它们就是为这个词生成的，未必前缀命中）；历史只补前缀命中。
-    let localMatches = history.map(\.keyword).filter { $0.hasPrefix(text) }
+    // 前缀比对除了原样，再比一遍**折叠形**（小写 + 去重音 + 西里尔/希腊/汉字转拉丁）：
+    // 俄语吧名「Москва」敲 moskva 能命中，反过来敲「МОСКВА」也能被 mosk 命中。
+    // 只放宽本地历史，不动发给服务端的查询词——服务端按原词检索，客户端改不了它的规则。
+    let foldedQuery = TiebaTransliteration.searchFolded(text)
+    let localMatches = history.map(\.keyword).filter { keyword in
+      if keyword.hasPrefix(text) { return true }
+      guard !foldedQuery.isEmpty else { return false }
+      return TiebaTransliteration.searchFolded(keyword).hasPrefix(foldedQuery)
+    }
     var seen: Set<String> = []
     var out: [String] = []
     for candidate in remoteSuggestions + localMatches where !candidate.isEmpty {
@@ -537,12 +546,14 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     let rows: [[String: Any]]
   }
 
-  /// 同页键重推（缺页自愈出口）。列表侧已按 0.5s 节流，这里再兜一道。
+  /// 同页键重推（缺页自愈出口）。列表侧也有一道节流，这里兜第二道 —— 但**用同一套自适应节流**：
+  /// 连续缺页时退避到 2s、静默后回到 0.5s、页面不可见时直接用最大间隔。
+  /// 改前是硬编码 0.5s：既与列表侧策略不一致（第二套机制），又让「连续缺页」每 0.5s 重推一整页，
+  /// 而且离屏时照样重推一页。
   private func republishCurrentPage() {
     guard !pageKey.isEmpty, lastWidth > 0 else { return }
     let now = ProcessInfo.processInfo.systemUptime
-    guard now - lastRepublishAt >= 0.5 else { return }
-    lastRepublishAt = now
+    guard republishThrottle.shouldPass(now: now, inactive: view.window == nil) else { return }
     publish(fresh: false)
   }
 
@@ -608,6 +619,14 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
         guard !thread.id.isEmpty, expandedIds.insert(thread.id).inserted else { return }
         TiebaSceneHaptics.fire("toggle")
         publish(fresh: true)
+      case "quote":
+        // 转发引用卡 → 原帖；老数据缺 tid 退回整卡进帖。
+        if let quoteId = TiebaFeedRowInteraction.quotedThreadId(in: thread.row) {
+          TiebaSceneHaptics.fire("press")
+          TiebaNavigator.shared.navigate(.thread(id: quoteId))
+        } else {
+          openThread(thread)
+        }
       default:
         openThread(thread)
       }
@@ -786,11 +805,15 @@ extension TiebaSearchViewController: UISearchBarDelegate {
   }
 
   func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
+    // 裸 UISearchBar 默认不显示取消按钮（只有 UISearchController 才自带）：不打开的话
+    // 下面 searchBarCancelButtonClicked 的「空文本点取消=返回」整段永远不可达。
+    searchBar.showsCancelButton = true
     updateChrome()
     refreshSuggestionDisplay()
   }
 
   func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
+    searchBar.showsCancelButton = false
     updateChrome()
   }
 

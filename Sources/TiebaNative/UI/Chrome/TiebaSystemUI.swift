@@ -36,8 +36,29 @@ enum TiebaSystemUI {
       window.rootViewController?.view.backgroundColor = isDark ? .black : .white
       return
     }
-    window.backgroundColor = color
-    window.rootViewController?.view.backgroundColor = color
+    let apply = {
+      window.backgroundColor = color
+      window.rootViewController?.view.backgroundColor = color
+    }
+    // 换底色时**在旧、新两份背景之间插值**，而不是瞬切（报告 31 §二-3「克隆出向背景」的思路）：
+    // backgroundColor 是 UIView.animate 的可动画属性，隐式动画只补间这两个底色，内容本身
+    // 仍由动态色按 trait 立即解析 —— 等价于上游「留一份旧背景与新的插值」，但不需要自己留节点。
+    // 三种情况仍走瞬切：窗口还没有底色（启动首帧，见文件头：JS 在 bundle 求值期就下发一次）、
+    // 不在前台（回前台补写不值得补间）、开了减弱动态效果（HIG：颜色位移同样属于动态效果）。
+    let previous = window.backgroundColor
+    let shouldAnimate = previous != nil && previous != color
+      && window.windowScene?.activationState == .foregroundActive
+      && !UIAccessibility.isReduceMotionEnabled
+    if shouldAnimate {
+      UIView.animate(
+        withDuration: 0.25,
+        delay: 0,
+        options: [.beginFromCurrentState, .allowUserInteraction],
+        animations: apply
+      )
+    } else {
+      apply()
+    }
   }
 
   /// 本 App 的 key window：场景化 App（UIApplicationSceneManifest 已声明），
@@ -52,18 +73,4 @@ enum TiebaSystemUI {
 
 }
 
-/// 应用版本（替代 expo-constants 的 Constants.expoConfig.version）。
-///
-/// releaseService.currentAppVersion() 取的就是"构建产物的版本号"：expo prebuild
-/// 把 app.json 的 version 写进 Info.plist 的 CFBundleShortVersionString，所以读
-/// bundle 与读 expoConfig.version 是同一个值；拿不到（测试宿主/未打戳）时回空串，
-/// JS 侧沿用既有的 APP_VERSION 常量兜底（旧代码 `?? APP_VERSION` 的分支不变）。
-enum TiebaAppInfo {
-  static func appVersion() -> String {
-    let info = Bundle.main.infoDictionary
-    if let short = info?["CFBundleShortVersionString"] as? String, !short.isEmpty {
-      return short
-    }
-    return info?["CFBundleVersion"] as? String ?? ""
-  }
-}
+

@@ -7,7 +7,7 @@
 // 本文件是**唯一来源**（纯函数 + 纯几何，无状态、无 Expo 依赖）。
 //
 // 语义逐条对齐 src/hooks/useViewerSourceReveal.ts：
-//   · 命中优先级：banner → avatar → chip → showMore → action → media → card；
+//   · 命中优先级：banner → avatar → chip → showMore → action → media → quote → card；
 //   · 图片点击由列表**原生直开**查看器（TiebaPhotoBrowser），不经 JS、不发 rowTap；
 //     视频 poster（无 media 数组）不上报图片命中 → 继续走 rowTap 给 JS；
 //   · 揭示移位：源图被顶栏（safeAreaTop + NAV_BAR_H）或屏底遮挡时，先算出列表
@@ -63,7 +63,33 @@ enum TiebaFeedRowInteraction {
     if let frame = plan.mediaFrame, frame.contains(point) {
       return ("media", nil)
     }
+    // 转发引用卡：独立命中区，各页 rowTap 里跳原帖（不占整卡语义）。
+    if let frame = plan.quoteFrame, frame.contains(point) {
+      return ("quote", nil)
+    }
     return ("card", nil)
+  }
+
+  /// 帖子纯文本（长按卡片菜单「复制帖子内容」的载荷）：标题 + 正文，两段之间一个换行。
+  ///
+  /// 「正文」在信息流/吧页**只有一种形态**：行字典的 `abstract` —— TiebaViewModelMapper
+  /// 把 proto 的 abstract 段逐个取 text 拼成串（普通帖卡 = 主贴摘要，回复卡 = 被推荐
+  /// 的那条回复正文，即卡片上显示的那段）。表情/ @提及/外链在该串里本来就是可读文本
+  /// （表情是 `#(滑稽)` 标记、@ 是 `@昵称`、外链是锚文本），不需要再"还原"；
+  /// 图片（mediaList / 查看器那套）不在其中 —— 需求明确「不包括图片」。
+  /// 标题与正文各自 trim，空段不产生空行；两段都空 = 空串（调用方据此不发剪贴板）。
+  static func postPlainText(_ row: [String: Any]) -> String {
+    let title = (TiebaSimpleRowParser.string(row["title"]) ?? "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let body = (TiebaSimpleRowParser.string(row["abstract"]) ?? "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return [title, body].filter { !$0.isEmpty }.joined(separator: "\n")
+  }
+
+  /// 引用卡（转发帖）的原帖 thread id（mapper 从 proto tid 透传；缺失 = 老数据只展示）。
+  static func quotedThreadId(in row: [String: Any]) -> String? {
+    guard let origin = row["originThreadInfo"] as? [String: Any] else { return nil }
+    return TiebaRowDict.nonEmpty(origin["threadId"])
   }
 
   /// 顶栏上下文标题 = 帖子标题；无标题回落摘要前 30 字（旧查看器同语义）。
@@ -77,8 +103,9 @@ enum TiebaFeedRowInteraction {
 
   /// 图片命中 → 查看器展示计划。
   ///
-  /// - items：行模型 media 数组值类型直构（url = 卡片显示档 smallSrc||src，
-  ///   thumbUrl 同 URL——TiebaPhotoItem 去重成单级加载；originUrl = 原图档）；
+  /// - items：行模型 media 数组值类型直构（url = 动图档 animatedURL ?? 显示档——
+  ///   GIF 点开即播，静图两档近似；thumbUrl = 显示档，已缓存可垫图；
+  ///   originUrl = 原图档）；
   /// - mediaIndexes：viewer 页号 → 行内 media 下标（退出时重算源图矩形用）；
   /// - transition：被点图片的窗口矩形（mediaHit 已换算）+ 垫图 + 顶栏上下文标题；
   /// - 揭示移位：源图被顶栏/屏底遮挡时给出 scrollDelta（调用方在展示动画后滚动）。
@@ -103,10 +130,12 @@ enum TiebaFeedRowInteraction {
       mediaIndexes.append(offset)
       items.append(
         TiebaPhotoItem(
-          url: url,
+          url: entry.animatedURL ?? url,
           thumbUrl: url,
           originUrl: entry.originURL,
-          isGif: entry.isGif,
+          // 显式带上动图档（url 已经优先取它，这里让查看器的探测意图与档位一致；
+          // 与 url 相同时 init 会归一成 nil，行为不变）。
+          animatedUrl: entry.animatedURL,
           isLong: entry.isLong,
           width: entry.width,
           height: entry.height,
