@@ -45,3 +45,9 @@ docs/alamofire/
 docs/jxsegmentedview/
 docs/swiftyjson/
 docs/texture/
+
+# Swift 编译产物（typecheck 会落在仓库根）
+*.swiftmodule
+*.swiftdoc
+*.swiftsourceinfo
+*.abi.json
