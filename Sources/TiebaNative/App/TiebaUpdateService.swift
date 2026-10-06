@@ -19,8 +19,9 @@
 //     统一 "JSON Parse error"（GitHub 返回非 JSON 才会出现，属罕见路径）。
 //   - 版本号来源：JS 是 TiebaPlatform.appVersion() || APP_VERSION（常量）；
 //     这里直接读 Info.plist 的 CFBundleShortVersionString（同一字段，
-//     与 TiebaSystemUI.swift 的 TiebaAppInfo 同源），空串回落 "1.0.0"。
-//     ⚠️ 刻意不 import TiebaAppInfo：本文件要保持"可裸 swiftc 单测"的零依赖。
+//     与旧的 TiebaSystemUI.TiebaAppInfo 同源；后者已在本轮零调用方清理中删除，
+//     全仓只剩这一处版本读取），空串回落 "1.0.0"。
+//     ⚠️ 刻意不抽公共 helper：本文件要保持"可裸 swiftc 单测"的零依赖。
 //
 // 线程：TiebaReleaseAPI 全是 nonisolated（网络与解析在协作线程池）；
 // TiebaUpdateService 是 @MainActor 的页面状态容器（原 zustand updateStore 的

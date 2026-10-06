@@ -7,12 +7,12 @@ import Foundation
 struct TiebaLiveActivityPayload: Sendable {
   let name: String
   let extra: [String: String]?
-  let state: LiveActivityKitAttributes.ContentState
+  let state: TiebaLiveActivityKitAttributes.ContentState
 
   init(raw: [String: Any]) {
     self.name = raw["name"] as? String ?? "TiebaLiteSign"
     self.extra = raw["extra"] as? [String: String]
-    self.state = LiveActivityKitAttributes.ContentState(raw: raw)
+    self.state = TiebaLiveActivityKitAttributes.ContentState(raw: raw)
   }
 }
 
@@ -38,7 +38,7 @@ enum TiebaLiveActivityDismissalPolicy: Sendable {
 /// @MainActor 的 TiebaLiveActivityManager 内读写缓存，唯一"送出"的去处就是这些
 /// nonisolated API，所以这条断言被刻意收窄在管理器内部，不外泄给调用方。
 private struct TiebaLiveActivityHandle: @unchecked Sendable {
-  let activity: Activity<LiveActivityKitAttributes>
+  let activity: Activity<TiebaLiveActivityKitAttributes>
 }
 
 @MainActor
@@ -57,13 +57,13 @@ final class TiebaLiveActivityManager {
     guard ActivityAuthorizationInfo().areActivitiesEnabled else {
       throw TiebaLiveActivityError.disabled
     }
-    let attributes = LiveActivityKitAttributes(name: payload.name, extra: payload.extra)
+    let attributes = TiebaLiveActivityKitAttributes(name: payload.name, extra: payload.extra)
     let content = ActivityContent(
       state: payload.state,
       staleDate: nil,
       relevanceScore: 0
     )
-    let activity = try Activity<LiveActivityKitAttributes>.request(
+    let activity = try Activity<TiebaLiveActivityKitAttributes>.request(
       attributes: attributes,
       content: content,
       pushType: nil
@@ -72,7 +72,7 @@ final class TiebaLiveActivityManager {
     return activity.id
   }
 
-  func update(activityId: String, state: LiveActivityKitAttributes.ContentState) async {
+  func update(activityId: String, state: TiebaLiveActivityKitAttributes.ContentState) async {
     // 缓存未命中时回落系统活动列表（对齐 endAll 的遍历写法）：app 重启后
     // 内存缓存为空，但系统里可能仍有该活动（如签到 Live Activity 存续期间
     // 杀进程再开），命中后补入缓存，后续 update/end 直接走缓存。
@@ -87,7 +87,7 @@ final class TiebaLiveActivityManager {
 
   func end(
     activityId: String,
-    state: LiveActivityKitAttributes.ContentState,
+    state: TiebaLiveActivityKitAttributes.ContentState,
     dismissalPolicy: TiebaLiveActivityDismissalPolicy,
     alert: TiebaLiveActivityAlert? = nil
   ) async {
@@ -124,7 +124,7 @@ final class TiebaLiveActivityManager {
         return cached
       }
     }
-    guard let live = Activity<LiveActivityKitAttributes>.activities.first(where: { $0.id == activityId }) else {
+    guard let live = Activity<TiebaLiveActivityKitAttributes>.activities.first(where: { $0.id == activityId }) else {
       return nil
     }
     let handle = TiebaLiveActivityHandle(activity: live)
@@ -141,13 +141,13 @@ final class TiebaLiveActivityManager {
       "tintColorHex": "#3B82F6", "accent": "#FF6B5E",
     ]
     await endAll(
-      state: LiveActivityKitAttributes.ContentState(raw: state),
+      state: TiebaLiveActivityKitAttributes.ContentState(raw: state),
       dismissalPolicy: .immediate
     )
   }
 
   func endAll(
-    state: LiveActivityKitAttributes.ContentState,
+    state: TiebaLiveActivityKitAttributes.ContentState,
     dismissalPolicy: TiebaLiveActivityDismissalPolicy
   ) async {
     let content = ActivityContent(
@@ -158,7 +158,7 @@ final class TiebaLiveActivityManager {
     let policy = Self.endPolicy(dismissalPolicy)
     // Activity.activities 的返回值来自 nonisolated 静态属性、不与主 actor 状态相连，
     // 可以直接送进 nonisolated 的 end（内容本身已因 Sendable 而合法）。
-    for activity in Activity<LiveActivityKitAttributes>.activities {
+    for activity in Activity<TiebaLiveActivityKitAttributes>.activities {
       await activity.end(content, dismissalPolicy: policy)
     }
     activities.removeAll()

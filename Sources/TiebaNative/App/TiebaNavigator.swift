@@ -7,6 +7,16 @@ import UIKit
 // 原 expo-router 的 router.push/back/replace 语义在这里。
 //
 // 状态只有一份：当前 tab 那条栈的 viewControllers 就是当前导航栈，tabBar 就是底栏。
+//
+// task-12 的并发整理保留（不命中判据③）：install 那条 MainActor.assumeIsolated 已随 onReselect
+// 改成 @MainActor 闭包而去掉；popToRoot 标了 @MainActor；didShow 里那条多余的 assumeIsolated 删除。
+// 转场引擎相关的接线已按"系统接口更优"回滚成 UIView.animate。
+//
+// ⚠️ 仍未处理的既有并发标注（不是本次目标，改了会连带改 40+ 个调用方文件）：
+// 本类仍是 NSObject + @unchecked Sendable，pushRoute/navigate 等非隔离入口里还剩几处
+// MainActor.assumeIsolated。正确解法是整类 @MainActor，但那会让 Core/Features 里 40+ 个
+// 文件（网络回调、深链入口）的调用点一起需要 hop —— 超出本次「只改目标文件」的范围，
+// 留给 Lead 决策（见 docs/uikit-migration/22-接线-viewport.md 的「没做到」一节）。
 
 /// 底栏重复点击的**原生**受理面：tab 根屏已是原生 VC 时（不再有 JS 侧
 /// TAB_RESELECT 订阅），由壳直接回调，语义与 JS 的 tabReselect 分发一致。
@@ -21,14 +31,6 @@ protocol TiebaTabReselectable: UIViewController {
 @MainActor
 protocol TiebaTabRouteParamReceiving: UIViewController {
   func receiveInitialTab(_ index: Int)
-}
-
-/// 压栈方式：push（默认）/ replace（换掉栈顶）/ root（先回到栈底再压）。
-/// 深链 tiebalite://notifications/N 走 root，其余迁移后的调用点都是 push。
-public enum TiebaNavigationMode: Sendable {
-  case push
-  case replace
-  case root
 }
 
 /// NSObject 基类不是装饰：UINavigationControllerDelegate 继承自
@@ -102,13 +104,13 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     let tab = TiebaMainTabBarController()
     tab.onReselect = { [weak self] idx in
       // 原生 tab 根屏直接受理（JS 侧 TAB_RESELECT 订阅在页面原生化后消失）。
-      MainActor.assumeIsolated {
-        guard let self else { return }
-        if let host = self.tabRootHosts[idx],
-          let screen = host.children.first as? TiebaTabReselectable
-        {
-          screen.tabReselected()
-        }
+      // onReselect 是 @MainActor 闭包（TiebaNavigationShell.swift），这里本就是主 actor 上下文，
+      // 所以直接访问 @MainActor 的宿主/页面即可 —— 原来的 MainActor.assumeIsolated 是多余的绕过标注。
+      guard let self else { return }
+      if let host = self.tabRootHosts[idx],
+        let screen = host.children.first as? TiebaTabReselectable
+      {
+        screen.tabReselected()
       }
     }
     tabBar = tab
@@ -257,7 +259,11 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 路由入口（类型化）。深链先经 TiebaRouteTable.parse 产出同一个类型，再走这里；
   /// 调用点与深链只有这一条构造/压栈路径。
   @discardableResult
-  public func navigate(_ route: TiebaRoute, mode: TiebaNavigationMode = .push) -> Bool {
+  /// H16：原来的 mode（push/replace/root）三 case 里 replace 全仓零调用、root 的唯一调用点
+  /// （notifications 深链）到不了 pushRoute（notifications 是 tab 根屏，navigate 在 tab 分流就 return 了），
+  /// 却为不可达路径留了一处无防御下标 targetNav.viewControllers[0]（栈空即崩）。
+  /// 现在整层删除，行为零变化（所有调用点本来就走默认 push）。
+  public func navigate(_ route: TiebaRoute) -> Bool {
     let entry = TiebaRouteTable.entry(named: route.name)
     if let tabIdx = entry?.tabIndex {
       // tab 根屏：语义是"切到那个 tab"，不是压栈。expo-router 里
@@ -273,7 +279,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       }
       return true
     }
-    pushRoute(route, mode: mode)
+    pushRoute(route)
     return true
   }
 
@@ -294,7 +300,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     }
   }
 
-  private func pushRoute(_ route: TiebaRoute, mode: TiebaNavigationMode) {
+  private func pushRoute(_ route: TiebaRoute) {
     guard let nav = currentNav else { return }
     // 连点去重：同一路由 450ms 内只认一次（原 RN 侧靠 Pressable 的按压态挡，
     // 原生栏按钮没有那层，快速双击会压出两屏同样内容）。
@@ -317,19 +323,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
 
     switch entry?.presentation ?? .push {
     case .push:
-      switch mode {
-      case .replace:
-        var stack = targetNav.viewControllers
-        guard !stack.isEmpty else { return }
-        stack[stack.count - 1] = host
-        targetNav.setViewControllers(stack, animated: true)
-        pruneHosts()
-      case .root:
-        targetNav.setViewControllers([targetNav.viewControllers[0], host], animated: true)
-        pruneHosts()
-      case .push:
-        targetNav.pushViewController(host, animated: true)
-      }
+      targetNav.pushViewController(host, animated: true)
     case .sheet(let detents, let grabber, let cornerRadius):
       // 表单要自带导航栏才能显示标题与 headerRight（登录页有"登录帮助"按钮、
       // 且 headerBackVisible: false —— 只能拖拽关闭，所以标题必现）。
@@ -383,6 +377,11 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   }
 
   /// 回到栈底（双击底栏 tab / 双击顶栏回顶时用）。
+  ///
+  /// @MainActor：本方法全仓没有调用方（grep popToRoot() 只有这里一处声明），
+  /// 所以直接把隔离写进签名，方法体里也就不再需要 MainActor.assumeIsolated。
+  /// （同文件其它非隔离入口不能这么改：它们的调用方散在 Core/Features。）
+  @MainActor
   public func popToRoot() {
     guard let nav = activeNav else { return }
     if nav.presentedViewController != nil {
@@ -390,14 +389,10 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       return
     }
     guard nav.viewControllers.count > 1 else { return }
-    // popToRootViewController 的 [UIViewController]? 是 non-Sendable：就算 discard，
-    // 结果仍要从主 actor 方法"返回"到非隔离上下文，Swift 6.4 依旧判 RegionIsolation。
-    // 改经 @unchecked Sendable 的 self 读当前栈（同一对象），在 assumeIsolated 内
-    // 调用并就地丢弃结果——同 actor 调用，不产生跨域结果。
-    MainActor.assumeIsolated {
-      _ = self.activeNav?.popToRootViewController(animated: true)
-      self.pruneHosts()
-    }
+    // popToRootViewController 的返回值是 non-Sendable 的 [UIViewController]?：
+    // 在主 actor 方法里就地 discard，不产生跨域结果。
+    _ = nav.popToRootViewController(animated: true)
+    pruneHosts()
   }
 
   /// 关掉当前上推的表单（登录页 / 更多）。
@@ -547,28 +542,60 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 这一条解析路径，且解析出的类型与本地跳转共用同一个构造入口。
   @discardableResult
   public func open(url: URL) -> Bool {
-    let s = url.absoluteString
-    // 应用自有 scheme：tiebalite://notifications/2
-    if let m = s.range(of: #"t(ieba)?lite://notifications/(\d+)"#, options: .regularExpression) {
-      let digits = s[m].split(separator: "/").last.map(String.init) ?? ""
-      return navigateDeepLink(
-        digits.isEmpty ? "notifications" : "notifications?initialTab=\(digits)",
-        mode: .root
-      )
+    // H17：旧实现三种口径混用（notifications 用未锚定子串正则、search/history 用 hasPrefix、
+    // 其余走 URLComponents），结果是 absoluteString 里**含**自有深链子串的外来 URL 也会被吞掉
+    // ——例如推送 payload 的 https 链接 query 里塞一段 tblite://thread/456，就会盖过真实路径。
+    // 现在统一结构化解析一次，按 scheme/host/path/query 判定；解析不出来就返回 false（不消费）。
+    guard let components = URLComponents(string: url.absoluteString) else { return false }
+    let scheme = components.scheme?.lowercased() ?? ""
+    let host = components.host?.lowercased() ?? ""
+    let path = components.path
+    // 段切分必须用**未解码**的 percentEncodedPath：components.path 已把 %2F 还原成真斜杠，
+    // 含斜杠的吧名会被切成多段（轻则 notFound，重则静默命中别的路由）。
+    let encodedPath = components.percentEncodedPath
+    let query = { (name: String) -> String? in
+      components.queryItems?.first { $0.name == name }?.value
     }
-    if let tid = Self.extractThreadId(s) {
+
+    // 自有 scheme：tiebalite://<host>/<path>（tblite:// 是同一套的短写）。
+    if scheme == "tiebalite" || scheme == "tblite" {
+      switch host {
+      case "notifications":
+        // tiebalite://notifications/2 → 初始分段交给 tab 根屏（走 tab 分流，不压栈）。
+        let digits = path.split(separator: "/").first.map(String.init) ?? ""
+        return navigateDeepLink(digits.isEmpty ? "notifications" : "notifications?initialTab=\(digits)")
+      case "thread":
+        guard let tid = path.split(separator: "/").first.map(String.init), !tid.isEmpty, tid.allSatisfy({ $0.isNumber }) else {
+          break
+        }
+        return navigateDeepLink("thread/\(tid)")
+      case "forum":
+        // 吧名可含斜杠转义与百分号编码：切段在 percentEncodedPath 上做（%2F 不会被当成
+        // 分隔符），再对**每段各解码一次**——整串解码会把字面量 %252F 二次解码。
+        let raw = encodedPath.hasPrefix("/") ? String(encodedPath.dropFirst()) : encodedPath
+        guard !raw.isEmpty else { break }
+        let name = raw.split(separator: "/", omittingEmptySubsequences: false)
+          .map { $0.removingPercentEncoding ?? String($0) }
+          .joined(separator: "/")
+        return navigateDeepLink("forum/\(name)")
+      case "search":
+        // 搜索：q 非空则直接出结果（快捷指令/调试直达），空 q 只开搜索页。
+        let q = query("q") ?? ""
+        return navigateDeepLink(q.isEmpty ? "search/index" : "search/index?q=\(TiebaRoutePath.segment(q))")
+      case "history":
+        // 浏览记录：tab=forum 时直接开吧历史分段。
+        return navigateDeepLink(query("tab") == "forum" ? "history?tab=forum" : "history")
+      default:
+        break
+      }
+      return false
+    }
+
+    // 百度系 URL（com.baidu.tieba:// / *.tieba.baidu.com）：同样只认结构化字段。
+    if let tid = Self.extractThreadId(scheme: scheme, host: host, path: path, query: query) {
       return navigateDeepLink("thread/\(tid)")
     }
-    // 搜索：tiebalite://search 或 tiebalite://search?q=关键词（q 非空则直接出结果，
-    // 供快捷指令/调试直达；空 q 只开搜索页）。
-    if s.hasPrefix("tiebalite://search") || s.hasPrefix("tblite://search") {
-      let q = URLComponents(string: s)?.queryItems?.first { $0.name == "q" }?.value ?? ""
-      // q 走查询串（原走 extraParams，这里百分号编码后由解析器解回，值不变）。
-      return navigateDeepLink(
-        q.isEmpty ? "search/index" : "search/index?q=\(TiebaRoutePath.segment(q))"
-      )
-    }
-    if let name = Self.extractForumName(s) {
+    if let name = Self.extractForumName(scheme: scheme, host: host, path: path, query: query) {
       return navigateDeepLink("forum/\(name)")
     }
     return false
@@ -577,25 +604,14 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 深链字符串 → 类型化路由 → 同一条构造路径。解析不出就落「找不到页面」
   ///（旧行为：打错的深链不静默吞掉，也不空白）。
   @discardableResult
-  private func navigateDeepLink(_ path: String, mode: TiebaNavigationMode = .push) -> Bool {
-    navigate(TiebaRouteTable.parse(path: path) ?? .notFound(path: path), mode: mode)
+  private func navigateDeepLink(_ path: String) -> Bool {
+    navigate(TiebaRouteTable.parse(path: path) ?? .notFound(path: path))
     return true
   }
 
-  /// src/utils/index.ts 的 extractThreadId 原生版。两处必须同时改（或只此一处
-  /// ——迁移完成后 JS 那份会随 utils 一起删掉）。
-  static func extractThreadId(_ url: String) -> String? {
-    if let r = url.range(of: #"tblite://thread/(\d+)"#, options: .regularExpression) {
-      let digits = url[r].split(separator: "/").last.map(String.init) ?? ""
-      return digits.isEmpty ? nil : digits
-    }
-    guard let u = URLComponents(string: url) else { return nil }
-    let scheme = u.scheme?.lowercased() ?? ""
-    let host = u.host?.lowercased() ?? ""
-    let path = u.path
-    let query = { (k: String) -> String? in
-      u.queryItems?.first(where: { $0.name == k })?.value
-    }
+  /// src/utils/index.ts 的 extractThreadId 原生版（H17：入参改成 URLComponents 已经解好的结构化字段，
+  /// 不再拿 absoluteString 做未锚定子串匹配 —— 那样 query 里出现 tblite://thread/456 会盖过真实路径 /p/123）。
+  static func extractThreadId(scheme: String, host: String, path: String, query: (String) -> String?) -> String? {
     if scheme == "com.baidu.tieba", host == "unidispatch" || path.contains("/unidispatch") {
       if let tid = query("tid") { return tid }
     }
@@ -610,20 +626,8 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     return nil
   }
 
-  static func extractForumName(_ url: String) -> String? {
-    // tblite://forum/某吧 —— 取 // 之后的全部（吧名可含斜杠转义与百分号编码）
-    if let r = url.range(of: "tblite://forum/") {
-      let raw = String(url[r.upperBound...])
-      guard !raw.isEmpty else { return nil }
-      return raw.removingPercentEncoding ?? raw
-    }
-    guard let u = URLComponents(string: url) else { return nil }
-    let scheme = u.scheme?.lowercased() ?? ""
-    let host = u.host?.lowercased() ?? ""
-    let path = u.path
-    let query = { (k: String) -> String? in
-      u.queryItems?.first(where: { $0.name == k })?.value
-    }
+  /// 吧名提取（同样是结构化判定）。吧名可含斜杠转义与百分号编码，由调用方按 path 解出。
+  static func extractForumName(scheme: String, host: String, path: String, query: (String) -> String?) -> String? {
     if scheme == "com.baidu.tieba", (host == "unidispatch" || path.contains("/unidispatch")), path.hasSuffix("/frs") {
       return query("kw")
     }
@@ -673,9 +677,9 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     _ = TiebaChrome.forceNavBarLiquidGlass()
     // 转场一结束就关 Hero：这样"进入"用魔改，**返回与后续跳转全走系统原生**
     //（Hero 只在 push 那一刻被读，pop 时已关 ⇒ 系统 push/pop 动画）。
-    MainActor.assumeIsolated {
-      if navigationController.hero.isEnabled { navigationController.hero.isEnabled = false }
-    }
+    // 这里是 UINavigationControllerDelegate 的回调（协议方法本身就在主 actor），
+    // 直接写即可 —— 原来的 MainActor.assumeIsolated 是多余的。
+    if navigationController.hero.isEnabled { navigationController.hero.isEnabled = false }
   }
 
   /// 该屏是否无栏（tab 根屏 / webview / thread/[id]/more）。
@@ -751,12 +755,15 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     }
   }
 
-  /// 在 tab 控制器的视图树里找玻璃 dock（私有类，按名匹配）并设置可见性。
+  /// 在 tab 控制器的视图树里找玻璃 dock 并设置可见性。
+  /// ⚠️ 只能按类名匹配：UIKit 没有公开 API 能拿到 iOS 26 的悬浮底栏玻璃 dock
+  /// （_UIBottomTabBarGroupView 与 UITabBar 平级）。这个字符串依赖是**已知且刻意**的取舍，
+  /// 不是疏漏：它随 iOS 版本失效时表现为"压栈期间底部残留一条玻璃"，不影响功能。
+  /// （原实现在命中时还写一个 accessibilityIdentifier 作调试标记，全仓无人读取 → 已删。）
   private func hideFloatingTabDock(in view: UIView, hidden: Bool) {
     for subview in view.subviews {
       if NSStringFromClass(type(of: subview)).contains("_UIBottomTabBarGroupView") {
         subview.isHidden = hidden
-        subview.accessibilityIdentifier = "DOCK-FOUND"
       }
       hideFloatingTabDock(in: subview, hidden: hidden)
     }
@@ -834,11 +841,13 @@ final class TiebaBarAvatarButton: UIControl {
 
   @objc private func handleTap() { onTap?() }
 
+  // 按压高光就是两段几十毫秒的淡入淡出：系统 UIView.animate 更简洁，也不需要可中断/可拖拽
+  // （判据③：系统接口更优的就不动）。
   @objc private func handleDown() {
-    UIView.animate(withDuration: 0.08) { self.flash.alpha = 1 }
+    TiebaAnimation.animate(duration: 0.08) { self.flash.alpha = 1 }
   }
 
   @objc private func handleUp() {
-    UIView.animate(withDuration: 0.18) { self.flash.alpha = 0 }
+    TiebaAnimation.animate(duration: 0.18) { self.flash.alpha = 0 }
   }
 }
