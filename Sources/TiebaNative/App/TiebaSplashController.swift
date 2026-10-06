@@ -18,13 +18,12 @@
 // 本次接线（task-12，落地说明见 docs/uikit-migration/22-接线-viewport.md）：
 //   1) 淡出仍走系统 UIView.animate（判据③：系统接口更优就别动；本处不需要可中断/可拖拽）。
 //   2) 并发：原来靠 @unchecked Sendable 把线程安全交给"约定"（入口先查 isMainThread 再 hop）。
-//      本类是单例、会被 JS 桥从任意线程调，所以可变状态收进 Mutex<State>（Synchronization），
+//      本类是单例、会被 JS 桥从任意线程调，所以可变状态收进 TiebaMutex<State>（TiebaMutex shim：iOS 18 的 Synchronization.Mutex 在 iOS 17 不可用，见 Core/TiebaMutex.swift），
 //      类型改成真 Sendable —— 没有 nonisolated(unsafe) / @unchecked Sendable / assumeIsolated。
 //      视图操作仍然只在主线程做：入口的 isMainThread 检查与 hop 原样保留。
 // ============================================================
 import UIKit
 import os
-import Synchronization
 
 final class TiebaSplashController: Sendable {
   static let shared = TiebaSplashController()
@@ -39,7 +38,7 @@ final class TiebaSplashController: Sendable {
     var splashViewController: UIViewController?
   }
 
-  private let state = Mutex(State())
+  private let state = TiebaMutex(State())
 
   private init() {}
 

@@ -3,7 +3,7 @@
 //
 // 依据：docs/uikit-migration/07-ObjC++转Swift可行性.md §5.2 / §5.3 / §5.4
 //
-// 并发三条铁律的第 ② 条在这里：**共享可变状态 = Mutex<State>，不用 actor**。
+// 并发三条铁律的第 ② 条在这里：**共享可变状态 = TiebaMutex<State>，不用 actor**。
 //   - actor 会多一次 await hop，且「并发上限 + 在途去重」用 actor 反而更绕
 //     （要在 await 之间保持不变量）；
 //   - Mutex 正好对上 ASDK 的 AS::Mutex 语义（ASThread.h:104-260 不过是把
@@ -20,7 +20,6 @@
 // 报告 §2.3 裁决丢弃）。
 // ============================================================
 
-import Synchronization
 import UIKit
 
 public final class TiebaFeedBitmapBaker: Sendable {
@@ -64,7 +63,7 @@ public final class TiebaFeedBitmapBaker: Sendable {
     var statistics = Statistics()
   }
 
-  private let state = Mutex(State())
+  private let state = TiebaMutex(State())
   /// 并发队列（对应 _ASDisplayLayer.mm:124-135 的 displayQueue）。
   /// 真正的并发上限不是队列给的，是下面 active / limitProvider 给的。
   private let queue = DispatchQueue(

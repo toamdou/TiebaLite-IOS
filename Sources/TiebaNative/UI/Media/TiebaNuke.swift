@@ -50,7 +50,6 @@
 import Foundation
 import Nuke
 import NukeExtensions
-import Synchronization
 
 // MARK: - 防盗链数据加载器（Referer 注入）
 
@@ -375,9 +374,10 @@ public enum TiebaNuke {
   /// 探测结果缓存（会话级；进程内字典即可，HEAD 本身零 body，别为它落盘）。
   ///
   /// [接线 2026-10-05] 原为 `nonisolated(unsafe) static var` + NSLock。该写法属于 Swift 6 绕过
-  /// （人工声明「这块全局可变状态是安全的」，编译器不再检查）。改成标准库 `Mutex<[URL: Bool]>`：
+  /// （人工声明「这块全局可变状态是安全的」，编译器不再检查）。改成 `TiebaMutex<[URL: Bool]>`
+  /// （跨版本 shim，见 Core/TiebaMutex.swift；标准库 Mutex 是 iOS 18+）：
   /// 同样的会话级字典，但互斥由运行时对象保证，`Sendable` 由编译器校验，`nonisolated(unsafe)` 消失。
-  private static let gifProbeResults = Mutex<[URL: Bool]>([:])
+  private static let gifProbeResults = TiebaMutex<[URL: Bool]>([:])
 
   /// 零流量 GIF 判定：HEAD 看 Content-Type，头不明确时退到前 6 字节魔数。
   /// 探测目标必须是**动图档 URL**（帖页 big_cdn_src / 动态页 src_pic，服务端原样
@@ -408,7 +408,7 @@ public enum TiebaNuke {
   /// 按设计**不缓存**、下次重新布局又会再来一轮 —— 没有单飞时同一个 URL 会被并发探
   /// 2~3 次，几十条重复 HEAD 挤在 URLSession 的每主机连接数（6）上排队，
   /// 越靠后的探测回来得越晚（用户观感："越往后越探不出来"）。
-  private static let gifProbeInFlight = Mutex<[URL: Task<Bool?, Never>]>([:])
+  private static let gifProbeInFlight = TiebaMutex<[URL: Task<Bool?, Never>]>([:])
 
   /// 真探测：HEAD 看 Content-Type，头不明确时退到前 6 字节魔数。
   private static func performGIFProbe(_ url: URL) async -> Bool? {

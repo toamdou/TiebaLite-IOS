@@ -36,7 +36,6 @@
 // ============================================================
 import Foundation
 import SQLite3
-import Synchronization
 
 enum TiebaSQLiteError: LocalizedError {
   case databaseUnavailable(String)
@@ -63,8 +62,9 @@ private final class TiebaSQLiteConnection {
 }
 
 /// 绑定参数（真 Sendable 值）。`[[String: Any]]` 在**进锁前**翻译成它：
-/// Mutex 闭包的结果要求 sending，闭包里捕获非 Sendable 的 Any 字典会被
-/// region-isolation 拒绝（`-typecheck` 看不到这类诊断）。锁内因此只出现值类型。
+/// 锁内只出现值类型——这条设计早于 TiebaMutex shim（当时用标准库 Mutex，闭包结果要求
+/// sending，捕获非 Sendable 的 Any 字典会被 region-isolation 拒绝；`-typecheck` 看不到
+/// 这类诊断）。shim 只放宽约束，不改这个更安全的写法。
 private enum SQLiteBindValue: Sendable {
   case null
   case text(String)
@@ -232,7 +232,7 @@ final class TiebaSQLite: Sendable {
     """
 
   /// 库名 → 连接。
-  private let connections = Mutex<[String: TiebaSQLiteConnection]>([:])
+  private let connections = TiebaMutex<[String: TiebaSQLiteConnection]>([:])
 
   private init() {}
 

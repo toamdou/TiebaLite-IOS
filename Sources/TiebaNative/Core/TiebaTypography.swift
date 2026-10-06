@@ -35,7 +35,6 @@
 //   而是让"字体变了"直接体现为"这一行是另一行内容"。
 // ============================================================
 import Foundation
-import Synchronization
 
 nonisolated enum TiebaTypography {
 
@@ -95,7 +94,7 @@ nonisolated enum TiebaTypography {
     var generation: UInt64 = 0
   }
 
-  private static let state = Mutex<State>(State())
+  private static let state = TiebaMutex<State>(State())
 
   // MARK: - 读
 

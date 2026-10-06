@@ -7,14 +7,13 @@
 // 2. KERN_BOOTTIME 在一次开机内是常量 → 按进程缓存（上游每次调用都重新 sysctl）。
 // 3. bootTime 由 tv_sec 还原为带小数秒的时间戳（tv_sec + tv_usec/1e6），比上游只取 tv_sec 精确。
 // 4. 新增 now：以「本次开机时刻」为锚的 Unix 时间戳。上游只有开机秒数，没法直接当时间戳用。
-// 6. 并发：所有 API 都是 nonisolated 纯读取；进程内缓存用 Mutex<State>（Synchronization），
+// 6. 并发：所有 API 都是 nonisolated 纯读取；进程内缓存用 TiebaMutex<State>（TiebaMutex shim：iOS 18 的 Synchronization.Mutex 在 iOS 17 不可用，见 Core/TiebaMutex.swift），
 //    没有 nonisolated(unsafe) / @unchecked Sendable / assumeIsolated。
 //
 // 为什么不用 CACurrentMediaTime()：它从上次开机起算，设备一重启就归零，
 // 前后两次采样做差会得到负数或离谱的值；「本次开机时刻 + 已开机秒数」重启后依然连续。
 
 import Foundation
-import Synchronization
 
 #if canImport(Darwin)
 import Darwin
@@ -22,7 +21,7 @@ import Darwin
 
 public enum TiebaMonotonicTime {
     /// KERN_BOOTTIME 在一次开机内恒定，缓存避免每次 sysctl；nil 表示取不到（极罕见）。
-    private static let cachedBootTime = Mutex<TimeInterval?>(nil)
+    private static let cachedBootTime = TiebaMutex<TimeInterval?>(nil)
 
     /// 本次开机的时刻（Unix 时间戳，秒）。
     public nonisolated static var bootTime: TimeInterval? {

@@ -8,7 +8,6 @@
 //（栏内 hitTest 结果里找不到 UIControl），底栏触觉改由 UITabBarControllerDelegate
 // 的 shouldSelect 发（见 TiebaNavigationShell）。
 import Foundation
-import Synchronization
 import UIKit
 
 extension TiebaChrome {
@@ -17,13 +16,13 @@ extension TiebaChrome {
   /// Q7-6：原来是 4 个 nonisolated(unsafe) static var，靠"都在主线程"的口头约定兜底。
   /// 其中底栏那两个（lastTabIndex/lastTabAt）的消费者其实是壳层的 tab 控制器 —— 已收进
   /// TiebaMainTabBarController 的实例字段（自己的状态放自己身上，顺带解掉"壳层反向依赖 chrome 内部枚举"）。
-  /// 剩下这两个收进 Mutex<State>：非隔离方法里照样能读写，但不再需要 nonisolated(unsafe)。
+  /// 剩下这两个收进 TiebaMutex<State>：非隔离方法里照样能读写，但不再需要 nonisolated(unsafe)。
   struct PressDedupState {
     var lastControl: UIControl?
     var lastAt: TimeInterval = 0
   }
 
-  static let pressDedup = Mutex(PressDedupState())
+  static let pressDedup = TiebaMutex(PressDedupState())
 
   /// 触觉总开关转发（启动与设置页的写入点）：真相源在 TiebaHaptics 引擎层
   ///（见 TiebaHaptics.isEnabled），chrome 文件不持有第二份 enabled。

@@ -25,7 +25,6 @@
 // 三条都不成立 = 静止 ⇒ limit 放开（静止期走同步兜底，不进后台）。
 // ============================================================
 
-import Synchronization
 import UIKit
 
 public final class TiebaFeedScrollGate: Sendable {
@@ -39,7 +38,7 @@ public final class TiebaFeedScrollGate: Sendable {
     var paused = false
   }
 
-  private let state = Mutex(State())
+  private let state = TiebaMutex(State())
 
   public init() {}
 
