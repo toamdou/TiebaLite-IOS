@@ -9,7 +9,7 @@ name: Build iOS Unsigned IPA
 # 为什么 ad-hoc 等于"无签名"口径：rules_apple 对设备构建强制要求每个 bundle 都有
 # provisioning_profile 工件（ios_rules.bzl 无条件挂 partial），但把签名身份设为
 # ad-hoc（--ios_signing_cert_name=-）时它明确不拿该描述文件去签名
-# （codesigning_support.bzl:528）。所以 Tools/make-unsigned-profile.sh 现场生成一个
+# （codesigning_support.bzl:528）。所以 Build 步现场生成一个
 # 结构合法的占位件，产物是 ad-hoc 签名、无团队标识 —— 侧载工具会重签，不影响安装。
 
 on:
@@ -98,9 +98,50 @@ jobs:
         run: |
           brew install bazelisk
           bazel --version
-          ./Tools/make-unsigned-profile.sh
+          # ── 占位描述文件（原先的 Tools/make-unsigned-profile.sh，2026-10-07 内联到这里）──
+          # rules_apple 对设备构建强制要求每个 bundle 都有 provisioning_profile 工件
+          # （ios_rules.bzl 无条件挂 partial），且会解析它的 plist 取 entitlements；
+          # 身份设成 ad-hoc（--ios_signing_cert_name=-）时 rules_apple 不拿它签名
+          # （codesigning_support.bzl:528），所以只需要一个结构合法、键齐全的容器。
+          # 自签一张一次性证书只为产出 CMS 结构；不涉及任何 Apple 凭据，产物也不进仓库。
+          mkdir -p Signing
+          keep=0
+          for out in Signing/app.mobileprovision Signing/ext.mobileprovision; do
+            if [ -f "$out" ] && [ "$(wc -c < "$out" | tr -d ' ')" -gt 4096 ]; then keep=1; fi
+          done
+          if [ "$keep" = "1" ]; then
+            echo "keep existing provisioning profiles (look real)"
+          else
+            tmp="$(mktemp -d)"
+            trap 'rm -rf "$tmp"' EXIT
+            cat > "$tmp/profile.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>AppIDName</key><string>BuildPlaceholder</string>
+          <key>ApplicationIdentifierPrefix</key><array><string>0000000000</string></array>
+          <key>CreationDate</key><date>2026-01-01T00:00:00Z</date>
+          <key>Platform</key><array><string>iOS</string></array>
+          <key>Entitlements</key><dict/>
+          <key>ExpirationDate</key><date>2040-01-01T00:00:00Z</date>
+          <key>Name</key><string>BuildPlaceholder</string>
+          <key>TeamIdentifier</key><array><string>0000000000</string></array>
+          <key>TeamName</key><string>BuildPlaceholder</string>
+          <key>TimeToLive</key><integer>3650</integer>
+          <key>UUID</key><string>00000000-0000-0000-0000-000000000000</string>
+          <key>Version</key><integer>1</integer>
+          </dict></plist>
+          PLIST
+            openssl req -x509 -newkey rsa:2048 -nodes -keyout "$tmp/key.pem" -out "$tmp/cert.pem" \
+              -days 3650 -subj "/CN=BuildPlaceholder" 2>/dev/null
+            for out in Signing/app.mobileprovision Signing/ext.mobileprovision; do
+              openssl smime -sign -in "$tmp/profile.plist" -signer "$tmp/cert.pem" -inkey "$tmp/key.pem" \
+                -nodetach -outform der -out "$out" 2>/dev/null
+              echo "wrote $out ($(wc -c < "$out" | tr -d ' ') bytes)"
+            done
+          fi
           mode=$([ "$CONFIGURATION" = "Release" ] && echo release || echo debug)
-          # //:AppStripped = //:App 的 IPA 再剥一遍符号表（体积约 -12%，见 Tools/strip-ipa-symbols.sh）；
+          # //:AppStripped = //:App 的 IPA 再剥一遍符号表（体积约 -12%，见 BUILD.bazel 该目标的注释）；
           # dSYM 由 //:App 生成，剥离不改 UUID，崩溃符号化不受影响。
           bazel build //:AppStripped --config=ci --config="$mode"
 
@@ -116,8 +157,10 @@ jobs:
           echo "IPA_NAME=${base}${SUFFIX}.ipa" >> "$GITHUB_ENV"
           mkdir -p build/Payload
           unzip -q bazel-bin/AppStripped.ipa -d build
-          # 隐私消毒：把产物内嵌的构建机绝对路径（含 runner 用户名）做等长替换
-          python3 Tools/privacy-scrub.py build/Payload/*.app
+          # 原先这里有一道 python 隐私消毒（等长替换产物内嵌的构建机绝对路径，RN/Hermes
+          # 时代留下：Hermes 字节码不受编译期 -ffile-prefix-map 约束）。2026-10-07 实测
+          # CI 产物与本地未消毒产物里 /Users/... 与 bazel 临时路径均为 **0 处**，Hermes 早已
+          # 不存在 ⇒ 这一步（及其脚本）删除；产物自检仍在下一步做最低系统版本核对。
           ( cd build && zip -qry "$(basename "${base}${SUFFIX}.ipa")" Payload )
           unzip -l "build/${base}${SUFFIX}.ipa" | head -20
           # 产物自检：APP 与扩展的最低系统版本要跟本分支一致（防止把两种 IPA 搞混）
