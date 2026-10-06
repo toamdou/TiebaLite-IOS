@@ -36,6 +36,10 @@ final class TiebaUpdateDialogViewController: UIViewController {
   private let closeButton = UIButton(type: .system)
 
   private var observerToken: UUID?
+  /// 弹窗是否已经出现过（错误反馈抖动只在屏上发生，不在呈现动画里抖）。
+  private var hasAppeared = false
+  /// 上一次刷到的状态（用来判断"刚变成失败"）。
+  private var lastStatus: TiebaUpdateStatus?
   private var cardWidthConstraint: NSLayoutConstraint?
   /// 便签区高度的"内容高度"约束（750）：内容短时按内容撑、超长时被卡片上限压回可滚。
   private var notesHeightConstraint: NSLayoutConstraint?
@@ -55,6 +59,11 @@ final class TiebaUpdateDialogViewController: UIViewController {
     view.backgroundColor = UIColor.black.withAlphaComponent(0.35)
     setUpCard()
     reload()
+  }
+
+  override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    hasAppeared = true
   }
 
   override func viewWillAppear(_ animated: Bool) {
@@ -231,6 +240,13 @@ final class TiebaUpdateDialogViewController: UIViewController {
     openReleaseButton.configuration?.background.backgroundColor = theme.tint
     closeButton.configuration?.baseForegroundColor = .label
     closeButton.configuration?.background.backgroundColor = theme.background
+
+    // 错误反馈抖动（UI/Drawing/TiebaShakeAnimation.swift）：只在「屏上由非失败变成失败」时抖一次。
+    // 打开时就已经失败不抖 —— 那时正在播呈现动画，抖了会打架；标题本身已写明"检查更新失败"。
+    if hasAppeared, status == .error, lastStatus != .error {
+      card.layer.addShakeAnimation(amplitude: 8.0, duration: 0.35, count: 4)
+    }
+    lastStatus = status
   }
 
   /// 原 UpdateDialog 的 title 计算（逐字）。

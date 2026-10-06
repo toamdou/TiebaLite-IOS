@@ -83,17 +83,71 @@ public final class TiebaAppBootstrap {
     Task.detached(priority: .utility) { await TiebaAppBootstrap.runDeferredWork() }
   }
 
+  // MARK: - 「从后台返回」统一闸门（用户报：回前台有时自动刷新、有时不刷）
+
+  /// 进后台时刻的持久化键。**进程被系统回收**时内存态全丢，只有落盘这一份能告诉
+  /// 下次启动「这次不是冷启动、是后台返回」—— 内存态与持久化态必须同一判据，
+  /// 否则「有时刷有时不刷」换个马甲又回来（旧状：appearance 路径与 scene 路径各判各的）。
+  private static let backgroundExitAtKey = "app_lifecycle_backgroundExitAt"
+  /// 回前台窗口（秒）：窗口内的**所有自动刷新入口**一律不跑。
+  /// 只关「刚回来那一拍」—— 用户在前台正常停留后切 tab / 从二级页返回，仍按各页
+  /// 原有的新鲜度与 exploreAutoRefresh 偏好刷新（设置语义不变）。
+  private static let resumeWindow: TimeInterval = 2.0
+  /// 持久化标记有效期：超过它算「久别重进」，按普通冷启动处理（该刷照刷）。
+  private static let backgroundExitMarkerLifetime: TimeInterval = 30 * 60
+  /// 回前台窗口起点（内存态，由 sceneDidBecomeActive 写）。
+  private var resumedAt: Date?
+
+  /// 本次是否处于「从后台返回」窗口内。**唯一判据**：各页别再各写一份
+  /// （进后台时间戳只有一处写点 = sceneDidEnterBackground，scene 回调在 AppDelegate 里也是唯一入口）。
+  /// - 进程存活：sceneDidEnterBackground 留下的标记 → didBecomeActive 时打开窗口；
+  /// - 进程被回收：标记留在库里 → 下次启动的首次 layout/appear 也落在窗口内。
+  public static var isReturningFromBackground: Bool {
+    if let resumedAt = shared.resumedAt, Date().timeIntervalSince(resumedAt) <= resumeWindow {
+      return true
+    }
+    guard let raw = TiebaKvStore.shared.get(key: backgroundExitAtKey), let at = Double(raw) else {
+      return false
+    }
+    let elapsed = Date().timeIntervalSince1970 - at
+    return elapsed >= 0 && elapsed <= backgroundExitMarkerLifetime
+  }
+
+  /// 回前台时收掉持久化标记：窗口期内由内存态 resumedAt 继续兜（**不清内存态**）。
+  /// 收掉之后，下一次「前台停留中」的出现就是正常语义了。
+  private static func consumeBackgroundExitMarker() -> Bool {
+    guard TiebaKvStore.shared.get(key: backgroundExitAtKey) != nil else { return false }
+    try? TiebaKvStore.shared.remove(key: backgroundExitAtKey)
+    return true
+  }
+
   // MARK: - scene 生命周期（AppDelegate 转发）
 
-  /// 回前台：触觉引擎预热、前台消息轮询。
+  /// 回前台：触觉引擎预热、分享面板预热、前台消息轮询。
+  /// ⚠️ 这里**只开闸、不刷新数据**：回前台该不该刷由各页问
+  /// TiebaAppBootstrap.isReturningFromBackground，别在 scene 回调里再长一条刷新路径。
   public func sceneDidBecomeActive() {
+    if Self.consumeBackgroundExitMarker() { resumedAt = Date() }
     if TiebaPreferences.bool("hapticFeedback", default: true) { TiebaSceneHaptics.warmUp() }
+    // 系统分享面板的首次构建要等系统查分享扩展（见 TiebaShareSheet.prewarm）：
+    // 回前台先付掉，别让它落在用户点分享那一刻。延迟 1s = 让前台转场先跑完
+    // （预热是纯主线程构建，不跟转场抢帧）；预热一次即常驻本进程。
+    Task { @MainActor in
+      try? await Task.sleep(for: .seconds(1))
+      TiebaShareSheet.prewarm()
+    }
     TiebaForegroundNotifier.shared.handleDidBecomeActive()
   }
 
-  /// 进后台：触觉引擎销毁省电。
+  /// 进后台：触觉引擎销毁省电 + 记下「这次是进后台离开的」（回前台闸门的唯一写点）。
   public func sceneDidEnterBackground() {
     TiebaSceneHaptics.shutdown()
+    // 落盘失败也不影响本次运行（内存态 resumedAt 仍在 didBecomeActive 打开窗口）；
+    // 只影响「进程被回收后重启」这一条路径。
+    try? TiebaKvStore.shared.set(
+      key: Self.backgroundExitAtKey,
+      value: String(Date().timeIntervalSince1970)
+    )
   }
 
   // MARK: - 同步启动项（首帧前）
@@ -180,10 +234,21 @@ public final class TiebaAppBootstrap {
 
   private func installMemoryWarningObserver() {
     // 内存告警 → 清图片缓存（原 JS 经 tieba-system 事件转一手，现直接观察系统通知）。
+    // 改前症状：告警只清 Nuke，行内文字位图缓存（TiebaFeedRowTextCanvas，整表上限 24MB）
+    // 一个字节都不放，告警后仍常驻，且它唯一的作废入口 invalidateCache() 只有换外观档才走到。
+    // 改后行为：告警同时作废整表（画布下次布局按需重烘），与 Nuke 一同把峰值还给系统。
     NotificationCenter.default.addObserver(
       forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main
     ) { _ in
       TiebaNuke.clearCaches()
+      TiebaFeedRowTextCanvas.invalidateCache()
+      // GIF 帧缓存也要放：一屏十几张动图时，帧位图（查看器单帧 603KB × 8 帧窗）是那一刻
+      // 最大的一块可回收内存。在屏的播放器只清帧（下一拍按需在后台重解，观感是"跳一帧"），
+      // 离屏的直接整份回收（连 CGImageSource 里那 MB 级压缩字节一起还掉）——
+      // 见 TiebaGIFPlayer.purgeFrameCachesForMemoryWarning。
+      Task { @MainActor in
+        TiebaGIFPlayer.purgeFrameCachesForMemoryWarning()
+      }
     }
   }
 
@@ -263,7 +328,7 @@ public final class TiebaAppBootstrap {
   private nonisolated static func recoverLiveActivities() async {
     try? TiebaKvStore.shared.remove(key: "tiebalite_sign_live_activity_id")
     guard TiebaLiveActivityManager.areActivitiesEnabled() else { return }
-    let state = LiveActivityKitAttributes.ContentState(
+    let state = TiebaLiveActivityKitAttributes.ContentState(
       title: "签到已中断",
       subtitle: "签到进程已停止",
       status: "中断",

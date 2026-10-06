@@ -18,9 +18,9 @@ import UIKit
 // 常规交互。外层容器栈恒定只有一个 VC，仅为保住 statusBarStyle 链路与顶栏扫描。
 
 /// 主题与状态栏配置：跟随应用内主题，而非系统外观。
-/// @unchecked Sendable：UIColor 事实上不可变；这个标记只是让"主线程 hop 里读
-/// 主题"在 Swift 6 下不被拦。
-public struct TiebaChromeTheme: @unchecked Sendable {
+/// Sendable：四个字段全是值类型（UIColor 在 iOS 26 SDK 里本身就是 Sendable），
+/// 所以这里不需要 @unchecked Sendable —— 真 Sendable 就够跨隔离域传主题。
+public struct TiebaChromeTheme: Sendable {
   /// 底栏选中态 / 强调色（原 colors.primary）
   public var tint: UIColor
   /// 导航栏返回箭头与按钮色（原 headerTint：默认 colors.text，可被"工具栏
@@ -67,7 +67,14 @@ public final class TiebaRootNavigationController: UINavigationController {
 
 extension TiebaRootNavigationController: UIGestureRecognizerDelegate {
   public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-    viewControllers.count > 1
+    guard viewControllers.count > 1 else { return false }
+    // [移植 P0] 命中点落在横向手势容器（段页/图集/横滑带）上时让位给横滑。
+    // 移植自上游 Display/Source/InteractiveTransitionGestureRecognizer.swift:10-39
+    // 的 hasHorizontalGestures 命中链探测，见 TiebaInteractivePopGuard.swift。
+    // 注意：这里只加准入判断，**不替换系统手势**（替换会丢 iOS 26 转场联动）。
+    guard let host = gestureRecognizer.view else { return true }
+    let point = gestureRecognizer.location(in: host)
+    return !TiebaInteractivePopGuard.shouldBlockInteractivePop(at: point, in: host)
   }
 }
 
@@ -79,9 +86,15 @@ extension TiebaRootNavigationController: UIGestureRecognizerDelegate {
 /// TiebaChrome.setChromeDarkMode），本控制器不再自己写。
 public final class TiebaMainTabBarController: UITabBarController {
   /// 已选中 tab 被再次点击时回调（原生直接受理 tabReselected）。
-  var onReselect: ((Int) -> Void)?
+  /// 标 @MainActor：回调体要访问宿主/页面的 @MainActor 状态（TiebaNavigator.install 里那段），
+  /// 声明成主 actor 闭包后调用方无需 MainActor.assumeIsolated。
+  var onReselect: (@MainActor (Int) -> Void)?
 
   private var theme: TiebaChromeTheme = .default
+
+  /// 底栏选中的去重（viewController 版与 UITab 版回调可能各来一发，同一 index 50ms 内只处理一次）。见 Q7-6。
+  private var lastTabSelectionIndex = -1
+  private var lastTabSelectionAt: TimeInterval = 0
 
   public override func viewDidLoad() {
     super.viewDidLoad()
@@ -152,8 +165,10 @@ public final class TiebaMainTabBarController: UITabBarController {
     with coordinator: UIViewControllerTransitionCoordinator
   ) {
     super.viewWillTransition(to: size, with: coordinator)
+    // coordinator 的 completion 本来就在主 actor 上回调，直接调即可
+    // （原来套了一层 MainActor.assumeIsolated，属多余的绕过标注）。
     coordinator.animate { _ in } completion: { [weak self] _ in
-      MainActor.assumeIsolated { self?.configureSidebar() }
+      self?.configureSidebar()
     }
   }
 
@@ -233,10 +248,11 @@ extension TiebaMainTabBarController: UITabBarControllerDelegate {
   private func handleTabSelection(_ index: Int) {
     guard index >= 0 else { return }
     let now = ProcessInfo.processInfo.systemUptime
-    let state = TiebaChrome.HapticsState.self
-    if index == state.lastTabIndex, now - state.lastTabAt < 0.05 { return }
-    state.lastTabIndex = index
-    state.lastTabAt = now
+    // Q7-6：去重时间戳是本控制器自己的状态，收成实例字段（原来放在 chrome 的
+    // nonisolated(unsafe) static 里，靠"都在主线程"兜底，壳层还因此反向依赖 chrome 内部枚举）。
+    if index == lastTabSelectionIndex, now - lastTabSelectionAt < 0.05 { return }
+    lastTabSelectionIndex = index
+    lastTabSelectionAt = now
     let selected = selectedTab == nil ? -1 : indexOfSelected
     if index == selected {
       // 重按已选中 tab（回顶/刷新由各 tab 根屏的 tabReselected 受理），档位

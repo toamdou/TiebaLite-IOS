@@ -4,7 +4,7 @@ import Foundation
 // Sendable 显式声明（public 值类型不会隐式推断）：ActivityContent 的 Sendable
 // 条件正是 `State: Sendable`，而 Live Activity 的 update/end 是 nonisolated async，
 // 内容状态必须能跨隔离域传递。
-public struct LiveActivityKitAttributes: ActivityAttributes, Sendable {
+public struct TiebaLiveActivityKitAttributes: ActivityAttributes, Sendable {
   public struct ContentState: Codable, Hashable, Sendable {
     public var title: String
     public var subtitle: String?
@@ -57,7 +57,7 @@ public struct LiveActivityKitAttributes: ActivityAttributes, Sendable {
   }
 }
 
-extension LiveActivityKitAttributes.ContentState {
+extension TiebaLiveActivityKitAttributes.ContentState {
   /// 自由字典 → 值类型（原 TiebaLiveActivityManager.makeState 的语义，原样搬移）。
   /// 必须存在于非隔离上下文：模块侧 AsyncFunction 收到 [String: Any]（非 Sendable），
   /// 要在跨到主 actor 之前先归一，否则 Swift 6 报 "sending 'state'"。
