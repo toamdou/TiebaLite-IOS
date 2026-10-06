@@ -42,8 +42,18 @@ final class TiebaGlassContainerView: UIView {
     }
 
     init(spacing: CGFloat = 7.0) {
-        let effect = UIGlassContainerEffect()
-        effect.spacing = spacing
+        // 降级：UIGlassContainerEffect（玻璃分组上下文）是 iOS 26 起。17/18 上没有
+        // 分组概念，而本容器按设计本来就**自身无材质**（见类型注释：只提供分组上下文），
+        // 故用 effect = nil 的 UIVisualEffectView 顶上——contentView 承载子视图、
+        // hitTest 穿透、明暗 override 三条语义逐条不变。
+        let effect: UIVisualEffect?
+        if #available(iOS 26.0, *) {
+            let glass = UIGlassContainerEffect()
+            glass.spacing = spacing
+            effect = glass
+        } else {
+            effect = nil
+        }
         self.effectView = UIVisualEffectView(effect: effect)
         super.init(frame: .zero)
         self.backgroundColor = .clear
@@ -108,8 +118,17 @@ final class TiebaGlassContainerView: UIView {
 /// 现在统一从这里出，观感规则（.regular + 可选 tint）只此一份。
 extension TiebaGlassContainerView {
   static func makeEffect(tint: UIColor? = nil) -> UIVisualEffectView {
-    let effect = UIGlassEffect(style: .regular)
-    if let tint { effect.tintColor = tint }
-    return UIVisualEffectView(effect: effect)
+    // 降级：UIGlassEffect 是 iOS 26 起。17/18 上用经典超薄材质模糊顶上（最接近的
+    // 旧观感，同 TiebaUpdateDialogViewController/TiebaSignService 的 17 配方）；
+    // 旧系统的 effect 没有 tintColor 入口，tint 改落在 contentView 底色上——
+    // 调用点拿到的仍是"带色的一层材质"，子视图挂载点（contentView）也不变。
+    if #available(iOS 26.0, *) {
+      let effect = UIGlassEffect(style: .regular)
+      if let tint { effect.tintColor = tint }
+      return UIVisualEffectView(effect: effect)
+    }
+    let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+    if let tint { view.contentView.backgroundColor = tint }
+    return view
   }
 }

@@ -94,7 +94,12 @@ final class TiebaPhotoBrowserActionController {
             case .success:
               // 旧查看器 hapticForScene('action-success')。无 view 初始化已标待废弃
               // （UIFeedbackGenerator.h:21）：改挂 pill（控制器持有、必在窗口内），档位/时序不变。
-              UINotificationFeedbackGenerator(view: self.pill).notificationOccurred(.success)
+              // 降级：init(view:) 是 17.5 起；17.0–17.4 退回经典 init()（时序不变）。
+              if #available(iOS 17.5, *) {
+                UINotificationFeedbackGenerator(view: self.pill).notificationOccurred(.success)
+              } else {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+              }
               self.pill.showResult(success: true, text: "保存成功")
             case .failure(let error):
               self.pill.hide()
@@ -138,7 +143,12 @@ final class TiebaPhotoBrowserActionController {
     retainWhileBusy()
     // 旧查看器 hapticForScene('press')。init(style:) 已标待废弃
     // （UIImpactFeedbackGenerator.h:38）：改挂 pill，档位/时序不变。
-    UIImpactFeedbackGenerator(style: .light, view: pill).impactOccurred()
+    // 降级：init(style:view:) 是 17.5 起；17.0–17.4 退回经典 init(style:)（时序不变）。
+    if #available(iOS 17.5, *) {
+      UIImpactFeedbackGenerator(style: .light, view: pill).impactOccurred()
+    } else {
+      UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
     pill.show(text: "正在准备分享…", progress: 0)
     TiebaPhotoBrowserImageLoader.data(
       item.url,

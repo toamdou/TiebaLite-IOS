@@ -785,7 +785,9 @@ final class TiebaDislikeSheetViewController: UIViewController {
     table.delegate = self
     table.backgroundColor = .clear
     table.register(UITableViewCell.self, forCellReuseIdentifier: "reason")
-    var config: UIButton.Configuration = .prominentGlass()
+    // 降级：.prominentGlass() 是 iOS 26 起；17 退回经典 filled（标题/图标/胶囊逐值不变）。
+    var config: UIButton.Configuration =
+      if #available(iOS 26.0, *) { .prominentGlass() } else { .filled() }
     config.title = "提交"
     config.image = UIImage(systemName: "hand.thumbsdown.fill")
     config.imagePadding = 8
