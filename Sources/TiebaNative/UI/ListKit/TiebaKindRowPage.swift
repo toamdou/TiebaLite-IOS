@@ -28,11 +28,13 @@ public nonisolated final class TiebaKindRowPage: @unchecked Sendable {
   public let pageKey: String
   /// 页内每行的种类（下标与 JS 推入的 rows 一一对应）。
   public let kinds: [TiebaKindRowKind]
-  /// feed 行在 TiebaRowMetrics 页里的下标（升序 = JS 行序保序结果）。
+  /// feed 行在 TiebaRowMetrics 页里的下标（= 这些行在**本页**里的页内下标，升序）。
+  /// ⚠️ 是"页内位置"，不是 0…count-1：混合 kind 的页（浏览记录 = 分组标题 simple +
+  /// 卡片 feed）里两者不等，写错就会把别的族的行喂进度量页（见 init 注释）。
   let feedIndices: [Int]
-  /// simple 行在 TiebaSimpleRowMetrics 页里的下标。
+  /// simple 行在 TiebaSimpleRowMetrics 页里的下标（同上，= 页内位置）。
   let simpleIndices: [Int]
-  /// post 行在 TiebaPostRowMetrics 页里的下标。
+  /// post 行在 TiebaPostRowMetrics 页里的下标（同上，= 页内位置）。
   let postIndices: [Int]
   /// 页内下标 → 该行在自己族页里的下标。
   private let subIndices: [Int]
@@ -51,15 +53,33 @@ public nonisolated final class TiebaKindRowPage: @unchecked Sendable {
     var subIndices: [Int] = []
     subIndices.reserveCapacity(kinds.count)
     var counters: [TiebaKindRowKind: Int] = [:]
-    for kind in kinds {
+    // 三族的"族内下标 → 页内下标"反向表。各族度量页 = **按页序切片的行子集**
+    //（TiebaKindRowPages.prepareBlocking 用 feedIndices 去 rows 里切片），
+    // 所以这里必须是"这一族的行各自的页内位置"，不能写成 Array(0..<count)。
+    // 改前症状（2026-10-06 用户报「浏览记录不同记录之间大片空白、错位严重」，真机口径）：
+    // 浏览记录页 = 1 个分组标题（simple）+ N 张卡片（feed），feedIndices 被算成
+    // 0..<N ⇒ 度量页第 0 行装的是"今天"这条标题行、而最后一条记录被挤出切片。
+    // 于是：① 行视图按 (页Key, 族内下标) 取到标题行的模型 —— 分组标题被画成一张
+    // "吧友 / 今天 / 回复0 分享 赞"的卡片；② 每段少显示一条记录；③ simple 族同样
+    // 拿到前 N 行（含 feed 行）⇒ 本该画分组标题的位置画成"只有标题的空白卡"。
+    // 收藏页/动态页等**纯一族**的页 feedIndices 恰好等于 0..<count，所以此前没暴露。
+    var feedIndices: [Int] = []
+    var simpleIndices: [Int] = []
+    var postIndices: [Int] = []
+    for (index, kind) in kinds.enumerated() {
       let next = counters[kind] ?? 0
       subIndices.append(next)
       counters[kind] = next + 1
+      switch kind {
+      case .feed: feedIndices.append(index)
+      case .simple: simpleIndices.append(index)
+      case .post: postIndices.append(index)
+      }
     }
     self.subIndices = subIndices
-    self.feedIndices = Array(0..<(counters[.feed] ?? 0))
-    self.simpleIndices = Array(0..<(counters[.simple] ?? 0))
-    self.postIndices = Array(0..<(counters[.post] ?? 0))
+    self.feedIndices = feedIndices
+    self.simpleIndices = simpleIndices
+    self.postIndices = postIndices
   }
 
   public var count: Int { kinds.count }
@@ -102,12 +122,12 @@ public nonisolated final class TiebaRowPagePins: @unchecked Sendable {
 
   public func pin(_ pageKey: String) {
     guard !pageKey.isEmpty else { return }
-    lock.withLock { keys.insert(pageKey) }
+    lock.withLock { _ = keys.insert(pageKey) }
   }
 
   public func unpin(_ pageKey: String) {
     guard !pageKey.isEmpty else { return }
-    lock.withLock { keys.remove(pageKey) }
+    lock.withLock { _ = keys.remove(pageKey) }
   }
 
   /// 淘汰前取一次快照（一次加锁，不逐页判）。

@@ -107,7 +107,11 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
   private func buildTopBar() {
     segmented.selectedSegmentIndex = activeTab == "forum" ? 1 : 0
     segmented.addTarget(self, action: #selector(handleSegmentChange), for: .valueChanged)
-    var config = UIButton.Configuration.gray()
+    // 液态玻璃（用户 2026-10-06 报「清除全部是灰的，要液态玻璃按钮」）：文案/位置/点击行为
+    // 一字不变，只把材质从 .gray()（灰底填充）换成系统 .glass() —— 本仓既有配方，
+    // 同款见 Features/Home/TiebaHomeViewController.swift 的搜索胶囊与两颗圆钮、
+    // UI/ListKit/TiebaKindListParts.swift 的「重试」；圆角档 .capsule 与前景色沿用原值。
+    var config = UIButton.Configuration.glass()
     config.title = "清除全部"
     config.image = UIImage(
       systemName: "trash",
