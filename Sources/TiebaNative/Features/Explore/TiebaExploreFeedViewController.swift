@@ -265,9 +265,12 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     isLoadingMore = true
     list.footerState = .loading
     Task { @MainActor in
+      // [用户口径 2026-10-06] 正常态（.more）不显示「加载更多」药丸（触底即自动加载，
+      // 见 TiebaKindFooterState）；只有这次翻页失败才留一颗可点的「重试」。
+      var didFail = false
       defer {
         isLoadingMore = false
-        list.footerState = hasMore ? .more : .none
+        list.footerState = didFail ? .retry : (hasMore ? .more : .none)
       }
       do {
         let result = try await fetch(page: page)
@@ -276,6 +279,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
         items.append(contentsOf: result.items)
         publishFresh()
       } catch {
+        didFail = true
         pill.showResult(success: false, text: "加载失败")
       }
     }
@@ -796,7 +800,7 @@ final class TiebaDislikeSheetViewController: UIViewController {
     }, for: .touchUpInside)
     let header = UILabel()
     header.text = "我们会减少这类内容的推荐"
-    header.font = .preferredFont(forTextStyle: .footnote)
+    header.font = TiebaSimpleText.uiFont(style: .footnote)
     header.textColor = .secondaryLabel
     header.textAlignment = .center
     header.frame = CGRect(x: 0, y: 0, width: 0, height: 44)

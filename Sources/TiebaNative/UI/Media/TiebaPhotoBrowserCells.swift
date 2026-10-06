@@ -302,17 +302,26 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
   /// 逐帧播放器。每个查看页一个实例：换页/取消时 recycle() **真释放**帧缓存。
   private let gifPlayer = TiebaGIFPlayer()
 
-  /// 播放当前页的 GIF。帧尺寸**只降不升**（资源纪律）：目标 = min(视图 bounds, 源像素/屏幕 scale)。
+  /// 播放当前页的 GIF。帧尺寸**只降不升**（资源纪律）：目标 = min(展示像素, 源像素)。
   /// 源像素就是显示分辨率上限，重采样到更大只是白占内存；大图 GIF 随之按屏幕尺寸降采样。
   /// 缓冲窗 8 → 峰值内存 = 单帧 × 8。播放期间打开 suppressImageChangeForAnimation，
   /// 挡住每帧 image 赋值触发的布局重算。
+  ///
+  /// [修复 2026-10-06] 目标尺寸的单位是**像素**，不是点：TiebaGIFSource.resizedFrame 用
+  /// format.scale = 1 出图（帧位图的像素数 = targetSize，见 TiebaGIFPlayer 里那条同名注释）。
+  /// 这里原来传的是视图**点数**、再被 cg.width / scale 砍一刀 ⇒ 帧位图只有屏幕像素密度的
+  /// 1/3（实测：240×240 的动图被解成 80×80，再铺满 1179px 宽的屏幕 = 14.7 倍放大），
+  /// 而同位置的静态首帧是原生的 240×240（Nuke 不套处理器、不放大 = 4.9 倍放大）——
+  /// 用户报的「点进去大图模式很糊」就是这 3 倍线性差（Gifu 时代查看器 shouldResizeFrames
+  /// = false 走原生帧，换自研播放器时按点渲染才引入）。静态图解码档一字未动。
+  /// 改后：目标 = 展示像素（视图点数 × 屏幕 scale），上界仍是源像素（只降不升）。
   private func startGIFPlayback(data: Data) {
     let view = self.imageView
     let scale = self.traitCollection.displayScale > 0 ? self.traitCollection.displayScale : 3
-    var target = view.bounds.size
+    var target = CGSize(width: view.bounds.width * scale, height: view.bounds.height * scale)
     if let cg = view.image?.cgImage, cg.width > 1, cg.height > 1 {
-      target.width = min(target.width, CGFloat(cg.width) / scale)
-      target.height = min(target.height, CGFloat(cg.height) / scale)
+      target.width = min(target.width, CGFloat(cg.width))
+      target.height = min(target.height, CGFloat(cg.height))
     }
     // 只有真的播起来了才抑制回调：数据不是 GIF 时保持正常布局链路。
     self.suppressImageChangeForAnimation = self.gifPlayer.play(

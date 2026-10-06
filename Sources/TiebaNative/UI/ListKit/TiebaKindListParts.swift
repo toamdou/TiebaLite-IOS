@@ -291,16 +291,25 @@ final class TiebaKindListPostCell: UICollectionViewCell {
   }
 }
 
-// MARK: - 页脚（加载更多三态）
+// MARK: - 页脚（加载中动画 / 状态文案 / 失败重试；正常态不显示按钮）
 
-/// 页脚三态（对齐 LoadMoreFooter 的 hasMore/loading 组合）。
+/// 页脚状态。
+///
+/// [用户口径 2026-10-06] 底部**不再有**药丸型「加载更多」按钮：那条路径本来就是
+/// `loadMore()` 的第二个入口（10 个页面的 `onListEvent` 里 `.reachEnd` 与 `.footerTap`
+/// 走的是同一个分支），而触底自动加载由 `updateReachEnd()` 覆盖（含"内容不足一屏"）。
+/// 于是 `more` = 什么都不显示（见 TiebaKindFooterView.height）；**只把"上一次翻页失败"
+/// 单独保留成可点重试**（`retry`）—— 否则失败后停在这一屏，用户没有任何入口再试一次。
 public enum TiebaKindFooterState: String {
+  /// 还有更多内容：不显示任何东西（触底自动加载）。
   case more
   case loading
   case none
   /// 一条回复都没有（主贴仍钉在首行的页面用：不能走整页空态，否则主贴也不见）。
   case empty
   case hidden
+  /// 上一次翻页失败（网络/服务端错误）：唯一保留药丸按钮的态。
+  case retry
 }
 
 // 访问级 private → internal（H10 拆分，Lead 裁决 B）：final 被留在 TiebaKindListView.swift 的主类 TiebaKindListContentView 引用，
@@ -324,9 +333,12 @@ final class TiebaKindFooterView: UICollectionReusableView {
       return base + max(20, UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18))
     case .none, .empty:
       return base + UIFontMetrics(forTextStyle: .caption1).scaledValue(for: 16)
-    case .more:
+    case .retry:
       return base + UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18) + 8
-    case .hidden:
+    case .more, .hidden:
+      // [用户口径 2026-10-06] "还有更多"不再有可点药丸：页脚整块收起（0 高 = 布局里
+      // 连 supplementary 都不生成，见 TiebaRowListLayout 的 `footerHeight > 0` 判据），
+      // 底部内容直接贴住最后一行；加载动画（.loading）与文案态（.none/.empty）不受影响。
       return 0
     }
   }
@@ -366,8 +378,9 @@ final class TiebaKindFooterView: UICollectionReusableView {
     self.onTap = onTap
     spinner.color = palette.base.primary
     let textColor = palette.base.textTertiary
-    label.isHidden = state == .more
-    button.isHidden = state != .more
+    // 药丸按钮只在“失败重试”这一态出现（用户口径：正常态不显示「加载更多」）。
+    label.isHidden = state == .more || state == .retry
+    button.isHidden = state != .retry
     switch state {
     case .loading:
       spinner.startAnimating()
@@ -403,9 +416,14 @@ final class TiebaKindFooterView: UICollectionReusableView {
         ]
       )
     case .more:
+      // 正常态：页脚是 0 高、什么都不画（触底自动加载接管，见 TiebaKindFooterState 的注释）。
       spinner.stopAnimating()
       label.attributedText = nil
-      button.configuration = TiebaKindFooterView.moreConfiguration(palette: palette)
+      button.configuration = nil
+    case .retry:
+      spinner.stopAnimating()
+      label.attributedText = nil
+      button.configuration = TiebaKindFooterView.retryConfiguration(palette: palette)
     case .hidden:
       spinner.stopAnimating()
       label.attributedText = nil
@@ -413,9 +431,11 @@ final class TiebaKindFooterView: UICollectionReusableView {
     }
   }
 
-  /// 「加载更多」按钮：系统液态玻璃配置（UIButtonConfiguration.glassButtonConfiguration，
-  /// iOS 26 起可用；部署目标 26 = 恒走此支）。
-  private static func moreConfiguration(palette: TiebaSimpleRowPalette) -> UIButton.Configuration {
+  /// 「重试」按钮：系统液态玻璃配置（UIButtonConfiguration.glassButtonConfiguration，
+  /// iOS 26 起可用；部署目标 26 = 恒走此支）。样式与原来那颗「加载更多」药丸逐值一致
+  /// （圆角胶囊 / 13pt semibold / 文字宽 + 56），只有文案与**出现时机**变了：
+  /// 只在翻页失败（.retry）时出现，正常态一律不显示。
+  private static func retryConfiguration(palette: TiebaSimpleRowPalette) -> UIButton.Configuration {
     var config = UIButton.Configuration.glass()
     config.cornerStyle = .capsule
     config.baseForegroundColor = palette.base.primary
@@ -426,7 +446,7 @@ final class TiebaKindFooterView: UICollectionReusableView {
       )
       return outgoing
     }
-    config.title = "加载更多"
+    config.title = "加载失败，点击重试"
     // 原按钮宽 = 文字宽 + 56、高 = 文字高（footer height 预算里的 marginVertical 4）。
     config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 28, bottom: 4, trailing: 28)
     return config
