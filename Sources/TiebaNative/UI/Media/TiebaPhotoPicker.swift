@@ -95,26 +95,25 @@ final class TiebaPhotoPickerDelegate: NSObject, PHPickerViewControllerDelegate, 
   }
 }
 
+@MainActor
 enum TiebaPhotoPicker {
   /// 展示中的 delegate（强持有，见 TiebaPhotoPickerDelegate 注释）。
-  nonisolated(unsafe) private static var activeDelegate: TiebaPhotoPickerDelegate?
+  /// 改前症状：本枚举用「模拟主线程契约」——静态状态挂 nonisolated(unsafe)、两条早退路径包
+  /// MainActor.assumeIsolated，而真正触碰 UIKit 的 host.present 反而没有保护（一半陷阱一半裸奔）。
+  /// 改后行为：整个枚举 @MainActor 收口 —— 静态状态天然隔离、present 只能在主线程调用；
+  /// 唯一 nonisolated 的是 outputURL()（解码回调在任意队列，纯路径拼接不碰 UI 状态）。
+  private static var activeDelegate: TiebaPhotoPickerDelegate?
 
   /// 展示单图选择器。completion 在主线程回调；取消回空串。
-  ///
-  /// completion 是 `@MainActor`，而本函数本身 nonisolated（静态状态 + present
-  /// 的前置条件是"在主线程调用"，见文件头"线程"）。唯一调用点
-  /// 经 onMain 收束，所以两条
-  /// 早退路径用 assumeIsolated 把这条既有契约显式化：不满足即 crash，而不是
-  /// 静默跨线程回调（与 TiebaPhotoBrowser.swift:611 同一约定）。
   static func presentSingleImage(
     completion: @escaping @MainActor @Sendable (Result<String, Error>) -> Void
   ) {
     guard activeDelegate == nil else {
-      MainActor.assumeIsolated { completion(.failure(TiebaPhotoPickerError.alreadyPresenting)) }
+      completion(.failure(TiebaPhotoPickerError.alreadyPresenting))
       return
     }
     guard let host = TiebaTopViewController.find() else {
-      MainActor.assumeIsolated { completion(.failure(TiebaPhotoPickerError.noPresenter)) }
+      completion(.failure(TiebaPhotoPickerError.noPresenter))
       return
     }
     // 独立配置（不传 photoLibrary:）——完全不需要相册权限，也不需要 asset
@@ -129,7 +128,8 @@ enum TiebaPhotoPicker {
     let delegate = TiebaPhotoPickerDelegate { result in
       // 延后一拍释放 delegate：这个回调还在 delegate 的方法栈上，立即置 nil
       // 会在执行中释放 self。activeDelegate 是静态强引用，晚一拍清无副作用。
-      DispatchQueue.main.async { activeDelegate = nil }
+      // 延后一拍释放 delegate（这个回调还在 delegate 的方法栈上）：Task 落到下一个主 actor 轮次。
+      Task { @MainActor in activeDelegate = nil }
       completion(result)
     }
     picker.delegate = delegate
@@ -139,7 +139,8 @@ enum TiebaPhotoPicker {
 
   /// 输出路径：缓存目录 portrait_<毫秒>.jpg。上传成功后即可被系统回收，不进
   /// 文档目录（旧实现直接用相册 localUri，本仓改为落一份上传副本）。
-  static func outputURL() -> URL {
+  /// nonisolated：PHPicker 的解码回调在任意队列（见 delegate 注释），这里只拼缓存目录路径。
+  nonisolated static func outputURL() -> URL {
     TiebaFileSystem.cacheDirectory
       .appendingPathComponent("portrait_\(Int(Date().timeIntervalSince1970 * 1000)).jpg")
   }
