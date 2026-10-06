@@ -235,11 +235,17 @@ enum TiebaSearchAPI {
       let big = TiebaSimpleRowParser.string(raw["big_pic"] ?? raw["bigPic"]) ?? ""
       let src = TiebaSimpleRowParser.string(raw["src"]) ?? ""
       let small = TiebaSimpleRowParser.string(raw["small_pic"] ?? raw["smallPic"]) ?? ""
+      // 契约对齐 TiebaRowMetrics.parseMedia（搜索 API 无 proto 三档——只有
+      // pic/item 原图与 crop 压缩两档）：src=压缩档（卡片，等价于 feed 的 g=0
+      // 静态档位；对 GIF 仍为动图字节，服务端没给静态档）、smallSrc=原图档
+      // （GIF 探测/查看器大图档）、originSrc=原图（保存/查看原图）。
+      let compressed = small.isEmpty ? (src.isEmpty ? big : src) : small
+      let full = big.isEmpty ? (src.isEmpty ? small : src) : big
       return [
         "type": ((raw["type"] as? String) ?? "pic") == "video" ? "video" : "image",
-        "src": big.isEmpty ? (src.isEmpty ? small : src) : big,
-        "originSrc": big.isEmpty ? (src.isEmpty ? small : src) : big,
-        "smallSrc": small,
+        "src": compressed,
+        "smallSrc": full,
+        "originSrc": full,
         "width": TiebaSimpleRowParser.double(raw["width"]) ?? 300,
         "height": TiebaSimpleRowParser.double(raw["height"]) ?? 300,
         "index": index,
@@ -437,7 +443,9 @@ enum TiebaSearchAPI {
   }
 
   private static func escape(_ raw: String) -> String {
-    raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
+    // [采用] 见 TiebaURLQueryValue：这是**单个参数值**的编码集，
+    // .urlQueryAllowed 不转义 & 与 = ⇒ 值里含 & 时会丢参数。
+    raw.addingPercentEncoding(withAllowedCharacters: .tiebaURLQueryValueAllowed) ?? raw
   }
 
   private static func array(_ value: Any?) -> [[String: Any]]? {

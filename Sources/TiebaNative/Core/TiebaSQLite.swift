@@ -36,6 +36,7 @@
 // ============================================================
 import Foundation
 import SQLite3
+import Synchronization
 
 enum TiebaSQLiteError: LocalizedError {
   case databaseUnavailable(String)
@@ -61,6 +62,48 @@ private final class TiebaSQLiteConnection {
   }
 }
 
+/// 绑定参数（真 Sendable 值）。`[[String: Any]]` 在**进锁前**翻译成它：
+/// Mutex 闭包的结果要求 sending，闭包里捕获非 Sendable 的 Any 字典会被
+/// region-isolation 拒绝（`-typecheck` 看不到这类诊断）。锁内因此只出现值类型。
+private enum SQLiteBindValue: Sendable {
+  case null
+  case text(String)
+  case integer(Int64)
+  case double(Double)
+
+  /// 与旧 bindLocked 逐行等价：缺 "v" / NSNull / 既非 String 又非 NSNumber → NULL。
+  /// 参数顺序 = 数组顺序（下标即绑定位置）。
+  static func from(_ raw: Any?) -> SQLiteBindValue {
+    guard let raw, !(raw is NSNull) else { return .null }
+    if let text = raw as? String { return .text(text) }
+    if let number = raw as? NSNumber {
+      // JS 里所有数字都是 Double；整数值（时间戳毫秒）绑 int64，其余绑 double，
+      // 与列亲和性配合得到与 expo-sqlite 相同的落盘类型。
+      let value = number.doubleValue
+      if value.rounded() == value, abs(value) < 9_007_199_254_740_992 {
+        return .integer(Int64(value))
+      }
+      return .double(value)
+    }
+    return .null
+  }
+}
+
+/// 列值（真 Sendable 值）。同上：锁内只产生它，出了锁再装箱成 `Any`。
+private enum SQLiteColumnValue: Sendable {
+  case null
+  case text(String)
+  case real(Double)
+
+  var anyValue: Any {
+    switch self {
+    case .null: return NSNull()
+    case .text(let value): return value
+    case .real(let value): return value
+    }
+  }
+}
+
 // ============================================================
 // 共享 SQLite 原语（TiebaSQLite 与 TiebaKvStore 各自手写了一份 → 收敛到这里）
 //
@@ -82,8 +125,12 @@ enum TiebaSQLiteCoreError: LocalizedError {
 
 enum TiebaSQLiteCore {
   /// SQLITE_TRANSIENT：让 SQLite 复制绑定值（Swift 侧临时 C 串不能传 STATIC）。
-  /// nonisolated(unsafe)：函数指针类型的静态常量，只读、无并发风险。
-  nonisolated(unsafe) static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+  /// 用函数而不是 static let 常量：@convention(c) 函数指针不是 Sendable，
+  /// 存成全局量要 nonisolated(unsafe) 才能过编译；每次现算一个常量字面量既没有
+  /// 共享状态，也不需要任何绕过（编译器会折叠成同一个值）。
+  static func transient() -> sqlite3_destructor_type {
+    unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+  }
 
   /// 打开一条连接：建目录 + open_v2(FULLMUTEX) + busy_timeout(1s)。
   /// 失败时关闭半开句柄并抛错误（详情给调用方包成各自门面的错误类型）。
@@ -130,7 +177,7 @@ enum TiebaSQLiteCore {
   }
 
   static func bind(_ statement: OpaquePointer, _ index: Int32, _ value: String) {
-    sqlite3_bind_text(statement, index, value, -1, transient)
+    sqlite3_bind_text(statement, index, value, -1, transient())
   }
 
   static func bind(_ statement: OpaquePointer, _ index: Int32, _ value: Int) {
@@ -146,9 +193,10 @@ enum TiebaSQLiteCore {
   }
 }
 
-/// 同步查询门面。@unchecked Sendable：全部可变状态（连接表）归 `lock` 保护，
-/// 与 TiebaKvStore 同款"手动串行化"声明。
-final class TiebaSQLite: @unchecked Sendable {
+/// 同步查询门面。并发：全部可变状态（连接表）由 Mutex 保护——真并发安全，
+/// 不需要 @unchecked Sendable 的人工声明（连接里的 transactionDepth 也是可变的，
+/// 所以整张表一起串行化，而不是只锁字典本身）。
+final class TiebaSQLite: Sendable {
   static let shared = TiebaSQLite()
 
   /// 库目录/默认库名与 TiebaKvStore 逐字一致（同一个文件）。
@@ -183,8 +231,8 @@ final class TiebaSQLite: @unchecked Sendable {
       ON visit_history(type, timestamp DESC, id DESC);
     """
 
-  private let lock = NSLock()
-  private var connections: [String: TiebaSQLiteConnection] = [:]
+  /// 库名 → 连接。
+  private let connections = Mutex<[String: TiebaSQLiteConnection]>([:])
 
   private init() {}
 
@@ -205,18 +253,36 @@ final class TiebaSQLite: @unchecked Sendable {
   // MARK: - 对外查询 API
 
   func exec(database: String, sql: String) throws {
-    try lock.withLock {
-      let connection = try openLocked(database)
+    try connections.withLock { table in
+      // 取连接：命中直接用；未命中建一条并登记（登记必须发生在 Mutex 闭包内）。
+      // 这里不用「把表 inout 传给助手」的写法：inout sending 参数在闭包返回时
+      // 仍可达，会触发 region-isolation 报错（-typecheck 看不出来）。
+      let connection: TiebaSQLiteConnection
+      if let cached = table[database] {
+        connection = cached
+      } else {
+        let created = try openLocked(database)
+        table[database] = created
+        connection = created
+      }
       try execLocked(connection.handle, sql: sql)
     }
   }
 
   func run(database: String, sql: String, params: [[String: Any]]) throws -> (lastInsertRowId: Int64, changes: Int) {
-    try lock.withLock {
-      let connection = try openLocked(database)
+    let values = params.map { SQLiteBindValue.from($0["v"]) }
+    return try connections.withLock { table in
+      let connection: TiebaSQLiteConnection
+      if let cached = table[database] {
+        connection = cached
+      } else {
+        let created = try openLocked(database)
+        table[database] = created
+        connection = created
+      }
       let statement = try prepareLocked(connection.handle, sql: sql)
       defer { sqlite3_finalize(statement) }
-      bindLocked(statement, params: params)
+      bindLocked(statement, values: values)
       guard sqlite3_step(statement) == SQLITE_DONE else {
         throw TiebaSQLiteError.statementFailed(Self.errorMessage(connection.handle))
       }
@@ -225,12 +291,23 @@ final class TiebaSQLite: @unchecked Sendable {
   }
 
   func query(database: String, sql: String, params: [[String: Any]]) throws -> [[String: Any]] {
-    try lock.withLock {
-      let connection = try openLocked(database)
+    let values = params.map { SQLiteBindValue.from($0["v"]) }
+    let rows: [[String: SQLiteColumnValue]] = try connections.withLock { table in
+      // 取连接：命中直接用；未命中建一条并登记（登记必须发生在 Mutex 闭包内）。
+      // 这里不用「把表 inout 传给助手」的写法：inout sending 参数在闭包返回时
+      // 仍可达，会触发 region-isolation 报错（-typecheck 看不出来）。
+      let connection: TiebaSQLiteConnection
+      if let cached = table[database] {
+        connection = cached
+      } else {
+        let created = try openLocked(database)
+        table[database] = created
+        connection = created
+      }
       let statement = try prepareLocked(connection.handle, sql: sql)
       defer { sqlite3_finalize(statement) }
-      bindLocked(statement, params: params)
-      var rows: [[String: Any]] = []
+      bindLocked(statement, values: values)
+      var rows: [[String: SQLiteColumnValue]] = []
       while true {
         let step = sqlite3_step(statement)
         if step == SQLITE_ROW {
@@ -242,14 +319,27 @@ final class TiebaSQLite: @unchecked Sendable {
         }
       }
     }
+    // Any 装箱放在锁外：锁内只出现 Sendable 值，出锁后再翻成 [[String: Any]]
+    return rows.map { row in row.mapValues(\.anyValue) }
   }
 
   func queryFirst(database: String, sql: String, params: [[String: Any]]) throws -> [String: Any]? {
-    try lock.withLock {
-      let connection = try openLocked(database)
+    let values = params.map { SQLiteBindValue.from($0["v"]) }
+    let row: [String: SQLiteColumnValue]? = try connections.withLock { table in
+      // 取连接：命中直接用；未命中建一条并登记（登记必须发生在 Mutex 闭包内）。
+      // 这里不用「把表 inout 传给助手」的写法：inout sending 参数在闭包返回时
+      // 仍可达，会触发 region-isolation 报错（-typecheck 看不出来）。
+      let connection: TiebaSQLiteConnection
+      if let cached = table[database] {
+        connection = cached
+      } else {
+        let created = try openLocked(database)
+        table[database] = created
+        connection = created
+      }
       let statement = try prepareLocked(connection.handle, sql: sql)
       defer { sqlite3_finalize(statement) }
-      bindLocked(statement, params: params)
+      bindLocked(statement, values: values)
       let step = sqlite3_step(statement)
       if step == SQLITE_ROW {
         return Self.rowDictionary(statement)
@@ -259,13 +349,24 @@ final class TiebaSQLite: @unchecked Sendable {
       }
       throw TiebaSQLiteError.statementFailed(Self.errorMessage(connection.handle))
     }
+    return row.map { $0.mapValues(\.anyValue) }
   }
 
   // MARK: - 事务（JS 的 withTransactionAsync 驱动）
 
   func begin(database: String) throws {
-    try lock.withLock {
-      let connection = try openLocked(database)
+    try connections.withLock { table in
+      // 取连接：命中直接用；未命中建一条并登记（登记必须发生在 Mutex 闭包内）。
+      // 这里不用「把表 inout 传给助手」的写法：inout sending 参数在闭包返回时
+      // 仍可达，会触发 region-isolation 报错（-typecheck 看不出来）。
+      let connection: TiebaSQLiteConnection
+      if let cached = table[database] {
+        connection = cached
+      } else {
+        let created = try openLocked(database)
+        table[database] = created
+        connection = created
+      }
       if connection.transactionDepth == 0 {
         try execLocked(connection.handle, sql: "BEGIN IMMEDIATE;")
       } else {
@@ -278,8 +379,8 @@ final class TiebaSQLite: @unchecked Sendable {
   }
 
   func commit(database: String) throws {
-    try lock.withLock {
-      guard let connection = connections[database], connection.transactionDepth > 0 else { return }
+    try connections.withLock { table in
+      guard let connection = table[database], connection.transactionDepth > 0 else { return }
       connection.transactionDepth -= 1
       if connection.transactionDepth == 0 {
         try execLocked(connection.handle, sql: "COMMIT;")
@@ -290,8 +391,8 @@ final class TiebaSQLite: @unchecked Sendable {
   }
 
   func rollback(database: String) throws {
-    try lock.withLock {
-      guard let connection = connections[database], connection.transactionDepth > 0 else { return }
+    try connections.withLock { table in
+      guard let connection = table[database], connection.transactionDepth > 0 else { return }
       connection.transactionDepth = 0
       // ROLLBACK 自己失败没有恢复手段（事务已不可信），原始错误照抛。
       try execLocked(connection.handle, sql: "ROLLBACK;")
@@ -300,16 +401,16 @@ final class TiebaSQLite: @unchecked Sendable {
 
   /// 关闭连接（遗留库迁移读完就关，回收句柄）。
   func close(database: String) {
-    lock.withLock {
-      guard let connection = connections.removeValue(forKey: database) else { return }
+    connections.withLock { table in
+      guard let connection = table.removeValue(forKey: database) else { return }
       sqlite3_close_v2(connection.handle)
     }
   }
 
   /// 删除库文件（含 -wal/-shm）。legacy 迁移把旧库并进统一库后调用。
   func deleteDatabase(named name: String) throws {
-    try lock.withLock {
-      if let connection = connections.removeValue(forKey: name) {
+    try connections.withLock { table in
+      if let connection = table.removeValue(forKey: name) {
         sqlite3_close_v2(connection.handle)
       }
       let base = databaseURL(named: name)
@@ -324,8 +425,9 @@ final class TiebaSQLite: @unchecked Sendable {
 
   // MARK: - 打开 / 建连接
 
+  /// 打开一条新连接（WAL + schema 自愈）。**不碰连接表**：登记由调用方在
+  /// Mutex 闭包内完成（见 public API 里的注释）。
   private func openLocked(_ database: String) throws -> TiebaSQLiteConnection {
-    if let connection = connections[database] { return connection }
     let handle: OpaquePointer
     do {
       handle = try TiebaSQLiteCore.open(path: databaseURL(named: database).path)
@@ -346,7 +448,6 @@ final class TiebaSQLite: @unchecked Sendable {
         throw error
       }
     }
-    connections[database] = connection
     return connection
   }
 
@@ -428,45 +529,42 @@ final class TiebaSQLite: @unchecked Sendable {
     }
   }
 
-  private func bindLocked(_ statement: OpaquePointer, params: [[String: Any]]) {
-    for (offset, param) in params.enumerated() {
+  private func bindLocked(_ statement: OpaquePointer, values: [SQLiteBindValue]) {
+    for (offset, value) in values.enumerated() {
       let index = Int32(offset + 1)
-      guard let raw = param["v"], !(raw is NSNull) else {
+      switch value {
+      case .null:
         sqlite3_bind_null(statement, index)
-        continue
-      }
-      if let text = raw as? String {
+      case .text(let text):
         TiebaSQLiteCore.bind(statement, index, text)
-      } else if let number = raw as? NSNumber {
-        // JS 里所有数字都是 Double；整数值（时间戳毫秒）绑 int64，其余绑 double，
-        // 与列亲和性配合得到与 expo-sqlite 相同的落盘类型。
-        let value = number.doubleValue
-        if value.rounded() == value, abs(value) < 9_007_199_254_740_992 {
-          sqlite3_bind_int64(statement, index, Int64(value))
-        } else {
-          sqlite3_bind_double(statement, index, value)
-        }
-      } else {
-        sqlite3_bind_null(statement, index)
+      case .integer(let number):
+        sqlite3_bind_int64(statement, index, number)
+      case .double(let number):
+        sqlite3_bind_double(statement, index, number)
       }
     }
   }
 
-  /// 一行 → 字典（列名 → String / Double / NSNull）。
-  private static func rowDictionary(_ statement: OpaquePointer) -> [String: Any] {
-    var row: [String: Any] = [:]
+  /// 一行 → 字典（列名 → SQLiteColumnValue，出锁时才装箱成 String / Double / NSNull）。
+  private static func rowDictionary(_ statement: OpaquePointer) -> [String: SQLiteColumnValue] {
+    var row: [String: SQLiteColumnValue] = [:]
     for index in 0..<sqlite3_column_count(statement) {
       guard let namePointer = sqlite3_column_name(statement, index) else { continue }
       let name = String(cString: namePointer)
       switch sqlite3_column_type(statement, index) {
       case SQLITE_INTEGER, SQLITE_FLOAT:
-        row[name] = sqlite3_column_double(statement, index)
+        row[name] = .real(sqlite3_column_double(statement, index))
       case SQLITE_TEXT:
         // column_bytes 而不是 cString：值里出现 NUL 时不被截断（core 内同款）。
-        row[name] = TiebaSQLiteCore.columnString(statement, index) ?? NSNull()
+        // 旧实现里 columnString 返回 nil 会装箱成 NSNull，这里保持同一语义。
+        if let text = TiebaSQLiteCore.columnString(statement, index) {
+          row[name] = .text(text)
+        } else {
+          row[name] = .null
+        }
       default:
         // BLOB / NULL：本仓无 blob 列，统一给 NSNull（null 语义）。
-        row[name] = NSNull()
+        row[name] = .null
       }
     }
     return row

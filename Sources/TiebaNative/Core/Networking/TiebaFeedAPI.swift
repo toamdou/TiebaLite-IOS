@@ -238,7 +238,11 @@ enum TiebaFeedAPI {
       let list = object["items"] as? [[String: Any]]
     else { return [] }
     let ts = TiebaJSON.doubleValue(object["ts"]) ?? 0
-    guard ts > 0, Date().timeIntervalSince1970 * 1000 - ts <= snapshotMaxAge * 1000 else { return [] }
+    // 快照存活时长改用单调时钟：这个 ts 会跨进程/跨重启存进 KV，而墙上时钟会被
+    // 对时或手动改时间拨动——往回拨一次，过期快照就能"续命"很久；往回拨之后写的
+    // 新快照又会被判成过期。TiebaMonotonicTime 以本次开机时刻为锚，重启后仍连续，
+    // 正是给这种"持久化下来的间隔"用的（同机同钟，历史值由 Date 写成也照常可比）。
+    guard ts > 0, TiebaMonotonicTime.now * 1000 - ts <= snapshotMaxAge * 1000 else { return [] }
     return list.filter { ($0["threadInfo"] as? [String: Any])?["id"] is String }
   }
 
@@ -249,7 +253,8 @@ enum TiebaFeedAPI {
   static func saveSnapshot(_ items: [[String: Any]], segment: String) {
     guard !items.isEmpty else { return }
     let payload: [String: Any] = [
-      "ts": Int(Date().timeIntervalSince1970 * 1000),
+      // 与 cachedSnapshot 的读数同源（TiebaMonotonicTime），见那里的注释。
+      "ts": Int(TiebaMonotonicTime.now * 1000),
       "items": Array(items.prefix(snapshotMaxItems)),
     ]
     guard let data = try? JSONSerialization.data(withJSONObject: payload),
@@ -274,6 +279,9 @@ enum TiebaFeedRowBuilder {
     var timestampStyle = "relative"
     var closeMenuOptions: [String] = ["block", "copy-title"]
     var imageContextMenu = false
+    /// 卡片长按菜单（分享帖子/复制帖子内容/不感兴趣/屏蔽作者）开关。
+    /// 缺省关：四个动作都由页面执行，只有接线了的页面才该打开（见 TiebaFeedRowModel）。
+    var cardContextMenu = false
 
     /// 每次出现现读偏好：过渡期原生只读共享偏好，不做订阅（见 TiebaPreferenceSnapshot）。
     static func current() -> Options {
@@ -305,104 +313,12 @@ enum TiebaFeedRowBuilder {
     row["timestampStyle"] = options.timestampStyle
     row["closeMenuOptions"] = options.closeMenuOptions
     row["imageContextMenu"] = options.imageContextMenu
+    row["cardContextMenu"] = options.cardContextMenu
     row["showForumPill"] = true
     return row
   }
 }
 
-/// 信息流图片的「保存照片 / 分享照片」（原 JS PostImageContextMenu 的水印 + 相册 + 分享）。
-@MainActor
-enum TiebaFeedImageActions {
-  static func save(url: String, forumName: String?, presenter: UIViewController?) {
-    Task { @MainActor in
-      do {
-        let file = try await prepare(url: url, forumName: forumName)
-        try await TiebaPhotoLibrary.saveFile(uri: file.absoluteString)
-        TiebaSceneHaptics.fire("action-success")
-        showToast("保存成功", on: presenter)
-      } catch {
-        TiebaSceneHaptics.fire("action-fail")
-        showAlert(title: "保存失败", message: error.localizedDescription, on: presenter)
-      }
-    }
-  }
-
-  static func share(url: String, forumName: String?, presenter: UIViewController?, sourceRect: CGRect) {
-    Task { @MainActor in
-      do {
-        let file = try await prepare(url: url, forumName: forumName)
-        guard let presenter else { return }
-        TiebaShareSheet.present(
-          fileURL: file,
-          dialogTitle: watermarkText(forumName: forumName).isEmpty
-            ? "分享图片" : "分享图片 — \(watermarkText(forumName: forumName))",
-          from: presenter,
-          sourceRect: sourceRect
-        )
-      } catch {
-        TiebaSceneHaptics.fire("action-fail")
-        showAlert(title: "分享失败", message: error.localizedDescription, on: presenter)
-      }
-    }
-  }
-
-  /// 源图落到临时文件；有水印偏好时渲染水印（TiebaImageWatermark）。
-  private static func prepare(url: String, forumName: String?) async throws -> URL {
-    guard let target = URL(string: url) else { throw TiebaPhotoBrowserError.invalidImageData }
-    // 走 TiebaPhotoBrowser 暴露的 Nuke 取数入口：Referer 注入 + DataCache 与
-    // 查看器同一条管线；不要手写 URLSession（贴吧图床防盗链，且会分裂缓存）。
-    let data = try await TiebaPhotoBrowserImageLoader.data(target)
-    let temp = FileManager.default.temporaryDirectory
-      .appendingPathComponent("feed-image-\(UUID().uuidString).jpg")
-    try data.write(to: temp, options: .atomic)
-    let text = watermarkText(forumName: forumName)
-    guard !text.isEmpty else { return temp }
-    let output = try await TiebaImageWatermark.applyWatermark(sourceUri: temp.absoluteString, text: text)
-    guard let url = URL(string: output) else { return temp }
-    return url
-  }
-
-  /// 与 JS resolveWatermarkText 同判据：username = 当前账号昵称，forum_name = 吧名。
-  static func watermarkText(forumName: String?) -> String {
-    guard TiebaPreferenceSnapshot.bool("imageWatermarkEnabled", default: false) else { return "" }
-    switch TiebaPreferenceSnapshot.string("imageWatermark") ?? "none" {
-    case "username": return accountName()
-    case "forum_name": return forumName ?? ""
-    default: return ""
-    }
-  }
-
-  /// 账号昵称：冷启动档案缓存（AuthSecureStorage 的无凭据缓存，与 JS 同一份 KV）。
-  private static func accountName() -> String {
-    guard let raw = TiebaKvStore.shared.get(key: "@tiebalite:account_profile_cache_v1"),
-      let data = raw.data(using: .utf8),
-      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    else { return "" }
-    return object["name"] as? String ?? object["nameShow"] as? String ?? ""
-  }
-
-  private static func showToast(_ text: String, on presenter: UIViewController?) {
-    guard let presenter else { return }
-    let pill = TiebaPhotoBrowserPillView()
-    presenter.view.addSubview(pill)
-    pill.translatesAutoresizingMaskIntoConstraints = false
-    NSLayoutConstraint.activate([
-      pill.centerXAnchor.constraint(equalTo: presenter.view.centerXAnchor),
-      pill.bottomAnchor.constraint(
-        equalTo: presenter.view.safeAreaLayoutGuide.bottomAnchor,
-        constant: -24
-      ),
-    ])
-    pill.showResult(success: true, text: text)
-  }
-
-  private static func showAlert(title: String, message: String, on presenter: UIViewController?) {
-    guard let presenter, presenter.presentedViewController == nil else { return }
-    let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-    alert.addAction(UIAlertAction(title: "好", style: .default))
-    presenter.present(alert, animated: true)
-  }
-}
 
 /// 通用行字典的主题色（行字典的 colors 子字典只认 hex/rgba 串；映射与吧务页同）。
 @MainActor
@@ -449,63 +365,23 @@ enum TiebaFeedFilter {
   static func visible(_ items: [[String: Any]], filterAds: Bool) -> [[String: Any]] {
     // 一页一次：屏蔽词在这里预编译（此前逐行逐词现编 NSRegularExpression，
     // O(行×词) 次编译；正则只编一次）。
-    let rules = Rules.load()
-    let users = TiebaBlockStore.users()
+    // [算法审查 40 §4.E] 判据收敛：本页原来自己实现了一份「白名单放行 / 黑名单屏蔽 + 屏蔽用户」，
+    // 现在直接用 TiebaPostBlockFilter（帖子行测量那条最热路径的同一张表）—— 同一规则一份实现。
+    let filter = TiebaPostBlockFilter.load()
     return items.filter { item in
       guard let thread = item["threadInfo"] as? [String: Any] else { return true }
       if filterAds, TiebaViewModelMapper.isAdThreadInfo(thread) { return false }
-      if !rules.isEmpty {
+      if !filter.isEmpty {
         let text = "\(thread["title"] as? String ?? "") \(thread["abstract"] as? String ?? "")"
-        if rules.blocks(text) { return false }
+        if filter.isContentBlocked(text) { return false }
       }
-      if !users.isEmpty {
-        let uid = thread["authorId"] as? String ?? ""
+      if !filter.users.isEmpty {
         let name = thread["authorName"] as? String ?? ""
-        if users.contains(where: { $0.uid == uid || (!name.isEmpty && $0.username == name) }) {
+        if filter.isUserBlocked(uid: thread["authorId"] as? String ?? "", name: name) {
           return false
         }
       }
       return true
-    }
-  }
-
-  /// 页级屏蔽词表（正则已编译）；匹配判据与 BlockManager.shouldBlockContent 同。
-  private struct Rules {
-    private struct Word {
-      let keyword: String
-      let isRegex: Bool
-      /// isRegex 且编译成功时非 nil；编译失败按"不匹配"处理（迁移前同判据）。
-      let regex: NSRegularExpression?
-      let whitelist: Bool
-    }
-
-    private let words: [Word]
-    var isEmpty: Bool { words.isEmpty }
-
-    static func load() -> Rules {
-      Rules(words: TiebaBlockStore.words().compactMap { word in
-        guard !word.keyword.isEmpty else { return nil }
-        return Word(
-          keyword: word.keyword,
-          isRegex: word.isRegex == true,
-          // 编译走 BlockStore 的记忆化：同一 keyword 与帖子行测量/消息页共享结果。
-          regex: word.isRegex == true ? TiebaBlockStore.compiledRegex(pattern: word.keyword) : nil,
-          whitelist: word.isWhitelist
-        )
-      })
-    }
-
-    /// 白名单命中即放行；黑名单按子串 / 正则。
-    func blocks(_ content: String) -> Bool {
-      if words.contains(where: { $0.whitelist && matches(content, $0) }) { return false }
-      return words.contains { !$0.whitelist && matches(content, $0) }
-    }
-
-    private func matches(_ content: String, _ word: Word) -> Bool {
-      guard word.isRegex else { return content.contains(word.keyword) }
-      guard let regex = word.regex else { return false }
-      let range = NSRange(content.startIndex..<content.endIndex, in: content)
-      return regex.firstMatch(in: content, range: range) != nil
     }
   }
 }

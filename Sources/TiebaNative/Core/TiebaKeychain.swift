@@ -25,6 +25,7 @@
 // ============================================================
 import Foundation
 import Security
+import Synchronization
 
 enum TiebaKeychainError: LocalizedError {
   case invalidKey
@@ -46,45 +47,57 @@ enum TiebaKeychain {
   private static let noAuthService = "app:no-auth"
   private static let authService = "app:auth"
 
-  /// 本仓唯一使用（也是旧包唯一写入）的可访问性档位。
-  /// nonisolated(unsafe)：CFString 常量，SDK 未标 Sendable（Swift 6 会当错误）。
-  nonisolated(unsafe) private static let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-
   /// 进程内缓存（124）：credentials() 一次读 5 个键，未命中时每个键最多 3 次
   /// SecItemCopyMatching（no-auth/auth/legacy 回退），启动/切号路径会重复读同一批。
   /// 本进程内所有写都经过 set/delete（缓存随之更新/失效），读命中不再进 Security。
-  private static let cacheLock = NSLock()
-  nonisolated(unsafe) private static var cacheHits: [String: String] = [:]
-  nonisolated(unsafe) private static var cacheMisses: Set<String> = []
+  ///
+  /// 并发：命中/未命中表都是一个 Sendable 值类型，由 Mutex 保护——不是
+  /// NSLock + nonisolated(unsafe) 全局可变状态（那是编译器管不到的共享可变状态）。
+  /// Security 调用一律在锁外做，锁只覆盖字典读写。
+  private struct CacheState: Sendable {
+    var hits: [String: String] = [:]
+    var misses: Set<String> = []
+  }
+
+  /// 三态：命中 / 确证未命中 / 没记录（要去问 Security）。
+  private enum CacheLookup {
+    case hit(String)
+    case miss
+    case unknown
+  }
+
+  private static let cache = Mutex(CacheState())
 
   /// 读一个键；不存在 → nil。读序 no-auth → auth → legacy（兼容旧包写入面）。
   static func get(key: String) -> String? {
     let trimmed = key.trimmingCharacters(in: .whitespaces)
     guard !trimmed.isEmpty else { return nil }
-    cacheLock.lock()
-    if let hit = cacheHits[key] {
-      cacheLock.unlock()
-      return hit
-    }
-    if cacheMisses.contains(key) {
-      cacheLock.unlock()
+    switch cache.withLock({ state -> CacheLookup in
+      if let hit = state.hits[key] { return .hit(hit) }
+      if state.misses.contains(key) { return .miss }
+      return .unknown
+    }) {
+    case .hit(let value):
+      return value
+    case .miss:
       return nil
+    case .unknown:
+      break
     }
-    cacheLock.unlock()
 
     for service in [noAuthService, authService, baseService] {
       if let data = copy(service: service, key: key) {
         let value = String(data: data, encoding: .utf8)
-        cacheLock.lock()
-        cacheHits[key] = value
-        cacheMisses.remove(key)
-        cacheLock.unlock()
+        // 与旧实现一致：解码失败（非 UTF-8）时 value 为 nil → 字典赋值等于移除，
+        // 该键不进任何表，下次读仍会去问 Security。
+        cache.withLock { state in
+          state.hits[key] = value
+          state.misses.remove(key)
+        }
         return value
       }
     }
-    cacheLock.lock()
-    cacheMisses.insert(key)
-    cacheLock.unlock()
+    cache.withLock { _ = $0.misses.insert(key) }
     return nil
   }
 
@@ -96,7 +109,11 @@ enum TiebaKeychain {
     let query = baseQuery(service: noAuthService, key: key)
     var addQuery = query
     addQuery[kSecValueData as String] = valueData
-    addQuery[kSecAttrAccessible as String] = accessibility
+    // 可访问性档位（本仓唯一使用、也是旧包唯一写入的一档）直接内联 SDK 常量：
+    // 它是只读的 C 全局 let，在 nonisolated 上下文读取是安全的；反过来存成
+    // static let 会因为 CFString 非 Sendable 报错——所以这里既不需要
+    // nonisolated(unsafe)，也不需要多一个存储属性。
+    addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
     let status = SecItemAdd(addQuery as CFDictionary, nil)
     switch status {
@@ -110,10 +127,10 @@ enum TiebaKeychain {
     default:
       throw TiebaKeychainError.writeFailed(status)
     }
-    cacheLock.lock()
-    cacheHits[key] = value
-    cacheMisses.remove(key)
-    cacheLock.unlock()
+    cache.withLock { state in
+      state.hits[key] = value
+      state.misses.remove(key)
+    }
   }
 
   /// 删一个键（三个 service 变体都删；不存在是 no-op，不抛——与旧包 delete 同）。
@@ -124,10 +141,10 @@ enum TiebaKeychain {
     for service in [baseService, authService, noAuthService] {
       SecItemDelete(baseQuery(service: service, key: key) as CFDictionary)
     }
-    cacheLock.lock()
-    cacheHits.removeValue(forKey: key)
-    cacheMisses.insert(key)
-    cacheLock.unlock()
+    cache.withLock { state in
+      state.hits.removeValue(forKey: key)
+      state.misses.insert(key)
+    }
   }
 
   // MARK: - 原语
