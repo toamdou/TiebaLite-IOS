@@ -307,7 +307,9 @@ public final class TiebaTopicHeaderView: UIView, TiebaKindListHeaderView {
 
 private final class TiebaTopicForumChipView: UIControl {
   private let avatarView = UIImageView()
-  private let placeholderView = UIView()
+  /// 占位块 = 微光遮罩视图：微光贴着「圆 + person 图标」的轮廓走，而不是叠一条亮带
+  ///（亮带盖不到 SF Symbol，裁进圆形又得 masksToBounds，见 UI/Components/TiebaShimmerMaskView）。
+  private let placeholderView = TiebaShimmerMaskView(baseAlpha: 0.55, duration: 1.5)
   private let placeholderIcon = UIImageView()
   private let nameLabel = UILabel()
 
@@ -321,9 +323,9 @@ private final class TiebaTopicForumChipView: UIControl {
 
     // 占位块在下、头像图在上：图未到时露出占位（RN Avatar 的 person.2 兜底），
     // 图命中即盖住——不需要加载回调，也不存"失败"状态。
-    placeholderView.clipsToBounds = true
+    placeholderView.contentView.clipsToBounds = true
     placeholderIcon.contentMode = .scaleAspectFit
-    placeholderView.addSubview(placeholderIcon)
+    placeholderView.contentView.addSubview(placeholderIcon)
     addSubview(placeholderView)
     avatarView.clipsToBounds = true
     avatarView.contentMode = .scaleAspectFill
@@ -349,7 +351,9 @@ private final class TiebaTopicForumChipView: UIControl {
 
     avatarView.image = nil
     avatarView.isHidden = forum.avatar == nil
-    placeholderView.backgroundColor = colors.chip
+    // 有头像要加载才扫；没有头像 URL 时占位是**静态兜底图标**（不是加载中），不扫。
+    placeholderView.isSuspended = forum.avatar == nil
+    placeholderView.contentView.backgroundColor = colors.chip
     placeholderIcon.image = UIImage(
       systemName: "person.2.fill",
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .regular)
@@ -363,7 +367,10 @@ private final class TiebaTopicForumChipView: UIControl {
       options.processors = [
         TiebaNuke.resizeProcessor(targetPixelSize: CGSize(width: 20, height: 20)),
       ]
-      loadImage(with: TiebaNuke.secureURL(url), options: options, into: avatarView)
+      // 图落地即停微光（占位已被盖住，不停就是白烧帧）。
+      loadImage(with: TiebaNuke.secureURL(url), options: options, into: avatarView) { [weak self] _ in
+        self?.placeholderView.isSuspended = true
+      }
     }
     setNeedsLayout()
   }
@@ -380,7 +387,7 @@ private final class TiebaTopicForumChipView: UIControl {
     )
     avatarView.layer.cornerRadius = side / 2
     placeholderView.frame = avatarView.frame
-    placeholderView.layer.cornerRadius = side / 2
+    placeholderView.contentView.layer.cornerRadius = side / 2
     placeholderIcon.frame = CGRect(x: 3, y: 3, width: side - 6, height: side - 6)
     let textX = TiebaTopicHeaderLayout.chipPaddingH + side + TiebaTopicHeaderLayout.chipGap
     nameLabel.frame = CGRect(

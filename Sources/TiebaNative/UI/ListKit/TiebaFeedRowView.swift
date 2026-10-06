@@ -33,6 +33,9 @@
 //   - actionButtonFrames[0/1/2]        → 回复 / 分享 / 点赞（0.45 按压透明度；
 //                                        点赞另有蓄力触觉 + heart pop）
 //   - 卡片右上角 26×26 menuButtonFrame  → 不感兴趣/屏蔽作者/复制标题（回传 JS）
+//   - 卡片长按（UIContextMenuInteraction，宿主 = 文字画布 textCanvas）→ 分享帖子 /
+//     复制帖子内容 / 不感兴趣 / 屏蔽作者（四项都经 onMenuAction 回传页面执行；
+//     图片格上的长按仍归图片菜单 —— 画布在命中链之外，同一行只有一套长按会成立）
 //   以上 frame 均可由 model.plan 直接取得（行坐标；内部常量与 TweetCard 对齐）。
 //   图片带序号需要滚动内容坐标 → contentOffset 的换算（帧计划里没有偏移），
 //   由 `mediaHit(atRowPoint:)` 提供（只读几何；列表侧点击分发用它）。
@@ -40,901 +43,9 @@
 //   手势据此过滤，避免"点菜单同时进帖"）。
 // ============================================================
 
-import Gifu
 import UIKit
 import Nuke
 import NukeExtensions
-
-// MARK: - 配色
-
-// 语义色板在 TiebaRowMetrics.swift 的 TiebaFeedRowPalette：默认值与本节旧
-// 静态常量逐一相同，JS 经 TiebaListView 的 themeColors prop 下发实际主题
-// （非默认主题的 primary/chip/onChip 由此生效；行视图不再是"只有默认蓝"）。
-
-// MARK: - 行内图片加载（Nuke 共享管线）
-
-/// 行内图片统一入口：Nuke 管线（Referer + 内存/磁盘缓存 + 同 URL 合并）按目标
-/// 像素下采样（fit inside，长边 ≤ maxPixel）。复用/换行必须 cancelRequest(for:)
-///（任务关联在视图上，取消后回调不再投递；重复 load 也会先取消旧任务）。
-@MainActor private func tiebaLoadRowImage(
-  url: URL?,
-  maxPixel: CGFloat,
-  into imageView: UIImageView
-) {
-  loadImage(
-    with: url.map { TiebaNuke.secureURL($0) },
-    options: TiebaNuke.options(maxPixel: maxPixel, mode: .fit),
-    into: imageView
-  )
-}
-
-// MARK: - 弹簧动画工具（参数与 src/theme/springs.ts 逐值对齐）
-
-/// 动画令牌（Reanimated 的 damping/stiffness/mass 与 CASpringAnimation 是同一
-/// 套物理模型，可直接照搬；restDisplacement/restSpeed 默认 0.001 两处一致）。
-/// 引用点：TweetCard LikeButton（pop / numPop）与 CollapseRow。
-/// （EntranceRow 的时长/级联/位移已收进 TiebaEntrance，与其余三个行族共用一份。）
-private nonisolated enum TiebaFeedRowMotion {
-  /// LikeButton pop：withSpring(1.35, {damping:12, stiffness:380, mass:0.6})
-  static let likePop = TiebaSpringParams(mass: 0.6, stiffness: 380, damping: 12)
-  /// MOMENTUM（松手/计数回落）：damping 16, stiffness 220, mass 1
-  static let momentum = TiebaSpringParams(mass: 1, stiffness: 220, damping: 16)
-  /// 计数跳动首段：withSpring(1.28, {damping:11, stiffness:320, mass:0.5})
-  static let countBump = TiebaSpringParams(mass: 0.5, stiffness: 320, damping: 11)
-  /// CollapseRow：280ms + EASE_OUT cubic-bezier(0.32,0.72,0,1)
-  static let collapseDuration: CFTimeInterval = 0.28
-  /// nonisolated(unsafe)：CAMediaTimingFunction 不是 Sendable，但它是 Core
-  /// Animation 的**不可变值对象**——由控制点构造后没有任何 setter，Apple 自家
-  /// 的 kCAMediaTimingFunctionEaseIn/EaseOut 就是进程级共享常量；这里只被本文件
-  /// 主线程动画代码读取（group.timingFunction 赋值），跨线程只读安全。
-  nonisolated(unsafe) static let easeOut = CAMediaTimingFunction(controlPoints: 0.32, 0.72, 0, 1)
-}
-
-private struct TiebaSpringParams {
-  let mass: CGFloat
-  let stiffness: CGFloat
-  let damping: CGFloat
-
-  var settlingDuration: CFTimeInterval {
-    let animation = CASpringAnimation()
-    animation.mass = mass
-    animation.stiffness = stiffness
-    animation.damping = damping
-    return animation.settlingDuration
-  }
-}
-
-/// 可动画属性（CALayer 的 KVC 对 transform.scale 不完整，显式读写）。
-/// 当前只服务点赞 pop/计数跳动的 scale 弹簧；接入新属性时在此扩展。
-private enum TiebaAnimatedProperty {
-  case scale
-
-  var keyPath: String {
-    switch self {
-    case .scale: return "transform.scale"
-    }
-  }
-
-  func apply(_ value: CGFloat, to layer: CALayer) {
-    switch self {
-    case .scale:
-      layer.transform = CATransform3DMakeScale(value, value, 1)
-    }
-  }
-
-  /// 呈现树当前值（打断在途弹簧时作为 from，避免跳变）。
-  func current(of layer: CALayer) -> CGFloat {
-    switch self {
-    case .scale:
-      return (layer.presentation() ?? layer).transform.m11
-    }
-  }
-}
-
-/// 弹簧播放：模型值立即写终值（动画结束不回跳），presentation 由
-/// CASpringAnimation 从 from 推到 to；fillMode forwards + 保留到完成回调里移除，
-/// 保证回调只触发一次（RN 的 withSequence 语义）。
-///
-/// @MainActor：CALayer 动画是主线程状态，而且下面 `DispatchQueue.main.async`
-/// 的闭包被编译器按主 actor 闭包检查——非隔离函数里捕获 layer 会被判成
-/// "把 layer 发送给主 actor"（SIL 区域隔离报 sending 'layer'）。所有调用点都在
-/// @MainActor 的 TiebaFeedRowView 内，标 @MainActor 后捕获与闭包同域，不需要
-/// 也没有发生任何跨域发送。
-@MainActor
-private func tiebaPlaySpring(
-  on layer: CALayer,
-  property: TiebaAnimatedProperty,
-  from: CGFloat,
-  to: CGFloat,
-  spring: TiebaSpringParams,
-  key: String,
-  completion: (() -> Void)? = nil
-) {
-  layer.removeAnimation(forKey: key)
-  let animation = CASpringAnimation(keyPath: property.keyPath)
-  animation.mass = spring.mass
-  animation.stiffness = spring.stiffness
-  animation.damping = spring.damping
-  animation.fromValue = from
-  animation.toValue = to
-  animation.duration = animation.settlingDuration
-  animation.fillMode = .forwards
-  animation.isRemovedOnCompletion = false
-  property.apply(to, to: layer)
-  if let completion {
-    CATransaction.begin()
-    CATransaction.setCompletionBlock {
-      layer.removeAnimation(forKey: key)
-      completion()
-    }
-    layer.add(animation, forKey: key)
-    CATransaction.commit()
-  } else {
-    layer.add(animation, forKey: key)
-    DispatchQueue.main.async { [weak layer] in
-      layer?.removeAnimation(forKey: key)
-    }
-  }
-}
-
-// MARK: - 行内触觉
-
-/// 行内触觉全部走全仓唯一的场景表 / 播放器（TiebaSceneHaptics / TiebaHaptics）：
-/// 行内不再自建 CHHapticEngine（否则设置页的「长按弹出大图 / 点赞蓄力」档位失效）。
-/// 点赞蓄力的播放器 id 与设置页 hapticsRealtimeStyles 的键同名。
-private enum TiebaFeedRowHapticIds {
-  /// 点赞蓄力连续播放器（hapticsRealtime.ts 的 likeCharge；档位读 hapticsRealtimeStyles）。
-  static let likeCharge = "likeCharge"
-  /// JS CHARGE_INTENSITY / CHARGE_SHARPNESS。
-  static let chargeIntensity = 0.3
-  static let chargeSharpness = 0.25
-}
-
-// MARK: - 右上角菜单钮（UIButton.Configuration + 44pt 命中区）
-
-/// 卡片右上角「更多」钮：26×26 槽位、ellipsis、textTertiary（与帖子页的更多钮同形）。
-/// 原设计是 xmark（RN closeButton 直译），但它的动作是弹出「不感兴趣/屏蔽/复制标题」
-/// 菜单、并非关闭卡片，iOS 信息流此处惯例也是省略号（2026-09-19 改）。
-private final class TiebaFeedRowMenuButton: UIButton {
-  /// 命中区下限（RN hitSlop=8 等价；26 视觉 + 两侧 9 = 44pt，行内布局仍按 26）。
-  private static let minHitSide: CGFloat = 44
-
-  /// 命中矩形：bounds 之外外扩到 ≥44pt（不改变视觉尺寸与帧计划占位）。
-  var hitFrame: CGRect {
-    let dx = max((Self.minHitSide - bounds.width) / 2, 0)
-    let dy = max((Self.minHitSide - bounds.height) / 2, 0)
-    return bounds.insetBy(dx: -dx, dy: -dy)
-  }
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    var config = UIButton.Configuration.plain()
-    config.image = UIImage(
-      systemName: "ellipsis",
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
-    )
-    config.contentInsets = .zero
-    configuration = config
-    isAccessibilityElement = true
-    accessibilityLabel = "更多操作"
-  }
-
-  required init?(coder: NSCoder) {
-    fatalError("init(coder:) is not supported")
-  }
-
-  func configure(tint: UIColor) {
-    var config = configuration ?? .plain()
-    config.baseForegroundColor = tint
-    configuration = config
-  }
-
-  /// hitSlop 等价：bounds 外的触摸也归本控件（cell 的整卡点击靠
-  /// TiebaFeedRowView.ownsInteraction 的同一 hitFrame 让位）。
-  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-    hitFrame.contains(point)
-  }
-}
-
-// MARK: - 深色小角标（长图 / GIF / 计数）
-
-/// 角标底色常量：RN 侧 MediaPager 的 rgba(0,0,0,0.55) 与 11pt semibold 白字，
-/// 明暗主题同值（不随主题 token 走）。
-private let tiebaBadgeBackground = UIColor.black.withAlphaComponent(0.55)
-
-private final class TiebaFeedRowBadgeView: UIView {
-  private let label = UILabel()
-  private let iconView = UIImageView()
-  private let iconWidth: CGFloat
-
-  init(text: String, systemImage: String?) {
-    iconWidth = systemImage == nil ? 0 : 10
-    super.init(frame: .zero)
-    backgroundColor = tiebaBadgeBackground
-    layer.cornerRadius = 10
-    label.text = text
-    label.font = .systemFont(ofSize: 11, weight: .semibold)
-    label.textColor = .white
-    addSubview(label)
-    iconView.tintColor = .white
-    iconView.contentMode = .scaleAspectFit
-    if let systemImage {
-      iconView.image = UIImage(
-        systemName: systemImage,
-        withConfiguration: UIImage.SymbolConfiguration(pointSize: 9, weight: .semibold)
-      )
-    }
-    if iconWidth > 0 { addSubview(iconView) }
-    isHidden = true
-  }
-
-  required init?(coder: NSCoder) {
-    fatalError("init(coder:) is not supported")
-  }
-
-  override func sizeThatFits(_ size: CGSize) -> CGSize {
-    let labelSize = label.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
-    let gap: CGFloat = iconWidth > 0 ? 3 : 0
-    return CGSize(
-      width: iconWidth + gap + labelSize.width + 14,
-      height: max(iconWidth, labelSize.height) + 6
-    )
-  }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    let gap: CGFloat = iconWidth > 0 ? 3 : 0
-    iconView.frame = CGRect(x: 7, y: (bounds.height - iconWidth) / 2, width: iconWidth, height: iconWidth)
-    label.frame = CGRect(
-      x: 7 + iconWidth + gap,
-      y: 0,
-      width: max(bounds.width - 14 - iconWidth - gap, 0),
-      height: bounds.height
-    )
-  }
-}
-
-// MARK: - 媒体单元（单图 / 图片带一格 / 视频 poster 共用）
-
-private final class TiebaFeedRowMediaItemView: UIView {
-  // GIFImageView：GIF 档走 Gifu 逐帧渲染，静态档当普通 UIImageView 用（子类透明）。
-  private let imageView = GIFImageView()
-
-  /// 进帖转场的图片配对用（同模块内部）：媒体项不持有 threadId，由行视图下发 id。
-  var heroImageView: UIView { imageView }
-  /// 当前已解好的位图（列表→详情快照把它带给占位卡，避免进帖先显示灰底）。
-  var loadedImage: UIImage? { imageView.image }
-  private let longBadge = TiebaFeedRowBadgeView(text: "长图", systemImage: "arrow.down")
-  private let gifBadge = TiebaFeedRowBadgeView(text: "GIF", systemImage: nil)
-  private let moreOverlay = UIView()
-  private let moreLabel = UILabel()
-  /// 视频播放入口：单张 play.circle.fill（此前是手拼的 44pt 圆底 + 独立 play 图标，
-  /// 图标字号与容器不齐）。
-  private let playBadge = UIImageView()
-
-  /// 行下发的主题色板（占位底色）。
-  var palette: TiebaFeedRowPalette = .default {
-    didSet { backgroundColor = palette.placeholder }
-  }
-
-  /// 长按菜单上下文（行下发）：媒体序号、是否启用、动作回调。
-  var mediaIndex = 0
-  var contextMenuEnabled = false
-  var onMenuAction: ((Int, String) -> Void)?
-  /// 长按预览提交（点预览进大图）：媒体序号向行视图冒泡，由列表侧按格现算
-  /// 几何并复用点图入口；本视图不构造任何几何、不开查看器。
-  var onPreviewCommit: ((Int) -> Void)?
-  /// 预览加载目标 = 压缩显示档（产品要求：长按菜单预览仍显示压缩图）；
-  /// 保存/分享用原图不经这里——动作 payload 由行模型单独取 originURL。
-  private var fullURL: URL?
-  private var pixelWidth: Double = 0
-  private var pixelHeight: Double = 0
-  private var contextMenuInteraction: UIContextMenuInteraction?
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    // 不再 clipsToBounds：静态图的圆角由管线烘焙进位图（displayProcessor/
-    // fitDisplayProcessor，位图与显示框逐像素等价），裁切挂在每帧离屏合成上
-    // （仓内 TiebaPostRowView 同结论）。GIF 档例外：tiebaLoadGifImage 里临时
-    // 开回 clipsToBounds（帧不烘焙圆角）。cornerRadius 仍保留——它裁的是本层
-    // 占位底色（纯色随圆角自动剪裁，不需要 masksToBounds）。
-    clipsToBounds = false
-    backgroundColor = palette.placeholder
-    imageView.contentMode = .scaleAspectFill
-    addSubview(imageView)
-    addSubview(longBadge)
-    addSubview(gifBadge)
-
-    moreOverlay.backgroundColor = UIColor.black.withAlphaComponent(0.5)
-    moreOverlay.isHidden = true
-    moreLabel.font = .systemFont(ofSize: 24, weight: .bold)
-    moreLabel.textColor = .white
-    moreLabel.textAlignment = .center
-    moreOverlay.addSubview(moreLabel)
-    addSubview(moreOverlay)
-
-    playBadge.image = UIImage(
-      systemName: "play.circle.fill",
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 40, weight: .regular)
-    )
-    playBadge.tintColor = .white
-    playBadge.contentMode = .scaleAspectFit
-    playBadge.isHidden = true
-    addSubview(playBadge)
-  }
-
-  required init?(coder: NSCoder) {
-    fatalError("init(coder:) is not supported")
-  }
-
-  func prepareForReuse() {
-    TiebaHeroTransition.clear(imageView)
-    cancelRequest(for: imageView)
-    imageView.stopAnimatingGIF()
-    imageView.image = nil
-    longBadge.isHidden = true
-    gifBadge.isHidden = true
-    moreOverlay.isHidden = true
-    playBadge.isHidden = true
-    moreLabel.text = nil
-    contextMenuEnabled = false
-    syncContextMenuInteraction()
-    fullURL = nil
-    pixelWidth = 0
-    pixelHeight = 0
-  }
-
-  /// 转场源图 = 自身 imageView 里那张已加载的图（无图返回 nil）。
-  var transitionSourceImage: UIImage? { imageView.image }
-
-  /// 长按菜单开关：只在启用时挂 UIContextMenuInteraction（关闭态零手势开销）。
-  private func syncContextMenuInteraction() {
-    if contextMenuEnabled {
-      if contextMenuInteraction == nil {
-        let interaction = UIContextMenuInteraction(delegate: self)
-        addInteraction(interaction)
-        contextMenuInteraction = interaction
-      }
-    } else if let interaction = contextMenuInteraction {
-      removeInteraction(interaction)
-      contextMenuInteraction = nil
-    }
-  }
-
-  func configure(
-    media: TiebaFeedRowMedia?,
-    isVideoPoster: Bool,
-    remainingCount: Int,
-    cornerRadius: CGFloat,
-    contentMode: UIView.ContentMode,
-    imageContextMenu: Bool,
-    contextMenuIndex: Int,
-    onMenuAction: ((Int, String) -> Void)?,
-    onPreviewCommit: ((Int) -> Void)?
-  ) {
-    layer.cornerRadius = cornerRadius
-    layer.cornerCurve = .continuous
-    imageView.contentMode = contentMode
-    backgroundColor = palette.placeholder
-
-    mediaIndex = contextMenuIndex
-    self.onMenuAction = onMenuAction
-    self.onPreviewCommit = onPreviewCommit
-    // 视频 poster 不进图片菜单（RN 的 MediaPager 同样只在图片上挂 contextMenu）。
-    contextMenuEnabled = imageContextMenu && !isVideoPoster && media != nil
-    fullURL = media?.url ?? media?.originURL
-    pixelWidth = media?.width ?? 0
-    pixelHeight = media?.height ?? 0
-    syncContextMenuInteraction()
-
-    let isLong = media?.isLong == true
-    let isGif = media?.isGif == true
-    longBadge.isHidden = !isLong
-    gifBadge.isHidden = !isGif
-    if !longBadge.isHidden { longBadge.sizeToFit() }
-    if !gifBadge.isHidden { gifBadge.sizeToFit() }
-
-    if remainingCount > 0 {
-      moreOverlay.isHidden = false
-      moreLabel.text = "+\(remainingCount)"
-    } else {
-      moreOverlay.isHidden = true
-      moreLabel.text = nil
-    }
-
-    playBadge.isHidden = !isVideoPoster
-  }
-
-  func load(url: URL?, maxPixel: CGFloat) {
-    tiebaLoadRowImage(url: url, maxPixel: maxPixel, into: imageView)
-  }
-
-  /// 显示档取图：位图按视图尺寸裁切（cover）+ 圆角烘焙，尺寸与清晰度都对齐显示框。
-  func loadDisplay(url: URL?, targetSize: CGSize, cornerRadius: CGFloat, scale: CGFloat) {
-    tiebaPostLoadDisplayImage(
-      url,
-      targetSize: targetSize,
-      cornerRadius: cornerRadius,
-      scale: scale,
-      into: imageView
-    )
-  }
-
-  /// 单图 fit 显示档：fit 缩放 + 圆角烘焙（见 TiebaNuke.fitDisplayProcessor），
-  /// 配合容器 clipsToBounds = false 去掉每帧离屏合成。
-  func loadFitDisplay(url: URL?, targetSize: CGSize, cornerRadius: CGFloat, scale: CGFloat) {
-    tiebaLoadFitDisplayImage(
-      url,
-      targetSize: targetSize,
-      cornerRadius: cornerRadius,
-      scale: scale,
-      into: imageView
-    )
-  }
-
-  /// GIF 播放档：动图真身（originURL = mapper 的 gifChain）交 Gifu 逐帧渲染，
-  /// 帧按显示尺寸×contentMode 重采样、缓冲窗 24。isStale 由行视图给（换行后
-  /// 迟到的 GIF 不回贴）。
-  func loadGif(url: URL, targetSize: CGSize, isStale: @escaping @MainActor () -> Bool) {
-    tiebaLoadGifImage(
-      url,
-      targetSize: targetSize,
-      contentMode: imageView.contentMode,
-      frameBufferSize: 24,
-      into: imageView,
-      isStale: isStale
-    )
-  }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    imageView.frame = bounds
-    moreOverlay.frame = bounds
-    moreLabel.frame = moreOverlay.bounds
-    playBadge.frame = CGRect(
-      x: bounds.midX - 22,
-      y: bounds.midY - 22,
-      width: 44,
-      height: 44
-    )
-    // 长图/GIF 角标：右下角，两个同时存在时水平排开（RN 版固定同位会重叠）。
-    var right = bounds.maxX - 8
-    if !gifBadge.isHidden {
-      gifBadge.frame = CGRect(
-        x: right - gifBadge.bounds.width,
-        y: bounds.maxY - 8 - gifBadge.bounds.height,
-        width: gifBadge.bounds.width,
-        height: gifBadge.bounds.height
-      )
-      right -= gifBadge.bounds.width + 4
-    }
-    if !longBadge.isHidden {
-      longBadge.frame = CGRect(
-        x: right - longBadge.bounds.width,
-        y: bounds.maxY - 8 - longBadge.bounds.height,
-        width: longBadge.bounds.width,
-        height: longBadge.bounds.height
-      )
-    }
-  }
-}
-
-// MARK: - 图片长按菜单（对齐 PostImageContextMenu：X 同款系统上下文菜单）
-
-/// 长按媒体格 → 系统上下文菜单（深色压暗 + 大图预览 + 菜单在预览下方）。
-/// 菜单项与 RN 的 POST_IMAGE_ACTIONS 逐字对齐（保存照片 / 分享照片）；动作
-/// 不在此执行——回传 JS 复用 PostImageContextMenu 的 savePhoto/sharePhoto
-/// （水印偏好在动作触发时现读，原生读不到 preferencesStore）。
-extension TiebaFeedRowMediaItemView: UIContextMenuInteractionDelegate {
-  func contextMenuInteraction(
-    _ interaction: UIContextMenuInteraction,
-    configurationForMenuAtLocation location: CGPoint
-  ) -> UIContextMenuConfiguration? {
-    guard contextMenuEnabled, imageView.image != nil || fullURL != nil, bounds.width > 0 else {
-      return nil
-    }
-    // 预览首帧 = 屏上已渲染缩略图（零下载），原图后台加载淡入（预览控制器内完成）。
-    let snapshot = UIGraphicsImageRenderer(bounds: bounds).image { _ in
-      drawHierarchy(in: bounds, afterScreenUpdates: false)
-    }
-    let previewProvider: UIContextMenuContentPreviewProvider = { [weak self] in
-      guard let self else { return nil }
-      return TiebaPhotoPreviewViewController(
-        initialImage: snapshot,
-        fullUrl: self.fullURL?.absoluteString,
-        pixelWidth: self.pixelWidth,
-        pixelHeight: self.pixelHeight
-      )
-    }
-    let actionProvider: UIContextMenuActionProvider = { [weak self] _ in
-      guard let self else { return nil }
-      let save = UIAction(
-        title: "保存照片",
-        image: UIImage(systemName: "square.and.arrow.down")
-      ) { [weak self] _ in
-        guard let self else { return }
-        self.onMenuAction?(self.mediaIndex, "save-image")
-      }
-      let share = UIAction(
-        title: "分享照片",
-        image: UIImage(systemName: "square.and.arrow.up")
-      ) { [weak self] _ in
-        guard let self else { return }
-        self.onMenuAction?(self.mediaIndex, "share-image")
-      }
-      return UIMenu(children: [save, share])
-    }
-    return UIContextMenuConfiguration(
-      identifier: nil,
-      previewProvider: previewProvider,
-      actionProvider: actionProvider
-    )
-  }
-
-  /// 升起动画以缩略图格为锚点；格已离开窗口（复用/滚出）时返回 nil——
-  /// 飞回目标已死，沿用 TiebaPhotoContextMenuView 的既有防御（真机实证留白）。
-  /// ⚠️ 方法名一个字都不能简写/错位：写成 `previewForHighlighting` 这类"几乎
-  /// 匹配"的名字编译器只给 warning、系统永远不会调到，锚点会静默失效。
-  /// 两个协议名都给：旧名自 iOS 16 起标废弃，但 UIKitCore 里新旧选择器都还在被
-  /// 引用（真机上只实现其中一个都可能不被调），两个入口落到同一份实现。
-  private func tiebaHighlightPreview() -> UITargetedPreview? {
-    guard tiebaIsOnScreen else { return nil }
-    return UITargetedPreview(view: self)
-  }
-
-  func contextMenuInteraction(
-    _ interaction: UIContextMenuInteraction,
-    configuration: UIContextMenuConfiguration,
-    highlightPreviewForItemWithIdentifier identifier: any NSCopying
-  ) -> UITargetedPreview? {
-    tiebaHighlightPreview()
-  }
-
-  func contextMenuInteraction(
-    _ interaction: UIContextMenuInteraction,
-    configuration: UIContextMenuConfiguration,
-    dismissalPreviewForItemWithIdentifier identifier: any NSCopying
-  ) -> UITargetedPreview? {
-    nil
-  }
-
-  /// （旧协议名，见上：与 identifier 形态同一份实现。）
-  func contextMenuInteraction(
-    _ interaction: UIContextMenuInteraction,
-    previewForHighlightingMenuWithConfiguration configuration: UIContextMenuConfiguration
-  ) -> UITargetedPreview? {
-    tiebaHighlightPreview()
-  }
-
-  /// 收起动画不飞回（同 TiebaPhotoContextMenuView：iOS 26+ 飞回路径留白风险）。
-  func contextMenuInteraction(
-    _ interaction: UIContextMenuInteraction,
-    previewForDismissingMenuWithConfiguration configuration: UIContextMenuConfiguration
-  ) -> UITargetedPreview? {
-    nil
-  }
-
-  /// 菜单升起瞬间的「弹出大图」触觉（RN playImageLiftHaptic）。
-  func contextMenuInteraction(
-    _ interaction: UIContextMenuInteraction,
-    willDisplayMenuFor configuration: UIContextMenuConfiguration,
-    animator: UIContextMenuInteractionAnimating?
-  ) {
-    TiebaSceneHaptics.playImageLift()
-  }
-
-  /// 点长按预览 = 提交：收起动画走完再冒泡「打开查看器」（菜单还在时 present
-  /// 会与收起动画时序打架）。保存/分享菜单项仍走 onMenuAction，互不影响。
-  func contextMenuInteraction(
-    _ interaction: UIContextMenuInteraction,
-    willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration,
-    animator: any UIContextMenuInteractionCommitAnimating
-  ) {
-    let index = mediaIndex
-    animator.addCompletion { [weak self] in
-      self?.onPreviewCommit?(index)
-    }
-  }
-}
-
-// MARK: - 操作栏单元（图标 + 计数）
-
-/// UIControl 跟踪（不是手势）：滚动开始时 UIScrollView 会 cancel 子视图
-/// tracking，不抢 scroll pan、也不会留悬挂的按压状态。
-private final class TiebaFeedRowActionView: UIControl {
-  private let iconView = UIImageView()
-  private let label = UILabel()
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    iconView.contentMode = .scaleAspectFit
-    label.textAlignment = .left
-    label.lineBreakMode = .byClipping
-    addSubview(iconView)
-    addSubview(label)
-  }
-
-  required init?(coder: NSCoder) {
-    fatalError("init(coder:) is not supported")
-  }
-
-  func configure(systemImage: String, text: String, tint: UIColor, font: UIFont) {
-    iconView.image = TiebaSymbols.image(systemImage, pointSize: 17, weight: .regular)
-    iconView.tintColor = tint
-    label.text = text
-    label.font = font
-    label.textColor = tint
-  }
-
-  /// 由行的帧计划直接摆放（frame 为按钮局部坐标）。
-  func layout(iconFrame: CGRect, labelFrame: CGRect) {
-    iconView.frame = iconFrame
-    label.frame = labelFrame
-  }
-
-  /// 点赞 pop / 计数跳动的动画载体（RN 的两层 Animated.View）。
-  var iconLayer: CALayer { iconView.layer }
-  var labelLayer: CALayer { label.layer }
-}
-
-// MARK: - 静态文字画布
-
-/// 卡片静态文字画布：把卡内多段静态文字画进**同一张** backing store，省掉每段文字
-/// 一个可见 CALayer 的绘制/合成与一份独立 backing store；并按行身份缓存位图，使
-/// **来回滚动同一行不必重光栅化**（cell 复用会把画布换给别的行，否则每次复用都要重画）。
-///
-/// 绘制走 `NSAttributedString.draw(with:options:context:)`——与 `UILabel` 底层同一套
-/// 排版（图形/字体/行高都在属性串里），但**不需要 UIView 参与**。相比上一版把 9 段文字
-/// 交给 9 个隐藏 label：每行少 9 个视图对象、少 9 次 trait 传播；而且该原语不绑主线程，
-/// 是后续异步化的前置（本次仍在主线程调用）。
-///
-/// 行数限制由 frame 高度承担，不用 `numberOfLines`：折叠态 title/abstract 的 frame 高度
-/// 正是按 maxLines 量出来的，配 `.truncatesLastVisibleLine` 即在末行加省略号
-///（`NSStringDrawingContext.maximumNumberOfLines` 是私有属性，SDK 头文件里没有，不采用）。
-///
-/// 坐标系（**容易写错，务必按这条来**）：plan 里所有 frame 都是**行坐标**——它的
-/// `cardX = cardMarginH`、`cardY = cardMarginV`，即行内容的左上角加了卡片外边距。
-/// 而画布是 `cardView` 的子视图，原点是卡片左上角 ⇒ 画布坐标 = 行坐标 − (cardMarginH,
-/// cardMarginV)。所以喂给画布的每一段 frame 都要过 `cardRect()`（子视图走 `place()` 是同
-/// 一条转换）。
-/// ⚠️ 这里曾写成"画布与 plan 的 frame 同属 cardView 局部坐标、零换算"，照它做就漏掉转换，
-/// 整组文字右下各偏 (16, 4)：名字压到头像下沿、标题右端顶出画布被提前截断（而截断是绘制
-/// 期才知道的，测量期判不出截断 ⇒「显示更多」不出现）。
-private final class TiebaFeedRowTextCanvas: UIView {
-  /// 一段要画的文字：**已完全解析**的属性串（字体/颜色/行高都烘进属性里）+ 绘制矩形。
-  ///
-  /// 不持有 UILabel：绘制走 `NSAttributedString.draw(with:options:context:)`——与
-  /// `UILabel` 底层同一套排版，但不需要 UIView 参与。这带来两件事：每行少 9 个视图对象，
-  /// 且该原语不绑主线程（异步化的前置，本次仍在主线程调用）。
-  struct Run {
-    let attributed: NSAttributedString
-    let frame: CGRect
-  }
-
-  /// 弱引用盒：缓存**不持有**模型，否则会把已被整页 LRU 淘汰的行钉在内存里
-  ///（模型的 NSAttributedString 才是大头）。
-  private final class ModelRef {
-    weak var value: AnyObject?
-    init(_ value: AnyObject) { self.value = value }
-  }
-
-  /// 一张缓存位图 + 它的**精确**身份。查找用逐字段比对而非哈希：身份是对象引用 +
-  /// 值比较的混合，逐字段比对更直接。
-  private struct Entry {
-    let model: ModelRef
-    let palette: TiebaFeedRowPalette
-    let size: CGSize
-    let scale: CGFloat
-    let style: UIUserInterfaceStyle
-    let image: CGImage
-    let bytes: Int
-    var lastUsed: UInt64
-  }
-
-  /// 位图预算。典型卡片（370×220pt @3x）约 2.9MB/张，24MB ≈ 8 张 ≈ 一屏多一点，
-  /// 覆盖"往回滚一屏"的命中需求。调大能覆盖滚更远，代价是常驻内存线性增长。
-  private static let byteBudget = 24 * 1024 * 1024
-  /// 单张位图上限：展开后的长文卡可以到一千多 pt 高（十几 MB），存它会把预算挤空、
-  /// 还把别的卡挤掉。这类卡仍然一次画好，只是不进缓存（它本来也不常被来回滚）。
-  private static let maxEntryBytes = 8 * 1024 * 1024
-  private static var entries: [Entry] = []
-  private static var useClock: UInt64 = 0
-
-  private var runs: [Run] = []
-  private var bakedModel: AnyObject?
-  private var bakedPalette: TiebaFeedRowPalette?
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    isOpaque = false
-    backgroundColor = .clear
-    isUserInteractionEnabled = false
-    isAccessibilityElement = false
-    accessibilityElementsHidden = true
-  }
-
-  required init?(coder: NSCoder) {
-    fatalError("init(coder:) is not supported")
-  }
-
-  /// 收集本轮要画的文字，并按 (模型, 色板, 尺寸, 缩放, 深浅档) 取或烘位图。
-  /// frame 已在 plan 里算好（卡片坐标），画布与 labelHost 同在 (0,0) 同尺寸，零换算。
-  func update(runs: [Run], model: AnyObject, palette: TiebaFeedRowPalette) {
-    self.runs = runs
-    bakedModel = model
-    bakedPalette = palette
-    applyBitmap()
-  }
-
-  /// 清空（无模型 / 置顶横幅行：卡片整体隐藏，内容不该留着上一行的位图）。
-  func clear() {
-    runs = []
-    bakedModel = nil
-    bakedPalette = nil
-    setContents(nil)
-  }
-
-  /// 外观档或色板变化时由宿主调用：整表作废。
-  /// **不在这里重烘**——`applyPalette` 是"先刷 layer 色、后 configure 文案色"，
-  /// 此刻属性串可能还是旧色，重烘会把旧色位图存进新键。宿主清掉 placedToken 后
-  /// 必然走一次完整布局，由 `update` 用配色完成的 runs 重烘。
-  static func invalidateCache() {
-    entries.removeAll()
-  }
-
-  // MARK: 位图
-
-  private var scaleForDisplay: CGFloat { max(traitCollection.displayScale, 1) }
-
-  private func applyBitmap() {
-    guard let model = bakedModel, let palette = bakedPalette else {
-      setContents(nil)
-      return
-    }
-    let size = bounds.size
-    guard !runs.isEmpty, size.width > 1, size.height > 1 else {
-      setContents(nil)
-      return
-    }
-    let scale = scaleForDisplay
-    let style = traitCollection.userInterfaceStyle
-
-    if let index = Self.indexOfHit(
-      model: model, palette: palette, size: size, scale: scale, style: style
-    ) {
-      Self.useClock &+= 1
-      Self.entries[index].lastUsed = Self.useClock
-      setContents(Self.entries[index].image)
-      return
-    }
-    guard let image = makeBitmap(size: size, scale: scale) else {
-      setContents(nil)
-      return
-    }
-    let bytes = Int(size.width * scale) * Int(size.height * scale) * 4
-    // 超长卡只画不存（见 maxEntryBytes）。
-    if bytes <= Self.maxEntryBytes {
-      Self.store(
-        Entry(
-          model: ModelRef(model),
-          palette: palette,
-          size: size,
-          scale: scale,
-          style: style,
-          image: image,
-          bytes: bytes,
-          lastUsed: Self.useClock
-        )
-      )
-    }
-    setContents(image)
-  }
-
-  /// 逐字段精确比对；顺带把模型已释放（弱引用空）的条目清出去。
-  private static func indexOfHit(
-    model: AnyObject,
-    palette: TiebaFeedRowPalette,
-    size: CGSize,
-    scale: CGFloat,
-    style: UIUserInterfaceStyle
-  ) -> Int? {
-    var hit: Int?
-    var index = entries.count - 1
-    while index >= 0 {
-      if entries[index].model.value == nil {
-        entries.remove(at: index)   // 模型已释放：这条缓存永远不可能再命中
-      } else if hit == nil,
-        entries[index].model.value === model,
-        entries[index].size == size,
-        entries[index].scale == scale,
-        entries[index].style == style,
-        entries[index].palette == palette {
-        hit = index
-      }
-      index -= 1
-    }
-    return hit
-  }
-
-  /// 存入并按预算淘汰最久未用的一张（绝不动刚存进来的这张）。
-  private static func store(_ entry: Entry) {
-    useClock &+= 1
-    var fresh = entry
-    fresh.lastUsed = useClock
-    entries.append(fresh)
-    var total = entries.reduce(0) { $0 + $1.bytes }
-    while total > byteBudget, entries.count > 1 {
-      var oldest = 0
-      for index in entries.indices where entries[index].lastUsed < entries[oldest].lastUsed {
-        oldest = index
-      }
-      guard entries[oldest].lastUsed != useClock else { break }
-      total -= entries[oldest].bytes
-      entries.remove(at: oldest)
-    }
-  }
-
-  private func makeBitmap(size: CGSize, scale: CGFloat) -> CGImage? {
-    let format = UIGraphicsImageRendererFormat()
-    format.scale = scale
-    format.opaque = false
-    let canvas = CGRect(origin: .zero, size: size)
-    let runs = self.runs
-    let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
-      for run in runs where run.frame.intersects(canvas) {
-        Self.draw(run)
-      }
-    }
-    return image.cgImage
-  }
-
-  /// 画一段文字。
-  ///
-  /// 两个必须复刻 UILabel 的细节：
-  /// 1. **垂直居中**。UILabel 把文字在 bounds 内居中；直接绘制是顶部对齐。名字行这类
-  ///    "frame 比文字自然高"的段（20pt frame / 15pt 字体 ≈ 17.9pt 自然高）不补偏移，
-  ///    整行字会上移约 1pt —— 属于肉眼能看出的"字没对齐"。
-  /// 2. **行数由 frame 高度天然限制**。`NSStringDrawingContext.maximumNumberOfLines` 是
-  ///    私有属性（SDK 头文件里没有），所以不靠它：折叠态的 title/abstract frame 高度
-  ///    正是按 maxLines 量出来的，配 `.truncatesLastVisibleLine` 就会在最后一行加省略号。
-  private static func draw(_ run: Run) {
-    let attributed = run.attributed
-    let frame = run.frame
-    guard attributed.length > 0, frame.width > 0, frame.height > 0 else { return }
-    // 有界量高：垂直居中只需要知道"自然高是否超过框高"——超框（截断态）inset
-    // 恒为 0。无界 .greatestFiniteMagnitude 会把折叠态长摘要的**全文**逐行排完
-    // （几十行 vs 实画 4 行，约 5-10 倍排版量）再整个丢弃；有界版排版在框高处
-    // 停，结果与无界版逐像素一致。
-    let natural = attributed.boundingRect(
-      with: CGSize(width: frame.width, height: frame.height),
-      options: [.usesLineFragmentOrigin],
-      context: nil
-    ).height
-    let inset = natural < frame.height ? max((frame.height - natural) / 2, 0) : 0
-    attributed.draw(
-      with: CGRect(
-        x: frame.minX,
-        y: frame.minY + inset,
-        width: frame.width,
-        height: frame.height - inset
-      ),
-      options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
-      context: nil
-    )
-  }
-
-  /// 直接写 `layer.contents`（不走 draw(_:)）。必须关掉隐式动画：cell 复用换位图时
-  /// 否则会看到一次淡入过渡。
-  private func setContents(_ image: CGImage?) {
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    layer.contents = image
-    layer.contentsScale = scaleForDisplay
-    CATransaction.commit()
-  }
-}
-
-// MARK: - 行视图
 
 public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   // MARK: - 协调者接口
@@ -992,6 +103,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     rowIndex = -1
     applying = false
     model = nil
+    syncCardMenuInteraction()
     placedToken = nil
     resetAnimations()
     resetContent()
@@ -1012,40 +124,58 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   /// playCollapseAnimation 的 completion 驱动，不再需要外部约这时长。
   public static var collapseDuration: CFTimeInterval { TiebaFeedRowMotion.collapseDuration }
 
-  /// 不感兴趣折叠（CollapseRow）：280ms、EASE_OUT、opacity + scaleY 同步 1→0；
-  /// 数据移除改由 completion 驱动（原 JS 的动画窗口后 360ms 兜底定时器）。
+  /// 不感兴趣折叠（CollapseRow）：280ms、EASE_OUT、opacity 1→0。
+  /// 数据移除仍由 completion 驱动（原 JS 的动画窗口后 360ms 兜底定时器已删）。
+  ///
+  /// **视觉高度与布局高度解耦**（TiebaApparentHeight）：动画只收**本视图的高度**
+  /// （顶边不动、内容裁剪），列表给的布局高度在动画结束、数据真正移除之后才变。
+  /// ⚠️ 改前是 `transform.scale.y`：整层连同**文字**一起被纵向压扁——文字在那个
+  /// 280ms 里被压成半高，是可见的缺陷（同仓查看器的缩放不用在文字上也是这个道理）。
   /// Reduce Motion 无动画可等，必须同步回调一次，否则列表永远不删数据。
   public func playCollapseAnimation(completion: (() -> Void)? = nil) {
-    if UIAccessibility.isReduceMotionEnabled {
-      layer.opacity = 0
-      layer.transform = CATransform3DMakeScale(1, 0, 1)
+    collapseState.setLayoutHeight(max(bounds.height, 0))
+    collapseState.beginTransition(to: 0)
+    isCollapsing = true
+    // 收缩期间必须裁剪：内容按完整高度摆好后**不再重排**（见 layoutSubviews 的
+    // isCollapsing 早退），高度收下去的部分由裁剪吃掉——这就是"不压扁文字"的关键。
+    clipsToBounds = true
+
+    let finish: () -> Void = { [weak self] in
+      guard let self else {
+        completion?()
+        return
+      }
+      self.collapseState.finishTransition()
+      self.isCollapsing = false
+      self.collapseAnimator = nil
       completion?()
+    }
+
+    guard !UIAccessibility.isReduceMotionEnabled else {
+      collapseState.setApparentHeight(0)
+      applyCollapseFrame()
+      alpha = 0
+      finish()
       return
     }
-    let group = CAAnimationGroup()
-    let opacity = CABasicAnimation(keyPath: "opacity")
-    opacity.fromValue = 1
-    opacity.toValue = 0
-    let scale = CABasicAnimation(keyPath: "transform.scale.y")
-    scale.fromValue = 1
-    scale.toValue = 0
-    group.animations = [opacity, scale]
-    group.duration = TiebaFeedRowMotion.collapseDuration
-    group.timingFunction = TiebaFeedRowMotion.easeOut
-    group.fillMode = .forwards
-    group.isRemovedOnCompletion = false
-    layer.opacity = 0
-    layer.transform = CATransform3DMakeScale(1, 0, 1)
-    if let completion {
-      // 完成块挂 CATransaction（同 tiebaPlaySpring）：动画被复用复位移除时
-      // 也会回调一次，删数据不会卡死在等不到的动画上。
-      CATransaction.begin()
-      CATransaction.setCompletionBlock(completion)
-      layer.add(group, forKey: "tieba.collapse")
-      CATransaction.commit()
-    } else {
-      layer.add(group, forKey: "tieba.collapse")
+    let animator = UIViewPropertyAnimator(
+      duration: TiebaFeedRowMotion.collapseDuration,
+      curve: .easeOut
+    ) { [weak self] in
+      guard let self else { return }
+      self.collapseState.setApparentHeight(0)
+      self.applyCollapseFrame()
+      self.alpha = 0
     }
+    animator.addCompletion { _ in finish() }
+    collapseAnimator = animator
+    animator.startAnimation()
+  }
+
+  /// 把视觉高度贴到本视图（TiebaApparentHeight.apparentFrame：只换高度，origin/宽度不动 →
+  /// 顶边不动，下面的行不会因为这次收缩而位移）。
+  private func applyCollapseFrame() {
+    frame = collapseState.apparentFrame(from: frame)
   }
 
   /// 复位行级动画（复用/换行）：动画 key 移除 + 终态归位，防止 transform/alpha
@@ -1053,6 +183,14 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   public func resetAnimations() {
     layer.removeAnimation(forKey: "tieba.entrance")
     layer.removeAnimation(forKey: "tieba.collapse")
+    // 折叠：停掉动画并复位折叠状态（高度由列表下次布局重新给，这里只保证
+    // alpha/裁剪/在途标记不串到下一行）。
+    collapseAnimator?.stopAnimation(true)
+    collapseAnimator = nil
+    isCollapsing = false
+    collapseState = TiebaApparentHeight(layoutHeight: max(bounds.height, 0))
+    clipsToBounds = false
+    alpha = 1
     layer.opacity = 1
     layer.transform = CATransform3DIdentity
     likeIconPopLayer?.removeAllAnimations()
@@ -1070,6 +208,11 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   // MARK: - 状态
 
   private var model: TiebaFeedRowModel?
+  /// 折叠退场的视觉高度（TiebaApparentHeight：布局高度不动，只收视觉高度）。
+  private var collapseState = TiebaApparentHeight(layoutHeight: 0)
+  private var collapseAnimator: UIViewPropertyAnimator?
+  /// 折叠在途：layoutSubviews 期间不重排内容（内容保持完整高度，被裁剪掉下半部分）。
+  private var isCollapsing = false
   /// 上次摆 frame 的输入指纹（模型身份 + 尺寸）：相同就不必再摆一遍（见 layoutSubviews）。
   private struct PlacedToken: Equatable {
     let model: ObjectIdentifier
@@ -1187,7 +330,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     stripScrollView.isHidden = true
     stripScrollView.showsHorizontalScrollIndicator = false
     stripScrollView.isDirectionalLockEnabled = true
-    stripScrollView.decelerationRate = .normal
+    stripScrollView.decelerationRate = TiebaMotionSpec.Scroll.systemDecelerationRate
     stripScrollView.backgroundColor = .clear
     stripScrollView.contentInsetAdjustmentBehavior = .never
     stripScrollView.delegate = self
@@ -1205,8 +348,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     // 吧名徽章
     chipView.isHidden = true
     chipView.backgroundColor = palette.chip
-    chipView.layer.cornerRadius = 20 // Radius.card
-    chipView.layer.cornerCurve = .continuous
+    // 药丸型（用户口径）：正圆端头 = circular 曲线 + 半径=半高（在 layout 里随
+    // 实际高度落定）。continuous 曲线在半径超半高时叠成"橄榄型"，已否。
+    chipView.layer.cornerCurve = .circular
     chipView.clipsToBounds = true
     chipAvatarView.contentMode = .scaleAspectFill
     chipAvatarView.clipsToBounds = true
@@ -1357,8 +501,21 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   /// 9 段静态文字：字体/颜色/行高全部在此解析成属性串，交给画布一次性绘制。
   /// 原来是 9 个 UILabel（各自 numberOfLines / textColor / attributedText），
   /// 现在只按 plan 的 frame 产出绘制项——**不建任何视图**。
-  /// 行数限制由 frame 高度天然承担（见 TiebaFeedRowTextCanvas.draw）。
-  private func makeRuns(model: TiebaFeedRowModel) -> [TiebaFeedRowTextCanvas.Run] {
+  /// 行数限制由 frame 高度天然承担（见 TiebaFeedGraphics 的逐段绘制）。
+  ///
+  /// **静态纯函数**：只吃 (模型, 色板, 引用卡显隐)，不读任何视图状态 —— 预取路径
+  /// （TiebaKindListView 的 prefetchItemsAt）没有行视图，却必须产出与画布**逐字段同键、
+  /// 同 runs** 的 Job（键里不含 runs，所以 runs 也必须同源），这里是那份输入的唯一产地。
+  ///
+  /// - Parameter quoteVisible: 引用卡是否显示。原实现读 `quoteCard.isHidden`（视图态），
+  ///   现在按纯模型派生（isQuoteVisible(model:)）—— 与 configureQuote 同一条判据。
+  ///   派生不引入差异：configureCard 里 configureQuote 恒在本函数之前跑，
+  ///   `!quoteCard.isHidden` ≡ `isQuoteVisible(model)`。
+  static func makeRuns(
+    model: TiebaFeedRowModel,
+    palette: TiebaFeedRowPalette,
+    quoteVisible: Bool
+  ) -> [TiebaFeedBitmapJob.Run] {
     let fonts = model.geometry.fonts
     let plan = model.plan
     var runs: [TiebaFeedRowTextCanvas.Run] = []
@@ -1367,9 +524,14 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     // 所以每一段都要过 cardRect 转换——子视图走 place() 是同一条转换。
     // 此前这里直接透传行坐标，整组文字右下各偏 (16, 4)：名字压在头像下沿、标题右端
     // 顶出画布被提前截断，而截断是绘制期才知道的，测量期判不出「显示更多」。
-    func add(_ attributed: NSAttributedString?, _ frame: CGRect?) {
-      guard let attributed, attributed.length > 0, let rect = cardRect(frame) else { return }
-      runs.append(.init(attributed: attributed, frame: rect))
+    // naturalHeight = **测量期已知的自然高**（阶段 0）：绘制期垂直居中不再需要先跑
+    // 一遍有界量高（旧实现每段两趟 CoreText 排版）。单行段直接给行高；多行段
+    //（title / abstract / quoteContent）用 plan 里带的未取整 usedRect 高（测量期与
+    // frame 同源，见 TiebaRowMetrics.measure 的 exactHeight）。任一段为 nil 时画布
+    // 仍回落旧行为（正确性不变，只是多一趟排版）。
+    func add(_ attributed: NSAttributedString?, _ frame: CGRect?, naturalHeight: CGFloat? = nil) {
+      guard let attributed, attributed.length > 0, let rect = Self.cardRect(frame) else { return }
+      runs.append(.init(attributed: attributed, frame: rect, naturalHeight: naturalHeight))
     }
     // 昵称 / IP：纯文本按当前色板着色（换主题即变）。
     add(
@@ -1377,7 +539,10 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
         string: model.displayName,
         attributes: [.font: fonts.displayName, .foregroundColor: palette.text]
       ),
-      plan.displayNameFrame
+      plan.displayNameFrame,
+      // 名字段是**唯一**用内联属性（无 paragraphStyle）建的段：它的自然高 = 字体行高，
+      // 而 frame 高 = lineHeights.subhead，两者差 ≈1pt —— 旧实现的垂直居中偏移就来自这里。
+      naturalHeight: fonts.displayName.lineHeight
     )
     // 元信息（@昵称 + 时间）是一个串：色按当前色板统一覆盖（模型侧只写语义色）。
     if let meta = model.metaAttributed {
@@ -1387,7 +552,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
         value: palette.textSecondary,
         range: NSRange(location: 0, length: colored.length)
       )
-      add(colored, plan.metaFrame)
+      // meta 是 makeAttributed 建的（min/maximumLineHeight = lineHeights.subhead）：
+      // 单行自然高恒等于 frame 高 ⇒ inset 0（旧实现量出来也是 0，只是白排一趟）。
+      add(colored, plan.metaFrame, naturalHeight: model.geometry.lineHeights.subhead)
     }
     if let ip = model.ipText, !ip.isEmpty {
       add(
@@ -1395,30 +562,56 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
           string: ip,
           attributes: [.font: fonts.ip, .foregroundColor: palette.textSecondary]
         ),
-        plan.ipFrame
+        plan.ipFrame,
+        naturalHeight: fonts.ip.lineHeight
       )
     }
     // 正文：attributed 已在测量期构建（含行高），这里只补「精品」前缀色。
     if let title = model.titleAttributed {
-      add(titleAttributed(title, prefix: model.titlePrefix), plan.titleFrame)
+      add(
+        Self.titleAttributed(title, prefix: model.titlePrefix, palette: palette),
+        plan.titleFrame,
+        naturalHeight: plan.naturalTitleHeight
+      )
     }
-    add(model.abstractAttributed, plan.abstractFrame)
+    add(model.abstractAttributed, plan.abstractFrame, naturalHeight: plan.naturalAbstractHeight)
     if model.isCollapsible && !model.expanded, !model.showMoreText.isEmpty {
       add(
         NSMutableAttributedString(
           string: model.showMoreText,
           attributes: [.font: fonts.showMore, .foregroundColor: palette.primary]
         ),
-        plan.showMoreTextFrame
+        plan.showMoreTextFrame,
+        // frame 高 = lineHeights.subhead + 4（showMore.marginTop 之上的 2 + 2），
+        // 自然高 = 一行 ⇒ 旧实现给的是 2pt 的居中偏移，这里逐字复刻。
+        naturalHeight: model.geometry.lineHeights.subhead
       )
     }
     // 引用帖三段：仅当引用卡显示时画（卡片隐藏时其文字也不该出现）。
-    if !quoteCard.isHidden {
-      add(model.quoteForumAttributed, plan.quoteForumFrame)
-      add(model.quoteTitleAttributed, plan.quoteTitleFrame)
-      add(model.quoteContentAttributed, plan.quoteContentFrame)
+    if quoteVisible {
+      add(
+        model.quoteForumAttributed,
+        plan.quoteForumFrame,
+        naturalHeight: model.geometry.lineHeights.quoteForum
+      )
+      add(
+        model.quoteTitleAttributed,
+        plan.quoteTitleFrame,
+        naturalHeight: model.geometry.lineHeights.quoteTitle
+      )
+      add(
+        model.quoteContentAttributed,
+        plan.quoteContentFrame,
+        naturalHeight: plan.naturalQuoteContentHeight
+      )
     }
     return runs
+  }
+
+  /// 实例转发（**薄**，只为不动既有调用点语义）：引用卡显隐按纯模型派生，
+  /// 与 configureQuote 同判据。见静态 makeRuns(model:palette:quoteVisible:)。
+  private func makeRuns(model: TiebaFeedRowModel) -> [TiebaFeedRowTextCanvas.Run] {
+    Self.makeRuns(model: model, palette: palette, quoteVisible: Self.isQuoteVisible(model: model))
   }
 
   // MARK: - 主题重刷
@@ -1460,6 +653,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     } else {
       configureCard(with: model)
     }
+    // 卡片长按菜单开关随模型走（换行/换页/同页重配都在这里收敛）。
+    syncCardMenuInteraction()
     configuredIdentity = identityKey
     accessibilityLabel = makeAccessibilityLabel(for: model)
   }
@@ -1602,14 +797,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
       TiebaHeroTransition.markImage(singleMediaView.heroImageView, threadId: model.threadId)
       if !isSameRow {
         let height = model.singleMediaHeight ?? 0
-        if media?.isGif == true, let gifURL = media?.originURL ?? url {
-          // GIF 档：真身是 originURL（mapper 的 gifChain），url 常是静态预览帧。
-          singleMediaView.loadGif(
-            url: gifURL,
-            targetSize: singleMediaView.bounds.size,
-            isStale: { [weak self] in self?.model !== model }
-          )
-        } else if height > 0 {
+        if height > 0 {
           // fit 显示档：位图 = 显示框像素 + 圆角烘焙（容器已去 clipsToBounds）。
           // 半径与上方 configure(cornerRadius: 16) 同源（Radius.card - 4）。
           singleMediaView.loadFitDisplay(
@@ -1628,11 +816,16 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     }
   }
 
+  /// 引用卡是否显示：**纯模型派生**，判据的唯一定义处。configureQuote 用它决定卡片底
+  /// 的显隐，静态 makeRuns 用它决定三段引用文字进不进画布，预取路径同样调它 ——
+  /// 预取时没有行视图、读不到 quoteCard.isHidden，三处必须是同一条判据。
+  static func isQuoteVisible(model: TiebaFeedRowModel) -> Bool {
+    model.quoteForumText != nil || model.quoteTitleText != nil || model.quoteContentText != nil
+  }
+
   /// 引用帖：只决定卡片底的显隐。三段文字由 makeRuns 按同一判据产出（见该处）。
   private func configureQuote(with model: TiebaFeedRowModel) {
-    guard model.quoteForumText != nil || model.quoteTitleText != nil || model.quoteContentText != nil else {
-      return
-    }
+    guard Self.isQuoteVisible(model: model) else { return }
     quoteCard.isHidden = false
   }
 
@@ -1684,8 +877,13 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     }
   }
 
-  /// 标题串：「精品」前缀段按当前色板的 warning 补色（模型只存文案，换主题即变）。
-  private func titleAttributed(_ attributed: NSAttributedString, prefix: String?) -> NSAttributedString {
+  /// 标题串：「精品」前缀段按色板的 warning 补色（模型只存文案，换主题即变）。
+  /// static：makeRuns 抽成静态纯函数后这里不能再读实例的 palette（预取路径没有实例）。
+  private static func titleAttributed(
+    _ attributed: NSAttributedString,
+    prefix: String?,
+    palette: TiebaFeedRowPalette
+  ) -> NSAttributedString {
     guard let prefix, !prefix.isEmpty, attributed.length >= (prefix as NSString).length else {
       return attributed
     }
@@ -1754,6 +952,48 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     case "copy-title": return "复制标题"
     default: return option
     }
+  }
+
+  // MARK: - 卡片长按菜单（与长按图片同一套：UIContextMenuInteraction + UITargetedPreview + UIMenu）
+
+  /// 卡片长按菜单的交互实例（开关见 syncCardMenuInteraction）。
+  private var cardMenuInteraction: UIContextMenuInteraction?
+
+  /// 卡片长按菜单开关（页面按行字典 cardContextMenu 下发）：只在启用时挂交互，
+  /// 关闭态零手势开销 —— 与图片菜单的 syncContextMenuInteraction 同策略。
+  ///
+  /// 宿主是**文字画布** textCanvas，不是 self / cardView：画布覆盖整卡、又压在图片/
+  /// 头像/徽章/操作栏等子视图**之下**，命中链与那些子视图**互不相交** —— 手指落在
+  /// 图片上时画布不在链里，图片那套长按菜单原样生效；同一行不会有两套长按抢手势。
+  ///
+  /// 菜单项固定四项，动作经 onMenuAction 回传页面（与右上角「更多」同一出口）：
+  /// "share" 分享帖子 · "copy-content" 复制帖子内容 · "dislike" 不感兴趣 ·
+  /// "block" 屏蔽作者 —— **启用本菜单的页面必须四个都接线**。
+  private func syncCardMenuInteraction() {
+    let enabled = model?.showsCardContextMenu == true && model?.isTopBanner != true
+    if enabled {
+      if cardMenuInteraction == nil {
+        let interaction = UIContextMenuInteraction(delegate: self)
+        textCanvas.addInteraction(interaction)
+        cardMenuInteraction = interaction
+      }
+    } else if let interaction = cardMenuInteraction {
+      textCanvas.removeInteraction(interaction)
+      cardMenuInteraction = nil
+    }
+  }
+
+  /// 菜单身份 = 页键 # 行号 # 帖子 id。菜单是异步的：动作触发那一刻本视图可能已被
+  /// 复用/换页（页级 reload + 翻页模型），身份对不上就丢弃这次动作 —— 宁可什么都不做，
+  /// 也不能把「屏蔽作者」落到另一张帖子上。
+  private var cardMenuIdentity: String? {
+    guard let model, let identityKey else { return nil }
+    return "\(identityKey)#\(model.threadId)"
+  }
+
+  private func emitCardMenuAction(_ action: String, identity: String) {
+    guard cardMenuIdentity == identity else { return }
+    onMenuAction?(action)
   }
 
   /// 操作栏按压（UIControl 跟踪）：三键统一 0.45 透明度；点赞另外承担蓄力
@@ -1830,6 +1070,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     guard !UIAccessibility.isReduceMotionEnabled, let layer = likeIconPopLayer else { return }
     tiebaPlaySpring(
       on: layer,
+      host: self,
       property: .scale,
       from: 1,
       to: 1.35,
@@ -1845,6 +1086,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     guard let layer = likeIconPopLayer else { return }
     tiebaPlaySpring(
       on: layer,
+      host: self,
       property: .scale,
       from: TiebaAnimatedProperty.scale.current(of: layer),
       to: value,
@@ -1860,15 +1102,17 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     guard !UIAccessibility.isReduceMotionEnabled, let layer = likeCountPopLayer else { return }
     tiebaPlaySpring(
       on: layer,
+      host: self,
       property: .scale,
       from: 1,
       to: 1.28,
       spring: TiebaFeedRowMotion.countBump,
       key: "tieba.countBump"
     ) { [weak self] in
-      guard let layer = self?.likeCountPopLayer else { return }
+      guard let self, let layer = self.likeCountPopLayer else { return }
       tiebaPlaySpring(
         on: layer,
+        host: self,
         property: .scale,
         from: 1.28,
         to: 1,
@@ -1882,6 +1126,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
 
   public override func layoutSubviews() {
     super.layoutSubviews()
+    // 折叠动画在途：**不重排**。高度在收，内容是按完整高度摆好的那一份，
+    // 由 clipsToBounds 裁掉下半部分（重排的话就成了"内容跟着缩"，不是折叠）。
+    guard !isCollapsing else { return }
     guard let model else {
       // 模型被清掉（换行 / 页还没测完）：画布必须一起清空，否则会留着上一行的文字。
       textCanvas.clear()
@@ -1925,7 +1172,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     avatarView.frame = avatarContainer.bounds
     place(menuButton, plan.menuButtonFrame)
 
-    if let mediaFrame = cardRect(plan.mediaFrame) {
+    if let mediaFrame = Self.cardRect(plan.mediaFrame) {
       singleMediaView.frame = mediaFrame
       stripScrollView.frame = mediaFrame
       stripScrollView.contentSize = CGSize(width: plan.mediaContentWidth, height: mediaFrame.height)
@@ -1965,6 +1212,8 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
       chipLabel.frame = .zero
     }
     chipAvatarView.layer.cornerRadius = chipAvatarView.bounds.width / 2
+    // 药丸端头半径 = 实际高的一半（帧高固定 ~28pt，写死会随字号档漂移）。
+    chipView.layer.cornerRadius = chipView.bounds.height / 2
 
     for (index, item) in actionItems.enumerated() {
       guard index < plan.actionButtonFrames.count,
@@ -1973,7 +1222,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
         break
       }
       let button = plan.actionButtonFrames[index]
-      item.frame = cardRect(button) ?? .zero
+      item.frame = Self.cardRect(button) ?? .zero
       let icon = plan.actionIconFrames[index]
       let label = plan.actionLabelFrames[index]
       item.layout(
@@ -1987,8 +1236,9 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
     textCanvas.update(runs: runs, model: model, palette: palette)
   }
 
-  /// 行坐标 → 卡片坐标。
-  private func cardRect(_ rect: CGRect?) -> CGRect? {
+  /// 行坐标 → 卡片坐标。static：静态 makeRuns 也要做这条换算（预取路径没有视图实例），
+  /// 换算只有这一处定义，免得两处各写一遍偏移量。
+  private static func cardRect(_ rect: CGRect?) -> CGRect? {
     guard let rect else { return nil }
     return rect.offsetBy(
       dx: -TiebaFeedRowLayout.cardMarginH,
@@ -2094,7 +1344,7 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
   }
 
   private func place(_ view: UIView, _ rect: CGRect?) {
-    view.frame = cardRect(rect) ?? .zero
+    view.frame = Self.cardRect(rect) ?? .zero
   }
 
   private func placeBanner(_ view: UIView, _ rect: CGRect?, in bannerFrame: CGRect) {
@@ -2171,21 +1421,115 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
             model.media.indices.contains(index)
       else { continue }
       let media = model.media[index]
-      if media.isGif, let gifURL = media.originURL ?? media.url {
-        // GIF 档：动图真身走 Gifu；帧按这一格真实尺寸重采样（同下方显示档口径）。
-        stripItems[index].loadGif(
-          url: gifURL,
-          targetSize: frames[index].size,
-          isStale: { [weak self] in self?.model !== model }
-        )
-      } else {
-        stripItems[index].loadDisplay(
-          url: media.url,
-          targetSize: frames[index].size,
-          cornerRadius: 0,
-          scale: scale
-        )
-      }
+      stripItems[index].loadDisplay(
+        url: media.url,
+        targetSize: frames[index].size,
+        cornerRadius: 0,
+        scale: scale
+      )
     }
+  }
+}
+
+// MARK: - 卡片长按菜单（分享帖子 / 复制帖子内容 / 不感兴趣 / 屏蔽作者）
+
+/// 长按卡片 → 系统上下文菜单：卡片本身被 lift 凸显、菜单在下方。
+/// 与「长按图片」（TiebaFeedRowMediaItemView 同一套系统机制）分工：图片格上的
+/// 长按仍归图片菜单（画布在命中链之外），卡片文字/空白上的长按归本菜单。
+extension TiebaFeedRowView: UIContextMenuInteractionDelegate {
+  public func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction,
+    configurationForMenuAtLocation location: CGPoint
+  ) -> UIContextMenuConfiguration? {
+    guard let model, model.showsCardContextMenu, !model.isTopBanner,
+          let identity = cardMenuIdentity, bounds.width > 1 else { return nil }
+    // [采用] 惯性滚动中长按一律不成立（图片/帖子行同一守卫，见 TiebaDecelerationGuard）。
+    // 宿主取 window：列表的滚动视图在行视图**之上**，而该守卫只向下递归 —— 传行视图
+    // 或画布都探不到集合视图，传 window（点的坐标一并换算到 window）才真的生效。
+    if let window = self.window,
+       !TiebaDecelerationGuard.shouldAllowLongPress(at: convert(location, to: window), in: window) {
+      return nil
+    }
+    let actionProvider: UIContextMenuActionProvider = { [weak self] _ in
+      // 手势到菜单呈现之间行被换掉 → 整套菜单作废（菜单项属于另一张帖子）。
+      guard let self, self.cardMenuIdentity == identity else { return nil }
+      let actions: [UIAction] = [
+        UIAction(title: "分享帖子", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
+          self?.emitCardMenuAction("share", identity: identity)
+        },
+        UIAction(title: "复制帖子内容", image: UIImage(systemName: "doc.on.doc")) { [weak self] _ in
+          self?.emitCardMenuAction("copy-content", identity: identity)
+        },
+        UIAction(title: "不感兴趣", image: UIImage(systemName: "hand.thumbsdown")) { [weak self] _ in
+          self?.emitCardMenuAction("dislike", identity: identity)
+        },
+        UIAction(title: "屏蔽作者", image: UIImage(systemName: "person.crop.circle.badge.xmark")) { [weak self] _ in
+          self?.emitCardMenuAction("block", identity: identity)
+        },
+      ]
+      return UIMenu(children: actions)
+    }
+    return UIContextMenuConfiguration(
+      identifier: nil,
+      previewProvider: nil,
+      actionProvider: actionProvider
+    )
+  }
+
+  /// 升起锚点 = **整张卡片**（cardView）：卡片区域 + 圆角（Radius.card=20，与
+  /// cardView.layer 同源）。方法名一个字都不能简写/错位（写成 previewForHighlighting
+  /// 这类"几乎匹配"的名字只编译告警、系统永不调用，锚点静默失效）；新旧两个协议名
+  /// 都给，两个入口落到同一份实现 —— 与图片/帖子行的既有防御同款。
+  private func tiebaCardHighlightPreview() -> UITargetedPreview? {
+    guard cardView.tiebaIsOnScreen, cardView.bounds.width > 1 else { return nil }
+    let parameters = UIPreviewParameters()
+    parameters.visiblePath = UIBezierPath(
+      roundedRect: cardView.bounds,
+      cornerRadius: cardView.layer.cornerRadius
+    )
+    // 卡片四角是透明的：不显式给 clear，系统会给 lift 出来的预览垫一层白底。
+    parameters.backgroundColor = .clear
+    return UITargetedPreview(view: cardView, parameters: parameters)
+  }
+
+  public func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction,
+    configuration: UIContextMenuConfiguration,
+    highlightPreviewForItemWithIdentifier identifier: any NSCopying
+  ) -> UITargetedPreview? {
+    tiebaCardHighlightPreview()
+  }
+
+  /// 收起不飞回（与图片菜单一致：iOS 26+ 飞回路径留白风险）。
+  public func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction,
+    configuration: UIContextMenuConfiguration,
+    dismissalPreviewForItemWithIdentifier identifier: any NSCopying
+  ) -> UITargetedPreview? {
+    nil
+  }
+
+  /// （旧协议名，见上：与 identifier 形态同一份实现。）
+  public func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction,
+    previewForHighlightingMenuWithConfiguration configuration: UIContextMenuConfiguration
+  ) -> UITargetedPreview? {
+    tiebaCardHighlightPreview()
+  }
+
+  public func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction,
+    previewForDismissingMenuWithConfiguration configuration: UIContextMenuConfiguration
+  ) -> UITargetedPreview? {
+    nil
+  }
+
+  /// 菜单升起瞬间的触觉：与长按图片同一个「升起」瞬态（长按卡片不再是静默的）。
+  public func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction,
+    willDisplayMenuFor configuration: UIContextMenuConfiguration,
+    animator: UIContextMenuInteractionAnimating?
+  ) {
+    TiebaSceneHaptics.playImageLift()
   }
 }
