@@ -268,6 +268,8 @@ struct TiebaFormRow {
   var step: Double = 0
   /// slider：实时示例文案（无级调节时用户要能看到字号在变）。
   var previewText: String?
+  /// slider：默认档（「重置」按钮的目标值）。nil = 这一行没有默认档，不显示重置按钮。
+  var defaultValue: Double?
 
 
   /// 行内文字字体（SwiftUI textStyle 名 → 系统动态字体，跟随 Dynamic Type）。
@@ -360,6 +362,8 @@ final class TiebaFormListView: UIView {
   /// 隐藏是**数据源级**的删行：这样 tableView 的插入/删除动画才能给出"杆子
   /// 收回/展开"的高度动画，而不是瞬切（用户明确要求显隐要有动画）。
   private var hiddenRowIDs: Set<String> = []
+  /// 拖动中被推迟的整表重排（见 reloadTableDeferringWhileTracking）。
+  private var pendingReload = false
   /// 主色（nil = 系统默认，见 tintHex）
   private var accent: UIColor?
   /// trait 登记令牌（registerForTraitChanges 的返回值需持有）。
@@ -411,7 +415,7 @@ final class TiebaFormListView: UIView {
 
   private func rebuild() {
     model = sections.indices.map { visibleRows(inSection: $0) }
-    tableView.reloadData()
+    reloadTableDeferringWhileTracking()
   }
 
   /// 某分组当前应显示的行（整份 sections 减去被隐藏的 id）。
@@ -453,6 +457,40 @@ final class TiebaFormListView: UIView {
   /// 一次 reload 的代价可忽略；调用方负责在拖动结束后再调（拖动中 reload 会把
   /// 正在被按住的滑杆一起重建，手感直接断）。
   func refreshTypography() {
+    reloadTableDeferringWhileTracking()
+  }
+
+  /// reloadData 的**唯一出口**：有滑杆正被手指按着时推迟到松手之后。
+  ///
+  /// 为什么必须推迟：reloadData 会把可见 cell 收回复用池，而被按住的那一格里的
+  /// UISlider **仍在跟踪**这次触摸；它一旦被复用给另一条滑杆行，后续每一格拖动
+  /// 事件都会打到另一行的字号上 —— 用户实测「拖着一个，拖着拖着变成拖动另一个」。
+  /// （拖动中 0.35s 没有新值就会触发一次字号重排，手指停一下必中。）
+  private func reloadTableDeferringWhileTracking() {
+    if isAnySliderTracking {
+      pendingReload = true
+      return
+    }
+    pendingReload = false
+    tableView.reloadData()
+  }
+
+  /// 是否有可见的滑杆行正在被拖动。
+  private var isAnySliderTracking: Bool {
+    guard let indexPaths = tableView.indexPathsForVisibleRows else { return false }
+    for indexPath in indexPaths {
+      let cell = tableView.cellForRow(at: indexPath) as? TiebaFormSliderCell
+      if cell?.isTrackingSlider == true {
+        return true
+      }
+    }
+    return false
+  }
+
+  /// 滑杆松手：把之前推迟的重排补上（rebuild 与 refreshTypography 共用同一出口）。
+  private func sliderTrackingChanged(_ tracking: Bool) {
+    guard !tracking, pendingReload else { return }
+    pendingReload = false
     tableView.reloadData()
   }
 
@@ -586,6 +624,11 @@ extension TiebaFormListView: UITableViewDataSource, UITableViewDelegate {
     )
     // 一次协议转换代替原来的 10 分支 switch：注册表保证 dequeue 出来的就是映射表里的类，
     // 而映射表里的类全部实现协议（见文件下方一致性扩展）。
+    // 滑杆行：拖动起止回报给列表层（决定 reloadData 能不能现在做）。
+    // 每次出队都重设：cell 是复用的，上一次的闭包可能指向别的行。
+    (cell as? TiebaFormSliderCell)?.onTrackingChanged = { [weak self] tracking in
+      self?.sliderTrackingChanged(tracking)
+    }
     if let configuring = cell as? TiebaFormCellConfiguring {
       configuring.apply(row, context: context)
     } else {
