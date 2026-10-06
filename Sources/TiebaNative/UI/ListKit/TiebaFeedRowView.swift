@@ -534,15 +534,20 @@ public final class TiebaFeedRowView: UIView, UIScrollViewDelegate {
       runs.append(.init(attributed: attributed, frame: rect, naturalHeight: naturalHeight))
     }
     // 昵称 / IP：纯文本按当前色板着色（换主题即变）。
+    // ⚠️ 昵称必须与紧随其后的元信息（@昵称 + 时间）走**同一段落行高**（lineHeights.subhead）：
+    // 改前这里是唯一的「无 paragraphStyle」段（自然高 = 字体行高 ≈17.9），而 frame 高 = 20、
+    // 元信息段的自然高 = 20 —— 两个不同的居中基准 ⇒ 同一行里昵称比「回复于 xx 前」高约 1pt
+    //（用户 2026-10-06 报「用户名与回复于 xx 前没有居中对齐在一条线上」，真机像素实测 1.0-1.2pt）。
+    // 同段落后两者逐位同基线（同 frame 高 + 同自然高 ⇒ 同 inset）。
     add(
-      NSMutableAttributedString(
-        string: model.displayName,
-        attributes: [.font: fonts.displayName, .foregroundColor: palette.text]
+      TiebaFeedRowLayout.makeAttributed(
+        text: model.displayName,
+        font: fonts.displayName,
+        color: palette.text,
+        lineHeight: model.geometry.lineHeights.subhead
       ),
       plan.displayNameFrame,
-      // 名字段是**唯一**用内联属性（无 paragraphStyle）建的段：它的自然高 = 字体行高，
-      // 而 frame 高 = lineHeights.subhead，两者差 ≈1pt —— 旧实现的垂直居中偏移就来自这里。
-      naturalHeight: fonts.displayName.lineHeight
+      naturalHeight: model.geometry.lineHeights.subhead
     )
     // 元信息（@昵称 + 时间）是一个串：色按当前色板统一覆盖（模型侧只写语义色）。
     if let meta = model.metaAttributed {
