@@ -90,6 +90,10 @@ enum TiebaThemePalette {
     case "grey_dark": return "#9AA3B2"
     case "amoled_dark": return "#5B9BFF"
     case "dark": return "#60A5FA"
+    case "tieba":
+      // 品牌蓝 #208AEF（仓内已知值）：此前落 default 分支，与「默认」主题逐值相同，
+      // 选「贴吧蓝」唯一效果是设置行图标变单色。深端按 custom 同一套提亮规则。
+      return isDark ? darkAdapted("#208AEF") : "#208AEF"
     case "custom":
       let primary = hex(customPrimary) ?? defaultCustomPrimary
       return isDark ? darkAdapted(primary) : primary

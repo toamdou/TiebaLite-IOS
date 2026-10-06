@@ -384,16 +384,21 @@ final class TiebaSkeletonCellView: UIView {
   // MARK: post（PostCard 同形）
 
   private func buildPost() {
-    let surface = makeSurface(radius: TiebaSkeletonMetrics.cardRadius)
+    // 评审 H8：帖子骨架卡必须用**帖子**那一族的几何（TiebaPostRowLayout），不能借信息流族的常量。
+    // 改前症状：真实楼层卡是 marginH 10 / radius 16（用户反馈"与屏幕两边距离太大"从 16 收到 10），
+    // 骨架却用 feed 族的 16 / 20 ⇒ ① 有快照进帖时，页头里已加载的主贴占位卡（正确用 10）与下方
+    // 5 条骨架行（16）同屏左右边缘不齐；② 无快照/深链进帖时首包落地整块卡每边横移 6pt、圆角收窄。
+    // 改后行为：同一常量源，骨架与真实楼层卡边缘、圆角严丝合缝，落地不再横移。
+    let surface = makeSurface(radius: TiebaPostRowLayout.cardRadius)
     addSubview(surface)
     let inner = UIView()
     inner.translatesAutoresizingMaskIntoConstraints = false
     surface.addSubview(inner)
     NSLayoutConstraint.activate([
-      surface.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TiebaFeedRowLayout.cardMarginH),
-      surface.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -TiebaFeedRowLayout.cardMarginH),
-      surface.topAnchor.constraint(equalTo: topAnchor, constant: TiebaFeedRowLayout.cardMarginV),
-      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -TiebaFeedRowLayout.cardMarginV),
+      surface.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TiebaPostRowLayout.cardMarginH),
+      surface.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -TiebaPostRowLayout.cardMarginH),
+      surface.topAnchor.constraint(equalTo: topAnchor, constant: TiebaPostRowLayout.cardMarginV),
+      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -TiebaPostRowLayout.cardMarginV),
       inner.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: TiebaSkeletonMetrics.postPadding),
       inner.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -TiebaSkeletonMetrics.postPadding),
       inner.topAnchor.constraint(equalTo: surface.topAnchor, constant: TiebaSkeletonMetrics.postPadding),
