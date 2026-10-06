@@ -552,7 +552,8 @@ enum TiebaTopicHeaderLayout {
     return TiebaSimpleText.makeAttributed(
       text: text,
       font: font,
-      lineHeight: TiebaSimpleText.lineHeight(lineHeight, font: font)
+      lineHeight: TiebaSimpleText.lineHeight(
+        lineHeight, font: font, scale: TiebaTypography.uiScale())
     )
   }
 }

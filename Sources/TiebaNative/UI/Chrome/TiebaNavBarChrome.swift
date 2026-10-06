@@ -26,6 +26,10 @@ enum TiebaChrome {
     /// 已写过"透明外观"的栏（弱引用，随栏释放自动清理）。
     /// 只写一次：写 appearance 会让 UIKit 重建栏底，周期性重写 = 周期性重建。
     nonisolated(unsafe) static let transparentAppearanceBars = NSHashTable<UINavigationBar>.weakObjects()
+    /// 上一次把字体写进栏 appearance 时的**字号世代**（TiebaTypography.generation）。
+    /// 栏外观是"写过即不再写"的记账（transparentAppearanceBars），字体变了必须让
+    /// 全部栏重写一次——这里存世代当失效信号，见 applyChromeTypographyIfNeeded。
+    nonisolated(unsafe) static var typographyGeneration: UInt64 = .max
 
     // ── 空转治理（2026-09-12 发热审查）──
     // force 每次要做两趟视图树全量遍历：collectChromeBars 扫所有窗口的
@@ -172,7 +176,27 @@ enum TiebaChrome {
   static func installNavBarChromeHooks() {
     _ = navChromeHooks
     _ = navChromeScrollHooks
+    _ = typographyObserverInstall
   }
+
+  /// 界面字号变化 → 导航栏标题字体要重贴。
+  /// 栏 appearance 只在挂载时写一次（见 applyBarAppearance 的记账），没有这个
+  /// 信号就会出现"设置里调了界面字号，顶栏标题还是旧大小"。这里只标脏 + 排一次
+  /// tick，真正的重写在重扫里做（事件驱动，不新增周期任务）。
+  private nonisolated(unsafe) static var typographyObserver: NSObjectProtocol?
+
+  /// 幂等：装一次观察者（TiebaPreferenceChange 是主队列广播）。
+  private static let typographyObserverInstall: Void = {
+    typographyObserver = TiebaPreferenceChange.observe(
+      keys: [
+        TiebaTypography.bodySizeKey, TiebaTypography.uiSizeKey, TiebaTypography.followsBodyKey,
+      ]
+    ) {
+      TiebaChrome.markChromeDirty()
+      TiebaChrome.scheduleChromeTick()
+    }
+    return ()
+  }()
 
   // 顶栏 chrome 的幂等重挂入口（v3 起，2026-08-22；v34 起职责收窄）：窗口
   // 底色/窗口 trait、导航容器底色、栏外观（透明）、双击回顶手势、滚动边缘模糊
@@ -398,6 +422,15 @@ enum TiebaChrome {
     let scrollEdge = UINavigationBarAppearance()
     scrollEdge.configureWithTransparentBackground()
     scrollEdge.shadowColor = .clear
+    // 栏标题字体：系统默认是 headline(17 semibold)。**显式写一份 = 界面字号 ×
+    // 系统 Dynamic Type**（TiebaSimpleText.scaledFont 与全仓界面文本同一条换算），
+    // 不写就永远停在系统 17pt —— 设置里调界面字号，顶栏标题不动（用户口径：
+    // "字体大小调节意味着很多界面组件都要同步调节"）。其余栏元素（返回键、
+    // 右侧按钮）走各自 VC 的 UIButton.Configuration，不在这里。
+    let titleFont = TiebaSimpleText.scaledFont(
+      size: 17, weight: .semibold, scale: TiebaTypography.uiScale())
+    standard.titleTextAttributes = [.font: titleFont]
+    scrollEdge.titleTextAttributes = [.font: titleFont]
     bar.standardAppearance = standard
     bar.compactAppearance = standard
     bar.scrollEdgeAppearance = scrollEdge
@@ -527,6 +560,12 @@ enum TiebaChrome {
     var applied = false
     CATransaction.begin()
     CATransaction.setDisableActions(true)
+    // 界面字号变过 ⇒ 作废"栏外观已写"的记账，让下面每个栏都重写一次 appearance
+    // （字体烙在 appearance 里，不重写就停在旧档）。世代只在字号真变时 +1。
+    if ChromeState.typographyGeneration != TiebaTypography.generation {
+      ChromeState.transparentAppearanceBars.removeAllObjects()
+      ChromeState.typographyGeneration = TiebaTypography.generation
+    }
     for navBar in chromeBars.navBars {
       // 栏内按压判定（HDR 高光 + 轻触觉）与双击回顶手势：两者在 bar 挂载钩子里
       // 已装好（见 navChromeScrollHooks.didMoveToWindow），这里幂等补齐

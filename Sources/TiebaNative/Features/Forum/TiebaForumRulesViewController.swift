@@ -291,7 +291,7 @@ private final class TiebaRuleSectionHeaderView: UITableViewHeaderFooterView {
 
   override init(reuseIdentifier: String?) {
     super.init(reuseIdentifier: reuseIdentifier)
-    chip.font = .systemFont(ofSize: 13, weight: .heavy)
+    chip.font = TiebaSimpleText.font(size: 13, weight: .heavy)
     chip.textColor = TiebaNavigator.shared.chromeTheme.tint
     chip.textAlignment = .center
     chip.translatesAutoresizingMaskIntoConstraints = false
@@ -299,7 +299,7 @@ private final class TiebaRuleSectionHeaderView: UITableViewHeaderFooterView {
     chipBox.layer.cornerRadius = 12
     chipBox.translatesAutoresizingMaskIntoConstraints = false
     chipBox.addSubview(chip)
-    titleLabel.font = .preferredFont(forTextStyle: .headline)
+    titleLabel.font = TiebaSimpleText.uiFont(style: .headline)
     titleLabel.textColor = .label
     titleLabel.numberOfLines = 0
 
@@ -336,7 +336,7 @@ private final class TiebaRuleSectionHeaderView: UITableViewHeaderFooterView {
 private final class TiebaRuleTitleCell: UITableViewCell {
   static let reuseID = "TiebaRuleTitleCell"
   private let label = TiebaSelectableLabel(
-    font: .systemFont(ofSize: 27, weight: .heavy), color: .label
+    font: TiebaSimpleText.font(size: 27, weight: .heavy), color: .label
   )
 
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -370,10 +370,10 @@ private final class TiebaRuleAuthorCell: UITableViewCell {
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
     selectionStyle = .none
-    nameLabel.font = UIFont.tiebaFormFont(.preferredFont(forTextStyle: .subheadline), weight: .semibold)
+    nameLabel.font = UIFont.tiebaFormFont(TiebaSimpleText.uiFont(style: .subheadline), weight: .semibold)
     nameLabel.textColor = .label
     nameLabel.numberOfLines = 1
-    timeLabel.font = .preferredFont(forTextStyle: .caption1)
+    timeLabel.font = TiebaSimpleText.uiFont(style: .caption1)
     timeLabel.textColor = .tertiaryLabel
     timeLabel.numberOfLines = 1
     let column = UIStackView(arrangedSubviews: [nameLabel, timeLabel])
@@ -409,7 +409,7 @@ private final class TiebaRuleAuthorCell: UITableViewCell {
 private final class TiebaRulePrefaceCell: UITableViewCell {
   static let reuseID = "TiebaRulePrefaceCell"
   private let label = TiebaSelectableLabel(
-    font: .preferredFont(forTextStyle: .subheadline), color: .secondaryLabel
+    font: TiebaSimpleText.uiFont(style: .subheadline), color: .secondaryLabel
   )
 
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -448,7 +448,7 @@ private final class TiebaRulePrefaceCell: UITableViewCell {
 private final class TiebaRuleTextCell: UITableViewCell {
   static let reuseID = "TiebaRuleTextCell"
   private let label = TiebaSelectableLabel(
-    font: .preferredFont(forTextStyle: .subheadline), color: .secondaryLabel
+    font: TiebaSimpleText.uiFont(style: .subheadline), color: .secondaryLabel
   )
 
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -468,7 +468,7 @@ private final class TiebaRuleTextCell: UITableViewCell {
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   func configure(text: String, bold: Bool) {
-    let base = UIFont.preferredFont(forTextStyle: .subheadline)
+    let base = TiebaSimpleText.uiFont(style: .subheadline)
     label.font = bold ? UIFont.tiebaFormFont(base, weight: .semibold) : base
     label.text = text
   }
@@ -478,7 +478,7 @@ private final class TiebaRuleTextCell: UITableViewCell {
 private final class TiebaRuleQuoteCell: UITableViewCell {
   static let reuseID = "TiebaRuleQuoteCell"
   private let label = TiebaSelectableLabel(
-    font: .preferredFont(forTextStyle: .footnote), color: .secondaryLabel
+    font: TiebaSimpleText.uiFont(style: .footnote), color: .secondaryLabel
   )
 
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -529,7 +529,7 @@ private final class TiebaRuleImageCell: UITableViewCell {
     ruleImageView.backgroundColor = .secondarySystemFill
     ruleImageView.translatesAutoresizingMaskIntoConstraints = false
     placeholder.text = "[图片]"
-    placeholder.font = .preferredFont(forTextStyle: .subheadline)
+    placeholder.font = TiebaSimpleText.uiFont(style: .subheadline)
     placeholder.textColor = .tertiaryLabel
     placeholder.translatesAutoresizingMaskIntoConstraints = false
     contentView.addSubview(ruleImageView)
@@ -670,7 +670,7 @@ private final class TiebaRuleFooterCell: UITableViewCell {
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
     selectionStyle = .none
-    label.font = .preferredFont(forTextStyle: .caption1)
+    label.font = TiebaSimpleText.uiFont(style: .caption1)
     label.textColor = .tertiaryLabel
     label.textAlignment = .center
     label.numberOfLines = 0

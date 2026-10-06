@@ -137,7 +137,8 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
   private func rowSignature() -> String {
     let hideMedia = TiebaPreferenceSnapshot.bool("hideMedia", default: false)
     let showIp = TiebaPreferenceSnapshot.bool("showIpLocation", default: true)
-    let fontScale = Double(TiebaPreferenceSnapshot.string("fontScale") ?? "") ?? 1
+    // 字号进指纹（两级体系：读正文级当前倍率，不读旧 fontScale 键）。
+    let fontScale = TiebaTypography.snapshot().bodyScale
     return "\(fontScale)#\(hideMedia)#\(showIp)#\(expandedIds.count)"
   }
 
@@ -220,7 +221,7 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
   private func makeRows() -> [[String: Any]] {
     let hideMedia = TiebaPreferenceSnapshot.bool("hideMedia", default: false)
     let showIp = TiebaPreferenceSnapshot.bool("showIpLocation", default: true)
-    let fontScale = Double(TiebaPreferenceSnapshot.string("fontScale") ?? "") ?? 1
+    let fontScale = TiebaTypography.snapshot().bodyScale
     return threads.map { thread in
       var row = thread
       row["kind"] = TiebaKindRowKind.feed.rawValue

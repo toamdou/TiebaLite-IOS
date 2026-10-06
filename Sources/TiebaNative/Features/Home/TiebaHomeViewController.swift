@@ -304,8 +304,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
 
   private func buildHistoryRow(below topBar: UIStackView) {
     historyTitle.text = "最近访问"
-    historyTitle.font = UIFontMetrics(forTextStyle: .subheadline)
-      .scaledFont(for: .systemFont(ofSize: 15, weight: .semibold))
+    historyTitle.font = TiebaSimpleText.font(size: 15, weight: .semibold)
     var toggle = UIButton.Configuration.plain()
     toggle.image = UIImage(systemName: "chevron.up")
     toggle.imagePadding = 4
@@ -964,14 +963,12 @@ final class TiebaHomeForumCell: UICollectionViewCell {
     card.layer.cornerCurve = .continuous
     card.translatesAutoresizingMaskIntoConstraints = false
     contentView.addSubview(card)
-    nameLabel.font = UIFontMetrics(forTextStyle: .subheadline)
-      .scaledFont(for: .systemFont(ofSize: 15, weight: .semibold))
+    nameLabel.font = TiebaSimpleText.font(size: 15, weight: .semibold)
     nameLabel.adjustsFontForContentSizeCategory = true
     nameLabel.numberOfLines = 1
-    metaLabel.font = UIFontMetrics(forTextStyle: .caption1).scaledFont(for: .systemFont(ofSize: 12))
+    metaLabel.font = TiebaSimpleText.font(size: 12, weight: .regular)
     metaLabel.textColor = .tertiaryLabel
-    levelLabel.font = UIFontMetrics(forTextStyle: .caption1)
-      .scaledFont(for: .systemFont(ofSize: 12, weight: .bold))
+    levelLabel.font = TiebaSimpleText.font(size: 12, weight: .bold)
     checkIcon.contentMode = .center
     let textColumn = UIStackView(arrangedSubviews: [nameLabel, metaLabel])
     textColumn.axis = .vertical
@@ -1086,8 +1083,7 @@ final class TiebaHistoryPill: UIControl {
     layer.cornerRadius = 15
     layer.cornerCurve = .continuous
     backgroundColor = .tertiarySystemFill
-    label.font = UIFontMetrics(forTextStyle: .footnote)
-      .scaledFont(for: .systemFont(ofSize: 13, weight: .medium))
+    label.font = TiebaSimpleText.font(size: 13, weight: .medium)
     label.adjustsFontForContentSizeCategory = true
     label.numberOfLines = 1
     let stack = UIStackView(arrangedSubviews: [avatar, label])

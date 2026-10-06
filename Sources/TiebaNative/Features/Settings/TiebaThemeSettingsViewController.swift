@@ -14,19 +14,25 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     ("default", "默认"), ("dark", "暗夜"), ("blue_dark", "暗夜蓝"),
     ("grey_dark", "暗夜灰"), ("amoled_dark", "纯黑"),
   ]
-  private static let fontScales: [(value: String, label: String)] = [
-    ("0.9", "小"), ("1", "标准"), ("1.15", "大"), ("1.3", "特大"),
-  ]
+  /// 字号偏好的行 id（与偏好键同名；正文/界面两级 + 跟随开关）。
+  private static let bodySizeRow = TiebaTypography.bodySizeKey
+  private static let uiSizeRow = TiebaTypography.uiSizeKey
+  private static let followsRow = TiebaTypography.followsBodyKey
 
   /// 本页展示的全部偏好键（在屏时被别处改写要即时回推行值，不再只靠出现重读）。
   private static let preferenceKeys = [
     "lightTheme", "darkTheme", "customPrimaryColor", "followSystemDarkMode", "darkMode",
-    "toolbarPrimaryColor", "statusBarFontDark", "fontScale", "entranceAnimation",
+    "toolbarPrimaryColor", "statusBarFontDark", "entranceAnimation",
+    TiebaTypography.bodySizeKey, TiebaTypography.uiSizeKey, TiebaTypography.followsBodyKey,
+    // 旧键仍观察：本页的正文滑杆会把倍率镜像写回它（兼容未改造的读取方）。
+    TiebaTypography.legacyScaleKey,
   ]
 
   /// 行结构缓存：这两行按偏好增删，「有无」变化是唯一需要整表重建的情形。
   private var showsCustomPrimaryRow = false
   private var showsStatusBarFontRow = false
+  /// 界面字号滑杆当前是否展开（跟随关闭时才展开）。
+  private var showsUIFontSliderRow = false
 
   /// 观察者是 non-Sendable，deinit 非隔离：与 TiebaHomeViewController 同款声明。
   private nonisolated(unsafe) var prefToken: NSObjectProtocol?
@@ -42,6 +48,13 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     // 页面在屏时偏好改了（本页写入也经广播回环）就地回推，不整表重建。
     prefToken = TiebaPreferenceChange.observe(keys: Self.preferenceKeys) { [weak self] in
       self?.refreshDisplayedValues()
+    }
+    // 滑杆实时示例的字体**由本页给**：表单层不认识字号体系（正文级/界面级），
+    // 示例字号 = "滑杆当前值这么多 pt"——拖动中逐帧现算，不等落库。
+    form.slidePreviewFont = { _, value in
+      TiebaSimpleText.scaledFont(
+        size: CGFloat(value), weight: .regular,
+        scale: CGFloat(value / TiebaTypography.referenceSize))
     }
     // 「深色模式」行在跟随系统时 = 当前外观档：系统深浅切换要重算行值。
     styleRegistration = registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
@@ -62,8 +75,16 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     // 跟随系统时以宿主 trait 为准（JS 已把应用内深浅下发到窗口）。
     let isDarkNow = dark
     let toolbarPrimary = TiebaPreferences.bool("toolbarPrimaryColor", default: false)
-    let fontScale = TiebaPreferences.number("fontScale", default: 1)
-    let fontValue = TiebaPreferences.numberLiteral(fontScale)
+    // 两级字号：快照读的是**已迁移**的值（老用户的 fontScale 倍率在这里被平滑
+    // 换算成新的正文字号 pt，见 TiebaTypography）。
+    let typography = TiebaTypography.snapshot()
+    let followsBody = typography.followsBody
+    showsUIFontSliderRow = !followsBody
+    let bodyValue = TiebaPreferences.numberLiteral(typography.bodySize)
+    let uiValue = TiebaPreferences.numberLiteral(typography.uiSize)
+    let minSize = TiebaTypography.sizeRange.lowerBound
+    let maxSize = TiebaTypography.sizeRange.upperBound
+    let step = TiebaTypography.sizeStep
 
     var themeRows = [
       TiebaFormRow(
@@ -144,17 +165,15 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
       ),
       TiebaFormSection(
         title: "阅读字号",
-        footer: "调整帖子正文与回复的字号，即时生效。",
-        rows: [
-          TiebaFormRow(
-            id: "fontScale",
-            kind: .picker,
-            title: "正文字号",
-            icon: "textformat.size",
-            value: fontValue,
-            options: options(Self.fontScales)
-          )
-        ]
+        footer: "滑杆左右拖动 = 无级调节，下方示例实时跟随。正文字号管帖子卡片与帖内正文/回复/楼中楼；界面字号管其余全部界面（导航栏、按钮、设置页、列表标题、时间与徽章）。",
+        rows: uiFontRows(
+          bodyValue: bodyValue,
+          uiValue: uiValue,
+          followsBody: followsBody,
+          minSize: minSize,
+          maxSize: maxSize,
+          step: step
+        )
       ),
       TiebaFormSection(
         title: "动效",
@@ -176,6 +195,68 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     ]
   }
 
+  /// 整份重建（主题/结构变化）会把隐藏行一起复原：重建后按当前跟随态重新收起
+  /// 界面字号滑杆。无动画——重建本身就是一次硬切，这里再叠动画只会打架。
+  override func reload() {
+    super.reload()
+    form.setHidden(
+      id: Self.uiSizeRow,
+      hidden: TiebaTypography.snapshot().followsBody,
+      animated: false
+    )
+  }
+
+  /// 「阅读字号」分组的行：正文滑杆 + 界面滑杆 + 跟随开关。
+  ///
+  /// 顺序按用户口径：两个调节部分在前，按钮在后；开关**打开时界面字号滑杆
+  /// 收起**（收起/展开走 TiebaFormListView.setHidden 的插入/删除动画，不是瞬切）。
+  private func uiFontRows(
+    bodyValue: String,
+    uiValue: String,
+    followsBody: Bool,
+    minSize: Double,
+    maxSize: Double,
+    step: Double
+  ) -> [TiebaFormRow] {
+    var rows = [
+      TiebaFormRow(
+        id: Self.bodySizeRow,
+        kind: .slider,
+        title: "正文字号",
+        icon: "textformat.size",
+        value: bodyValue,
+        minValue: minSize,
+        maxValue: maxSize,
+        step: step,
+        previewText: followsBody
+          ? "正文示例：贴吧的帖子正文、回复与楼中楼。界面字号正跟随此档。"
+          : "正文示例：贴吧的帖子正文、回复与楼中楼。"
+      )
+    ]
+    // 这一行**恒在 sections 里**：显隐交给 TiebaFormListView.setHidden 做数据源级
+    // 增删（这样才有插入/删除的高度动画）。跟随打开时它在重建后立刻被收起。
+    rows.append(TiebaFormRow(
+      id: Self.uiSizeRow,
+      kind: .slider,
+      title: "界面字号",
+      icon: "textformat",
+      value: uiValue,
+      minValue: minSize,
+      maxValue: maxSize,
+      step: step,
+      previewText: "界面示例：导航栏、按钮、设置页与列表标题。"
+    ))
+    rows.append(TiebaFormRow(
+      id: Self.followsRow,
+      kind: .toggle,
+      title: "界面字号跟随正文字号",
+      subtitle: "开启后界面字号与正文字号一致，界面字号调节杆收起",
+      icon: "textformat.size.larger",
+      value: followsBody ? "1" : "0"
+    ))
+    return rows
+  }
+
   // MARK: - 偏好回推
 
   /// 偏好变更（含系统外观变化）后就地重算本页行值：只有增删行（自定义主色 /
@@ -190,7 +271,10 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     guard (lightTheme == "custom" || darkTheme == "custom") == showsCustomPrimaryRow,
       toolbarPrimary == showsStatusBarFontRow
     else {
+      // 整份重建会把隐藏行一起复原：重建后按当前跟随态重新收起界面字号滑杆。
       reload()
+      form.setHidden(
+        id: Self.uiSizeRow, hidden: TiebaTypography.snapshot().followsBody, animated: false)
       return
     }
     // 主题/主色/深浅都会影响表单染色：不重建行，但染色与深浅要跟着重算。
@@ -214,9 +298,19 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
         id: "statusBarFontDark",
         value: TiebaPreferences.bool("statusBarFontDark", default: false) ? "1" : "0")
     }
-    form.setValue(
-      id: "fontScale",
-      value: TiebaPreferences.numberLiteral(TiebaPreferences.number("fontScale", default: 1)))
+    // 两级字号：快照读的是已迁移的值（旧 fontScale 倍率由 TiebaTypography 换算）。
+    let typography = TiebaTypography.snapshot()
+    form.setValue(id: Self.bodySizeRow, value: TiebaPreferences.numberLiteral(typography.bodySize))
+    if !typography.followsBody {
+      form.setValue(id: Self.uiSizeRow, value: TiebaPreferences.numberLiteral(typography.uiSize))
+    }
+    form.setValue(id: Self.followsRow, value: typography.followsBody ? "1" : "0")
+    // 跟随开关决定界面字号滑杆在不在表里：走 setHidden 的插入/删除动画（用户
+    // 明确要求显隐要有动画）。幂等：值没变时 setHidden 直接返回。
+    if showsUIFontSliderRow != !typography.followsBody {
+      showsUIFontSliderRow = !typography.followsBody
+      form.setHidden(id: Self.uiSizeRow, hidden: typography.followsBody, animated: true)
+    }
     form.setValue(
       id: "entranceAnimation",
       value: TiebaPreferences.bool("entranceAnimation", default: true) ? "1" : "0")
@@ -232,6 +326,8 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
       handlePick(id, value)
     case .color(_, let value):
       handleColor(value)
+    case .slide(let id, let value):
+      handleSlide(id, value)
     default:
       break
     }
@@ -258,6 +354,23 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
         guard write("darkMode", bool: traitCollection.userInterfaceStyle == .dark) else { return }
       }
       applyChrome()
+    case TiebaTypography.followsBodyKey:
+      TiebaSceneHaptics.fire("toggle")
+      // 写库 → TiebaTypography 快照重解析（世代 +1，全仓度量缓存随之失效）→
+      // 广播回本页 → refreshDisplayedValues 里收起/展开界面字号滑杆（带动画）。
+      // 关闭跟随时先落一次当前生效的界面字号，避免"关掉后界面突然跳档"。
+      guard write(id, bool: value) else { return }
+      if value {
+        form.setHidden(id: Self.uiSizeRow, hidden: true, animated: true)
+      } else {
+        // 首次关闭跟随：界面字号没有历史值就取当前生效档（= 正文字号）作初值，
+        // 否则用户会看到界面"突然跳一下"。
+        if TiebaPreferenceSnapshot.number(TiebaTypography.uiSizeKey) == nil {
+          _ = write(TiebaTypography.uiSizeKey, number: TiebaTypography.snapshot().bodySize)
+        }
+        form.setHidden(id: Self.uiSizeRow, hidden: false, animated: true)
+      }
+      scheduleTypographyRefresh()
     case "entranceAnimation":
       TiebaSceneHaptics.fire("toggle")
       write(id, bool: value)
@@ -273,6 +386,71 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     }
   }
 
+  // MARK: - 无级滑杆
+
+  /// 拖动期间待落库的最后一格（前沿 + 尾沿节流，见 handleSlide）。
+  private var pendingSlide: (id: String, value: Double)?
+  private var slideWriteScheduled = false
+  private var lastSlideWriteAt: CFAbsoluteTime = 0
+  /// 字号落库后的整表重排（延迟到拖动停下再做，见 scheduleTypographyRefresh）。
+  private var typographyRefresh: DispatchWorkItem?
+
+  /// 滑杆每次变化都会到这里（UISlider 连续事件，拖动时每秒几十次）。
+  ///
+  /// **为什么不能逐次落库**：每次写偏好 = 一次 SQLite upsert + 一次全仓广播，
+  /// 几十 Hz 地写会让拖动掉帧。这里做"前沿 + 尾沿"节流：距上次落库 ≥80ms 就
+  /// 立刻写，否则只记下最后一格、80ms 后补写——松手前的那一格一定落库。
+  /// 示例文字不受影响：它是 cell 自己按滑杆现值现算的，逐帧都跟手。
+  private func handleSlide(_ id: String, _ value: Double) {
+    pendingSlide = (id, value)
+    let now = CFAbsoluteTimeGetCurrent()
+    if now - lastSlideWriteAt >= 0.08 {
+      commitPendingSlide()
+    } else if !slideWriteScheduled {
+      slideWriteScheduled = true
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+        self?.slideWriteScheduled = false
+        self?.commitPendingSlide()
+      }
+    }
+    scheduleTypographyRefresh()
+  }
+
+  private func commitPendingSlide() {
+    guard let pending = pendingSlide else { return }
+    pendingSlide = nil
+    lastSlideWriteAt = CFAbsoluteTimeGetCurrent()
+    // 无级但落盘值量化到 0.1pt：避免 17.030000000000001 这种脏值进 KV。
+    let size = TiebaTypography.quantize(pending.value)
+    switch pending.id {
+    case Self.bodySizeRow:
+      _ = write(Self.bodySizeRow, number: size)
+      // 兼容镜像：旧键 fontScale（倍率）同步写回，尚未改造的读取方仍拿到正确字号。
+      // 它也是老用户设置的迁移来源（TiebaTypography.readBodySize）。
+      _ = TiebaPreferences.set(
+        TiebaTypography.legacyScaleKey, number: size / TiebaTypography.referenceSize)
+    case Self.uiSizeRow:
+      _ = write(Self.uiSizeRow, number: size)
+    default:
+      break
+    }
+  }
+
+  /// 字号落库后**延迟**整表重排：拖动中 reloadData 会把手指正按着的滑杆一起
+  /// 重建（拖动当场断掉），所以等 0.35s 没有新事件再做。字体与行高都由 cell
+  /// 现算，reload 之后整页（含离屏行）就是新字号。
+  private func scheduleTypographyRefresh() {
+    typographyRefresh?.cancel()
+    let item = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      self.form.refreshTypography()
+      // 全仓度量缓存由字号世代失效（TiebaRowDiff 指纹），这里只需让 UI 也重排。
+      self.view.setNeedsLayout()
+    }
+    typographyRefresh = item
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: item)
+  }
+
   private func handlePick(_ id: String, _ value: String) {
     switch id {
     case "lightTheme", "darkTheme":
@@ -281,10 +459,6 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
       applyChrome()
       // 「自定义」主题会增删主色行 → 结构性变化走整份重建。
       reload()
-    case "fontScale":
-      TiebaSceneHaptics.fire("toggle")
-      guard let scale = Double(value), scale > 0 else { return }
-      write("fontScale", number: scale)
     default:
       break
     }

@@ -92,7 +92,9 @@ final class TiebaThreadKnownPostView: UIView {
     // 标题：占位卡的第一个块（JS knownTitle 17pt/22pt/最多 3 行）。快照里标题一直
     // 有，漏掉它占位卡就没有帖名——与作者行、摘要同尺排下去，换真卡不位移。
     if !snapshot.title.isEmpty {
-      titleLabel.font = TiebaSimpleText.font(size: 17, weight: .medium)
+      // 字号/行高与真实主贴卡同源（TiebaPostRowLayout.titleFont/titleLineHeight）：
+      // 正文级字号一变，占位卡与真卡同步变，换卡时才不位移。
+      titleLabel.font = TiebaPostRowLayout.titleFont
       // 与真卡（TiebaPostRowLayout.titleLineLimit = 0）保持一致：都不截断，
       // 否则换卡那一刻标题行数会变、下面整块跳一次。
       // makeAttributed 的 truncating 默认 true，会以 byTruncatingTail 盖过 numberOfLines=0
@@ -100,8 +102,8 @@ final class TiebaThreadKnownPostView: UIView {
       titleLabel.numberOfLines = TiebaPostRowLayout.titleLineLimit
       titleLabel.attributedText = TiebaSimpleText.makeAttributed(
         text: snapshot.title,
-        font: TiebaSimpleText.font(size: 17, weight: .medium),
-        lineHeight: 22,
+        font: TiebaPostRowLayout.titleFont,
+        lineHeight: TiebaPostRowLayout.titleLineHeight,
         truncating: TiebaPostRowLayout.titleLineLimit > 0
       )
       stack.addArrangedSubview(titleLabel)
@@ -116,7 +118,7 @@ final class TiebaThreadKnownPostView: UIView {
     avatar.configure(url: snapshot.authorPortrait, initial: snapshot.authorName)
     row.addArrangedSubview(avatar)
     authorLabel.text = snapshot.authorName
-    authorLabel.font = TiebaSimpleText.font(size: 16, weight: .semibold)
+    authorLabel.font = TiebaPostRowLayout.nameFontMain
     authorLabel.numberOfLines = 1
     row.addArrangedSubview(authorLabel)
     stack.addArrangedSubview(row)
@@ -126,12 +128,12 @@ final class TiebaThreadKnownPostView: UIView {
       // 字号/行高与真实主贴正文同尺（15pt/22pt，见 TiebaPostRowMetrics.buildContent）：
       // 摘要本来就是正文的预览，行高不一致时换卡会整块上下跳（用户 2026-09-15 报）。
       // 颜色留次要色——预览的视觉设计不变。
-      abstractLabel.font = TiebaSimpleText.font(size: 15, weight: .regular)
+      abstractLabel.font = TiebaSimpleText.bodyFont(size: 15, weight: .regular)
       abstractLabel.numberOfLines = 2
       abstractLabel.attributedText = TiebaSimpleText.makeAttributed(
         text: snapshot.abstract,
-        font: TiebaSimpleText.font(size: 15, weight: .regular),
-        lineHeight: 22
+        font: TiebaSimpleText.bodyFont(size: 15, weight: .regular),
+        lineHeight: TiebaPostRowLayout.abstractLineHeight
       )
       stack.addArrangedSubview(abstractLabel)
     }

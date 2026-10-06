@@ -401,7 +401,7 @@ final class TiebaPostRowView: UIView {
     )
     blockedTipView.addSubview(blockedTipIcon)
     blockedTipLabel.text = "内容已屏蔽"
-    blockedTipLabel.font = TiebaSimpleText.font(size: 12, weight: .regular)
+    blockedTipLabel.font = TiebaSimpleText.bodyFont(size: 12, weight: .regular)
     blockedTipView.addSubview(blockedTipLabel)
     addSubview(blockedTipView)
 
@@ -968,7 +968,7 @@ final class TiebaPostRowView: UIView {
       result.append(NSAttributedString(
         string: " · \(pageLabel)",
         attributes: [
-          .font: TiebaSimpleText.font(size: 12, weight: .medium),
+          .font: TiebaSimpleText.bodyFont(size: 12, weight: .medium),
           .foregroundColor: palette.textTertiary,
         ]
       ))

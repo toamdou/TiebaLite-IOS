@@ -409,10 +409,10 @@ private final class TiebaThreadStoreUndoBar: UIView {
       glass.bottomAnchor.constraint(equalTo: bottomAnchor),
     ])
     label.text = "已取消收藏"
-    label.font = .preferredFont(forTextStyle: .footnote)
+    label.font = TiebaSimpleText.uiFont(style: .footnote)
     label.textColor = .label
     button.setTitle("撤销", for: .normal)
-    button.titleLabel?.font = .preferredFont(forTextStyle: .footnote)
+    button.titleLabel?.font = TiebaSimpleText.uiFont(style: .footnote)
     button.addTarget(self, action: #selector(handleUndo), for: .touchUpInside)
     let stack = UIStackView(arrangedSubviews: [label, button])
     stack.axis = .horizontal

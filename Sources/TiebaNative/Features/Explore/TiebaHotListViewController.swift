@@ -705,8 +705,11 @@ private enum TiebaHotMetrics {
   /// 之后改 Dynamic Type 新建的 cell 仍拿旧档字体。
   static var fonts: Fonts { Fonts() }
 
+  /// 字号 = **界面级**（界面字号 × 系统 Dynamic Type）。style 参数保留在签名上
+  /// 只为不动 6 个调用点的实参顺序；缩放统一走 TiebaSimpleText（全仓唯一换算）。
   static func font(_ size: CGFloat, _ weight: UIFont.Weight, _ style: UIFont.TextStyle) -> UIFont {
-    UIFontMetrics(forTextStyle: style).scaledFont(for: UIFont.systemFont(ofSize: size, weight: weight))
+    _ = style
+    return TiebaSimpleText.font(size: size, weight: weight)
   }
 
   struct Fonts {
