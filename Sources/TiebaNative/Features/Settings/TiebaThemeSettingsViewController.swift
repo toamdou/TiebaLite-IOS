@@ -230,7 +230,9 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
         step: step,
         previewText: followsBody
           ? "正文示例：贴吧的帖子正文、回复与楼中楼。界面字号正跟随此档。"
-          : "正文示例：贴吧的帖子正文、回复与楼中楼。"
+          : "正文示例：贴吧的帖子正文、回复与楼中楼。",
+        // 「重置」目标 = 该档的默认字号（基准 17pt）。
+        defaultValue: TiebaTypography.defaultBodySize
       )
     ]
     // 这一行**恒在 sections 里**：显隐交给 TiebaFormListView.setHidden 做数据源级
@@ -244,7 +246,8 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
       minValue: minSize,
       maxValue: maxSize,
       step: step,
-      previewText: "界面示例：导航栏、按钮、设置页与列表标题。"
+      previewText: "界面示例：导航栏、按钮、设置页与列表标题。",
+      defaultValue: TiebaTypography.defaultUISize
     ))
     rows.append(TiebaFormRow(
       id: Self.followsRow,
