@@ -12,7 +12,9 @@
 //   3. 上游用 `Atomic<[Corner: DrawingContext]>`（SwiftSignalKit）做圆角遮罩缓存，本工程零 ObjC、无该依赖。
 //      改用 @MainActor 隔离的字典缓存：缓存值 TiebaBitmapContext 持有可变像素缓冲、不是 Sendable，
 //      而 Mutex<TiebaBitmapContext> 在 Swift 6 区域隔离下只允许原地改、不允许把它「取出」（编译器实测报
-//      inout sending 区域隔离错误）。所以如实把「生成圆角遮罩 + 贴圆角」整条链路放到主线程 ——
+//      inout sending 区域隔离错误）。跨版本写法 TiebaMutex（NSLock 包装，见 Core/TiebaMutex.swift）
+//      同样不改变这个判断：取出来的仍是非 Sendable 的像素缓冲，所以如实把「生成圆角遮罩 + 贴圆角」
+//      整条链路放到主线程 ——
 //      本目录是 UIView 系移植，绘制入口本来就在主线程。相应地 apply(to:arguments:) 标 @MainActor，
 //      没有 @unchecked Sendable / nonisolated(unsafe) 之类的绕过。
 //   4. DrawingContext → TiebaBitmapContext（见 TiebaDrawingSupport.swift 文件头）。

@@ -14,7 +14,6 @@
 // ============================================================
 
 import Foundation
-import Synchronization
 
 @MainActor
 public final class TiebaRowPageDriver {
@@ -69,7 +68,7 @@ public final class TiebaRowPageDriver {
   /// "点进帖子退回来只剩那张卡、上下全白"的静默留白重演）。
   /// 在 driver 里追加实例域：**一处修复覆盖全部调用方**，宿主给的 keyPrefix 语义不变。
   /// 用自增序号而不是对象地址：地址会被复用，进程级页记录里可能留着上一实例的同键条目。
-  private static let instanceDomain = Mutex<Int>(0)
+  private static let instanceDomain = TiebaMutex<Int>(0)
 
   public init(list: TiebaKindListContentView, keyPrefix: String) {
     self.list = list

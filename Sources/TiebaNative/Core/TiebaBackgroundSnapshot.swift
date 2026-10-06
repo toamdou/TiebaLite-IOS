@@ -1,6 +1,5 @@
 import Foundation
 import Security
-import Synchronization
 import os
 
 /// 后台快照（BDUSS/STOKEN/签到目标等）：JS 桥线程写入、BGTask 与请求组装线程
@@ -10,7 +9,8 @@ import os
 /// （String 非原子，撕裂读写是未定义行为，而且这是凭据）。
 /// 现在**全部字段收进一个 Sendable 值类型，由 Mutex 保护**：单字段读走计算属性，
 /// `save/load/clear` 在锁内整体替换，保证读到的一定是自洽的一份快照。
-/// 并发安全由编译器检查（Mutex<State>），不再需要 NSLock + @unchecked Sendable。
+/// 并发安全集中在 TiebaMutex shim 一处（见 Core/TiebaMutex.swift）：
+/// 本文件不再需要自己写 NSLock + @unchecked Sendable。
 final class TiebaBackgroundSnapshot: Sendable {
   static let shared = TiebaBackgroundSnapshot()
 
@@ -37,7 +37,7 @@ final class TiebaBackgroundSnapshot: Sendable {
   }
 
   /// 保护整份 State：单字段读写与 save/load/clear 的整体替换互斥。
-  private let state = Mutex(State())
+  private let state = TiebaMutex(State())
 
   var bduss: String {
     get { state.withLock { $0.bduss } }

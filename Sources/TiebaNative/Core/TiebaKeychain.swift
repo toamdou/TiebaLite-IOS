@@ -25,7 +25,6 @@
 // ============================================================
 import Foundation
 import Security
-import Synchronization
 
 enum TiebaKeychainError: LocalizedError {
   case invalidKey
@@ -66,7 +65,7 @@ enum TiebaKeychain {
     case unknown
   }
 
-  private static let cache = Mutex(CacheState())
+  private static let cache = TiebaMutex(CacheState())
 
   /// 读一个键；不存在 → nil。读序 no-auth → auth → legacy（兼容旧包写入面）。
   static func get(key: String) -> String? {

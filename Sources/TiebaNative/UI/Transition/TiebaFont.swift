@@ -13,9 +13,9 @@
 //      本仓没有该字族，.camera 与 .regular 同义（走系统字体），上游那句 design != .camera 的特判一并删掉。
 //   3. 删掉上游 iOS 13 以下的退化分支（Georgia/Menlo 具名字体）：本工程部署目标远高于 13，那段是死代码；
 //      保留它只会让人以为还有第二条路径（判据②：不留两套行为）。
-//   4. 缓存从 pthread_rwlock_t 换成 Mutex<[String: UIFont]>（Synchronization）：上游那个
+//   4. 缓存从 pthread_rwlock_t 换成 TiebaMutex<[String: UIFont]>（TiebaMutex shim：iOS 18 的 Synchronization.Mutex 在 iOS 17 不可用，见 Core/TiebaMutex.swift）：上游那个
 //      private final class Cache 在 Swift 6 下是"非 Sendable 类型的 static let"，直接搬会报并发错误；
-//      本仓统一写法就是 Mutex<State>，这样也不必用 nonisolated(unsafe) / @unchecked Sendable 绕。
+//      本仓统一写法就是 TiebaMutex<State>，这样也不必用 nonisolated(unsafe) / @unchecked Sendable 绕。
 //   5. Traits / Design / Width / Weight 补 Sendable（字体参数要跨隔离域传给后台测量线程）。
 //   6. FeatureKey 的旧名（iOS 15 废弃，且新旧名字语义相反）换成 .type / .selector；
 //      iOS 16 的 available 包装去掉（部署目标 26 恒真）。
@@ -25,7 +25,6 @@
 //   9. 全部 API nonisolated：字体解析 + 锁缓存，后台测量路径也要能调。
 
 import Foundation
-import Synchronization
 import UIKit
 
 public enum TiebaFont {
@@ -150,9 +149,9 @@ public enum TiebaFont {
     }
     
     /// 描述符缓存（上游用 pthread_rwlock_t + 字典）。
-    /// 这里换成本仓统一写法 Mutex<[String: UIFont]>（Synchronization）：
+    /// 这里换成本仓统一写法 TiebaMutex<[String: UIFont]>（TiebaMutex shim：iOS 18 的 Synchronization.Mutex 在 iOS 17 不可用，见 Core/TiebaMutex.swift）：
     /// UIFont 不可变、线程安全，锁只保护字典；后台测量线程会并发问字体（本仓测量在后台跑）。
-    private static let cache = Mutex<[String: UIFont]>([:])
+    private static let cache = TiebaMutex<[String: UIFont]>([:])
 
     /// 上游 Font.with(size:design:weight:width:traits:)（只保留 iOS 13+ 路径，见文件头改动 2/3）。
     ///

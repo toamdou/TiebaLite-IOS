@@ -7,40 +7,41 @@
 //
 // 并发三条铁律（本文件是第 ①③ 条）：
 //   ① 跨域载荷 = 不可变 struct + @unchecked Sendable（论据写在每个类型上）
-//   ③ 取消代次 = Atomic<UInt64>（唯一需要的原子量，它本身 Sendable，不需要 @unchecked）
+//   ③ 取消代次 = UInt64 计数器（唯一需要的共享量），由 TiebaMutex 保护
+//      （不用标准库 Atomic：它是 iOS 18+，而 ios17 线要 17.0，见 Core/TiebaMutex.swift）
 //
-// 本文件不依赖 TiebaNative 的任何其他类型：只吃 UIKit 的值类型，
+// 本文件只吃 UIKit 的值类型 + Core/TiebaMutex.swift 的跨版本互斥量，
 // 因此可与 BitmapPipeline/ 其余文件一起独立 typecheck（见目录内交付说明）。
 // ============================================================
 
-import Synchronization
 import UIKit
 
 // MARK: - 取消代次
 
-/// 单调递增的取消代次。**唯一需要跨线程的共享状态**，故只有这一个原子量。
+/// 单调递增的取消代次。**唯一需要跨线程的共享状态**，故只有这一个计数器。
 ///
-/// 为什么不用 actor / 锁：写入方在**主线程**（画布的 update / clear），读取方在
-/// 后台烘制线程（分段取消检查点），语义上就是个计数器；Atomic 的 relaxed 读写
-/// 足够（不需要内存序保证 —— 位图数据本身靠闭包捕获传递，不经过这个量）。
+/// 为什么不用 actor：写入方在**主线程**（画布的 update / clear），读取方在
+/// 后台烘制线程（分段取消检查点），语义上就是个计数器，同步读就够——用 actor 反而
+/// 要把两处调用点都变成 async。锁选 TiebaMutex（NSLock）：iOS 17 可用，且与
+/// 位图数据本身的传递无关（位图靠闭包捕获，不经过这个量，不需要内存序保证）。
 ///
 /// epoch **0 保留给「预取」**：预取 Job 用 probe 恒返回 0，与 job.epoch = 0 永远相等，
 /// 于是它的取消判据恒为假（= ASDK 里同步绘制路径「不支持取消」的等价物，
 /// ASDisplayNode+AsyncDisplay.mm:347-351）。画布用的代次从 1 起。
 public final class TiebaFeedBitmapEpoch: Sendable {
-  private let counter = Atomic<UInt64>(0)
+  private let counter = TiebaMutex<UInt64>(0)
 
   public init() {}
 
   /// 自增并返回新代次（画布每次 update / clear 调一次 → 在途结果全部作废）。
   @discardableResult
   public func next() -> UInt64 {
-    counter.wrappingAdd(1, ordering: .relaxed).newValue
+    counter.withLock { $0 &+= 1; return $0 }
   }
 
   /// 当前代次（后台线程读，用于分段取消检查）。
   public func probe() -> UInt64 {
-    counter.load(ordering: .relaxed)
+    counter.withLock { $0 }
   }
 }
 
