@@ -16,7 +16,7 @@ import WidgetKit
 @available(iOS 16.1, *)
 struct LiveActivityKitLiveActivity: Widget {
   var body: some WidgetConfiguration {
-    ActivityConfiguration(for: LiveActivityKitAttributes.self) { context in
+    ActivityConfiguration(for: TiebaLiveActivityKitAttributes.self) { context in
       TiebaLiveActivityLockScreenView(state: context.state)
         .activityBackgroundTint(Color.black.opacity(0.35))
         .activitySystemActionForegroundColor(.white)
@@ -147,7 +147,7 @@ struct LiveActivityKitLiveActivity: Widget {
 
 @available(iOS 16.1, *)
 private struct TiebaLiveActivityLockScreenView: View {
-  let state: LiveActivityKitAttributes.ContentState
+  let state: TiebaLiveActivityKitAttributes.ContentState
 
   var body: some View {
     let tint = LiveActivityKitTheme.color(state.tintColorHex) ?? .blue
@@ -275,7 +275,7 @@ enum LiveActivityKitTheme {
     return "正在签到 \(forum)吧"
   }
 
-  static func statusLine(_ state: LiveActivityKitAttributes.ContentState) -> String {
+  static func statusLine(_ state: TiebaLiveActivityKitAttributes.ContentState) -> String {
     if let subtitle = state.subtitle, !subtitle.isEmpty {
       return subtitle
     }
