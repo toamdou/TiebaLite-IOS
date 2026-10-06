@@ -5,759 +5,18 @@
 // 视频/语音的互斥与离屏暂停由 TiebaThreadMediaCoordinator 收敛（原 mediaBusStore）。
 import AVFoundation
 import AVKit
-import Gifu
 import UIKit
 import Nuke
 import NukeExtensions
 
-// MARK: - 事件
-
-enum TiebaPostRowEvent: Sendable {
-  case avatar
-  case agree
-  case toggleSeeLz
-  /// 排序档位选择（药丸弹菜单，直接选热门/正序/倒序，不再循环）。
-  case selectSort(TiebaThreadSort)
-  case copyContent
-  case share
-  case copyLink
-  case delete
-  case subPosts
-  case image(index: Int, rect: CGRect)
-  case link(String)
-  case user(String)
-}
-
-// MARK: - 媒体互斥 / 离屏暂停（原 mediaBusStore 的原生等价）
-
-@MainActor
-final class TiebaThreadMediaCoordinator {
-  static let shared = TiebaThreadMediaCoordinator()
-
-  private var activeKey: String?
-  private var visibleKeys: Set<String>?
-  private var pauseHandlers: [String: () -> Void] = [:]
-  private var resumeHandlers: [String: () -> Void] = [:]
-
-  private init() {}
-
-  func register(
-    key: String,
-    pause: @escaping () -> Void,
-    resume: (() -> Void)? = nil
-  ) {
-    pauseHandlers[key] = pause
-    if let resume { resumeHandlers[key] = resume }
-    // 可见性已上报过后才注册的媒体（行复用时才 configure）：不在可视集就先暂停。
-    if let visibleKeys, !visibleKeys.contains(key) { pause() }
-  }
-
-  func unregister(key: String) {
-    pauseHandlers.removeValue(forKey: key)
-    resumeHandlers.removeValue(forKey: key)
-    if activeKey == key { activeKey = nil }
-  }
-
-  /// 抢占总线（后激活者胜）；旧的 active 立即暂停。
-  func activate(key: String) {
-    let previous = activeKey
-    activeKey = key
-    if let previous, previous != key {
-      pauseHandlers[previous]?()
-    }
-  }
-
-  func deactivate(key: String) {
-    if activeKey == key { activeKey = nil }
-  }
-
-  /// 列表层上报可视媒体 key；null = 未接入可见性（视为全部可见）。
-  func setVisibleKeys(_ keys: Set<String>?) {
-    visibleKeys = keys
-    guard let keys else { return }
-    for (key, pause) in pauseHandlers where !keys.contains(key) {
-      pause()
-    }
-    for (key, resume) in resumeHandlers where keys.contains(key) {
-      resume()
-    }
-  }
-
-  /// 自动起播前查可见性：预取/复用的行可能已经上报过可视集且不在其中。
-  func isVisible(key: String) -> Bool {
-    guard let visibleKeys else { return true }
-    return visibleKeys.contains(key)
-  }
-}
-
-// MARK: - 图片加载（Nuke；options 组装统一走 TiebaNuke.options）
-
-@MainActor
-func tiebaPostLoadImage(
-  _ url: URL?,
-  maxPixel: CGFloat,
-  into imageView: UIImageView,
-  transition: Bool = false
-) {
-  guard let url else {
-    imageView.image = nil
-    return
-  }
-  loadImage(
-    with: TiebaNuke.secureURL(url),
-    options: TiebaNuke.options(maxPixel: maxPixel, transition: transition),
-    into: imageView
-  )
-}
-
-/// 显示档取图（aspectFill 视图专用）：位图 = 视图尺寸下的裁切结果，圆角也烘焙在
-/// 像素里，所以视图侧不需要 clipsToBounds（省掉每帧一次离屏合成），也不会把长图
-/// 解成远超显示尺寸的位图。视图必须已经摆好最终 frame（尺寸即入参来源）。
-@MainActor
-func tiebaPostLoadDisplayImage(
-  _ url: URL?,
-  targetSize: CGSize,
-  cornerRadius: CGFloat,
-  scale: CGFloat,
-  into imageView: UIImageView,
-  transition: Bool = false
-) {
-  guard let url, targetSize.width > 1, targetSize.height > 1 else {
-    imageView.image = nil
-    return
-  }
-  loadImage(
-    with: TiebaNuke.secureURL(url),
-    options: TiebaNuke.options(
-      processor: TiebaNuke.displayProcessor(
-        targetSize: targetSize,
-        cornerRadius: cornerRadius,
-        scale: scale
-      ),
-      transition: transition
-    ),
-    into: imageView
-  )
-}
-
-/// 单图 fit 显示档（aspectFit 视图专用）：fit 缩放 + 圆角烘焙进位图（见
-/// TiebaNuke.fitDisplayProcessor），视图侧不再 clipsToBounds。
-@MainActor
-func tiebaLoadFitDisplayImage(
-  _ url: URL?,
-  targetSize: CGSize,
-  cornerRadius: CGFloat,
-  scale: CGFloat,
-  into imageView: UIImageView,
-  transition: Bool = false
-) {
-  guard let url, targetSize.width > 1, targetSize.height > 1 else {
-    imageView.image = nil
-    return
-  }
-  loadImage(
-    with: TiebaNuke.secureURL(url),
-    options: TiebaNuke.options(
-      processor: TiebaNuke.fitDisplayProcessor(
-        targetSize: targetSize,
-        cornerRadius: cornerRadius,
-        scale: scale
-      ),
-      transition: transition
-    ),
-    into: imageView
-  )
-}
-
-/// GIF 播放档（Gifu 逐帧渲染）。GIF 请求必须无处理器：Resize/圆角烘焙都会把
-/// 多帧重绘压成首帧（TiebaPhotoBrowser 文件头同结论）。数据源是 Nuke 默认解码器
-/// 挂在 container.data 的原始 GIF 字节；到位后先落首帧静态底再异步起帧。
-/// 帧按 targetSize×contentMode 重采样（Gifu shouldResizeFrames），缓冲窗
-/// frameBufferSize 控内存；targetSize 未布局（≤1pt）时退全尺寸帧。
-/// isStale 由调用方持行级身份判断（复用/换行后迟到的 GIF 不回贴）。
-@MainActor
-func tiebaLoadGifImage(
-  _ url: URL,
-  targetSize: CGSize,
-  contentMode: UIView.ContentMode,
-  frameBufferSize: Int,
-  into view: GIFImageView,
-  isStale: @escaping @MainActor () -> Bool
-) {
-  view.stopAnimatingGIF()
-  view.clipsToBounds = true
-  Task { [weak view] in
-    // imageTask.response 给出完整 ImageResponse（container 里才有 GIF 原始字节）；
-    // image(for:) 只回已解码的首帧位图。
-    let task = TiebaNuke.pipeline.imageTask(with: ImageRequest(url: TiebaNuke.secureURL(url)))
-    guard
-      let response = try? await task.response,
-      let view, !isStale()
-    else { return }
-    view.image = response.container.image
-    guard let data = response.container.data else { return }
-    let animator = view.animator
-    animator?.frameBufferSize = frameBufferSize
-    animator?.shouldResizeFrames = targetSize.width > 1 && targetSize.height > 1
-    animator?.animate(withGIFData: data, size: targetSize, contentMode: contentMode)
-  }
-}
-
-// MARK: - 头像
-//
-// 行视图不自己实现头像：直接复用 TiebaForumViews 的 TiebaForumAvatarView
-// （首字占位 + Nuke 取图）。它是 init 定尺视图（主贴 40 / 回复 36），尺寸变化
-// 时由 configureAvatar 重建。
-
-// MARK: - 视频块（poster → 点击后内嵌 AVPlayerViewController，系统控制条）
-
-final class TiebaInlineVideoView: UIView {
-  private let posterView = UIImageView()
-  private let playIcon = UIImageView()
-  private let badgeView = UIView()
-  private let badgeLabel = UILabel()
-
-  private var video: TiebaThreadVideo?
-  private var player: AVPlayer?
-  private var playerController: AVPlayerViewController?
-  // nonisolated(unsafe)：deinit 是 nonisolated，Swift 6 禁止它读非 Sendable 状态；该值只在主线程读写。
-  private nonisolated(unsafe) var endObserver: NSObjectProtocol?
-  private var autoplay = false
-  private(set) var isPlaying = false
-  private var userStarted = false
-  private var isVisible = true
-  private var mediaKey = ""
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    clipsToBounds = true
-    layer.cornerCurve = .continuous
-    posterView.contentMode = .scaleAspectFill
-    posterView.clipsToBounds = true
-    addSubview(posterView)
-    playIcon.image = UIImage(
-      systemName: "play.circle.fill",
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 44, weight: .regular)
-    )
-    playIcon.tintColor = UIColor.white.withAlphaComponent(0.9)
-    addSubview(playIcon)
-    badgeView.backgroundColor = UIColor.black.withAlphaComponent(0.5)
-    badgeView.layer.cornerRadius = 8
-    badgeView.layer.cornerCurve = .continuous
-    addSubview(badgeView)
-    badgeLabel.text = "视频"
-    badgeLabel.font = TiebaSimpleText.font(size: 10, weight: .medium)
-    badgeLabel.textColor = .white
-    badgeView.addSubview(badgeLabel)
-    addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleTap)))
-  }
-
-  required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-  deinit {
-    if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
-  }
-
-  func configure(video: TiebaThreadVideo, preferences: TiebaPostPreferences) {
-    // 点赞等原地重发布会用同一模型重配：同一条视频播放中则保持播放（不重挂海报）。
-    if mediaKey == "v:\(video.src)", isPlaying {
-      self.video = video
-      return
-    }
-    self.video = video
-    self.autoplay = preferences.videoAutoplay
-    mediaKey = "v:\(video.src)"
-    posterView.isHidden = false
-    playIcon.isHidden = false
-    badgeView.isHidden = false
-    tiebaPostLoadImage(
-      TiebaPhotoItem.normalizedURL(video.poster),
-      maxPixel: max(bounds.width, 320) * max(traitCollection.displayScale, 1),
-      into: posterView
-    )
-    TiebaThreadMediaCoordinator.shared.register(
-      key: mediaKey,
-      pause: { [weak self] in self?.pause() },
-      resume: { [weak self] in self?.resumeIfNeeded() }
-    )
-    setNeedsLayout()
-    // 预取/复用的行可能已在屏外（可视集已上报）：屏外不起播，否则播放器常驻。
-    if autoplay, TiebaThreadMediaCoordinator.shared.isVisible(key: mediaKey) {
-      startPlayback()
-    }
-  }
-
-  func applyPalette(_ palette: TiebaFeedRowPalette) {
-    layer.cornerRadius = TiebaPostRowLayout.imageRadius
-    backgroundColor = palette.placeholder
-  }
-
-  func prepareForReuse() {
-    if !mediaKey.isEmpty {
-      TiebaThreadMediaCoordinator.shared.unregister(key: mediaKey)
-    }
-    teardownPlayer()
-    mediaKey = ""
-    video = nil
-    posterView.image = nil
-    userStarted = false
-    isVisible = true
-  }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    posterView.frame = bounds
-    let side: CGFloat = 44
-    playIcon.frame = CGRect(
-      x: (bounds.width - side) / 2,
-      y: (bounds.height - side) / 2,
-      width: side,
-      height: side
-    )
-    let badgeW: CGFloat = 42, badgeH: CGFloat = 18
-    badgeView.frame = CGRect(x: 8, y: bounds.height - badgeH - 8, width: badgeW, height: badgeH)
-    badgeLabel.frame = badgeView.bounds.insetBy(dx: 8, dy: 2)
-    playerController?.view.frame = bounds
-  }
-
-  @objc private func handleTap() {
-    TiebaSceneHaptics.fire("press")
-    userStarted = true
-    startPlayback()
-  }
-
-  private func startPlayback() {
-    guard !isPlaying, let video else { return }
-    guard let url = URL(string: video.src), !video.src.isEmpty else { return }
-    isPlaying = true
-    posterView.isHidden = true
-    playIcon.isHidden = true
-    badgeView.isHidden = true
-    let item = AVPlayerItem(url: url)
-    item.preferredForwardBufferDuration = 5
-    let player = AVPlayer(playerItem: item)
-    player.isMuted = true
-    player.actionAtItemEnd = .pause
-    self.player = player
-    endObserver = NotificationCenter.default.addObserver(
-      forName: .AVPlayerItemDidPlayToEndTime,
-      object: item,
-      queue: .main
-    ) { [weak self] _ in
-      Task { @MainActor in self?.handlePlaybackEnded() }
-    }
-    let controller = AVPlayerViewController()
-    controller.player = player
-    controller.showsPlaybackControls = true
-    controller.view.backgroundColor = .black
-    if let host = TiebaViewHosts.viewController(for: self) {
-      host.addChild(controller)
-      controller.view.frame = bounds
-      controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-      addSubview(controller.view)
-      controller.didMove(toParent: host)
-      playerController = controller
-    }
-    TiebaThreadMediaCoordinator.shared.activate(key: mediaKey)
-    player.play()
-  }
-
-  /// 行重配后不再显示视频时调用（隐藏不等于暂停）。
-  func stopPlayback() {
-    pause()
-  }
-
-  private func pause() {
-    guard isPlaying else { return }
-    player?.pause()
-    isPlaying = false
-    teardownPlayer()
-  }
-
-  private func resumeIfNeeded() {
-    guard autoplay, !userStarted, player == nil else { return }
-    startPlayback()
-  }
-
-  private func handlePlaybackEnded() {
-    isPlaying = false
-    teardownPlayer()
-    posterView.isHidden = false
-    playIcon.isHidden = false
-    badgeView.isHidden = false
-    TiebaThreadMediaCoordinator.shared.deactivate(key: mediaKey)
-  }
-
-  private func teardownPlayer() {
-    if let endObserver {
-      NotificationCenter.default.removeObserver(endObserver)
-      self.endObserver = nil
-    }
-    player?.pause()
-    playerController?.willMove(toParent: nil)
-    playerController?.view.removeFromSuperview()
-    playerController?.removeFromParent()
-    playerController = nil
-    player = nil
-  }
-}
-
-// MARK: - 语音条（AVPlayer + 静态波形 + 倍速 + 长按下载）
-
-final class TiebaAudioPillView: UIView {
-  private let actionButton = UIButton(type: .system)
-  private let playIcon = UIImageView()
-  private let waveform = TiebaAudioWaveformBarView()
-  private let timeLabel = UILabel()
-  private let rateButton = UIButton(type: .system)
-
-  private var src = ""
-  private var fallbackDuration = 0.0
-  private var player: AVPlayer?
-  // nonisolated(unsafe)：deinit 是 nonisolated，Swift 6 禁止它读非 Sendable 状态；两者只在主线程读写。
-  private nonisolated(unsafe) var timeObserver: Any?
-  private nonisolated(unsafe) var endObserver: NSObjectProtocol?
-  private var rate = 1.0
-  private(set) var isActive = false
-  private var mediaKey = ""
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    layer.cornerRadius = 10
-    layer.cornerCurve = .continuous
-    layer.borderWidth = 1
-    // 播放/暂停与下载合并到一个铺满的 UIButton：点按走 touchUpInside，长按弹
-    // UIMenu（系统菜单，不再自绘手势 + 确认弹窗）。
-    actionButton.addTarget(self, action: #selector(handleTap), for: .touchUpInside)
-    actionButton.menu = UIMenu(children: [
-      UIAction(
-        title: "下载音频",
-        image: UIImage(systemName: "square.and.arrow.down")
-      ) { [weak self] _ in
-        self?.download()
-      },
-    ])
-    addSubview(actionButton)
-    playIcon.contentMode = .scaleAspectFit
-    addSubview(playIcon)
-    addSubview(waveform)
-    timeLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
-    addSubview(timeLabel)
-    rateButton.titleLabel?.font = .monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
-    rateButton.layer.cornerRadius = 8
-    rateButton.layer.cornerCurve = .continuous
-    rateButton.clipsToBounds = true
-    // 点按直接展开倍速菜单（1x / 1.5x），不再手写 1↔1.5 循环。
-    rateButton.showsMenuAsPrimaryAction = true
-    addSubview(rateButton)
-    updateRate()
-  }
-
-  required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-  deinit {
-    if let timeObserver { player?.removeTimeObserver(timeObserver) }
-    if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
-  }
-
-  func configure(src: String, duration: Double, palette: TiebaFeedRowPalette) {
-    // 同一条语音播放中：只更新配色，不复位进度（原地重发布不打断播放）。
-    if self.src == src, mediaKey == "a:\(src)", isActive {
-      fallbackDuration = duration
-      applyPalette(palette)
-      return
-    }
-    self.src = src
-    fallbackDuration = duration
-    mediaKey = "a:\(src)"
-    applyPalette(palette)
-    update(time: 0, duration: duration)
-    TiebaThreadMediaCoordinator.shared.register(
-      key: mediaKey,
-      pause: { [weak self] in self?.pause() }
-    )
-    TiebaAudioSession.register(
-      id: mediaKey,
-      isPlaying: { [weak self] in self?.isActive ?? false },
-      pause: { [weak self] in self?.pause() },
-      resume: { [weak self] in self?.play() }
-    )
-    setNeedsLayout()
-  }
-
-  func applyPalette(_ palette: TiebaFeedRowPalette) {
-    backgroundColor = palette.chip
-    layer.borderColor = palette.separator.cgColor
-    playIcon.tintColor = palette.primary
-    waveform.activeColor = palette.primary
-    waveform.inactiveColor = palette.textSecondary
-    timeLabel.textColor = palette.textSecondary
-    rateButton.setTitleColor(palette.textSecondary, for: .normal)
-    rateButton.backgroundColor = .systemFill
-    updatePlayIcon(playing: isActive)
-  }
-
-  func prepareForReuse() {
-    if !mediaKey.isEmpty { TiebaThreadMediaCoordinator.shared.unregister(key: mediaKey) }
-    TiebaAudioSession.unregister(id: mediaKey)
-    teardown()
-    src = ""
-    mediaKey = ""
-    isActive = false
-    rate = 1
-    updateRate()
-  }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    actionButton.frame = bounds
-    playIcon.frame = CGRect(x: 10, y: (bounds.height - 28) / 2, width: 28, height: 28)
-    let rateW: CGFloat = isActive ? 34 : 0
-    timeLabel.sizeToFit()
-    let timeW = timeLabel.bounds.width
-    timeLabel.frame = CGRect(
-      x: bounds.width - 10 - timeW,
-      y: (bounds.height - timeLabel.bounds.height) / 2,
-      width: timeW,
-      height: timeLabel.bounds.height
-    )
-    rateButton.frame = CGRect(
-      x: bounds.width - 10 - timeW - 8 - rateW,
-      y: (bounds.height - 22) / 2,
-      width: rateW,
-      height: 22
-    )
-    let waveX = playIcon.frame.maxX + 10
-    let waveRight = (isActive ? rateButton.frame.minX : timeLabel.frame.minX) - 10
-    waveform.frame = CGRect(x: waveX, y: 10, width: max(waveRight - waveX, 0), height: bounds.height - 20)
-    waveform.isHidden = waveform.frame.width < 24
-    rateButton.isHidden = !isActive
-  }
-
-  @objc private func handleTap() {
-    TiebaSceneHaptics.fire("toggle")
-    if isActive {
-      pause()
-    } else {
-      play()
-    }
-  }
-
-  /// 倍速落点（1x / 1.5x）+ 菜单勾选态刷新。
-  private func updateRate() {
-    rateButton.setTitle(rate == 1 ? "1x" : "1.5x", for: .normal)
-    rateButton.menu = UIMenu(
-      title: "播放速度",
-      options: .singleSelection,
-      children: [
-        UIAction(title: "1x", state: rate == 1 ? .on : .off) { [weak self] _ in self?.setRate(1) },
-        UIAction(title: "1.5x", state: rate == 1.5 ? .on : .off) { [weak self] _ in self?.setRate(1.5) },
-      ]
-    )
-  }
-
-  private func setRate(_ value: Double) {
-    guard rate != value else { return }
-    TiebaSceneHaptics.fire("toggle")
-    rate = value
-    updateRate()
-    if isActive { player?.rate = Float(rate) }
-    setNeedsLayout()
-  }
-
-  private func play() {
-    guard !src.isEmpty, let url = URL(string: src) else { return }
-    if player == nil {
-      let player = AVPlayer(url: url)
-      self.player = player
-      timeObserver = player.addPeriodicTimeObserver(
-        forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
-        queue: .main
-      ) { [weak self] time in
-        Task { @MainActor in
-          guard let self, let item = self.player?.currentItem else { return }
-          let total = item.duration.isNumeric ? item.duration.seconds : self.fallbackDuration
-          self.update(time: time.seconds, duration: total)
-        }
-      }
-      endObserver = NotificationCenter.default.addObserver(
-        forName: .AVPlayerItemDidPlayToEndTime,
-        object: player.currentItem,
-        queue: .main
-      ) { [weak self] _ in
-        Task { @MainActor in self?.handleEnded() }
-      }
-    }
-    TiebaAudioSession.activate()
-    player?.playImmediately(atRate: Float(rate))
-    isActive = true
-    updatePlayIcon(playing: true)
-    TiebaThreadMediaCoordinator.shared.activate(key: mediaKey)
-    setNeedsLayout()
-  }
-
-  /// 行重配后不再显示语音时调用（隐藏不等于暂停）。
-  func stopPlayback() {
-    pause()
-  }
-
-  private func pause() {
-    player?.pause()
-    isActive = false
-    updatePlayIcon(playing: false)
-    TiebaThreadMediaCoordinator.shared.deactivate(key: mediaKey)
-    TiebaAudioSession.deactivateIfIdle()
-    setNeedsLayout()
-  }
-
-  private func handleEnded() {
-    player?.seek(to: .zero)
-    pause()
-    update(time: 0, duration: fallbackDuration)
-  }
-
-  private func teardown() {
-    if let timeObserver {
-      player?.removeTimeObserver(timeObserver)
-      self.timeObserver = nil
-    }
-    if let endObserver {
-      NotificationCenter.default.removeObserver(endObserver)
-      self.endObserver = nil
-    }
-    player?.pause()
-    player = nil
-  }
-
-  private func updatePlayIcon(playing: Bool) {
-    playIcon.image = UIImage(
-      systemName: playing ? "pause.circle.fill" : "play.circle.fill",
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 28, weight: .regular)
-    )
-    // 无障碍落在真正可点的 actionButton 上（容器不再是 a11y 元素）。
-    actionButton.accessibilityLabel = playing ? "暂停音频" : "播放音频"
-  }
-
-  private func update(time: Double, duration: Double) {
-    let total = duration > 0 ? duration : fallbackDuration
-    waveform.progress = total > 0 ? min(max(time / total, 0), 1) : 0
-    timeLabel.text = "\(TiebaAudioPillView.format(time)) / \(TiebaAudioPillView.format(total))"
-    setNeedsLayout()
-  }
-
-  private func download() {
-    guard let url = URL(string: src) else { return }
-    Task { @MainActor in
-      do {
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let temp = FileManager.default.temporaryDirectory
-          .appendingPathComponent("tieba-audio-\(UUID().uuidString).mp3")
-        try data.write(to: temp, options: .atomic)
-        guard let presenter = TiebaViewHosts.viewController(for: self) else { return }
-        TiebaShareSheet.present(
-          fileURL: temp,
-          dialogTitle: "保存音频",
-          from: presenter,
-          sourceRect: convert(bounds, to: presenter.view)
-        )
-      }
-      catch {
-        TiebaSceneHaptics.fire("action-fail")
-      }
-    }
-  }
-
-  static func format(_ seconds: Double) -> String {
-    let total = max(0, Int(seconds.rounded(.down)))
-    return "\(total / 60):\(String(format: "%02d", total % 60))"
-  }
-}
-
-/// 15 根静态柱（AudioSegment.tsx 的 AUDIO_WAVEFORM_BARS 同值），按进度着色。
-final class TiebaAudioWaveformBarView: UIView {
-  static let bars: [CGFloat] = [12, 18, 8, 22, 14, 20, 10, 24, 16, 6, 19, 13, 21, 9, 17]
-  var activeColor: UIColor = .systemBlue { didSet { setNeedsDisplay() } }
-  var inactiveColor: UIColor = .secondaryLabel { didSet { setNeedsDisplay() } }
-  var progress: Double = 0 { didSet { setNeedsDisplay() } }
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    isOpaque = false
-    backgroundColor = .clear
-    isUserInteractionEnabled = false
-  }
-
-  required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-  override func draw(_ rect: CGRect) {
-    guard bounds.width > 0 else { return }
-    let count = Self.bars.count
-    let gap: CGFloat = 2
-    let barWidth = max((bounds.width - gap * CGFloat(count - 1)) / CGFloat(count), 1)
-    let shown = Int((Double(count) * progress).rounded(.up))
-    for (index, height) in Self.bars.enumerated() {
-      let x = CGFloat(index) * (barWidth + gap)
-      let y = (bounds.height - height) / 2
-      (index < shown ? activeColor : inactiveColor).setFill()
-      UIBezierPath(
-        roundedRect: CGRect(x: x, y: y, width: barWidth, height: height),
-        cornerRadius: barWidth / 2
-      ).fill()
-    }
-  }
-}
-
-// MARK: - 媒体占位条（hideMedia / blockVideo）
-
-final class TiebaPostPlaceholderView: UIView {
-  private let iconView = UIImageView()
-  private let label = UILabel()
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    layer.cornerRadius = 10
-    layer.cornerCurve = .continuous
-    iconView.contentMode = .scaleAspectFit
-    addSubview(iconView)
-    label.font = TiebaSimpleText.font(size: 13, weight: .regular)
-    addSubview(label)
-  }
-
-  required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-  func configure(icon: String, text: String, palette: TiebaFeedRowPalette) {
-    backgroundColor = palette.chip
-    layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
-    layer.borderColor = palette.separator.cgColor
-    iconView.image = TiebaSymbols.image(icon, pointSize: 14, weight: .regular)
-    iconView.tintColor = palette.textSecondary
-    label.text = text
-    label.textColor = palette.textSecondary
-    setNeedsLayout()
-  }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    iconView.frame = CGRect(x: 10, y: (bounds.height - 16) / 2, width: 16, height: 16)
-    label.sizeToFit()
-    label.frame = CGRect(
-      x: 32,
-      y: (bounds.height - label.bounds.height) / 2,
-      width: max(bounds.width - 42, 0),
-      height: label.bounds.height
-    )
-  }
-}
-
 // MARK: - 帖子卡视图
-
 final class TiebaPostRowView: UIView {
   var onEvent: ((TiebaPostRowEvent) -> Void)?
 
   /// 上一次真正贴上去的模型（身份比较）：同一个实例重复 apply 直接返回（见 apply(model:)）。
   private weak var appliedModel: TiebaPostRowModel?
 
-  /// 上一次贴进 textView 的正文（身份比较，见 loadEmoticonsIfNeeded）。
+  /// 上一次贴进正文 TextNode 的 attributed（身份比较，见 loadEmoticonsIfNeeded）。
   private var assignedText: NSAttributedString?
 
   private let cardView = UIView()
@@ -772,24 +31,43 @@ final class TiebaPostRowView: UIView {
   private let menuButton = UIButton(type: .system)
   private let avatarControl = UIControl()
   private let likeControl = UIControl()
-  private let textView = UITextView()
+  // [显示] 正文 = TextNode 渲染（移植自上游 Display/Source/TextNode.swift 的排版/绘制路径）：
+  // 行高/行距/截断/配色全部由 plan 的行距因子 + TextNode 排版决定，逐项与系统排版对拍（见 27 号文档）。
+  // 选择、链接按压高亮、无障碍元素都读**同一份 cachedLayout** —— 几何与绘制同源，没有第二套排版。
+  private let textNode = TiebaImmediateTextNode()
+  /// 选择层（长按选词 / 拖手柄改选 / 编辑菜单）：叠在正文之上，命中与否由它自己的 hitTest 决定。
+  private var textSelectionNode: TiebaTextSelectionNode?
+  /// 链接按压高亮（跨行连续）：正文之上、选择层之下。
+  private let linkHighlightNode = TiebaLinkHighlightingNode(color: .clear)
+  /// 链接的无障碍元素容器（与正文同框的透明层；正文本体仍由 textNode 自己作为元素）。
+  private let textAccessibilityOverlay = UIView()
+  /// 按下中的链接（抬手时据此决定打开；移开手指即取消）。
+  private var pressedLink: (url: String, displayText: String)?
+  /// 链接按压识别器（delegate 判据要用到它：只按在链接上才成立）。
+  private var linkPressRecognizer: UILongPressGestureRecognizer?
+  private var selectionMenu: UIMenu?
+  private var selectionMenuInteraction: UIEditMenuInteraction?
   private let blockedTipView = UIView()
   private let blockedTipLabel = UILabel()
   private let blockedTipIcon = UIImageView()
   private let imageScrollView = UIScrollView()
-  // GIFImageView：GIF 档走 Gifu 逐帧渲染，静态档当普通 UIImageView 用（子类透明）。
-  private var imageViews: [GIFImageView] = []
+  // TiebaGIFImageView：GIF 档由 TiebaGIFPlayer 逐帧渲染，静态档当普通 UIImageView 用。
+  private var imageViews: [TiebaGIFImageView] = []
   private var imagePlaceholderViews: [TiebaPostPlaceholderView] = []
   private let videoPlaceholderView = TiebaPostPlaceholderView()
   private let imageBadge = UILabel()
   /// GIF 角标（对齐 Kotlin 版：GIF 图右下角小黑标；.feed 行已有同款）。
-  private let gifBadge = UILabel()
+  /// [修复④a] **每张图各一个角标**：原来整行共用 `gifBadge` 一个 label，一行多图时后亮的角标会覆盖
+  /// 前一个的位置（用户实测的「有的有有的没有」）。改为一图一标，挂在图自己的视图上。
+  private var gifBadges: [ObjectIdentifier: UILabel] = [:]
   private var videoView: TiebaInlineVideoView?
   private var audioView: TiebaAudioPillView?
   private let subPostsControl = UIControl()
   private let subPostsHairline = UIView()
   private var subPostNameLabels: [UILabel] = []
-  private var subPostTextViews: [UILabel] = []
+  // 楼中楼预览同样是 TextNode：两行截断（truncationType = .end，与 UILabel 的 byTruncatingTail 同口径），
+  // 行盒与左侧名字标签共用，链接色已烘进 attributed。
+  private var subPostTextNodes: [TiebaImmediateTextNode] = []
   private var subPostDividers: [UIView] = []
   private let subPostsMoreLabel = UILabel()
   private let toolbarView = UIView()
@@ -824,8 +102,8 @@ final class TiebaPostRowView: UIView {
   }
 
   func apply(model: TiebaPostRowModel) {
-    // 同一个模型实例重复 apply（点赞/页脚变化引起的可见行重配）不必重贴：正文那个
-    // UITextView 一赋 attributedText 就是一次全文排版，是这行最贵的一笔；主题色变
+    // 同一个模型实例重复 apply（点赞/页脚变化引起的可见行重配）不必重贴：正文重新贴一次
+    // 就是一次完整排版（TextNode 的 CoreText 排版），是这行最贵的一笔；主题色变
     // 走 applyPalette 另一条路。换行/换模型/reuse 都会让 token 失配。
     if appliedModel === model { return }
     appliedModel = model
@@ -898,15 +176,22 @@ final class TiebaPostRowView: UIView {
     menuButton.setImage(TiebaSymbols.image("ellipsis", pointSize: 18, weight: .bold), for: .normal)
     menuButton.tintColor = model.palette.textTertiary
 
-    textView.isHidden = plan.textFrame == nil
+    textNode.isHidden = plan.textFrame == nil
     if let frame = plan.textFrame {
-      textView.frame = frame
+      textNode.frame = frame
       assignedText = model.contentText
-      textView.attributedText = model.contentText
+      textNode.lineSpacing = plan.contentLineSpacing
+      textNode.attributedText = model.contentText
+      // 约束高度不参与行数判定：行数只看 maximumNumberOfLines（0 = 不限行），与 measureBody 同口径 ——
+      // 若把「量出来的高度」当约束传进去，末行会被判成最后一行而给正文加上省略号。
+      _ = textNode.updateLayout(CGSize(width: frame.width, height: .greatestFiniteMagnitude))
+      installTextAccessibility()
     } else {
       assignedText = nil
-      textView.attributedText = nil
+      textNode.attributedText = nil
+      textAccessibilityOverlay.accessibilityElements = nil
     }
+    layoutTextOverlays()
 
     blockedTipView.isHidden = plan.blockedTipFrame == nil
     if let frame = plan.blockedTipFrame {
@@ -936,23 +221,19 @@ final class TiebaPostRowView: UIView {
   func applyPalette(_ palette: TiebaFeedRowPalette) {
     self.palette = palette
     titleLabel.textColor = palette.text
-    textView.textColor = palette.text
-    textView.linkTextAttributes = [
-      .foregroundColor: palette.primary,
-      .underlineStyle: NSUnderlineStyle.single.rawValue,
-    ]
+    // 正文颜色烘在 attributed 里（palette.text / 链接 palette.primary + 下划线），与 titleLabel 同法：
+    // 换主题由 UITextView 时代的 textColor/linkTextAttributes 改为「随模型重建」，语义不变。
     avatarView?.backgroundColor = palette.avatarFallback
     blockedTipView.backgroundColor = .systemFill
     blockedTipLabel.textColor = palette.textSecondary
     blockedTipIcon.tintColor = palette.textSecondary
     imageBadge.textColor = .white
-    imageBadge.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+    // 与 buildSubviews 里的规范值同源（黑 55%；改前这里是 45%，会把新规范覆盖回旧值）。
+    imageBadge.backgroundColor = UIColor.black.withAlphaComponent(0.55)
     subPostsHairline.backgroundColor = palette.separator
     for divider in subPostDividers { divider.backgroundColor = palette.separator }
     for label in subPostNameLabels { label.textColor = palette.textSecondary }
-    for label in subPostTextViews {
-      label.textColor = palette.textSecondary
-    }
+    // 楼中楼正文颜色同样烘在 attributed 里（palette.text），与主贴正文一致。
     subPostsMoreLabel.textColor = palette.primary
     // 底色 = 主题 surfaceSecondary（原 JS replyToolbar 的 colors.surfaceSecondary，
     // 浅色下与页面底色同值）：只靠 hairline 描边成卡，不用 .systemFill —— 那块灰
@@ -972,20 +253,27 @@ final class TiebaPostRowView: UIView {
     appliedModel = nil
     imageScrollView.contentOffset = .zero
     assignedText = nil
+    gifProbeGenerations.removeAll(keepingCapacity: true)
     titleLabel.attributedText = nil
-    textView.attributedText = nil
+    textNode.attributedText = nil
+    textSelectionNode?.cancelSelection()
+    clearLinkHighlight()
     for view in imageViews {
       // 在途请求必须取消（与 TiebaFeedRowView.resetContent / TiebaSimpleRows 同纪律，
       // 文件头写明）：否则旧 displayProcessor 请求照常解码并写缓存，位图贴在复用后的
-      // 隐藏视图上。GIF 侧 stopAnimatingGIF 同时释放 Gifu 帧缓冲。
+      // 隐藏视图上。GIF 侧必须走 prepareForGIFReuse()：它 = recycle()，
+      // 停表 + **真释放帧缓存** + 释放 CGImageSource（老的 Gifu 只暂停 animator，
+      // 帧缓冲一个都不放，滚动一遍就把沿途所有 GIF 的整窗帧攒在内存里）。
       cancelRequest(for: view)
-      view.stopAnimatingGIF()
+      // GIF 的 Nuke ImageTask 是手挂的，不在 NukeExtensions 的视图关联里，得单独取消（P2-5）。
+      tiebaCancelGifLoad(view)
+      view.prepareForGIFReuse()
       view.image = nil
       view.alpha = 1
       view.clipsToBounds = false
     }
     for view in imagePlaceholderViews { view.isHidden = true }
-    for view in subPostTextViews { view.attributedText = nil }
+    for node in subPostTextNodes { node.attributedText = nil }
     videoView?.prepareForReuse()
     audioView?.prepareForReuse()
     videoView?.removeFromSuperview()
@@ -993,7 +281,7 @@ final class TiebaPostRowView: UIView {
     videoView = nil
     audioView = nil
     imageBadge.isHidden = true
-    gifBadge.isHidden = true
+    self.hideGifBadges()
   }
 
   /// 首屏入场：参数与其余三族共用 TiebaEntrance（原各抄一份时位移是 10pt、
@@ -1038,14 +326,72 @@ final class TiebaPostRowView: UIView {
     menuButton.addTarget(self, action: #selector(handleMenu), for: .touchUpInside)
     menuButton.accessibilityLabel = "更多操作"
 
-    textView.isEditable = false
-    textView.isScrollEnabled = false
-    textView.isSelectable = true
-    textView.backgroundColor = .clear
-    textView.textContainerInset = .zero
-    textView.textContainer.lineFragmentPadding = 0
-    textView.delegate = self
-    addSubview(textView)
+    // 正文四层（自下而上）：TextNode 文本 → 链接按压高亮 → 无障碍元素层 → 选择层。
+    // 选择/高亮/无障碍都读 textNode.cachedLayout 的矩形，因此不会与绘制差半像素。
+    textNode.maximumNumberOfLines = 0
+    textNode.truncationType = .end
+    textNode.isUserInteractionEnabled = false
+    addSubview(textNode)
+    linkHighlightNode.isUserInteractionEnabled = false
+    linkHighlightNode.isHidden = true
+    addSubview(linkHighlightNode)
+    textAccessibilityOverlay.isUserInteractionEnabled = false
+    textAccessibilityOverlay.backgroundColor = .clear
+    addSubview(textAccessibilityOverlay)
+
+    // 选择层：长按 0.3s 起选、拖手柄改选、抬手弹菜单。选区颜色用系统语义色（随深浅色自适应，
+    // 不依赖应用强调色），与系统文本框的选区观感一致。
+    let selectionNode = TiebaTextSelectionNode(
+      theme: TiebaTextSelectionTheme(
+        selection: UIColor.label.withAlphaComponent(0.2),
+        knob: .label,
+        isDark: traitCollection.userInterfaceStyle == .dark
+      ),
+      target: TiebaTextSelectionTarget(textNode: textNode),
+      updateIsActive: { [weak self] isActive in
+        // 起选时收起链接高亮：同一块区域不该同时出现两种高亮。
+        if isActive { self?.clearLinkHighlight() }
+      },
+      rootView: { [weak self] in
+        self.flatMap { TiebaViewHosts.viewController(for: $0)?.view }
+      },
+      presentMenu: { [weak self] anchor, rect, items in
+        self?.presentSelectionMenu(on: anchor, rect: rect, items: items)
+      },
+      dismissMenu: { [weak self] in
+        self?.selectionMenuInteraction?.dismissMenu()
+      },
+      performAction: { [weak self] string, action in
+        self?.performSelectionAction(string: string, action: action)
+      }
+    )
+    selectionNode.enableQuote = false
+    selectionNode.enableTranslate = false
+    selectionNode.canBeginSelection = { [weak self, weak selectionNode] point in
+      // 链接上不起选择：否则按住链接会弹出选词菜单，看不见该链接的按压高亮。
+      guard let self, let selectionNode else { return false }
+      return self.linkAttribute(at: self.textNode.convert(point, from: selectionNode)) == nil
+    }
+    // 点链接：轻点直接打开；按住 ≥0.1s 出跨行高亮、抬手打开。tap 等 press 失败 ⇒ 两条路互斥，不会开两次。
+    let linkPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLinkPress))
+    linkPress.minimumPressDuration = 0.1
+    linkPress.allowableMovement = 12
+    linkPress.cancelsTouchesInView = false
+    // 只按在**链接上**才允许开始（见文件末尾 UIGestureRecognizerDelegate 扩展）：它若在 0.1s
+    // 无条件 began，UIKit 会取消同一视图上仍在等 0.3s 的选择手势 —— 那是「长按正文弹不出菜单」的第二个原因。
+    linkPress.delegate = self
+    linkPressRecognizer = linkPress
+    let textTap = UITapGestureRecognizer(target: self, action: #selector(handleTextTap))
+    textTap.require(toFail: linkPress)
+    selectionNode.addGestureRecognizer(linkPress)
+    selectionNode.addGestureRecognizer(textTap)
+    // 编辑菜单（拷贝/全选/查询…）走系统的 UIEditMenuInteraction：装配期就挂到选择层上，
+    // 长按选词时由 presentSelectionMenu 弹出（自绘选择没有系统文本框那套免费菜单，必须自己装这一件）。
+    let editMenuInteraction = UIEditMenuInteraction(delegate: self)
+    selectionNode.addInteraction(editMenuInteraction)
+    selectionMenuInteraction = editMenuInteraction
+    addSubview(selectionNode)
+    textSelectionNode = selectionNode
 
     blockedTipView.layer.cornerRadius = 12
     blockedTipView.layer.cornerCurve = .continuous
@@ -1066,23 +412,17 @@ final class TiebaPostRowView: UIView {
     imageScrollView.backgroundColor = .clear
     imageScrollView.isHidden = true
     addSubview(imageScrollView)
-    imageBadge.font = TiebaSimpleText.font(size: 15, weight: .semibold)
+    // 改前症状：「+N」角标是 15pt / 黑 45% / 圆角 8，与同图带的 GIF 角标及信息流规范
+    //（11pt / 黑 55% / 圆角 10）两套风格，末图同时有 GIF 与 +N 时两个角标不同款。
+    // 改后行为：与信息流规范同款（字号/底色/圆角三处对齐，位置由帧计划给、不动）。
+    imageBadge.font = TiebaSimpleText.font(size: 11, weight: .semibold)
     imageBadge.textAlignment = .center
     imageBadge.textColor = .white
-    imageBadge.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-    imageBadge.layer.cornerRadius = 8
+    imageBadge.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+    imageBadge.layer.cornerRadius = 10
     imageBadge.layer.cornerCurve = .continuous
     imageBadge.clipsToBounds = true
-    // GIF 角标样式与信息流行 TiebaFeedRowBadgeView 同款（rgba(0,0,0,0.55) + 11pt 白字）。
-    gifBadge.text = "GIF"
-    gifBadge.font = .systemFont(ofSize: 11, weight: .semibold)
-    gifBadge.textColor = .white
-    gifBadge.backgroundColor = UIColor.black.withAlphaComponent(0.55)
-    gifBadge.textAlignment = .center
-    gifBadge.layer.cornerRadius = 10
-    gifBadge.layer.cornerCurve = .continuous
-    gifBadge.clipsToBounds = true
-    gifBadge.isHidden = true
+    // GIF 角标样式（用户口径：无底纯白字 + 阴影，不要胶囊底）已收进 makeGifBadge()，见文件内。
 
     subPostsControl.addTarget(self, action: #selector(handleSubPosts), for: .touchUpInside)
     addSubview(subPostsHairline)
@@ -1093,14 +433,14 @@ final class TiebaPostRowView: UIView {
       name.font = TiebaPostRowLayout.subPostNameFont
       addSubview(name)
       subPostNameLabels.append(name)
-      let text = UILabel()
-      // 楼中楼预览**两行截断**（与 TiebaPostRowPlan 的 measureHeight(maxLines: 2) 同口径）；
-      // 非可选非交互，链接色已烘进 attributed，故用 UILabel 而非第二个 UITextView
-      //（文本框一赋值就是一趟 TextKit 排版：一行楼中楼预览不值得）。
-      text.numberOfLines = 2
-      text.lineBreakMode = .byTruncatingTail
+      let text = TiebaImmediateTextNode()
+      // 楼中楼预览**两行截断**：maximumNumberOfLines + truncationType(.end) —— 与 plan 里的
+      // measureBody(maxLines: 2) 同一口径（TextNode 自排自量，不再有第二套 TextKit 测量）。
+      text.maximumNumberOfLines = 2
+      text.truncationType = .end
+      text.isUserInteractionEnabled = false
       addSubview(text)
-      subPostTextViews.append(text)
+      subPostTextNodes.append(text)
       let divider = UIView()
       addSubview(divider)
       subPostDividers.append(divider)
@@ -1154,7 +494,7 @@ final class TiebaPostRowView: UIView {
     imageScrollView.frame = frame
     let shownCount = min(model.images.count, TiebaPostRowLayout.maxImages)
     while imageViews.count < shownCount {
-      let view = GIFImageView()
+      let view = TiebaGIFImageView()
       view.contentMode = .scaleAspectFill
       // 圆角由图片管线烘焙进位图（见 tiebaPostLoadDisplayImage）：这里只留
       // cornerRadius 给占位底色，不再 clipsToBounds（否则每帧一次离屏合成）。
@@ -1169,14 +509,14 @@ final class TiebaPostRowView: UIView {
     }
     let scale = max(traitCollection.displayScale, 1)
     let single = model.images.count == 1
-    var gifBadgeFrame: CGRect?
     for (index, view) in imageViews.enumerated() {
       guard index < shownCount else {
         view.isHidden = true
         // 在途请求一并取消（复用纪律，见 prepareForReuse）。
         cancelRequest(for: view)
-        view.stopAnimatingGIF()
-        view.image = nil
+        // prepareForGIFReuse() = 停表 + 真释放帧缓存 + 清 image：比老的 stopAnimatingGIF()
+        // 多做"释放"这一步，而这里的语义正需要释放（视图要隐藏并换图）。
+        view.prepareForGIFReuse()
         TiebaHeroTransition.clear(view)
         continue
       }
@@ -1195,23 +535,15 @@ final class TiebaPostRowView: UIView {
       let image = model.images[index]
       view.backgroundColor = model.palette.placeholder
       if model.preferences.imageLoadType == "all_no" {
-        view.stopAnimatingGIF()
-        view.image = nil
-      } else if image.isGif, let gifURL = TiebaPostRowText.gifDisplayURL(image) {
-        // GIF 档：无处理器取动图真身，Gifu 按显示尺寸逐帧播放。
-        tiebaLoadGifImage(
-          gifURL,
-          targetSize: view.bounds.size,
-          contentMode: .scaleAspectFill,
-          frameBufferSize: 24,
-          into: view,
-          isStale: { [weak self] in self?.appliedModel !== model }
-        )
-        if gifBadgeFrame == nil {
-          gifBadgeFrame = view.frame
-        }
+        // 不加载图片：停表 + 释放帧缓存 + 清图（老的 stopAnimatingGIF 只停表，帧还留着）。
+        view.prepareForGIFReuse()
       } else {
-        view.stopAnimatingGIF()
+        // 只**暂停**：新显示档还没到，先让上一帧留在屏幕上，避免中间空一帧闪一下
+        // （老的 stopAnimatingGIF 也是这个语义：停表但保留当前帧）。帧缓存等到真正换图
+        // （tiebaLoadGifImage / prepareForGIFReuse）时才释放。
+        view.gifPlayer.stop()
+        // 显示档 = 服务端 cdn_src（对 GIF 即 g=0 静态压缩档，真首帧几十 KB）；
+        // 探测到 GIF 再拉 big_cdn_src 动图档起播（见 TiebaNuke「GIF 三档」注）。
         tiebaPostLoadDisplayImage(
           TiebaPostRowText.displayURL(image, preferences: model.preferences),
           targetSize: view.bounds.size,
@@ -1219,6 +551,12 @@ final class TiebaPostRowView: UIView {
           scale: scale,
           into: view,
           transition: true
+        )
+        probeAndPlayGIF(
+          candidates: TiebaPostRowText.gifProbeCandidates(image),
+          naturalPixelSize: CGSize(width: image.width, height: image.height),
+          view: view,
+          model: model
         )
       }
       view.alpha = model.preferences.isNight && model.preferences.imageDarkenWhenNight ? 0.6 : 1
@@ -1237,22 +575,103 @@ final class TiebaPostRowView: UIView {
     } else {
       imageBadge.isHidden = true
     }
-    // GIF 角标：第一张 GIF 图的右下角（信息流/查看器同语义；复用 imageBadge 的
-    // 挂载懒挂载模式）。
-    if let gifBadgeFrame {
-      if gifBadge.superview == nil { imageScrollView.addSubview(gifBadge) }
-      gifBadge.sizeToFit()
-      gifBadge.frame = CGRect(
-        x: gifBadgeFrame.maxX - 8 - gifBadge.bounds.width,
-        y: gifBadgeFrame.maxY - 8 - gifBadge.bounds.height,
-        width: gifBadge.bounds.width,
-        height: gifBadge.bounds.height
+    // GIF 角标由 probeAndPlayGIF 探测到动图后亮起（复用/换行先藏，见下行）。
+    self.hideGifBadges()
+  }
+
+  /// 帖子页的 GIF 自动播放：HEAD 探测动图档（big_cdn_src，零流量）命中 → 拉
+  /// 动图档（Gifu 逐帧）并亮角标。列表卡片（TiebaFeedRowView）同判定但只亮标
+  /// 不播——播放入口按用户口径只在进帖与大图查看器。
+  /// 帧重采样目标是「视图尺寸 与 源像素/屏幕 scale 取小」：Gifu 的帧位图 =
+  /// 目标点尺寸 × 设备 scale，不加上界的话小源（540×960）会被上采样到 3×、
+  /// 每帧 6MB+；缓冲窗 8 帧与查看器同口径（内存 = 单帧 × 8）。
+  /// 每格一份探测代次（视图身份 → 代次）。
+  /// 改前症状：行级单计数器被 layoutImages 循环里每张图各自自增 ⇒ N 图行只有**最后一格**的探测
+  /// 回调能通过代次判定，其余格的 GIF 角标不亮、动画不起播。
+  /// 改后行为：代次按格（视图）隔离，同格重配才作废旧探测；换行/复用时整表清空。
+  private var gifProbeGenerations: [ObjectIdentifier: Int] = [:]
+
+  /// - parameter candidates: GIF 判定候选链（动图档优先，见 TiebaPostRowText.gifProbeCandidates）。
+  ///   探测命中的那个 URL 就是**播放源**——判定与播放必须同源：改动前固定拿 animatedURL
+  ///   播放，而 animatedURL 在服务端没给动图档时会回落到显示档（对六成动图是静态 JPEG），
+  ///   于是"角标亮了却不动"。现在候选链里谁被判定为动图，就播谁。
+  private func probeAndPlayGIF(
+    candidates: [URL?],
+    naturalPixelSize: CGSize,
+    view: TiebaGIFImageView,
+    model: TiebaPostRowModel
+  ) {
+    let probeKey = ObjectIdentifier(view)
+    let generation = (gifProbeGenerations[probeKey] ?? 0) + 1
+    gifProbeGenerations[probeKey] = generation
+    Task { [weak self, weak view] in
+      guard let playURL = await TiebaNuke.firstGIFURL(among: candidates) else { return }
+      // 身份判定用视图**强持有**的 model，不用 appliedModel（weak）：页缓存淘汰/整页重发
+      // 会让 weak 引用变 nil，于是"nil !== model"被误判成"这行已经换内容"，
+      // 探测结果被丢弃 → 角标不亮、动画不起播，且没有任何日志（本轮查到的静默路径之一）。
+      guard let self, self.gifProbeGenerations[probeKey] == generation, self.model === model else { return }
+      guard let view else { return }
+      self.revealGifBadge(for: view)
+      guard self.model?.preferences.imageLoadType != "all_no" else { return }
+      let screenScale = view.traitCollection.displayScale > 0 ? view.traitCollection.displayScale : 3
+      var target = view.bounds.size
+      if naturalPixelSize.width > 1, naturalPixelSize.height > 1 {
+        target.width = min(target.width, naturalPixelSize.width / screenScale)
+        target.height = min(target.height, naturalPixelSize.height / screenScale)
+      }
+      tiebaLoadGifImage(
+        playURL,
+        targetSize: target,
+        contentMode: .scaleAspectFill,
+        frameBufferSize: 8,
+        into: view,
+        isStale: { [weak self] in self?.model !== model }
       )
-      gifBadge.isHidden = false
-      imageScrollView.bringSubviewToFront(gifBadge)
-    } else {
-      gifBadge.isHidden = true
     }
+  }
+
+  /// GIF 角标样式：无底纯白字 + 阴影（用户口径，原 0.55 黑胶囊已否）。
+  private func makeGifBadge() -> UILabel {
+    let badge = UILabel()
+    badge.text = "GIF"
+    badge.font = .systemFont(ofSize: 11, weight: .semibold)
+    badge.textColor = .white
+    badge.textAlignment = .center
+    badge.layer.shadowColor = UIColor.black.cgColor
+    badge.layer.shadowOpacity = 0.8
+    badge.layer.shadowRadius = 1.5
+    badge.layer.shadowOffset = CGSize(width: 0, height: 0.5)
+    badge.isHidden = true
+    return badge
+  }
+
+  private func hideGifBadges() {
+    for badge in self.gifBadges.values {
+      badge.isHidden = true
+    }
+  }
+
+  /// GIF 角标挂到**该图自己**的右下角（[修复④a]：一图一标，挂在图上而不是行容器的坐标系里 ——
+  /// 这样复用/换行/多图都不会互相覆盖，也不需要再 bringSubviewToFront）。
+  private func revealGifBadge(for view: TiebaGIFImageView) {
+    guard view.bounds.width > 1 else { return }
+    let key = ObjectIdentifier(view)
+    let badge: UILabel
+    if let existing = self.gifBadges[key] {
+      badge = existing
+    } else {
+      badge = self.makeGifBadge()
+      self.gifBadges[key] = badge
+      view.addSubview(badge)
+    }
+    badge.sizeToFit()
+    badge.frame = CGRect(
+      x: view.bounds.width - 8 - badge.bounds.width,
+      y: view.bounds.height - 8 - badge.bounds.height,
+      width: badge.bounds.width,
+      height: badge.bounds.height
+    )
+    badge.isHidden = false
   }
 
   private func layoutImagePlaceholders(model: TiebaPostRowModel, plan: TiebaPostRowPlan) {
@@ -1305,7 +724,7 @@ final class TiebaPostRowView: UIView {
       subPostsControl.frame = .zero
       subPostsHairline.isHidden = true
       for label in subPostNameLabels { label.isHidden = true }
-      for view in subPostTextViews { view.isHidden = true }
+      for node in subPostTextNodes { node.isHidden = true }
       for divider in subPostDividers { divider.isHidden = true }
       subPostsMoreLabel.isHidden = true
       return
@@ -1314,8 +733,6 @@ final class TiebaPostRowView: UIView {
     subPostsHairline.isHidden = false
     subPostsHairline.frame = CGRect(x: contentX, y: frame.minY, width: frame.width - TiebaPostRowLayout.cardPadding * 2, height: 1 / max(traitCollection.displayScale, 1))
     subPostsControl.frame = frame
-    let cardFrame = plan.cardFrame
-    let textWidth = max(cardFrame.width - TiebaPostRowLayout.cardPadding * 2, 0)
     for (index, label) in subPostNameLabels.enumerated() {
       let hasPost = index < model.post.subPosts.count
       label.isHidden = !hasPost
@@ -1333,20 +750,23 @@ final class TiebaPostRowView: UIView {
           ]
         )
       }
-      let text = subPostTextViews[index]
+      let text = subPostTextNodes[index]
       text.isHidden = !hasPost
       if hasPost, plan.subPostTextFrames.indices.contains(index) {
-        text.frame = plan.subPostTextFrames[index]
+        let frame = plan.subPostTextFrames[index]
+        text.frame = frame
+        text.lineSpacing = plan.subPostLineSpacing
         text.attributedText = model.subPostTexts.indices.contains(index) ? model.subPostTexts[index] : nil
+        // 两行截断：行数只看 maximumNumberOfLines = 2（与 measureBody 同口径）。
+        _ = text.updateLayout(CGSize(width: frame.width, height: .greatestFiniteMagnitude))
       }
+      // 分隔线显隐与页头/页脚同趟写完（原来先整轮 hide、再第二轮放开）。
       let divider = subPostDividers[index]
-      divider.isHidden = true
-      _ = textWidth
-    }
-    for (index, divider) in subPostDividers.enumerated() where index < model.post.subPosts.count {
-      if plan.subPostDividerFrames.indices.contains(index) {
+      if index < model.post.subPosts.count, plan.subPostDividerFrames.indices.contains(index) {
         divider.isHidden = false
         divider.frame = plan.subPostDividerFrames[index]
+      } else {
+        divider.isHidden = true
       }
     }
     subPostsMoreLabel.isHidden = plan.subPostsMoreFrame == nil
@@ -1392,6 +812,13 @@ final class TiebaPostRowView: UIView {
     updateToolbarPills()
   }
 
+  /// 只重贴工具栏（翻页页码变化）：正文/图片/行高都没变，走这条就不用重排一次
+  /// CoreText、也不用重新测量（TiebaThreadViewController.rebuild 调用）。
+  func refreshToolbar() {
+    guard let model else { return }
+    layoutToolbar(model: model, plan: model.plan)
+  }
+
   private func updateToolbarPills() {
     guard let toolbar = model?.toolbar else { return }
     configurePill(seeLzButton, title: "只看楼主", selected: toolbar.seeLz, palette: palette)
@@ -1430,10 +857,18 @@ final class TiebaPostRowView: UIView {
       let texts = current.upgradeTexts()
       if self.assignedText !== texts.text {
         self.assignedText = texts.text
-        self.textView.attributedText = texts.text
+        self.textNode.attributedText = texts.text
+        // 表情是附件（尺寸由 run delegate 定），换图不改行高，但必须重排一次才会重画。
+        if self.textNode.bounds.width > 0 {
+          _ = self.textNode.updateLayout(CGSize(width: self.textNode.bounds.width, height: .greatestFiniteMagnitude))
+        }
+        self.installTextAccessibility()
       }
-      for (idx, view) in self.subPostTextViews.enumerated() where !view.isHidden {
-        view.attributedText = texts.subs.indices.contains(idx) ? texts.subs[idx] : nil
+      for (idx, node) in self.subPostTextNodes.enumerated() where !node.isHidden {
+        node.attributedText = texts.subs.indices.contains(idx) ? texts.subs[idx] : nil
+        if node.bounds.width > 0 {
+          _ = node.updateLayout(CGSize(width: node.bounds.width, height: .greatestFiniteMagnitude))
+        }
       }
     }
   }
@@ -1542,49 +977,194 @@ final class TiebaPostRowView: UIView {
   }
 }
 
-// MARK: - 文本交互（选中 / 链接）
+// MARK: - 正文交互（链接点击 + 按压高亮 + 伪装链接确认）
+//
+// 显示 = TextNode（自绘）；交互全在本文件：命中用 layout.attributesAtPoint、高亮矩形用 layout.rangeRects，
+// 与绘制读同一份 cachedLayout（不再有「系统排版 + 自绘矩形」的亚像素差）。打开仍走 onEvent（.user / .link），
+// 伪装链接确认仍走 TiebaTextLinkSafety —— 与旧 UITextView 路径同一套判据。
 
-extension TiebaPostRowView: UITextViewDelegate {
-  /// 只读正文的长按菜单补「全选」（系统不一定给，见 tiebaSelectableEditMenu）。
-  func textView(
-    _ textView: UITextView,
-    editMenuForTextIn range: NSRange,
-    suggestedActions: [UIMenuElement]
-  ) -> UIMenu? {
-    textView.tiebaSelectableEditMenu(suggestedActions: suggestedActions)
+extension TiebaPostRowView {
+  /// 轻点：命中链接就打开；点在普通文字上什么也不做（选择层自己收选择）。
+  @objc private func handleTextTap(_ recognizer: UITapGestureRecognizer) {
+    let point = recognizer.location(in: textNode)
+    guard let link = linkAttribute(at: point) else { return }
+    openLink(url: link.url, displayText: link.displayText)
   }
 
-  func textView(
-    _ textView: UITextView,
-    primaryActionFor textItem: UITextItem,
-    defaultAction: UIAction
-  ) -> UIAction? {
-    guard case .link(let url) = textItem.content else { return defaultAction }
-    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+  /// 按住链接：出跨行高亮（拖动时跟着换成手指下的那条），抬手才打开；取消/移开立即收高亮。
+  @objc private func handleLinkPress(_ recognizer: UILongPressGestureRecognizer) {
+    let point = recognizer.location(in: textNode)
+    switch recognizer.state {
+    case .began, .changed:
+      guard let link = linkAttribute(at: point) else {
+        clearLinkHighlight()
+        return
+      }
+      pressedLink = (url: link.url, displayText: link.displayText)
+      showLinkHighlight(range: link.range)
+    case .ended:
+      let link = linkAttribute(at: point)
+      let pressed = pressedLink
+      clearLinkHighlight()
+      // 只有「按下时那条」和「抬手时那条」是同一条才打开：滑到别的链接上不该误开。
+      if let link, let pressed, link.url == pressed.url {
+        openLink(url: link.url, displayText: link.displayText)
+      }
+    default:
+      clearLinkHighlight()
+    }
+  }
+
+  /// 命中测试：该点上的 .link 属性 → (真实地址, 屏上显示文字, 属性区间)。三样同出一份 layout，
+  /// 显示文字就是用户看到的那段 —— 伪装地址检查靠它。
+  private func linkAttribute(at point: CGPoint) -> (url: String, displayText: String, range: NSRange)? {
+    guard
+      let layout = textNode.cachedLayout,
+      let string = layout.attributedString,
+      let (index, attributes) = layout.attributesAtPoint(point, orNearest: false),
+      let value = attributes[.link]
+    else { return nil }
+    let url = (value as? URL)?.absoluteString ?? (value as? String) ?? ""
+    guard !url.isEmpty else { return nil }
+    var linkRange: NSRange?
+    string.enumerateAttribute(.link, in: NSRange(location: 0, length: string.length), options: []) { value, range, stop in
+      guard value != nil, NSLocationInRange(index, range) else { return }
+      linkRange = range
+      stop.pointee = true
+    }
+    guard let linkRange else { return nil }
+    return (url, (string.string as NSString).substring(with: linkRange), linkRange)
+  }
+
+  /// 打开：tieba-native://user → 用户页；tieba-native://link → 外链（先做伪装地址确认）；其余原样外开。
+  private func openLink(url: String, displayText: String) {
+    guard let parsed = URL(string: url) else { return }
+    let components = URLComponents(url: parsed, resolvingAgainstBaseURL: false)
     let query = { (name: String) -> String in
       components?.queryItems?.first(where: { $0.name == name })?.value ?? ""
     }
     switch components?.host {
     case "user":
       let uid = query("uid")
-      guard !uid.isEmpty else { return nil }
-      return UIAction(title: defaultAction.title) { [weak self] _ in
-        self?.onEvent?(.user(uid))
-      }
+      guard !uid.isEmpty else { return }
+      onEvent?(.user(uid))
     case "link":
       let raw = query("url")
-      guard !raw.isEmpty else { return nil }
-      return UIAction(title: defaultAction.title) { [weak self] _ in
-        self?.onEvent?(.link(raw))
+      guard !raw.isEmpty else { return }
+      // [接线 URL 安全] 显示文字与真实地址不一致就先确认（典型：真实地址里塞 U+202E 双向覆盖，
+      // 屏幕上显示成另一个后缀）。一致的链接直接放行，行为与旧路径相同。
+      let fullText = textNode.attributedText?.string ?? ""
+      if let concealed = TiebaTextLinkSafety.concealedAddress(url: raw, displayText: displayText, fullText: fullText) {
+        TiebaTextLinkSafety.confirm(
+          address: concealed,
+          presenter: TiebaViewHosts.viewController(for: self)
+        ) { [weak self] in
+          self?.onEvent?(.link(raw))
+        }
+      } else {
+        onEvent?(.link(raw))
       }
     default:
-      return UIAction(title: defaultAction.title) { [weak self] _ in
-        self?.onEvent?(.link(url.absoluteString))
-      }
+      onEvent?(.link(url))
+    }
+  }
+
+  /// 链接按压高亮：矩形取自 layout.rangeRects(in:) —— 跨行链接会给多段矩形，高亮带因此连续。
+  private func showLinkHighlight(range: NSRange) {
+    guard let rects = textNode.cachedLayout?.rangeRects(in: range)?.rects, !rects.isEmpty else { return }
+    linkHighlightNode.updateRects(rects, color: palette.primary.withAlphaComponent(0.12))
+    linkHighlightNode.isHidden = false
+  }
+
+  private func clearLinkHighlight() {
+    pressedLink = nil
+    linkHighlightNode.isHidden = true
+  }
+
+  /// 选择菜单：交给系统的 UIEditMenuInteraction 呈现（与系统文本框同一套观感），菜单项由选择层给。
+  private func presentSelectionMenu(on anchor: UIView, rect: CGRect, items: [TiebaTextSelectionMenuItem]) {
+    selectionMenu = UIMenu(children: items.map { item in
+      UIAction(title: item.title) { _ in item.action() }
+    })
+    // anchor 就是交互挂在的选择层；交互在装配期已 add（见 buildSubviews），这里只负责弹。
+    // 矩形 rect 也在选择层坐标里（的选择高亮矩形），present 时才 add 有注册时序风险。
+    selectionMenuInteraction?.presentEditMenu(
+      with: UIEditMenuConfiguration(identifier: nil, sourcePoint: CGPoint(x: rect.midX, y: rect.midY))
+    )
+  }
+
+  /// 菜单动作：拷贝走 TiebaClipboard、分享走 TiebaShareSheet、查询走系统词典 —— 全是系统件。
+  private func performSelectionAction(string: NSAttributedString, action: TiebaTextSelectionAction) {
+    switch action {
+    case .copy:
+      TiebaClipboard.setString(string.string)
+    case .share:
+      guard let presenter = TiebaViewHosts.viewController(for: self) else { return }
+      TiebaShareSheet.present(text: string.string, from: presenter)
+    case .lookup:
+      guard let presenter = TiebaViewHosts.viewController(for: self), !string.string.isEmpty else { return }
+      presenter.present(UIReferenceLibraryViewController(term: string.string), animated: true)
+    case .translate, .quote:
+      // 这两项在选择层里没开（buildSubviews 的 enableTranslate / enableQuote = false），不会到达。
+      break
+    }
+  }
+
+  /// 覆盖层与正文同框；换模型/换宽后旧选择矩形已过期 → 一并收掉选择与高亮。
+  private func layoutTextOverlays() {
+    // 改前症状：三个覆盖层用的是 textNode.**bounds**（原点 0,0）而不是它在行里的 frame ⇒
+    // 选择层/链接高亮层/无障碍层全部贴在行左上角：正文上长按打不到选择层（弹不出编辑菜单）、
+    // 链接点不到、高亮画在错位置。
+    // 改后行为：与正文**同框**（覆盖层局部坐标 = 正文局部坐标，选择矩形正是按它算的）。
+    linkHighlightNode.frame = textNode.frame
+    textAccessibilityOverlay.frame = textNode.frame
+    textSelectionNode?.frame = textNode.frame
+    textSelectionNode?.cancelSelection()
+    clearLinkHighlight()
+  }
+
+  /// 链接的无障碍元素：VoiceOver 逐个聚焦、读出屏上文字、双击走同一条打开路径（含伪装地址确认）。
+  /// 正文本体由 textNode 自己作为元素（label = 全文），链接挂在与它同框的透明层上。
+  private func installTextAccessibility() {
+    guard let layout = textNode.cachedLayout else { return }
+    textNode.isAccessibilityElement = true
+    textNode.accessibilityLabel = textNode.attributedText?.string
+    textNode.accessibilityTraits = .staticText
+    TiebaTextAccessibility.install(on: textAccessibilityOverlay, layout: layout) { [weak self] url, displayText in
+      self?.openLink(url: url, displayText: displayText)
     }
   }
 }
 
+extension TiebaPostRowView: UIGestureRecognizerDelegate {
+  /// 链接按压「只按在链接上」才成立：不在链接上直接判失败。
+  /// 改前症状：`UILongPressGestureRecognizer(minimumPressDuration: 0.1)` 在任何位置都会 began，
+  /// UIKit 的默认裁决随即取消同一视图上仍是 .possible 的选择手势（touchesCancelled）⇒
+  /// 长按正文永远走不到 0.3s 的选词，编辑菜单弹不出来。
+  /// 改后行为：非链接处该识别器失败，选择手势照常计时；链接处仍按原语义出高亮 + 抬手打开。
+  // `UIView` 自己就声明了 `gestureRecognizerShouldBegin`（UIKit 给的默认实现），
+  // 子类扩展里再声明同名方法必须写 `override`，否则 Swift 6 直接报错。
+  override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+    guard recognizer === linkPressRecognizer else { return true }
+    return linkAttribute(at: recognizer.location(in: textNode)) != nil
+  }
+}
+
+extension TiebaPostRowView: @MainActor UIEditMenuInteractionDelegate {
+  func editMenuInteraction(
+    _ interaction: UIEditMenuInteraction,
+    menuFor configuration: UIEditMenuConfiguration,
+    suggestedActions: [UIMenuElement]
+  ) -> UIMenu? {
+    selectionMenu ?? UIMenu(children: suggestedActions)
+  }
+}
+// MARK: - TextNode 连线（本轮已接）
+//
+// 正文与楼中楼现在都由 TextNode 渲染（textNode / subPostTextNodes），系统 UITextView / UILabel 退场。
+// 四层的接法见 buildSubviews：文本 → 链接按压高亮（TiebaLinkHighlightingNode）→ 无障碍元素层
+//（TiebaTextAccessibility）→ 选择层（TiebaTextSelectionNode：长按选词 / 拖手柄 / 编辑菜单）。
+// 三者都读 textNode.cachedLayout，几何与绘制同源。
 // MARK: - 图片长按菜单（保存照片 / 分享照片，原 PostImageContextMenu）
 
 extension TiebaPostRowView: UIContextMenuInteractionDelegate {
@@ -1592,6 +1172,15 @@ extension TiebaPostRowView: UIContextMenuInteractionDelegate {
     _ interaction: UIContextMenuInteraction,
     configurationForMenuAtLocation location: CGPoint
   ) -> UIContextMenuConfiguration? {
+    // [移植 P0] 惯性滚动中长按一律不成立。
+    // 本仓列表是页级 reload + 翻页模型：减速中手指压在 A 行，但 cell 可能已被
+    // 复用/换页成 B 行 → 菜单会落到错的楼层。移植自上游
+    // ContextUI/Sources/PeekControllerGestureRecognizer.swift:14-25，
+    // 见 TiebaDecelerationGuard.swift。
+    if let host = interaction.view,
+       !TiebaDecelerationGuard.shouldAllowLongPress(at: location, in: host) {
+      return nil
+    }
     guard let model, let view = interaction.view as? UIImageView,
           model.images.indices.contains(view.tag) else { return nil }
     let image = model.images[view.tag]
