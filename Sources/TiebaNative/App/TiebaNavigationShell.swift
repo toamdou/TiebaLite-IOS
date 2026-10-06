@@ -142,10 +142,17 @@ public final class TiebaMainTabBarController: UITabBarController {
     // "编辑保存后顺序不变"的原因。
     let wanted: UITabBarController.Mode = regular ? .tabSidebar : .tabBar
     if mode != wanted { mode = wanted }
-    // 下滑收纳属于底栏：iPad 侧边栏形态下没有这回事，交给系统。
+    // 收纳方向：**上滑（手指向上 = 继续往下读）时收起、下滑恢复**。属于底栏；
+    // iPad 侧边栏形态下没有这回事，交给系统。
+    //
+    // 为什么用 .onScrollUp 而不是 .onScrollDown（2026-10-07 用户复报「浏览内容时
+    // 底栏持续存在」）：系统枚举名的语义是**手指拖动方向**，.onScrollDown = 手指
+    // 下滑时收纳 —— 于是读长帖（手指持续上滑）时底栏一直挂着，正好反了。头文件里
+    // .onScrollUp 的说明是 minimizes when scrolling up, and expands when scrolling
+    // back down，与「读内容时收起、往回翻时恢复」一致。
     tabBarMinimizeBehavior = regular
       ? .automatic
-      : (tabBarMinimizeEnabled ? .onScrollDown : .never)
+      : (tabBarMinimizeEnabled ? .onScrollUp : .never)
     guard regular else { return }
     // 只落一次默认展开。之后 sidebar.isHidden 归用户（系统折叠按钮）与
     // TiebaNavigator 的进二级页收起管——这里再写会把用户的折叠顶回去。
@@ -177,7 +184,8 @@ public final class TiebaMainTabBarController: UITabBarController {
     didSet {
       guard oldValue != tabBarMinimizeEnabled else { return }
       guard traitCollection.horizontalSizeClass != .regular else { return }
-      tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
+      // 方向同 configureSidebar：上滑收纳、下滑恢复（见那里的注释）。
+      tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollUp : .never
     }
   }
 }

@@ -141,7 +141,7 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
           toggle("navBarDoubleTapToTop", "双击顶栏回顶", "arrow.up.circle", default: true),
           toggle(
             "tabBarMinimizeEnabled", "底栏滚动收纳", "menubar.rectangle", default: true,
-            subtitle: "下滑收起底部栏、上滑恢复；关闭后底栏常驻"),
+            subtitle: "上滑收起底部栏、下滑恢复；关闭后底栏常驻"),
           TiebaFormRow(
             id: "defaultSortType",
             kind: .picker,
