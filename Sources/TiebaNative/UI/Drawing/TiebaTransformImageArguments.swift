@@ -53,12 +53,6 @@ struct TiebaTransformImageArguments: Equatable {
         self.scale = scale
     }
 
-    /// 含圆角外扩与内缩后的实际绘制尺寸。
-    nonisolated var drawingSize: CGSize {
-        let cornersExtendedEdges = self.corners.extendedEdges
-        return CGSize(width: self.boundingSize.width + cornersExtendedEdges.left + cornersExtendedEdges.right + self.intrinsicInsets.left + self.intrinsicInsets.right, height: self.boundingSize.height + cornersExtendedEdges.top + cornersExtendedEdges.bottom + self.intrinsicInsets.top + self.intrinsicInsets.bottom)
-    }
-
     nonisolated var drawingRect: CGRect {
         let cornersExtendedEdges = self.corners.extendedEdges
         return CGRect(x: cornersExtendedEdges.left + self.intrinsicInsets.left, y: cornersExtendedEdges.top + self.intrinsicInsets.top, width: self.boundingSize.width, height: self.boundingSize.height)

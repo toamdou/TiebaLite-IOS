@@ -420,28 +420,6 @@ public final class TiebaTextNodeLayoutArguments {
         self.customTruncationToken = customTruncationToken
     }
     
-    public func withAttributedString(_ attributedString: NSAttributedString?) -> TiebaTextNodeLayoutArguments {
-        return TiebaTextNodeLayoutArguments(
-            attributedString: attributedString,
-            backgroundColor: self.backgroundColor,
-            minimumNumberOfLines: self.minimumNumberOfLines,
-            maximumNumberOfLines: self.maximumNumberOfLines,
-            truncationType: self.truncationType,
-            constrainedSize: self.constrainedSize,
-            alignment: self.alignment,
-            verticalAlignment: self.verticalAlignment,
-            lineSpacing: self.lineSpacing,
-            cutout: self.cutout,
-            insets: self.insets,
-            lineColor: self.lineColor,
-            textShadowColor: self.textShadowColor,
-            textShadowBlur: self.textShadowBlur,
-            textStroke: self.textStroke,
-            displaySpoilers: self.displaySpoilers,
-            displayEmbeddedItemsUnderSpoilers: self.displayEmbeddedItemsUnderSpoilers,
-            customTruncationToken: self.customTruncationToken
-        )
-    }
 }
 
 public final class TiebaTextNodeLayout: NSObject {
@@ -472,16 +450,6 @@ public final class TiebaTextNodeLayout: NSObject {
                 return false
             }
             return true
-        }
-    }
-    
-    public struct LayoutInfo: Equatable {
-        public let size: CGSize
-        public let trailingLineWidth: CGFloat
-        
-        public init(size: CGSize, trailingLineWidth: CGFloat) {
-            self.size = size
-            self.trailingLineWidth = trailingLineWidth
         }
     }
     
@@ -577,50 +545,6 @@ public final class TiebaTextNodeLayout: NSObject {
         self.embeddedItems = embeddedItems
     }
     
-    public func areLinesEqual(to other: TiebaTextNodeLayout) -> Bool {
-        if self.lines.count != other.lines.count {
-            return false
-        }
-        for i in 0 ..< self.lines.count {
-            if !self.lines[i].frame.equalTo(other.lines[i].frame) {
-                return false
-            }
-            if self.lines[i].isRTL != other.lines[i].isRTL {
-                return false
-            }
-            if self.lines[i].range != other.lines[i].range {
-                return false
-            }
-            let lhsRuns = CTLineGetGlyphRuns(self.lines[i].line) as NSArray
-            let rhsRuns = CTLineGetGlyphRuns(other.lines[i].line) as NSArray
-            
-            if lhsRuns.count != rhsRuns.count {
-                return false
-            }
-            
-            for j in 0 ..< lhsRuns.count {
-                let lhsRun = lhsRuns[j] as! CTRun
-                let rhsRun = rhsRuns[j] as! CTRun
-                let lhsGlyphCount = CTRunGetGlyphCount(lhsRun)
-                let rhsGlyphCount = CTRunGetGlyphCount(rhsRun)
-                if lhsGlyphCount != rhsGlyphCount {
-                    return false
-                }
-                
-                for k in 0 ..< lhsGlyphCount {
-                    var lhsGlyph = CGGlyph()
-                    var rhsGlyph = CGGlyph()
-                    CTRunGetGlyphs(lhsRun, CFRangeMake(k, 1), &lhsGlyph)
-                    CTRunGetGlyphs(rhsRun, CFRangeMake(k, 1), &rhsGlyph)
-                    if lhsGlyph != rhsGlyph {
-                        return false
-                    }
-                }
-            }
-        }
-        return true
-    }
-    
     public var numberOfLines: Int {
         return self.lines.count
     }
@@ -640,14 +564,6 @@ public final class TiebaTextNodeLayout: NSObject {
         }
     }
 
-    public var trailingLineIsRTL: Bool {
-        if let lastLine = self.lines.last {
-            return lastLine.isRTL
-        } else {
-            return false
-        }
-    }
-    
     public func attributesAtPoint(_ point: CGPoint, orNearest: Bool) -> (Int, [NSAttributedString.Key: Any])? {
         if let attributedString = self.attributedString {
             let transformedPoint = CGPoint(x: point.x - self.insets.left, y: point.y - self.insets.top)
@@ -885,14 +801,6 @@ public final class TiebaTextNodeLayout: NSObject {
         return nil
     }
     
-    public func linesRects() -> [CGRect] {
-        var rects: [CGRect] = []
-        for line in self.lines {
-            rects.append(line.frame)
-        }
-        return rects
-    }
-    
     public func textRangesRects(text: String) -> [[CGRect]] {
         guard let attributedString = self.attributedString else {
             return []
@@ -946,73 +854,6 @@ public final class TiebaTextNodeLayout: NSObject {
             }
         }
         return nil
-    }
-    
-    public func attributeSubstringWithRange(name: String, index: Int) -> (String, String, NSRange)? {
-        if let attributedString = self.attributedString {
-            var range = NSRange()
-            let _ = attributedString.attribute(NSAttributedString.Key(rawValue: name), at: index, effectiveRange: &range)
-            if range.length != 0 {
-                return ((attributedString.string as NSString).substring(with: range), attributedString.string, range)
-            }
-        }
-        return nil
-    }
-    
-    public func allAttributeRects(name: String) -> [(Any, CGRect)] {
-        guard let attributedString = self.attributedString else {
-            return []
-        }
-        var result: [(Any, CGRect)] = []
-        attributedString.enumerateAttribute(NSAttributedString.Key(rawValue: name), in: NSRange(location: 0, length: attributedString.length), options: []) { (value, range, _) in
-            if let value = value, range.length != 0 {
-                var coveringRect = CGRect()
-                for line in self.lines {
-                    guard let rangeValue = line.range else {
-                        continue
-                    }
-                    let lineRange = NSIntersectionRange(range, rangeValue)
-                    if lineRange.length != 0 {
-                        var leftOffset: CGFloat = 0.0
-                        if lineRange.location != rangeValue.location {
-                            leftOffset = floor(CTLineGetOffsetForStringIndex(line.line, lineRange.location, nil))
-                        }
-                        var rightOffset: CGFloat = line.frame.width
-                        if lineRange.location + lineRange.length != rangeValue.length {
-                            var secondaryOffset: CGFloat = 0.0
-                            let rawOffset = CTLineGetOffsetForStringIndex(line.line, lineRange.location + lineRange.length, &secondaryOffset)
-                            rightOffset = ceil(rawOffset)
-                            if !tiebaTextIsEqual(rawOffset, secondaryOffset) {
-                                rightOffset = ceil(secondaryOffset)
-                            }
-                        }
-                        
-                        var lineFrame = CGRect(origin: CGPoint(x: line.frame.origin.x, y: line.frame.origin.y - line.frame.size.height + line.descent), size: line.frame.size)
-                        switch self.resolvedAlignment {
-                            case .center:
-                                lineFrame.origin.x = floor((self.size.width - lineFrame.size.width) / 2.0)
-                            case .natural:
-                                lineFrame = tiebaTextDisplayLineFrame(frame: lineFrame, isRTL: line.isRTL, boundingRect: CGRect(origin: CGPoint(), size: self.size), cutout: self.cutout)
-                            case .right:
-                                lineFrame.origin.x = self.size.width - lineFrame.size.width
-                            default:
-                                break
-                        }
-                        
-                        let rect = CGRect(origin: CGPoint(x: lineFrame.minX + min(leftOffset, rightOffset) + self.insets.left, y: lineFrame.minY + self.insets.top), size: CGSize(width: abs(rightOffset - leftOffset), height: lineFrame.size.height))
-                        if coveringRect.isEmpty {
-                            coveringRect = rect
-                        } else {
-                            coveringRect = coveringRect.union(rect)
-                        }
-                    }
-                }
-                if !coveringRect.isEmpty {
-                    result.append((value, coveringRect))
-                }
-            }
-        }
-        return result
     }
     
     public func lineAndAttributeRects(name: String, at index: Int) -> [(CGRect, CGRect)]? {

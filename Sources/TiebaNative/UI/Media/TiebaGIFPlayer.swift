@@ -380,10 +380,6 @@ final class TiebaGIFPlayer {
     /// 放过几帧就加几，recycle() 归零 —— 用来证明"真释放"而不是"以为释放了"。
     private var cachedFrameCountStorage = 0
 
-    var cachedFrameCount: Int {
-        return self.cachedFrameCountStorage
-    }
-
     // MARK: 生命周期
 
     /// 开始播放（或换一张图重新开始）。

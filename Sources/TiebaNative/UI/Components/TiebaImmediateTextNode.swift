@@ -59,32 +59,6 @@ open class TiebaImmediateTextNode: TiebaTextView {
     public var cutout: TiebaTextNodeCutout?
     public var displaySpoilers = false
     
-    public var truncationMode: NSLineBreakMode {
-        get {
-            switch self.truncationType {
-            case .start:
-                return .byTruncatingHead
-            case .middle:
-                return .byTruncatingMiddle
-            case .end:
-                return .byTruncatingTail
-            @unknown default:
-                return .byTruncatingTail
-            }
-        } set(value) {
-            switch value {
-            case .byTruncatingHead:
-                self.truncationType = .start
-            case .byTruncatingMiddle:
-                self.truncationType = .middle
-            case .byTruncatingTail:
-                self.truncationType = .end
-            default:
-                self.truncationType = .end
-            }
-        }
-    }
-    
     public var trailingLineWidth: CGFloat?
     
     public var constrainedSize: CGSize?
@@ -103,28 +77,5 @@ open class TiebaImmediateTextNode: TiebaTextView {
         return layout.size
     }
     
-    public func updateLayoutInfo(_ constrainedSize: CGSize) -> TiebaImmediateTextNodeLayoutInfo {
-        self.constrainedSize = constrainedSize
-        
-        let makeLayout = TiebaTextView.asyncLayout(self)
-        let (layout, apply) = makeLayout(TiebaTextNodeLayoutArguments(attributedString: self.attributedText, backgroundColor: nil, maximumNumberOfLines: self.maximumNumberOfLines, truncationType: self.truncationType, constrainedSize: constrainedSize, alignment: self.textAlignment, verticalAlignment: self.verticalAlignment, lineSpacing: self.lineSpacing, cutout: self.cutout, insets: self.insets, displaySpoilers: self.displaySpoilers))
-        let _ = apply()
-        return TiebaImmediateTextNodeLayoutInfo(size: layout.size, truncated: layout.truncated, numberOfLines: layout.numberOfLines)
-    }
-    
-    public func updateLayoutFullInfo(_ constrainedSize: CGSize) -> TiebaTextNodeLayout {
-        self.constrainedSize = constrainedSize
-        
-        let makeLayout = TiebaTextView.asyncLayout(self)
-        let (layout, apply) = makeLayout(TiebaTextNodeLayoutArguments(attributedString: self.attributedText, backgroundColor: nil, maximumNumberOfLines: self.maximumNumberOfLines, truncationType: self.truncationType, constrainedSize: constrainedSize, alignment: self.textAlignment, verticalAlignment: self.verticalAlignment, lineSpacing: self.lineSpacing, cutout: self.cutout, insets: self.insets, displaySpoilers: self.displaySpoilers))
-        let _ = apply()
-        return layout
-    }
-    
-    public func redrawIfPossible() {
-        if let constrainedSize = self.constrainedSize {
-            let _ = self.updateLayout(constrainedSize)
-        }
-    }
 }
 

@@ -87,29 +87,9 @@ public enum TiebaContainedViewLayoutTransitionCurve: Equatable, Hashable, Sendab
     case spring
     case customSpring(mass: CGFloat = 5.0, stiffness: CGFloat = 900.0, damping: CGFloat, initialVelocity: CGFloat)
     case custom(Float, Float, Float, Float)
-    
-    public static var slide: TiebaContainedViewLayoutTransitionCurve {
-        return .custom(0.33, 0.52, 0.25, 0.99)
-    }
 }
 
 public extension TiebaContainedViewLayoutTransitionCurve {
-    func solve(at offset: CGFloat) -> CGFloat {
-        switch self {
-        case .linear:
-            return offset
-        case .easeInOut:
-            return TiebaTransitionAnimation.easeInOutValue(at: offset)
-        case .easeIn:
-            return TiebaTransitionAnimation.easeInValue(at: offset)
-        case .spring:
-            return TiebaTransitionAnimation.springValue(at: offset)
-        case .customSpring:
-            return TiebaTransitionAnimation.springValue(at: offset)
-        case let .custom(c1x, c1y, c2x, c2y):
-            return TiebaTransitionAnimation.bezierPoint(CGFloat(c1x), CGFloat(c1y), CGFloat(c2x), CGFloat(c2y), offset)
-        }
-    }
 }
 
 public extension TiebaContainedViewLayoutTransitionCurve {
@@ -180,15 +160,6 @@ public enum TiebaContainedViewLayoutTransition: Sendable {
 }
 
 public extension CGRect {
-    var tiebaEnsuredValid: CGRect {
-        if !tiebaTransitionIsCGRectValidForLayout(CGRect(origin: CGPoint(), size: self.size)) {
-            return CGRect()
-        }
-        if !tiebaTransitionIsCGPositionValidForLayout(self.origin) {
-            return CGRect()
-        }
-        return self
-    }
 }
 
 // [移植] 曲线版便捷入口（上游 private extension CALayer 里的
@@ -265,41 +236,6 @@ public extension TiebaContainedViewLayoutTransition {
     
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateFrameAsPositionAndBounds
     
-    func updateFrameAsPositionAndBounds(layer: CALayer, frame: CGRect, force: Bool = false, beginWithCurrentState: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        if layer.frame.equalTo(frame) && !force {
-            completion?(true)
-        } else {
-            switch self {
-            case .immediate:
-                layer.removeAnimation(forKey: "position")
-                layer.removeAnimation(forKey: "bounds")
-                layer.position = frame.tiebaTransitionCenter
-                layer.bounds = CGRect(origin: CGPoint(), size: frame.size)
-                if let completion = completion {
-                    completion(true)
-                }
-            case let .animated(duration, curve):
-                let previousPosition: CGPoint
-                let previousBounds: CGRect
-                if beginWithCurrentState, let presentation = layer.presentation() {
-                    previousPosition = presentation.position
-                    previousBounds = presentation.bounds
-                } else {
-                    previousPosition = layer.position
-                    previousBounds = layer.bounds
-                }
-                layer.position = frame.tiebaTransitionCenter
-                layer.bounds = CGRect(origin: CGPoint(), size: frame.size)
-                layer.animateFrame(from:
-                    CGRect(origin: CGPoint(x: previousPosition.x - previousBounds.width / 2.0, y: previousPosition.y - previousBounds.height / 2.0), size: previousBounds.size), to: frame, duration: duration, timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, force: force, completion: { result in
-                    if let completion = completion {
-                        completion(result)
-                    }
-                })
-            }
-        }
-    }
-    
     func updateFrameAdditive(layer: CALayer, frame: CGRect, force: Bool = false, completion: ((Bool) -> Void)? = nil) {
         if layer.frame.equalTo(frame) && !force {
             completion?(true)
@@ -339,26 +275,6 @@ public extension TiebaContainedViewLayoutTransition {
     }
     
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateFrameAdditiveToCenter
-    
-    func updateFrameAdditiveToCenter(view: UIView, frame: CGRect, force: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        if view.frame.equalTo(frame) && !force {
-            completion?(true)
-        } else {
-            switch self {
-            case .immediate:
-                view.center = frame.tiebaTransitionCenter
-                view.bounds = CGRect(origin: view.bounds.origin, size: frame.size)
-                if let completion = completion {
-                    completion(true)
-                }
-            case .animated:
-                let previousCenter = view.frame.tiebaTransitionCenter
-                view.center = frame.tiebaTransitionCenter
-                view.bounds = CGRect(origin: view.bounds.origin, size: frame.size)
-                self.animatePositionAdditive(layer: view.layer, offset: CGPoint(x: previousCenter.x - frame.midX, y: previousCenter.y - frame.midY))
-            }
-        }
-    }
     
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateBounds
     
@@ -430,129 +346,6 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    func updatePositionSpring(layer: CALayer, position: CGPoint, completion: ((Bool) -> Void)? = nil) {
-        if layer.position.equalTo(position) {
-            completion?(true)
-        } else {
-            switch self {
-            case .immediate:
-                layer.removeAnimation(forKey: "position")
-                if let view = layer.delegate as? UIView {
-                    view.center = position
-                } else {
-                    layer.position = position
-                }
-                if let completion = completion {
-                    completion(true)
-                }
-            case let .animated(duration, curve):
-                let _ = curve
-                let previousPosition = layer.position
-                if let view = layer.delegate as? UIView {
-                    view.center = position
-                } else {
-                    layer.position = position
-                }
-                let params = bounceParameters(duration: duration)
-                layer.animateSpring(from: NSValue(cgPoint: previousPosition), to: NSValue(cgPoint: position), keyPath: "position", duration: params.duration, stiffness: params.stiffness, damping: params.damping, completion: { flag in
-                    if let completion {
-                        completion(flag)
-                    }
-                })
-            }
-        }
-    }
-    
-    func updateScaleSpring(layer: CALayer, scale: CGFloat, completion: ((Bool) -> Void)? = nil) {
-        let t = layer.transform
-        let currentScale = sqrt((t.m11 * t.m11) + (t.m12 * t.m12) + (t.m13 * t.m13))
-        if abs(CGFloat(currentScale) - scale) <= CGFloat(Float.ulpOfOne) {
-            completion?(true)
-        } else {
-            switch self {
-            case .immediate:
-                layer.removeAnimation(forKey: "transform.scale")
-                if let view = layer.delegate as? UIView {
-                    view.transform = CGAffineTransformMakeScale(scale, scale)
-                } else {
-                    layer.transform = CATransform3DMakeScale(scale, scale, 1.0)
-                }
-                if let completion = completion {
-                    completion(true)
-                }
-            case let .animated(duration, curve):
-                let _ = curve
-                if let view = layer.delegate as? UIView {
-                    view.transform = CGAffineTransformMakeScale(scale, scale)
-                } else {
-                    layer.transform = CATransform3DMakeScale(scale, scale, 1.0)
-                }
-                let params = bounceParameters(duration: duration)
-                layer.animateSpring(from: currentScale as NSNumber, to: scale as NSNumber, keyPath: "transform.scale", duration: params.duration, stiffness: params.stiffness, damping: params.damping, completion: { flag in
-                    if let completion {
-                        completion(flag)
-                    }
-                })
-            }
-        }
-    }
-    
-    func updateBoundsSpring(layer: CALayer, bounds: CGRect, completion: ((Bool) -> Void)? = nil) {
-        if layer.bounds.equalTo(bounds) {
-            completion?(true)
-        } else {
-            switch self {
-            case .immediate:
-                layer.removeAnimation(forKey: "bounds")
-                if let view = layer.delegate as? UIView {
-                    view.bounds = bounds
-                } else {
-                    layer.bounds = bounds
-                }
-                if let completion = completion {
-                    completion(true)
-                }
-            case let .animated(duration, curve):
-                let _ = curve
-                let previousBounds = layer.bounds
-                if let view = layer.delegate as? UIView {
-                    view.bounds = bounds
-                } else {
-                    layer.bounds = bounds
-                }
-                let params = bounceParameters(duration: duration)
-                layer.animateSpring(from: NSValue(cgRect: previousBounds), to: NSValue(cgRect: bounds), keyPath: "bounds", duration: params.duration, stiffness: params.stiffness, damping: params.damping, completion: { result in
-                    if let completion = completion {
-                        completion(result)
-                    }
-                })
-            }
-        }
-    }
-    
-    func updateAnchorPoint(layer: CALayer, anchorPoint: CGPoint, force: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        if layer.anchorPoint.equalTo(anchorPoint) && !force {
-            completion?(true)
-        } else {
-            switch self {
-            case .immediate:
-                layer.removeAnimation(forKey: "anchorPoint")
-                layer.anchorPoint = anchorPoint
-                if let completion = completion {
-                    completion(true)
-                }
-            case let .animated(duration, curve):
-                let previousAnchorPoint = layer.anchorPoint
-                layer.anchorPoint = anchorPoint
-                layer.animateAnchorPoint(from: previousAnchorPoint, to: anchorPoint, duration: duration, timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, completion: { result in
-                    if let completion = completion {
-                        completion(result)
-                    }
-                })
-            }
-        }
-    }
-    
     func animatePosition(layer: CALayer, from fromValue: CGPoint, to toValue: CGPoint, removeOnCompletion: Bool = true, additive: Bool = false, completion: ((Bool) -> Void)? = nil) {
         switch self {
         case .immediate:
@@ -573,28 +366,6 @@ public extension TiebaContainedViewLayoutTransition {
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animatePosition
     
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animatePositionWithKeyframes
-    
-    func animatePositionWithKeyframes(layer: CALayer, keyframes: [CGPoint], removeOnCompletion: Bool = true, additive: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        switch self {
-        case .immediate:
-            completion?(true)
-        case let .animated(duration, curve):
-            layer.animateKeyframes(values: keyframes.map(NSValue.init(cgPoint:)), duration: duration, keyPath: "position", timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: removeOnCompletion, completion: { value in
-                completion?(value)
-            })
-        }
-    }
-    
-    func animateScaleWithKeyframes(layer: CALayer, keyframes: [CGFloat], removeOnCompletion: Bool = true, additive: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        switch self {
-        case .immediate:
-            completion?(true)
-        case let .animated(duration, curve):
-            layer.animateKeyframes(values: keyframes.map { NSNumber(value: Float($0)) }, duration: duration, keyPath: "transform.scale", timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: removeOnCompletion, completion: { value in
-                completion?(value)
-            })
-        }
-    }
     
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animateFrame
 
@@ -627,64 +398,12 @@ public extension TiebaContainedViewLayoutTransition {
                 })
         }
     }
-
-    func animateWidthAdditive(layer: CALayer, value: CGFloat, removeOnCompletion: Bool = true, completion: ((Bool) -> Void)? = nil) {
-        switch self {
-        case .immediate:
-            if let completion = completion {
-                completion(true)
-            }
-        case let .animated(duration, curve):
-            layer.animateWidth(from: value, to: 0.0, duration: duration, timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: removeOnCompletion, additive: true, completion: { result in
-                if let completion = completion {
-                    completion(result)
-                }
-            })
-        }
-    }
-
-    func animateHeightAdditive(layer: CALayer, value: CGFloat, removeOnCompletion: Bool = true, completion: ((Bool) -> Void)? = nil) {
-        switch self {
-        case .immediate:
-            if let completion = completion {
-                completion(true)
-            }
-        case let .animated(duration, curve):
-            layer.animateHeight(from: value, to: 0.0, duration: duration, timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: removeOnCompletion, additive: true, completion: { result in
-                if let completion = completion {
-                    completion(result)
-                }
-            })
-        }
-    }
     
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animateOffsetAdditive
     
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animateOffsetAdditive
     
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animateHorizontalOffsetAdditive
-
-    func animateHorizontalOffsetAdditive(layer: CALayer, offset: CGFloat, completion: (() -> Void)? = nil) {
-        switch self {
-            case .immediate:
-                break
-            case let .animated(duration, curve):
-                layer.animateBoundsOriginXAdditive(from: offset, to: 0.0, duration: duration, timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, completion: { _ in
-                    completion?()
-                })
-        }
-    }
-    
-    func animateOffsetAdditive(layer: CALayer, offset: CGFloat, completion: (() -> Void)? = nil) {
-        switch self {
-            case .immediate:
-                completion?()
-            case let .animated(duration, curve):
-                layer.animateBoundsOriginYAdditive(from: offset, to: 0.0, duration: duration, timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, completion: { _ in
-                    completion?()
-                })
-        }
-    }
     
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animatePositionAdditive
     
@@ -707,15 +426,6 @@ public extension TiebaContainedViewLayoutTransition {
                 layer.animatePosition(from: offset, to: toOffset, duration: duration, timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: removeOnCompletion, additive: true, completion: { result in
                     completion?(result)
                 })
-        }
-    }
-
-    func animateContentsRectPositionAdditive(layer: CALayer, offset: CGPoint, removeOnCompletion: Bool = true, completion: ((Bool) -> Void)? = nil) {
-        switch self {
-        case .immediate:
-            completion?(true)
-        case let .animated(duration, curve):
-            layer.animate(from: NSValue(cgPoint: offset), to: NSValue(cgPoint: CGPoint()), keyPath: "contentsRect.origin", timingFunction: curve.timingFunction, duration: duration, delay: 0.0, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: removeOnCompletion, additive: true, completion: completion)
         }
     }
     
@@ -1077,74 +787,6 @@ public extension TiebaContainedViewLayoutTransition {
     //        加载时其 CALayer 尚不存在；逻辑并入 layer: 版——CALayer 版始终直接写 layer.sublayerTransform，
     //        与节点加载后走 layer: 路径语义一致，故删除无语义损失。
     
-    func updateSublayerTransformScaleAdditive(layer: CALayer, scale: CGFloat, completion: ((Bool) -> Void)? = nil) {
-        let t = layer.sublayerTransform
-        let currentScale = sqrt((t.m11 * t.m11) + (t.m12 * t.m12) + (t.m13 * t.m13))
-        if currentScale.isEqual(to: scale) {
-            if let completion = completion {
-                completion(true)
-            }
-            return
-        }
-        
-        switch self {
-        case .immediate:
-            layer.removeAnimation(forKey: "sublayerTransform")
-            layer.sublayerTransform = CATransform3DMakeScale(scale, scale, 1.0)
-            if let completion = completion {
-                completion(true)
-            }
-        case let .animated(duration, curve):
-            let t = layer.sublayerTransform
-            let currentScale = sqrt((t.m11 * t.m11) + (t.m12 * t.m12) + (t.m13 * t.m13))
-            layer.sublayerTransform = CATransform3DMakeScale(scale, scale, 1.0)
-            layer.animate(from: -(scale - currentScale) as NSNumber, to: 0.0 as NSNumber, keyPath: "sublayerTransform.scale", timingFunction: curve.timingFunction, duration: duration, delay: 0.0, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: true, additive: true, completion: {
-                result in
-                if let completion = completion {
-                    completion(result)
-                }
-            })
-        }
-    }
-    
-    func updateSublayerTransformScaleAndOffset(layer: CALayer, scale: CGFloat, offset: CGPoint, beginWithCurrentState: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        let t = layer.sublayerTransform
-        let currentScale = sqrt((t.m11 * t.m11) + (t.m12 * t.m12) + (t.m13 * t.m13))
-        let currentOffset = CGPoint(x: t.m41 / currentScale, y: t.m42 / currentScale)
-        if abs(currentScale - scale) <= CGFloat.ulpOfOne && abs(currentOffset.x - offset.x) <= CGFloat.ulpOfOne && abs(currentOffset.y - offset.y) <= CGFloat.ulpOfOne {
-            if let completion = completion {
-                completion(true)
-            }
-            return
-        }
-        
-        let transform = CATransform3DTranslate(CATransform3DMakeScale(scale, scale, 1.0), offset.x, offset.y, 0.0)
-        
-        switch self {
-        case .immediate:
-            layer.removeAnimation(forKey: "sublayerTransform")
-            layer.sublayerTransform = transform
-            if let completion = completion {
-                completion(true)
-            }
-        case let .animated(duration, curve):
-            let initialTransform: CATransform3D
-            if beginWithCurrentState {
-                initialTransform = layer.presentation()?.sublayerTransform ?? t
-            } else {
-                initialTransform = t
-            }
-            
-            layer.sublayerTransform = transform
-            layer.animate(from: NSValue(caTransform3D: initialTransform), to: NSValue(caTransform3D: layer.sublayerTransform), keyPath: "sublayerTransform", timingFunction: curve.timingFunction, duration: duration, delay: 0.0, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: true, additive: false, completion: {
-                result in
-                if let completion = completion {
-                    completion(result)
-                }
-            })
-        }
-    }
-    
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateSublayerTransformScaleAndOffset
     // [移植] 该重载的 !isNodeLoaded 快捷路径写 node.subnodeTransform（即 layer.sublayerTransform）：节点未
     //        加载时其 CALayer 尚不存在；逻辑并入 layer: 版——CALayer 版始终直接写 layer.sublayerTransform，
@@ -1154,45 +796,6 @@ public extension TiebaContainedViewLayoutTransition {
     // [移植] 该重载的 !isNodeLoaded 快捷路径写 node.subnodeTransform（即 layer.sublayerTransform）：节点未
     //        加载时其 CALayer 尚不存在；逻辑并入 layer: 版——CALayer 版始终直接写 layer.sublayerTransform，
     //        与节点加载后走 layer: 路径语义一致，故删除无语义损失。
-    
-    func updateSublayerTransformScale(layer: CALayer, scale: CGPoint, beginWithCurrentState: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        let t = layer.sublayerTransform
-        let currentScaleX = sqrt((t.m11 * t.m11) + (t.m12 * t.m12) + (t.m13 * t.m13))
-        var currentScaleY = sqrt((t.m21 * t.m21) + (t.m22 * t.m22) + (t.m23 * t.m23))
-        if t.m22 < 0.0 {
-            currentScaleY = -currentScaleY
-        }
-        if CGPoint(x: currentScaleX, y: currentScaleY) == scale {
-            if let completion = completion {
-                completion(true)
-            }
-            return
-        }
-        
-        switch self {
-        case .immediate:
-            layer.removeAnimation(forKey: "sublayerTransform")
-            layer.sublayerTransform = CATransform3DMakeScale(scale.x, scale.y, 1.0)
-            if let completion = completion {
-                completion(true)
-            }
-        case let .animated(duration, curve):
-            let initialTransform: CATransform3D
-            if beginWithCurrentState {
-                initialTransform = layer.presentation()?.sublayerTransform ?? t
-            } else {
-                initialTransform = t
-            }
-            
-            layer.sublayerTransform = CATransform3DMakeScale(scale.x, scale.y, 1.0)
-            layer.animate(from: NSValue(caTransform3D: initialTransform), to: NSValue(caTransform3D: layer.sublayerTransform), keyPath: "sublayerTransform", timingFunction: curve.timingFunction, duration: duration, delay: 0.0, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: true, additive: false, completion: {
-                result in
-                if let completion = completion {
-                    completion(result)
-                }
-            })
-        }
-    }
     
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateTransformScale
     // [移植] 该重载的 !isNodeLoaded 快捷路径写 node.subnodeTransform（即 layer.sublayerTransform）：节点未
@@ -1231,102 +834,7 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    func updateSublayerTransformOffset(layer: CALayer, offset: CGPoint, completion: ((Bool) -> Void)? = nil) {
-        let t = layer.sublayerTransform
-        let currentOffset = CGPoint(x: t.m41, y: t.m42)
-        if currentOffset == offset {
-            if let completion = completion {
-                completion(true)
-            }
-            return
-        }
-        
-        switch self {
-        case .immediate:
-            layer.removeAnimation(forKey: "sublayerTransform")
-            layer.sublayerTransform = CATransform3DMakeTranslation(offset.x, offset.y, 0.0)
-            if let completion = completion {
-                completion(true)
-            }
-        case let .animated(duration, curve):
-            layer.sublayerTransform = CATransform3DMakeTranslation(offset.x, offset.y, 0.0)
-            layer.animate(from: NSValue(caTransform3D: t), to: NSValue(caTransform3D: layer.sublayerTransform), keyPath: "sublayerTransform", timingFunction: curve.timingFunction, duration: duration, delay: 0.0, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: true, additive: false, completion: {
-                result in
-                if let completion = completion {
-                    completion(result)
-                }
-            })
-        }
-    }
-    
     // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateTransformRotation
-    
-    func updateTransformRotation(view: UIView, angle: CGFloat, beginWithCurrentState: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        let t = view.layer.transform
-        let currentAngle = atan2(t.m12, t.m11)
-        if currentAngle.isEqual(to: angle) {
-            if let completion = completion {
-                completion(true)
-            }
-            return
-        }
-        
-        switch self {
-        case .immediate:
-            view.layer.transform = CATransform3DMakeRotation(angle, 0.0, 0.0, 1.0)
-            if let completion = completion {
-                completion(true)
-            }
-        case let .animated(duration, curve):
-            let previousAngle: CGFloat
-            if beginWithCurrentState, let presentation = view.layer.presentation() {
-                let t = presentation.transform
-                previousAngle = atan2(t.m12, t.m11)
-            } else {
-                previousAngle = currentAngle
-            }
-            view.layer.transform = CATransform3DMakeRotation(angle, 0.0, 0.0, 1.0)
-            view.layer.animateRotation(from: previousAngle, to: angle, duration: duration, timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, completion: { result in
-                if let completion = completion {
-                    completion(result)
-                }
-            })
-        }
-    }
-    
-    func updateTransformRotationAndScale(view: UIView, angle: CGFloat, scale: CGPoint, beginWithCurrentState: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        let t = view.layer.transform
-        let currentAngle = atan2(t.m12, t.m11)
-        let currentScale = CGPoint(x: t.m11, y: t.m12)
-        if currentAngle.isEqual(to: angle) && currentScale == scale {
-            if let completion = completion {
-                completion(true)
-            }
-            return
-        }
-        
-        switch self {
-        case .immediate:
-            view.layer.transform = CATransform3DRotate(CATransform3DMakeScale(scale.x, scale.y, 1.0), angle, 0.0, 0.0, 1.0)
-            if let completion = completion {
-                completion(true)
-            }
-        case let .animated(duration, curve):
-            let previousAngle: CGFloat
-            if beginWithCurrentState, let presentation = view.layer.presentation() {
-                let t = presentation.transform
-                previousAngle = atan2(t.m12, t.m11)
-            } else {
-                previousAngle = currentAngle
-            }
-            view.layer.transform = CATransform3DRotate(CATransform3DMakeScale(scale.x, scale.y, 1.0), angle, 0.0, 0.0, 1.0)
-            view.layer.animateRotation(from: previousAngle, to: angle, duration: duration, timingFunction: curve.timingFunction, mediaTimingFunction: curve.mediaTimingFunction, completion: { result in
-                if let completion = completion {
-                    completion(result)
-                }
-            })
-        }
-    }
     
     func updatePath(layer: CAShapeLayer, path: CGPath, delay: Double = 0.0, completion: ((Bool) -> Void)? = nil) {
         if layer.path == path {
@@ -1351,96 +859,6 @@ public extension TiebaContainedViewLayoutTransition {
                 }
             })
         }
-    }
-    
-    func updateLineWidth(layer: CAShapeLayer, lineWidth: CGFloat, delay: Double = 0.0, completion: ((Bool) -> Void)? = nil) {
-        if layer.lineWidth == lineWidth {
-            completion?(true)
-            return
-        }
-        
-        switch self {
-        case .immediate:
-            layer.removeAnimation(forKey: "lineWidth")
-            layer.lineWidth = lineWidth
-            if let completion = completion {
-                completion(true)
-            }
-        case let .animated(duration, curve):
-            let fromLineWidth = layer.lineWidth
-            layer.lineWidth = lineWidth
-            layer.animate(from: fromLineWidth as NSNumber, to: lineWidth as NSNumber, keyPath: "lineWidth", timingFunction: curve.timingFunction, duration: duration, delay: delay, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: true, additive: false, completion: {
-                result in
-                if let completion = completion {
-                    completion(result)
-                }
-            })
-        }
-    }
-    
-    func updateStrokeColor(layer: CAShapeLayer, strokeColor: UIColor, delay: Double = 0.0, completion: ((Bool) -> Void)? = nil) {
-        if layer.strokeColor.flatMap(UIColor.init(cgColor:)) == strokeColor {
-            completion?(true)
-            return
-        }
-        
-        switch self {
-        case .immediate:
-            layer.removeAnimation(forKey: "strokeColor")
-            layer.strokeColor = strokeColor.cgColor
-            if let completion = completion {
-                completion(true)
-            }
-        case let .animated(duration, curve):
-            let fromStrokeColor = layer.strokeColor ?? UIColor.clear.cgColor
-            layer.strokeColor = strokeColor.cgColor
-            layer.animate(from: fromStrokeColor, to: strokeColor.cgColor, keyPath: "strokeColor", timingFunction: curve.timingFunction, duration: duration, delay: delay, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: true, additive: false, completion: {
-                result in
-                if let completion = completion {
-                    completion(result)
-                }
-            })
-        }
-    }
-    
-    func attachAnimation(view: UIView, id: String, completion: @escaping (Bool) -> Void) {
-        switch self {
-        case .immediate:
-            completion(true)
-        case let .animated(duration, curve):
-            view.layer.animateCurve(
-                from: 0.0 as NSNumber,
-                to: 1.0 as NSNumber,
-                keyPath: id,
-                duration: duration,
-                delay: 0.0,
-                curve: curve,
-                removeOnCompletion: true,
-                additive: false,
-                completion: completion
-            )
-        }
-    }
-    
-    func animateContents(layer: CALayer, from fromContents: Any) {
-        guard case let .animated(duration, curve) = self else {
-            return
-        }
-        guard let contents = layer.contents, CFGetTypeID(contents as CFTypeRef) == CGImage.typeID else {
-            return
-        }
-        guard CFGetTypeID(fromContents as CFTypeRef) == CGImage.typeID else {
-            return
-        }
-        
-        let contentsImage = contents as! CGImage
-        let fromContentsImage = fromContents as! CGImage
-    
-        if contentsImage === fromContentsImage {
-            return
-        }
-        
-        layer.animate(from: fromContentsImage, to: contentsImage, keyPath: "contents", timingFunction: curve.timingFunction, duration: duration, delay: 0.0, mediaTimingFunction: curve.mediaTimingFunction, removeOnCompletion: true, additive: false)
     }
 }
 

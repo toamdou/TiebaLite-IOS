@@ -72,18 +72,6 @@ enum TiebaMotionSpec {
         nonisolated static let ios26Stiffness: CGFloat = 555.027
         nonisolated static let ios26Damping: CGFloat = 47.118
 
-        /// 面板 / 提示条**进场**：mass 1、stiffness 555.027、damping 47.118（= 上面那颗 iOS 26 系统弹簧）。
-        ///
-        /// 上游：`UIKitUtils.m:70-72`。**改前是 3 / 1000 / 500（iOS 26 之前那一档）**，本轮按用户
-        /// 「动效参数按上游来」的批示换成 iOS 26 当前实现。
-        ///
-        /// 手感变化（相比改前的 ζ = 4.564）：**略微更"活"** —— 同一段位移前 1/3 走得更快、
-        /// 收尾更利落；因为 ζ 恰好 = 1.000，仍然一点都不过冲，不存在"面板弹一下"的风险。
-        /// 调用方：与引擎的 .spring 曲线同源（本函数是"显式传参"那条通道，给不走 curve 的调用点用）。
-        static func systemPanel(initialVelocity: CGFloat = 0.0) -> TiebaContainedViewLayoutTransition {
-            TiebaContainedViewLayoutTransition.spring(mass: ios26Mass, stiffness: ios26Stiffness, damping: ios26Damping, initialVelocity: initialVelocity)
-        }
-
         /// 阻尼三档（上游把"弹不弹"收成三个数，mass / stiffness 在关闭与图集场景固定 5 / 900）：
         ///   · 88 —— **通用回弹**：`CAAnimationUtils.swift:312, 338-340` 的 `animateSpring` 默认值，ζ = 0.656；
         ///   · 124 —— **带初速的关闭**：`ResizableSheetComponent.swift:641`（sheet 拖拽关闭）、
@@ -96,21 +84,6 @@ enum TiebaMotionSpec {
         /// 关闭档的 mass / stiffness（上游 :88-89 固定 5 / 900，只有 damping 分档）。
         static let closeMass: CGFloat = 5.0
         static let closeStiffness: CGFloat = 900.0
-
-        /// 面板**退场**（用户甩下来，带松手速度）：mass 5、stiffness 900、damping 124。
-        ///
-        /// 上游：`submodules/Display/Source/Navigation/NavigationController.swift:1715`
-        /// （最小化转场同参）、`submodules/Components/ResizableSheetComponent/Sources/ResizableSheetComponent.swift:641`（sheet 拖拽关闭同参）。
-        ///
-        /// 手感：ζ ≈ 0.92 —— **刚好欠阻尼**，收尾时一次极轻的回弹；这正是"甩下去"该有的收势。
-        /// initialVelocity 用归一化后的松手速度（本仓 TiebaSheetDismissalPolicy.springInitialVelocity，上界 8.0，
-        /// 上游 MinimizedContainer.swift:729 的 `min(8.0, abs(velocity/distance))`）：推得越快，关得越干脆。
-        /// 改了会怎样：damping 升到 180 回弹消失（变成"被吸走"）；降到 88 会明显弹两下。
-        /// 调用方：查看器下拉关闭的**松手收尾**（Vendor/JXPhotoBrowser 的拖拽手势，值由
-        /// UI/Media/TiebaPhotoBrowserCells.swift 从本表注入 —— Vendor 不能反向依赖本模块）。
-        static func sheetDismiss(initialVelocity: CGFloat = 0.0) -> TiebaContainedViewLayoutTransition {
-            TiebaContainedViewLayoutTransition.spring(mass: closeMass, stiffness: closeStiffness, damping: closeDamping, initialVelocity: initialVelocity)
-        }
 
         /// **系统签名时长 0.3832s** —— iOS 26 系统级转场（键盘收起 / 系统 sheet）的时长。
         ///

@@ -383,17 +383,6 @@ public final class TiebaTextSelectionNode: UIView {
         }
     }
 
-    /// 不开手势也能起选择（上游给测试/演示用；本仓的 DEBUG 自检也用它）。
-    public func pretendInitiateSelection() {
-        guard let attributedString = self.target.currentText else {
-            return
-        }
-        let resultRange = TiebaTextSelectionNode.wordRange(attributedString: attributedString, at: 0)
-        self.currentRange = (resultRange.lowerBound, resultRange.upperBound)
-        self.updateSelection(range: resultRange, animateIn: true)
-        self.updateIsActive(true)
-    }
-
     /// 直接设一个选择范围（原文坐标；内部会转换到显示文本坐标）。
     public func setSelection(range: NSRange, displayMenu: Bool) {
         guard let attributedString = self.target.currentText else {
@@ -406,15 +395,6 @@ public final class TiebaTextSelectionNode: UIView {
         if displayMenu {
             self.displayMenu()
         }
-    }
-
-    /// 取当前选择（转回原文坐标；没打原文属性时就是显示文本坐标）。
-    public func getSelection() -> NSRange? {
-        guard let currentRange = self.currentRange, let attributedString = self.target.currentText else {
-            return nil
-        }
-        let range = NSRange(location: min(currentRange.0, currentRange.1), length: max(currentRange.0, currentRange.1) - min(currentRange.0, currentRange.1))
-        return self.convertSelectionToOriginalText(attributedString: attributedString, range: range)
     }
 
     // MARK: 原文映射（上游 :507-608，逐行照搬）

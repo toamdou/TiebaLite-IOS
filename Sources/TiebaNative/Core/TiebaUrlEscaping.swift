@@ -21,15 +21,6 @@ public func tiebaDoesUrlMatchText(url: String, text: String, fullText: String) -
 }
 
 public extension CharacterSet {
-    static let urlQueryValueAllowed: CharacterSet = {
-        let generalDelimitersToEncode = ":#[]@"
-        let subDelimitersToEncode = "!$&'()*+,;="
-        
-        var allowed = CharacterSet.urlQueryAllowed
-        allowed.remove(charactersIn: generalDelimitersToEncode + subDelimitersToEncode)
-        
-        return allowed
-    }()
 }
 
 public func tiebaIsValidUrl(_ url: String, validSchemes: [String: Bool] = ["http": true, "https": true, "tonsite": true]) -> Bool {

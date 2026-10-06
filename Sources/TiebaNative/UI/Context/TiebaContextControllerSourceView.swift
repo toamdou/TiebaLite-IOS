@@ -210,13 +210,6 @@ public class TiebaContextControllerSourceView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 上游同名的兜底取消：先 cancel（带回弹），再靠 enable/disable 一跳把 UIGestureRecognizer
-    /// 内部状态彻底复位（单纯 cancel 之后，同一根手指的后续 touches 仍可能回到本识别器）。
-    public func cancelGesture() {
-      self.contextGesture?.cancel()
-      self.contextGesture?.isEnabled = false
-      self.contextGesture?.isEnabled = self.isGestureEnabled
-    }
   }
 
   // MARK: - CALayer 补间（上游 CALayer.animate 的最小等价物）

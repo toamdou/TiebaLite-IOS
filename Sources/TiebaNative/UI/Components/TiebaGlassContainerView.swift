@@ -104,36 +104,4 @@ final class TiebaGlassContainerView: UIView {
 // MARK: - A2：给 UIVisualEffectView.effect 赋值前的比较护栏
 
 extension UIVisualEffectView {
-    /// 报告 37 A2（上游 :797-808 与 :777-796）。
-    ///
-    /// 两条配套规则：
-    ///   · **只在真的变了才重新赋 effect** —— 赋一个等价值也会让系统重建整棵 backdrop 层树，
-    ///     代价远大于一次属性比较。UIGlassEffect 没有 Equatable，按上游 :801-806 比较
-    ///     tintColor + isInteractive 两个可见维度（style 没有公开 getter）。
-    ///   · **关掉玻璃要把 effect 置空**，并且包在 UIView.animate 里才有系统的溶解过渡
-    ///     （直接 isHidden = true 是瞬间消失）。带版本分支：iOS 26.0 只能设空效果对象
-    ///     `UIVisualEffect()`，26.1 起才可以设 nil（上游 :779-795 的同款 workaround）。
-    func tiebaSetGlassEffect(_ glass: UIGlassEffect?, animated: Bool) {
-        let apply: () -> Void
-        if let glass {
-            if let current = self.effect as? UIGlassEffect,
-               current.tintColor == glass.tintColor,
-               current.isInteractive == glass.isInteractive {
-                return
-            }
-            apply = { [weak self] in self?.effect = glass }
-        } else {
-            guard self.effect is UIGlassEffect else { return }
-            if #available(iOS 26.1, *) {
-                apply = { [weak self] in self?.effect = nil }
-            } else {
-                apply = { [weak self] in self?.effect = UIVisualEffect() }
-            }
-        }
-        if animated {
-            TiebaAnimation.animate(duration: TiebaAnimationDuration.overlayDismiss, animations: apply)
-        } else {
-            apply()
-        }
-    }
 }

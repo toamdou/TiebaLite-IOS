@@ -517,9 +517,6 @@ public final class TiebaKindListContentView: UIView {
 
   /// debug：真正执行过的几何失效次数（一次数据变更应当只 +1——验证"收成一条队"）。
   private(set) var geometryInvalidationCount = 0
-  /// debug：入队请求次数（去重前）；与上者之差 = 被事务队合并掉的失效次数。
-  var geometryInvalidationRequestCount: Int { geometryInvalidations.requestCount }
-
   // MARK: 子视图
 
   private lazy var collectionView: UICollectionView = {
@@ -1012,8 +1009,6 @@ public final class TiebaKindListContentView: UIView {
   }
 
   // MARK: 滚动头（top boundary supplementary item）
-
-  private var hasHeader: Bool { headerContentView != nil }
 
   /// 页头项高 = 页头在**内容列宽**下的自适应高（顶部内白由 contentInset.top 承担）。
   /// 页头与行共用同一列（左缘 = horizontalInset、宽 = itemWidth），量多少就画多少；

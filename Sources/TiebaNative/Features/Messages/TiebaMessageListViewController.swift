@@ -103,10 +103,6 @@ final class TiebaMessageListViewController: UIViewController {
 
   // MARK: - 外部驱动
 
-  /// 本页主滚动视图（宿主系统跟踪用：底栏滚动收纳 / 状态栏点按回顶）。
-  /// 分页器场景下容器会把主滚动视图关联交还给当前页（见 Notifications）。
-  var trackedScrollView: UIScrollView? { list.primaryScrollView() }
-
   /// trackedScrollView 的解析缓存：primaryScrollView 是无早退的全树 DFS，而消息
   /// 根屏每次布局趟都会来问（见 TiebaNotificationsViewController）。列表结构换人
   /// （骨架 → 列表、reload 换容器）时旧实例离开窗口即失效，其余布局趟零遍历。

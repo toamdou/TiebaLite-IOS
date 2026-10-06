@@ -376,25 +376,6 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     return false
   }
 
-  /// 回到栈底（双击底栏 tab / 双击顶栏回顶时用）。
-  ///
-  /// @MainActor：本方法全仓没有调用方（grep popToRoot() 只有这里一处声明），
-  /// 所以直接把隔离写进签名，方法体里也就不再需要 MainActor.assumeIsolated。
-  /// （同文件其它非隔离入口不能这么改：它们的调用方散在 Core/Features。）
-  @MainActor
-  public func popToRoot() {
-    guard let nav = activeNav else { return }
-    if nav.presentedViewController != nil {
-      nav.dismiss(animated: true)
-      return
-    }
-    guard nav.viewControllers.count > 1 else { return }
-    // popToRootViewController 的返回值是 non-Sendable 的 [UIViewController]?：
-    // 在主 actor 方法里就地 discard，不产生跨域结果。
-    _ = nav.popToRootViewController(animated: true)
-    pruneHosts()
-  }
-
   /// 关掉当前上推的表单（登录页 / 更多）。
   public func dismissPresented(animated: Bool) {
     activeNav?.presentedViewController?.dismiss(animated: animated)
@@ -424,14 +405,6 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       }
     }
     tabBar.selectedTab = tabItems[index]
-  }
-
-  /// 让某个 tab 的列表回到顶部（双击底栏 tab）。切 tab 时底栏会把当前 tab
-  /// 的滚动视图交给系统跟踪，这里直接用那个视图。
-  public func scrollTabToTop(_ index: Int) {
-    guard let host = tabRootHosts[index], let sv = host.scrollViewForSystem() else { return }
-    let top = CGPoint(x: 0, y: -sv.adjustedContentInset.top)
-    sv.setContentOffset(top, animated: true)
   }
 
   /// 让当前这一屏的列表回到顶部（双击顶栏）。

@@ -54,12 +54,6 @@ public final class TiebaFeedScrollGate: Sendable {
     }
   }
 
-  /// 整列表不可见（离屏 / 查看器打开）：把并发压到 1。对应
-  /// TiebaKindListView.swift:951-955 的 updatePrefetcherPause()。
-  public func setPaused(_ paused: Bool) {
-    state.withLock { $0.paused = paused }
-  }
-
   // MARK: - 查询
 
   /// 是否处于滚动中（判据 ① 或 ③）。**可跨线程读**（只碰 Mutex 与主 runloop 模式判定）。

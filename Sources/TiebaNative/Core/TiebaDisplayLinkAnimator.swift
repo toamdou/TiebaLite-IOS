@@ -168,13 +168,6 @@ private let isIpad: Bool = {
         })
     }
 
-    public func updateForegroundState(_ isActive: Bool) {
-        if self.isInForeground != isActive {
-            self.isInForeground = isActive
-            self.update()
-        }
-    }
-    
     private func requestUpdate() {
         if self.isProcessingEvent {
             self.isUpdateRequested = true
@@ -374,12 +367,6 @@ private let isIpad: Bool = {
     private var displayLink: TiebaSharedDisplayLinkDriver.Link?
     private let update: () -> Void
     private var completed = false
-    
-    public var frameInterval: Int = 1 {
-        didSet {
-            self.updateDisplayLink()
-        }
-    }
     
     private func updateDisplayLink() {
         guard let displayLink = self.displayLink else {
