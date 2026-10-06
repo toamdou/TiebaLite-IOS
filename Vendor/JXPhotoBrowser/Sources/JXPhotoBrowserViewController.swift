@@ -83,6 +83,25 @@ open class JXPhotoBrowserViewController: UIViewController {
 
     /// 是否启用拖拽关闭手势（下拉 / 上滑，视滚动位置决定哪个方向生效）。内嵌 Banner 场景应设为 false
     public var isDismissGestureEnabled: Bool = true
+
+    // MARK: - 【本仓补丁】交互式关闭的判据与收尾（值不在这里，见注释）
+
+    /// Vendor 不能反向依赖 TiebaNative，所以这里只留**旋钮**：默认值 = 上游值，
+    /// 真正的取值与出处集中在 Sources/TiebaNative/UI/Transition/TiebaMotionSpec.swift
+    /// （Transition 段 / Spring 段），由 Sources/TiebaNative/UI/Media/TiebaPhotoBrowserCells.swift
+    /// 的 TiebaPhotoBrowserViewController 在 viewDidLoad 里注入。未注入时的行为与本补丁前逐字一致。
+    ///
+    /// 判据：上游 Display/Source/Navigation/NavigationContainer.swift:285（速度 > 1000 或进度 > 0.2）。
+    /// 收尾时长：上游 Display/Source/Navigation/NavigationTransitionCoordinator.swift:333
+    ///   （clamp(0.05…0.2, |距离 / 速度|) + easeInOut；:328-331 是无速度时的 0.5s 弹簧分支）。
+    open var dismissProgressThreshold: CGFloat = 0.2
+    open var dismissVelocityThreshold: CGFloat = 1000.0
+    open var dismissSettleDurationRange: ClosedRange<TimeInterval> = 0.05 ... 0.2
+    /// 无速度时的归位弹簧（上游 :328-331 的 0.5 + .spring）与关闭档阻尼（上游三档之一）。
+    open var dismissSettleSpringDuration: TimeInterval = 0.5
+    open var dismissSettleMass: CGFloat = 5.0
+    open var dismissSettleStiffness: CGFloat = 900.0
+    open var dismissSettleDamping: CGFloat = 124.0
     
     /// 自动轮播间隔时间（默认 3.0 秒）
     public var autoPlayInterval: TimeInterval {
@@ -311,7 +330,20 @@ open class JXPhotoBrowserViewController: UIViewController {
         case .changed:
             guard let cell = interactiveDismissCell, let imageView = cell.transitionImageView else { return }
             let translation = gesture.translation(in: view)
-            
+
+            // 【本仓补丁】imageView 的父层（zoomContentView）本身带 zoom 缩放：
+            // 缩放态下屏幕位移要 ÷ zoomScale 才是容器坐标系位移，否则图片会跑得比手指快一倍。
+            // 进度 / 透明度 / 阈值仍用**屏幕**位移（用户感知与判据都以屏幕为准）。
+            // 未缩放时 zoomScale == 1，下面的分支数值与上游逐字相同（行为零变化）。
+            let containerTranslation: CGPoint
+            if let photoCell = cell as? JXZoomImageCell,
+               photoCell.scrollView.zoomScale > photoCell.scrollView.minimumZoomScale + 0.01 {
+                let zoomScale = max(photoCell.scrollView.zoomScale, 0.01)
+                containerTranslation = CGPoint(x: translation.x / zoomScale, y: translation.y / zoomScale)
+            } else {
+                containerTranslation = translation
+            }
+
             // 下拉时缩小；上拉时（负值）不放大，保持原大小但跟随位移
             let progress = translation.y / view.bounds.height
             let scale = translation.y > 0 ? max(0.5, 1 - abs(progress)) : 1.0
@@ -326,7 +358,7 @@ open class JXPhotoBrowserViewController: UIViewController {
             let adjustY = vector.y * (1 - scale)
             
             // 变换图片：Translation + Adjustment
-            let transform = CGAffineTransform(translationX: translation.x + adjustX, y: translation.y + adjustY)
+            let transform = CGAffineTransform(translationX: containerTranslation.x + adjustX, y: containerTranslation.y + adjustY)
                 .scaledBy(x: scale, y: scale)
             imageView.transform = transform
             
@@ -343,16 +375,20 @@ open class JXPhotoBrowserViewController: UIViewController {
             let velocity = gesture.velocity(in: view)
             let translation = gesture.translation(in: view)
 
-            // 上滑/下拉同一判据：位移超过屏幕高度 1/4，或松手时速度足够快，则关闭；
-            // 手势被取消时不关闭
+            // 【本仓补丁】判据按上游 NavigationContainer.swift:285：**速度 > 1000pt/s 或 进度 > 0.2**。
+            // 改前：|translation.y| > 屏幕高 1/4 或 |velocity.y| > 500。
+            // 上滑 / 下拉都算关闭，故取绝对值（上游那处是横向返回手势，只有单向）。
+            // 手感变化：**拖拽更容易走完（1/4 屏 → 1/5 屏），甩动更难走完（500 → 1000pt/s）** ——
+            // 上游的取舍是"用户一旦拖了 1/5，多半就是想关"，而"甩"这种无意识动作要更用力才算数。
+            let progress = view.bounds.height > 0 ? abs(translation.y) / view.bounds.height : 0
             let shouldDismiss = gesture.state == .ended
-                && (abs(translation.y) > view.bounds.height * 0.25 || abs(velocity.y) > 500)
+                && (abs(velocity.y) > dismissVelocityThreshold || progress > dismissProgressThreshold)
             
             if shouldDismiss {
                 dismissSelf()
                 // 不恢复 ScrollEnabled，直到页面消失
             } else {
-                resetDismissInteraction(animated: true)
+                resetDismissInteraction(animated: true, velocity: velocity)
             }
         default:
             resetDismissInteraction(animated: false)
@@ -925,7 +961,15 @@ extension JXPhotoBrowserViewController: UIGestureRecognizerDelegate {
                 let isAtBottom = scrollView.contentOffset.y >= bottomOffset - 1.0
                 let hasVerticalScrollableContent = scrollView.contentSize.height > scrollView.bounds.height + 1.0
                 // 下拉只在贴顶接管，上滑只在贴底接管；没有纵向可滚内容时两向都可
-                guard !isZoomed else { return false }
+                //
+                // 【本仓补丁】缩放态默认仍不接管（拖拽该平移已放大的图，iOS 相册同款语义）；
+                // 唯一例外：cell 用 allowsDismissWhileZoomed 声明"我这一页缩放态下拉就是退出"
+                // （长图 fit-width 页）。框架不猜页面类型，只认这个声明。
+                if isZoomed {
+                    return photoCell.allowsDismissWhileZoomed
+                        && velocity.y > 0
+                        && (isAtTop || !hasVerticalScrollableContent)
+                }
                 return velocity.y > 0
                     ? (isAtTop || !hasVerticalScrollableContent)
                     : (isAtBottom || !hasVerticalScrollableContent)
@@ -943,7 +987,8 @@ extension JXPhotoBrowserViewController: UIGestureRecognizerDelegate {
 }
 
 private extension JXPhotoBrowserViewController {
-    func resetDismissInteraction(animated: Bool) {
+    /// 【本仓补丁】带 `velocity`：收尾时长按上游 NavigationTransitionCoordinator.swift:333 由手速决定。
+    func resetDismissInteraction(animated: Bool, velocity: CGPoint = .zero) {
         let cell = interactiveDismissCell
         let updates = {
             cell?.transitionImageView?.transform = .identity
@@ -961,7 +1006,38 @@ private extension JXPhotoBrowserViewController {
         }
 
         if animated {
-            UIView.animate(withDuration: 0.25, animations: updates, completion: completion)
+            // 【本仓补丁】改前固定 0.25s（"程序化"的手感）。改后两分支：
+            //   ① 有速度 → clamp(0.05…0.2, |距离 / 速度|) + easeInOut：**接管你的动量**，甩得越快补完得越快；
+            //   ② 几乎没速度（按住不动后抬手）→ 0.5s + 关闭档弹簧（ζ = 0.924）：慢慢"坐"回去，收尾一次极轻回弹。
+            // 上游：NavigationTransitionCoordinator.swift:328-335。
+            let distance = hypot(
+                cell?.transitionImageView?.transform.tx ?? 0,
+                cell?.transitionImageView?.transform.ty ?? 0
+            )
+            let speed = hypot(velocity.x, velocity.y)
+            if speed > 1.0, distance > 1.0 {
+                let raw = Double(distance / speed)
+                let duration = min(max(raw, dismissSettleDurationRange.lowerBound), dismissSettleDurationRange.upperBound)
+                UIView.animate(
+                    withDuration: duration,
+                    delay: 0,
+                    options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction],
+                    animations: updates,
+                    completion: completion
+                )
+            } else {
+                // ζ = damping / (2√(stiffness·mass)) = 0.924（关闭档），UIKit 的 dampingRatio 就是 ζ。
+                let zeta = dismissSettleDamping / (2.0 * (dismissSettleStiffness * dismissSettleMass).squareRoot())
+                UIView.animate(
+                    withDuration: dismissSettleSpringDuration,
+                    delay: 0,
+                    usingSpringWithDamping: min(max(zeta, 0.0), 1.0),
+                    initialSpringVelocity: 0,
+                    options: [.beginFromCurrentState, .allowUserInteraction],
+                    animations: updates,
+                    completion: completion
+                )
+            }
         } else {
             updates()
             completion(true)

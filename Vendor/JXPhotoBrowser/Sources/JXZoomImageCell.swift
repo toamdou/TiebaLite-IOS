@@ -4,46 +4,26 @@
 //
 
 import UIKit
-import Gifu
 
 private class JXObservedImageView: UIImageView {
     var onImageChange: (() -> Void)?
 
-    override var image: UIImage? {
-        didSet {
-            onImageChange?()
-        }
-    }
-}
-
-/// JXObservedImageView + Gifu 逐帧渲染（GIF 查看页播放用；非 GIF 行为与父类一致）。
-/// 动画期间 Gifu 每帧重写 image，suppressImageChange 让这些帧不触发
-/// handleImageDidChange 的布局重算——首帧静态底仍走正常赋值（布局算一次）。
-// @preconcurrency：GIFAnimatable（Gifu，Swift 5 模块）的 requirement 是非隔离的，
-// 而 UIView 子类是 MainActor 隔离的——v6 模式下按编译器建议加垫片，全部调用都在
-// 主线程（UIView 的 layer/display 回调）。
-private final class JXGIFObservedImageView: JXObservedImageView, @preconcurrency GIFAnimatable {
+    /// 逐帧写 image 时由 cell 打开（见 suppressImageChangeForAnimation 的说明）。
     var suppressImageChange = false
 
     override var image: UIImage? {
         didSet {
-            if !suppressImageChange {
-                onImageChange?()
+            if !self.suppressImageChange {
+                self.onImageChange?()
             }
         }
     }
-
-    public lazy var animator: Animator? = {
-        return Animator(withDelegate: self)
-    }()
-
-    public override func display(_ layer: CALayer) {
-        if UIImageView.instancesRespond(to: #selector(display(_:))) {
-            super.display(layer)
-        }
-        updateImageIfNeeded()
-    }
 }
+
+// [2026-10-05] 这里原本是 JXGIFObservedImageView：JXObservedImageView + Gifu 的 GIFAnimatable
+// 逐帧渲染。按「GIF 播放职责从图片浏览器整个摘掉、由宿主（TiebaNative）独占」的约定整类删除：
+// 图片浏览器现在只是一个纯图片浏览器，不认识任何 GIF 库（依赖图 TiebaNative → JXPhotoBrowser
+// 不能再多一条反向依赖，否则成环）。宿主通过下面两个公开成员驱动播放。
 
 /// 支持图片捏合缩放查看的 Cell
 /// 内部使用 UIScrollView 实现缩放，支持单击关闭、双击切换缩放模式等手势交互
@@ -77,7 +57,7 @@ open class JXZoomImageCell: UICollectionViewCell, UIScrollViewDelegate, JXPhotoB
 
     /// 展示图片内容的视图（参与缩放与转场）
     public let imageView: UIImageView = {
-        let iv = JXGIFObservedImageView()
+        let iv = JXObservedImageView()
         // 使用非 AutoLayout 的 frame 布局以配合缩放
         iv.translatesAutoresizingMaskIntoConstraints = true
         iv.contentMode = .scaleAspectFill
@@ -124,6 +104,15 @@ open class JXZoomImageCell: UICollectionViewCell, UIScrollViewDelegate, JXPhotoB
         commonInit()
     }
 
+    /// 【本仓补丁】是否允许"缩放态 + 贴顶下拉"触发下拉关闭。
+    ///
+    /// 默认 false，保持上游语义：**缩放态的拖拽应当平移已放大的图**，而不是退出查看器。
+    /// 但有一类页面例外 —— 长图阅读模式（fit-width，整页就是"读"，贴顶下拉除了退出没有别的含义）。
+    /// 框架不做页面类型的猜测，改由 cell 自己声明；TiebaPhotoBrowserImageCell 在长图页覆写为 true。
+    /// 不设这个钩子会怎样：框架守卫对缩放态一律拒绝（见 JXPhotoBrowserViewController
+    /// gestureRecognizerShouldBegin 的 isZoomed 判断），长图页于是只能点关闭按钮退出。
+    open var allowsDismissWhileZoomed: Bool { false }
+
     /// 两个 init 共用的初始化逻辑，确保从 XIB/Storyboard 实例化时同样完成 setup
     private func commonInit() {
         // ScrollView 承载 imageView 以支持捏合缩放
@@ -150,28 +139,21 @@ open class JXZoomImageCell: UICollectionViewCell, UIScrollViewDelegate, JXPhotoB
         backgroundColor = .clear
     }
 
-    // MARK: - GIF 播放（Gifu；查看页 GIF 由 TiebaPhotoBrowserImageCell 调用）
+    // MARK: - 交给宿主驱动的显示钩子（本框架不认识 GIF）
 
-    /// 播放 GIF：首帧静态底已由调用方赋值，这里接管逐帧渲染（全尺寸帧、
-    /// 缓冲窗 8 → 峰值内存 = 单帧 × 8）。动画期间 JXGIFObservedImageView
-    /// 的 suppressImageChange 挡住每帧 image 赋值触发的布局重算。
-    /// 返回 false 表示当前 cell 不承载 GIF（类型转换失败）。
-    @discardableResult
-    public func playGifAnimation(data: Data) -> Bool {
-        guard let gif = imageView as? JXGIFObservedImageView else { return false }
-        let animator = gif.animator
-        animator?.frameBufferSize = 8
-        animator?.shouldResizeFrames = false
-        animator?.animate(withGIFData: data, size: .zero, contentMode: .scaleAspectFit)
-        gif.suppressImageChange = true
-        return true
+    /// 承载图片的视图。需要逐帧播放动图的宿主（TiebaNative 的 TiebaGIFPlayer）拿它来贴帧，
+    /// 并自行负责在换页/复用时停表。图片浏览器不关心它是静图还是动图。
+    public var imageDisplayView: UIImageView {
+        return self.imageView
     }
 
-    /// 停止 GIF 动画并释放帧缓冲、恢复布局钩子（换页/取消/复用共用）。
-    public func stopGifAnimation() {
-        guard let gif = imageView as? JXGIFObservedImageView else { return }
-        gif.suppressImageChange = false
-        gif.prepareForReuse()
+    /// 逐帧写 image 期间置 true：**挡住 onImageChange 回调**。
+    /// 为什么需要它：本 cell 靠 image 变更回调重算布局（handleImageDidChange）。
+    /// 动图播放时每帧都会写 image，不挡的话每帧触发一次布局重算 —— 一秒 24 次，
+    /// 而布局结果其实没变（帧尺寸一致）。首帧静态底仍走正常赋值，布局照算一次。
+    public var suppressImageChangeForAnimation: Bool {
+        get { return (self.imageView as? JXObservedImageView)?.suppressImageChange ?? false }
+        set { (self.imageView as? JXObservedImageView)?.suppressImageChange = newValue }
     }
     
     // MARK: - Layout State
