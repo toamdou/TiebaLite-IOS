@@ -143,7 +143,10 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
     guard hasMore, !isLoading, !isLoadingMore else { return }
     isLoadingMore = true
     list.footerState = .loading
-    // 分页不碰 loadSeq：否则并发 reload 的结果会被这里的 seq 判丢。
+    // 分页不碰 loadSeq（不让自己的结果被别人判丢），但**落地时必须校验**：reload 在飞时
+    // 它会自增 loadSeq，这里再把旧数据集的第 N+1 页 append 进新 rows，就是同一帖两行、
+    // 页序错乱，而且此后每次 loadMore 都在脏集合上继续翻（R17-6）。
+    let seq = loadSeq
     Task { @MainActor in
       defer {
         isLoadingMore = false
@@ -152,6 +155,8 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
       do {
         let target = page + 1
         let result = try await TiebaProfileAPI.favorites(page: target)
+        // reload 在这段 await 期间完成过 → 这一页属于旧数据集，丢掉（defer 会把页脚收回）。
+        guard seq == loadSeq else { return }
         page = target
         hasMore = result.hasMore
         rows.append(contentsOf: decorate(result.rows))
@@ -274,9 +279,15 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
       reload()
     case .reachEnd, .footerTap:
       loadMore()
-    case .rowTap(let index, _, _):
+    case .rowTap(let index, let region, _):
       guard rows.indices.contains(index) else { return }
-      openThread(rows[index])
+      // 转发引用卡 → 原帖；老数据缺 tid 或非引用区退回整卡进帖。
+      if region == "quote", let quoteId = TiebaFeedRowInteraction.quotedThreadId(in: rows[index]) {
+        TiebaSceneHaptics.fire("press")
+        TiebaNavigator.shared.navigate(.thread(id: quoteId))
+      } else {
+        openThread(rows[index])
+      }
     case .swipeAction(let index, let action):
       guard action == "uncollect", rows.indices.contains(index) else { return }
       TiebaSceneHaptics.fire("destructive")
@@ -338,6 +349,9 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
           rows.insert(row, at: target)
         }
         publish(fresh: true)
+        // 数据已还原：撤销入口不复存在（留着再点一次会对仍在收藏中的帖子再发 setStore），
+        // 且撤销条底边更贴屏、恒在上层，会把失败提示整个盖住。
+        undoBar.hide()
         TiebaSceneHaptics.fire("action-fail")
         pill.showResult(success: false, text: "取消收藏失败")
       }

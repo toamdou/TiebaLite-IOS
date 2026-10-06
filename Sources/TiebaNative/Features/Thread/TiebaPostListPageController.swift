@@ -1,10 +1,15 @@
 // 帖子详情 / 楼中楼两页的共享骨架（TiebaThreadViewController / TiebaSubpostsViewController）：
 // 列表（TiebaKindListContentView）+ 首屏骨架 + 状态块 + toast 药丸的装配与约束、
-// 生命周期、代际校验下的分页状态、媒体可见性上报、图片查看器入口、登录门卫、
-// 顶栏双击回顶。数据源（接口 / 行模型 / 行事件）由子类实现——本类不碰任何接口。
+// 生命周期、代际校验下的分页状态、媒体可见性上报、图片查看器入口、登录门卫。
+// 数据源（接口 / 行模型 / 行事件）由子类实现——本类不碰任何接口。
+//
+// ⚠️ 顶栏双击回顶**不在这里**：由 UI/Chrome/TiebaNavDoubleTapToTop.swift 统一安装到
+// 每根入窗导航栏（单击武装 + 400ms 判窗，绕开 iOS 27 上 numberOfTapsRequired=2
+// "单击即触发"的实证缺陷）。这里原先另挂了一只 numberOfTapsRequired=2，同一根栏上
+// 两个识别器互不排斥 → 一次双击触发两次回顶（且踩中上面那个缺陷）。已整层删除。
 import UIKit
 
-class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate {
+class TiebaPostListPageController: UIViewController {
   // MARK: - 共享子视图
 
   let list = TiebaKindListContentView()
@@ -26,8 +31,8 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
   var pageSeq = 0
   var lastWidth: CGFloat = 0
   var needsPublish = false
-  /// 上次"缺页自愈重推"的时刻（节流用）。
-  private var lastRepublishAt: TimeInterval = 0
+  /// 自愈重推的节流：与列表侧**同一套**自适应节流（改前这里是硬编码 0.5s 的第二套机制）。
+  private var republishThrottle = TiebaAdaptiveThrottle()
   var inFlight: Set<String> = []
   var mediaVisibleKeys: Set<String> = []
   var visibleRange: (start: Int, end: Int)?
@@ -56,18 +61,19 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
     refreshPreferences()
     applyPalette()
     applyInsets()
+    // inset 已按新偏好缩了，浮动栏/胶囊的显隐也必须跟着——它此前只在 showState/showList
+    // 两个数据落地路径里同步过，从设置页返回时胶囊会压住末行（反向则留一条死带）。
+    applyChromeVisibility()
   }
 
   override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated)
-    installNavDoubleTapToTop()
     TiebaThreadMediaCoordinator.shared.setVisibleKeys(nil)
     if let host = parent as? TiebaRouteHostViewController { host.syncNativeScreenChrome() }
   }
 
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
-    removeNavDoubleTapToTop()
     TiebaThreadMediaCoordinator.shared.setVisibleKeys([])
   }
 
@@ -77,7 +83,7 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
     // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
     let width = TiebaLayout.quantize(list.bounds.width - list.horizontalInset * 2)
     // 宽度变化（旋转/分屏）必须按新宽度重测重推：行高按精确宽度键控，旧宽度的度量
-    // 会被宽度闸门拒绝、整列表退回兜底高。
+    // 会被宽度闸门拒绝（新宽度下只有可见窗口能当场同步补测，其余行等本轮重推落地）。
     let resized = width != lastWidth && lastWidth > 0
     lastWidth = width
     if width > 0, resized || needsPublish {
@@ -137,12 +143,13 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
     list.onPageDataMissing = { [weak self] in self?.republishCurrentPage() }
   }
 
-  /// 同页键重推（缺页自愈出口）。列表侧已按 0.5s 节流，这里再兜一道。
+  /// 同页键重推（缺页自愈出口）。列表侧也有一道节流，这里兜第二道 —— 但**用同一套自适应节流**：
+  /// 连续缺页时退避到 2s、静默后回到 0.5s、页面不可见时直接用最大间隔。
+  /// 改前是硬编码 0.5s：既与列表侧策略不一致，又让"连续缺页"每 0.5s 重推一整页。
   private func republishCurrentPage() {
     guard !pageKey.isEmpty, lastWidth > 0 else { return }
     let now = ProcessInfo.processInfo.systemUptime
-    guard now - lastRepublishAt >= 0.5 else { return }
-    lastRepublishAt = now
+    guard republishThrottle.shouldPass(now: now, inactive: view.window == nil) else { return }
     publish(fresh: false)
   }
 
@@ -309,46 +316,6 @@ class TiebaPostListPageController: UIViewController, UIGestureRecognizerDelegate
       self?.list.isHidden = false
       self?.applyChromeVisibility()
     }
-  }
-
-  // MARK: - 顶栏双击回顶（设置-浏览可关）
-
-  private weak var navDoubleTap: UITapGestureRecognizer?
-
-  func installNavDoubleTapToTop() {
-    guard navDoubleTap == nil,
-          TiebaPreferenceSnapshot.bool("navBarDoubleTapToTop", default: true),
-          let bar = parent?.navigationController?.navigationBar
-    else { return }
-    let tap = UITapGestureRecognizer(target: self, action: #selector(handleNavDoubleTap))
-    tap.numberOfTapsRequired = 2
-    tap.delaysTouchesBegan = false
-    tap.delaysTouchesEnded = false
-    tap.delegate = self
-    bar.addGestureRecognizer(tap)
-    navDoubleTap = tap
-  }
-
-  func removeNavDoubleTapToTop() {
-    if let navDoubleTap { navDoubleTap.view?.removeGestureRecognizer(navDoubleTap) }
-    navDoubleTap = nil
-  }
-
-  @objc private func handleNavDoubleTap() {
-    list.scrollToTop(animated: true)
-  }
-
-  /// 顶栏双击门卫（栏内控件/左右边缘不识别）。
-  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-    guard let bar = gestureRecognizer.view else { return true }
-    let point = touch.location(in: bar)
-    if point.x < 64 || point.x > bar.bounds.width - 64 { return false }
-    var hit = bar.hitTest(point, with: nil)
-    while let current = hit, current !== bar {
-      if current is UIControl { return false }
-      hit = current.superview
-    }
-    return true
   }
 
   // MARK: - 子类实现（本类不做数据访问）

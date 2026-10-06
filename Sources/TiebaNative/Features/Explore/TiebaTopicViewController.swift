@@ -23,6 +23,8 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
 
   /// mapProtoThread 输出（行字典来源；点赞/屏蔽直接改这份）。
   private var threads: [[String: Any]] = []
+  /// 上次发布时的行指纹（偏好变化才重推；与发现页同款）。
+  private var lastRowSignature = ""
   private var detail: TiebaTopicDetail?
   private var expandedIds: Set<String> = []
   private var likeMirror: [String: Bool] = [:]
@@ -49,6 +51,8 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
     list.isHidden = true
     stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
     stateView.onButtonPress = { [weak self] _ in self?.reload() }
+    // 与吧页/ExploreFeed 同口径：骨架顶部留 8pt，不再贴着导航栏画。
+    stateView.skeletonInsets = UIEdgeInsets(top: 8, left: 0, bottom: 24, right: 0)
     stateView.isHidden = true
     stateHeaderHost.isHidden = true
     for subview in [list, stateHeaderHost, stateView, pill] as [UIView] {
@@ -66,7 +70,11 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
       list.topAnchor.constraint(equalTo: view.topAnchor),
       list.bottomAnchor.constraint(equalTo: view.bottomAnchor),
       stateHeaderHost.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-      stateHeaderHost.topAnchor.constraint(equalTo: view.topAnchor),
+      // 改前症状：空态页头顶边钉 view.topAnchor，而推入页从屏幕最顶开始、导航栏浮在上面 ⇒
+      // 话题名片（40pt 图标徽章 + 24pt 名称 + 简介）上半部被状态栏与玻璃导航栏遮住；
+      // 加载态宿主高度归 0 后骨架同样从 y=0 起画。
+      // 改后行为：与吧页（TiebaForumViewController）、用户主页同一口径，页头从安全区下方起画。
+      stateHeaderHost.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
       headerWidth,
       headerHeight,
       stateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -125,6 +133,24 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
 
   // MARK: - 数据
 
+  /// 行指纹只含影响测量的偏好（与发现页同款；宽度由 driver 自己看守，不入指纹）。
+  private func rowSignature() -> String {
+    let hideMedia = TiebaPreferenceSnapshot.bool("hideMedia", default: false)
+    let showIp = TiebaPreferenceSnapshot.bool("showIpLocation", default: true)
+    let fontScale = Double(TiebaPreferenceSnapshot.string("fontScale") ?? "") ?? 1
+    return "\(fontScale)#\(hideMedia)#\(showIp)#\(expandedIds.count)"
+  }
+
+  override func viewWillAppear(_ animated: Bool) {
+    super.viewWillAppear(animated)
+    // 偏好（字号/隐藏图片/IP 显示）嵌在每行字典里、测量与渲染都吃这份快照：本页此前
+    // 没有任何复现钩子（发现页有 handleFocus），从设置页改完回来会停在旧档。
+    // 指纹变了才整页重测（fresh: true）。
+    guard !threads.isEmpty, rowSignature() != lastRowSignature else { return }
+    lastRowSignature = rowSignature()
+    driver.publish(fresh: true, makeRows: { [weak self] in self?.makeRows() ?? [] })
+  }
+
   @objc private func reload() {
     guard !isLoading else {
       list.endRefreshing()
@@ -151,7 +177,8 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
         page = 2
         isLoadingMore = false
         list.headerSpec = headerSpec(for: result)
-        driver.publish(fresh: true, makeRows: makeRows)
+        driver.publish(fresh: true, makeRows: { [weak self] in self?.makeRows() ?? [] })
+        lastRowSignature = rowSignature()
         if threads.isEmpty {
           showEmpty()
         } else {
@@ -183,7 +210,7 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
         page += 1
         hasMore = result.hasMore
         threads.append(contentsOf: result.threads)
-        driver.publish(fresh: true, makeRows: makeRows)
+        driver.publish(fresh: true, makeRows: { [weak self] in self?.makeRows() ?? [] })
       } catch {
         pill.showResult(success: false, text: "加载失败")
       }
@@ -327,7 +354,7 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
       let id = value(index, "id")
       guard !id.isEmpty, expandedIds.insert(id).inserted else { return }
       TiebaSceneHaptics.fire("toggle")
-      driver.publish(fresh: false, makeRows: makeRows)
+      driver.publish(fresh: false, makeRows: { [weak self] in self?.makeRows() ?? [] })
     case "action":
       switch actionIndex {
       case 0: openThread(index)
@@ -339,6 +366,14 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
       // 真图点击已由原生查看器直开；到这里的只有视频 poster（进帖）。
       guard !hasImageMedia(index) else { return }
       openThread(index)
+    case "quote":
+      // 转发引用卡 → 原帖；老数据缺 tid 退回整卡进帖。
+      if let quoteId = TiebaFeedRowInteraction.quotedThreadId(in: threads[index]) {
+        TiebaSceneHaptics.fire("press")
+        TiebaNavigator.shared.navigate(.thread(id: quoteId))
+      } else {
+        openThread(index)
+      }
     default:
       openThread(index)
     }
@@ -424,7 +459,7 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
     threads[index]["hasAgree"] = liked
     let count = TiebaSimpleRowParser.double(threads[index]["zanNum"]) ?? 0
     threads[index]["zanNum"] = max(0, count + (liked ? 1 : -1))
-    driver.publish(fresh: false, makeRows: makeRows)
+    driver.publish(fresh: false, makeRows: { [weak self] in self?.makeRows() ?? [] })
   }
 
   /// 屏蔽作者：走 BlockManager 逐 uid 键（同键同形状，顺带按 uid 去重）。
@@ -450,7 +485,7 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
     if threads.isEmpty {
       showEmpty()
     } else {
-      driver.publish(fresh: true, makeRows: makeRows)
+      driver.publish(fresh: true, makeRows: { [weak self] in self?.makeRows() ?? [] })
     }
   }
 

@@ -60,149 +60,155 @@ final class TiebaBlockSettingsViewController: TiebaFormPageController {
 
   // MARK: - 行模型
 
-  override func makeSections(dark: Bool) -> [[String: Any]] {
-    var sections: [[String: Any]] = [[
-      "rows": [[
-        "id": "tab",
-        "kind": "segmented",
-        "value": activeTab.rawValue,
-        "options": Tab.allCases.map { ["value": $0.rawValue, "label": $0.label] },
-      ]]
-    ]]
+  override func makeSections(dark: Bool) -> [TiebaFormSection] {
+    var sections = [TiebaFormSection(
+      rows: [TiebaFormRow(
+        id: "tab",
+        kind: .segmented,
+        value: activeTab.rawValue,
+        options: Tab.allCases.map { TiebaFormOption(value: $0.rawValue, label: $0.label) }
+      )]
+    )]
     switch activeTab {
     case .keyword, .user:
       sections.append(addSection())
       sections.append(localSection())
     case .blacklist:
-      sections.append([
-        "title": "云端黑名单",
-        "footer": "由贴吧服务端维护的社交黑名单，与本地屏蔽相互独立。",
-        "rows": blacklistRows(),
-      ])
+      sections.append(TiebaFormSection(
+        title: "云端黑名单",
+        footer: "由贴吧服务端维护的社交黑名单，与本地屏蔽相互独立。",
+        rows: blacklistRows()
+      ))
     case .forums:
-      sections.append([
-        "title": "屏蔽吧（云端）",
-        "footer": "由贴吧服务端记录，解除请在贴吧客户端中操作。",
-        "rows": dislikeRows(),
-      ])
+      sections.append(TiebaFormSection(
+        title: "屏蔽吧（云端）",
+        footer: "由贴吧服务端记录，解除请在贴吧客户端中操作。",
+        rows: dislikeRows()
+      ))
     }
     return sections
   }
 
-  private func addSection() -> [String: Any] {
-    var rows: [[String: Any]] = [[
-      "id": "input",
-      "kind": "textField",
-      "placeholder": activeTab == .keyword ? "输入屏蔽关键词" : "输入用户ID",
-      "value": input,
-    ]]
+  private func addSection() -> TiebaFormSection {
+    var rows = [TiebaFormRow(
+      id: "input",
+      kind: .textField,
+      value: input,
+      placeholder: activeTab == .keyword ? "输入屏蔽关键词" : "输入用户ID"
+    )]
     if activeTab == .keyword {
-      rows.append(["id": "regex", "kind": "toggle", "title": "使用正则表达式", "value": isRegex ? "1" : "0"])
-      rows.append(["id": "whitelist", "kind": "toggle", "title": "设为白名单", "value": isWhitelist ? "1" : "0"])
+      rows.append(TiebaFormRow(id: "regex", kind: .toggle, title: "使用正则表达式", value: isRegex ? "1" : "0"))
+      rows.append(TiebaFormRow(id: "whitelist", kind: .toggle, title: "设为白名单", value: isWhitelist ? "1" : "0"))
     }
-    rows.append(["id": "add", "kind": "button", "title": "添加", "icon": "plus.circle.fill"])
-    return ["title": activeTab == .keyword ? "添加屏蔽词" : "添加屏蔽用户", "rows": rows]
+    rows.append(TiebaFormRow(id: "add", kind: .button, title: "添加", icon: "plus.circle.fill"))
+    return TiebaFormSection(title: activeTab == .keyword ? "添加屏蔽词" : "添加屏蔽用户", rows: rows)
   }
 
   /// 本地屏蔽项：menu 行（副标题显示 正则/白名单）+ 行尾 ellipsis 删除菜单；
   /// 点行本体与旧版一致弹「移除屏蔽项」确认框。
-  private func localSection() -> [String: Any] {
-    var rows: [[String: Any]]
+  private func localSection() -> TiebaFormSection {
+    var rows: [TiebaFormRow]
     if activeTab == .keyword {
       rows = words.map { word in
         var subtitle = word.isRegex == true ? "正则" : ""
         if word.isWhitelist { subtitle += "白名单" }
-        return [
-          "id": "word:\(word.id)",
-          "kind": "menu",
-          "title": word.keyword,
-          "subtitle": subtitle,
-          "menuItems": [["id": "delete", "title": "删除", "destructive": true]],
-        ]
+        return TiebaFormRow(
+          id: "word:\(word.id)",
+          kind: .menu,
+          title: word.keyword,
+          subtitle: subtitle,
+          menuItems: [TiebaFormMenuItem(id: "delete", title: "删除", destructive: true)]
+        )
       }
     } else {
       rows = users.map { user in
-        [
-          "id": "user:\(user.uid)",
-          "kind": "menu",
-          "title": user.username ?? user.uid,
-          "menuItems": [["id": "delete", "title": "删除", "destructive": true]],
-        ]
+        TiebaFormRow(
+          id: "user:\(user.uid)",
+          kind: .menu,
+          title: user.username ?? user.uid,
+          menuItems: [TiebaFormMenuItem(id: "delete", title: "删除", destructive: true)]
+        )
       }
     }
-    if rows.isEmpty { rows = [["id": "empty", "kind": "text", "title": "暂无屏蔽项"]] }
+    if rows.isEmpty { rows = [TiebaFormRow(id: "empty", kind: .text, title: "暂无屏蔽项")] }
     let title = activeTab == .keyword ? "屏蔽词列表 (\(words.count))" : "屏蔽用户 (\(users.count))"
-    return ["title": title, "rows": rows]
+    return TiebaFormSection(title: title, rows: rows)
   }
 
-  private func blacklistRows() -> [[String: Any]] {
+  private func blacklistRows() -> [TiebaFormRow] {
     switch blacklistState {
     case .loading:
-      return [["id": "loading", "kind": "spinner"]]
+      return [TiebaFormRow(id: "loading", kind: .spinner)]
     case .failed:
       return errorRows("云端黑名单加载失败", retry: "retryBlacklist")
     case .loaded:
       if blacklist.isEmpty {
-        return [[
-          "id": "emptyBlacklist",
-          "kind": "empty",
-          "icon": "person.crop.circle.badge.xmark",
-          "title": "暂无云端黑名单",
-          "subtitle": "你还没有在贴吧服务端拉黑过用户",
-        ]]
+        return [TiebaFormRow(
+          id: "emptyBlacklist",
+          kind: .empty,
+          title: "暂无云端黑名单",
+          subtitle: "你还没有在贴吧服务端拉黑过用户",
+          icon: "person.crop.circle.badge.xmark"
+        )]
       }
       return blacklist.map { user in
-        [
-          "id": "blacklist:\(user.uid)",
-          "kind": "avatar",
-          "avatarURL": user.portrait,
-          "initials": String(user.displayName.prefix(1)),
-          "title": user.displayName,
-          "subtitle": blacklistDetail(user),
-          "trailingStyle": "button",
-          "trailingIcon": "minus.circle.fill",
-          "trailingColor": "systemRed",
-          "trailingBusy": removingUid == user.uid,
-          "trailingDisabled": removingUid != nil,
-        ]
+        TiebaFormRow(
+          id: "blacklist:\(user.uid)",
+          kind: .avatar,
+          title: user.displayName,
+          subtitle: blacklistDetail(user),
+          avatarURL: user.portrait,
+          initials: String(user.displayName.prefix(1)),
+          trailingStyle: "button",
+          trailingIcon: "minus.circle.fill",
+          trailingColor: TiebaFormColor.resolve("systemRed"),
+          trailingBusy: removingUid == user.uid,
+          trailingDisabled: removingUid != nil
+        )
       }
     }
   }
 
-  private func dislikeRows() -> [[String: Any]] {
+  private func dislikeRows() -> [TiebaFormRow] {
     switch dislikeState {
     case .loading:
-      return [["id": "loading", "kind": "spinner"]]
+      return [TiebaFormRow(id: "loading", kind: .spinner)]
     case .failed:
       return errorRows("屏蔽吧列表加载失败", retry: "retryDislike")
     case .loaded:
       if dislikeForums.isEmpty {
-        return [[
-          "id": "emptyDislike",
-          "kind": "empty",
-          "icon": "hand.raised.fill",
-          "title": "暂无屏蔽吧",
-          "subtitle": "未发现被屏蔽的贴吧",
-        ]]
+        return [TiebaFormRow(
+          id: "emptyDislike",
+          kind: .empty,
+          title: "暂无屏蔽吧",
+          subtitle: "未发现被屏蔽的贴吧",
+          icon: "hand.raised.fill"
+        )]
       }
       return dislikeForums.map { forum in
-        [
-          "id": "dislike:\(forum.fid)",
-          "kind": "avatar",
-          "initials": String(forum.fname.prefix(1)),
-          "title": forum.fname,
-          "subtitle": "\(TiebaForumFormat.count(forum.memberNum)) 成员 · \(TiebaForumFormat.count(forum.postNum)) 帖子",
-          "trailingStyle": "text",
-          "trailingTitle": "需在贴吧客户端解除",
-        ]
+        TiebaFormRow(
+          id: "dislike:\(forum.fid)",
+          kind: .avatar,
+          title: forum.fname,
+          subtitle: "\(TiebaForumFormat.count(forum.memberNum)) 成员 · \(TiebaForumFormat.count(forum.postNum)) 帖子",
+          initials: String(forum.fname.prefix(1)),
+          trailingStyle: "text",
+          trailingTitle: "需在贴吧客户端解除"
+        )
       }
     }
   }
 
-  private func errorRows(_ text: String, retry: String) -> [[String: Any]] {
+  private func errorRows(_ text: String, retry: String) -> [TiebaFormRow] {
     [
-      ["id": "\(retry)Text", "kind": "text", "textStyle": "subheadline", "color": "secondaryLabel", "title": text],
-      ["id": retry, "kind": "button", "title": "重试", "icon": "arrow.clockwise"],
+      TiebaFormRow(
+        id: "\(retry)Text",
+        kind: .text,
+        title: text,
+        override: TiebaFormColor.resolve("secondaryLabel"),
+        textStyle: "subheadline"
+      ),
+      TiebaFormRow(id: retry, kind: .button, title: "重试", icon: "arrow.clockwise"),
     ]
   }
 

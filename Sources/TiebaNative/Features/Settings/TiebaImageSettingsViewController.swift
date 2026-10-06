@@ -63,61 +63,66 @@ final class TiebaImageSettingsViewController: TiebaFormPageController {
       value: TiebaPreferences.bool("videoAutoplay", default: false) ? "1" : "0")
   }
 
-  override func makeSections(dark: Bool) -> [[String: Any]] {
-    func picker(_ id: String, _ title: String, _ table: [(value: String, label: String)], fallback: String) -> [String: Any] {
-      [
-        "id": id, "kind": "picker", "title": title,
-        "value": TiebaPreferences.string(id, allowed: table.map(\.value), default: fallback),
-        "options": options(table),
-      ]
+  override func makeSections(dark: Bool) -> [TiebaFormSection] {
+    func picker(_ id: String, _ title: String, _ table: [(value: String, label: String)], fallback: String) -> TiebaFormRow {
+      TiebaFormRow(
+        id: id,
+        kind: .picker,
+        title: title,
+        value: TiebaPreferences.string(id, allowed: table.map(\.value), default: fallback),
+        options: options(table)
+      )
     }
-    func toggle(_ id: String, _ title: String, _ icon: String, fallback: Bool) -> [String: Any] {
-      [
-        "id": id, "kind": "toggle", "title": title, "icon": icon,
-        "value": TiebaPreferences.bool(id, default: fallback) ? "1" : "0",
-      ]
+    func toggle(_ id: String, _ title: String, _ icon: String, fallback: Bool) -> TiebaFormRow {
+      TiebaFormRow(
+        id: id,
+        kind: .toggle,
+        title: title,
+        icon: icon,
+        value: TiebaPreferences.bool(id, default: fallback) ? "1" : "0"
+      )
     }
 
     return [
-      [
-        "title": "图片加载",
-        "rows": [
+      TiebaFormSection(
+        title: "图片加载",
+        rows: [
           picker("imageLoadType", "图片加载策略", Self.loadTypes, fallback: "smart_origin"),
           picker("dataSaverMode", "大图清晰度", Self.dataSaver, fallback: "high"),
-        ],
-      ],
-      [
-        "title": "图片水印",
-        "rows": [
+        ]
+      ),
+      TiebaFormSection(
+        title: "图片水印",
+        rows: [
           picker("imageWatermark", "水印样式", Self.watermarks, fallback: "none"),
           toggle("imageWatermarkEnabled", "图片右下角水印", "signature", fallback: false),
-        ],
-      ],
-      [
-        "title": "显示",
-        "rows": [
+        ]
+      ),
+      TiebaFormSection(
+        title: "显示",
+        rows: [
           toggle("imageDarkenWhenNight", "暗色模式下暗化图片", "moon.circle.fill", fallback: true)
-        ],
-      ],
-      [
-        "title": "视频",
-        "footer": "自动播放：帖内视频滚入视野即静音开播，滚出视野自动收起（滚回重播）；关闭后点按播放。WiFi 档需网络状态模块，暂不提供。",
-        "rows": [
+        ]
+      ),
+      TiebaFormSection(
+        title: "视频",
+        footer: "自动播放：帖内视频滚入视野即静音开播，滚出视野自动收起（滚回重播）；关闭后点按播放。WiFi 档需网络状态模块，暂不提供。",
+        rows: [
           toggle("videoAutoplay", "帖内视频自动播放", "play.circle", fallback: false)
-        ],
-      ],
+        ]
+      ),
     ]
   }
 
   override func handle(_ event: TiebaFormEvent) {
     switch event {
     case .toggle(let id, let value):
-      // 触觉只有「暗化」「自动播放」两个开关有（水印开关没有，与旧页一致）。
+      // 触觉统一由行内控件层发（cell.toggleChanged），页面层不补发；旧页「水印开关没有
+      // 触觉」的差异在当前分层下无法表达（见 36 号文档 R18-2）。
       switch id {
       case "imageWatermarkEnabled":
         write(id, bool: value)
       case "imageDarkenWhenNight", "videoAutoplay":
-        TiebaSceneHaptics.fire("toggle")
         write(id, bool: value)
       default:
         break

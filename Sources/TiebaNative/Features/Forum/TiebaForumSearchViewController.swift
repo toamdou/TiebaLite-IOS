@@ -249,7 +249,7 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
     isLoading = true
     if reset {
       hits = []
-      driver.publish(fresh: true, makeRows: makeRows)
+      driver.publish(fresh: true, makeRows: { [weak self] in self?.makeRows() ?? [] })
       showState(.loading)
     }
     Task { @MainActor in
@@ -276,7 +276,7 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
         }
         page = requestPage
         hasMore = result.hasMore
-        driver.publish(fresh: true, makeRows: makeRows)
+        driver.publish(fresh: true, makeRows: { [weak self] in self?.makeRows() ?? [] })
         if hits.isEmpty {
           showState(.empty(
             image: "doc.text.magnifyingglass",
@@ -366,6 +366,26 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
 // MARK: - UISearchBarDelegate
 
 extension TiebaForumSearchViewController: UISearchBarDelegate {
+  func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
+    // 取消按钮：与全站搜索页同口径（裸 UISearchBar 默认不显示），否则下面
+    // searchBarCancelButtonClicked 的「空文本返回 / 清空」两个分支永远不可达。
+    searchBar.showsCancelButton = true
+    // 提交搜索时 commit 把历史区 isHidden=true，此后无任何代码置回——重新聚焦即恢复入口，
+    // 否则改词/清空/失败重试都再也拿不回「全部/收起/清空」。
+    historyView.isHidden = false
+    list.isHidden = true
+    stateView.isHidden = true
+  }
+
+  func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
+    searchBar.showsCancelButton = false
+    // 收起键盘：搜过就回结果列表（历史区让位），没搜过就留在历史区。
+    if hasSearched {
+      historyView.isHidden = true
+      showList()
+    }
+  }
+
   func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
     searchBar.resignFirstResponder()
     commit(searchBar.text ?? "")

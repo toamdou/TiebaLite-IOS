@@ -95,11 +95,14 @@ final class TiebaThreadKnownPostView: UIView {
       titleLabel.font = TiebaSimpleText.font(size: 17, weight: .medium)
       // 与真卡（TiebaPostRowLayout.titleLineLimit = 0）保持一致：都不截断，
       // 否则换卡那一刻标题行数会变、下面整块跳一次。
+      // makeAttributed 的 truncating 默认 true，会以 byTruncatingTail 盖过 numberOfLines=0
+      // ——标题完整却渲染出真卡没有的省略号，故显式按真卡口径传。
       titleLabel.numberOfLines = TiebaPostRowLayout.titleLineLimit
       titleLabel.attributedText = TiebaSimpleText.makeAttributed(
         text: snapshot.title,
         font: TiebaSimpleText.font(size: 17, weight: .medium),
-        lineHeight: 22
+        lineHeight: 22,
+        truncating: TiebaPostRowLayout.titleLineLimit > 0
       )
       stack.addArrangedSubview(titleLabel)
     }

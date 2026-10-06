@@ -15,8 +15,6 @@ final class TiebaHotListViewController: UIViewController, TiebaTabReselectable {
   private var isReloading = false
   /// 请求代号：加载中点第二个分类时旧响应必须丢弃（否则列表停在旧 tab）。
   private var requestSeq = 0
-  /// 回顶重拉在途（回顶动画结束才消费）。
-  private var pendingTopRefresh = false
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -115,17 +113,23 @@ final class TiebaHotListViewController: UIViewController, TiebaTabReselectable {
 
   // MARK: - 外部驱动（tab 根屏）
 
-  /// 热榜只在底栏重复点击时重拉（与旧页 TAB_RESELECT 判据一致）；回顶动画结束
-  /// （scrollViewDidEndScrollingAnimation）才重拉，不再用 260ms 定时器近似。
-  /// 已在顶部 = 没有滚动动画可等，直接重拉。
+  /// 底栏重复点击（用户口径）：不在顶部 → 只回顶，不刷新；已在顶部 → 顶部
+  /// 展示刷新动画并重拉。
   func tabReselected() {
     let top = -collectionView.adjustedContentInset.top
-    guard collectionView.contentOffset.y > top + 0.5 else {
-      reload()
+    guard collectionView.contentOffset.y <= top + 0.5 else {
+      collectionView.setContentOffset(CGPoint(x: 0, y: top), animated: true)
       return
     }
-    pendingTopRefresh = true
-    collectionView.setContentOffset(CGPoint(x: 0, y: top), animated: true)
+    guard !refreshControl.isRefreshing else { return }
+    refreshControl.beginRefreshing()
+    // 与 KindList 同款：refreshControl 未布局时 bounds.height 可能为 0，偏移量取 0 就
+    // 等于「只 beginRefreshing 不滚」，用户看不到刷新动画（同仓 KindList 已用 44 兜底）。
+    collectionView.setContentOffset(
+      CGPoint(x: 0, y: top - max(refreshControl.bounds.height, 44)),
+      animated: true
+    )
+    reload()
   }
 
   // MARK: - 状态
@@ -226,6 +230,107 @@ final class TiebaHotListViewController: UIViewController, TiebaTabReselectable {
     TiebaSceneHaptics.fire("press")
     TiebaNavigator.shared.navigate(.user(uid: uid))
   }
+
+  // MARK: - 长按卡片菜单的四个动作（分享 / 复制内容 / 不感兴趣 / 屏蔽作者）
+
+  /// 帖子 id → 当前下标。菜单动作一律按 id 现查（期间可能已删行/换 tab）。
+  private func hotIndex(ofThread id: String) -> Int? {
+    guard !id.isEmpty else { return nil }
+    return threads.firstIndex { TiebaSimpleRowParser.string($0.row["id"]) == id }
+  }
+
+  private func openAuthor(ofThread id: String) {
+    guard let index = hotIndex(ofThread: id) else { return }
+    openAuthor(index)
+  }
+
+  private func openForum(ofThread id: String) {
+    guard let index = hotIndex(ofThread: id) else { return }
+    openForum(index)
+  }
+
+  /// 分享帖子：标题 + 帖子链接（与动态流/吧页同一条文案与同一分享面板）。
+  private func shareThread(_ id: String) {
+    guard let index = hotIndex(ofThread: id) else { return }
+    TiebaSceneHaptics.fire("press")
+    let url = "https://tieba.baidu.com/p/\(id)"
+    let title = TiebaSimpleRowParser.string(threads[index].row["title"]) ?? ""
+    TiebaShareSheet.present(text: title.isEmpty ? url : "\(title)\n\(url)", from: self)
+  }
+
+  /// 复制帖子内容：标题 + 正文纯文本（不含图片）。取段与拼接复用
+  /// TiebaFeedRowInteraction.postPlainText（动态流/吧页同一实现）。
+  private func copyPostContent(_ id: String) {
+    guard let index = hotIndex(ofThread: id) else { return }
+    let text = TiebaFeedRowInteraction.postPlainText(threads[index].row)
+    guard !text.isEmpty else { return }
+    TiebaClipboard.setString(text)
+    TiebaSceneHaptics.fire("action-success")
+    pill.showResult(success: true, text: "已复制帖子内容")
+  }
+
+  /// 不感兴趣：原因面板（与动态流/吧页同一个面板类）→ 上报 → 移除本行。
+  private func presentDislikeSheet(_ id: String) {
+    guard hotIndex(ofThread: id) != nil else { return }
+    TiebaSceneHaptics.fire("sheet-present")
+    let sheet = TiebaDislikeSheetViewController { [weak self] ids in
+      self?.submitDislike(id, ids: ids)
+    }
+    present(sheet, animated: true)
+  }
+
+  private func submitDislike(_ id: String, ids: String) {
+    guard let index = hotIndex(ofThread: id) else { return }
+    let forumId = TiebaSimpleRowParser.string(threads[index].row["forumId"]) ?? ""
+    Task { @MainActor in
+      do {
+        try await TiebaFeedAPI.submitDislike(threadId: id, dislikeIds: ids, forumId: forumId)
+        TiebaSceneHaptics.fire("action-success")
+        pill.showResult(success: true, text: "已减少此类内容推荐")
+        threads.removeAll { TiebaSimpleRowParser.string($0.row["id"]) == id }
+        applyThreadRemoval()
+      } catch {
+        TiebaSceneHaptics.fire("action-fail")
+        pill.showResult(success: false, text: "提交失败，请稍后重试")
+      }
+    }
+  }
+
+  /// 屏蔽作者：写本地屏蔽表（逐 uid 键，同吧页）→ 其所有行立即从本页移除。
+  private func blockAuthor(ofThread id: String) {
+    guard let index = hotIndex(ofThread: id) else { return }
+    let row = threads[index].row
+    let uid = TiebaSimpleRowParser.string(row["authorId"]) ?? ""
+    guard !uid.isEmpty else { return }
+    let name = TiebaSimpleRowParser.nonEmpty(row["authorNameShow"])
+      ?? TiebaSimpleRowParser.string(row["authorName"]) ?? ""
+    do {
+      try TiebaBlockStore.add(
+        user: TiebaBlockedUser(id: uid, uid: uid, username: name.isEmpty ? nil : name)
+      )
+    } catch {
+      TiebaSceneHaptics.fire("action-fail")
+      return
+    }
+    TiebaSceneHaptics.fire("action-success")
+    threads.removeAll { TiebaSimpleRowParser.string($0.row["authorId"]) == uid }
+    applyThreadRemoval()
+  }
+
+  /// 删行后的收尾：还有内容刷新列表（名次随之重排），空了给空状态。
+  private func applyThreadRemoval() {
+    if threads.isEmpty {
+      showState(.empty(
+        image: "flame",
+        text: "暂无热榜内容",
+        secondary: "稍后再来看看吧",
+        retryTitle: "刷新"
+      ))
+    } else {
+      collectionView.reloadData()
+      showList()
+    }
+  }
 }
 
 // MARK: - 列表数据源
@@ -284,27 +389,42 @@ extension TiebaHotListViewController: UICollectionViewDataSource, UICollectionVi
     openThread(indexPath.item)
   }
 
-  /// 回顶（setContentOffset(animated:)）落位：消费在途的重拉（见 tabReselected）。
-  func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-    guard pendingTopRefresh else { return }
-    pendingTopRefresh = false
-    reload()
-  }
-
+  /// 热榜长按菜单：本页**已有**这套菜单（查看作者 / 进入吧），帖子长按需求落地时
+  /// 按「有就扩展、不挂第二套」原则在它后面追加四项（分享帖子 / 复制帖子内容 /
+  /// 不感兴趣 / 屏蔽作者）—— 全页仍然只有一个 UIContextMenuInteraction 入口。
   func collectionView(
     _ collectionView: UICollectionView,
     contextMenuConfigurationForItemAt indexPath: IndexPath,
     point: CGPoint
   ) -> UIContextMenuConfiguration? {
     guard threads.indices.contains(indexPath.item) else { return nil }
+    // 长按那一刻的帖子 id（不是下标）：菜单是异步的，动作触发时列表可能已经删行/
+    // 换 tab，下标会指到别人 —— 下面所有动作一律按 id 现查（hotIndex(ofThread:)）。
+    let threadId = TiebaSimpleRowParser.string(threads[indexPath.item].row["id"]) ?? ""
     return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+      guard let self, self.hotIndex(ofThread: threadId) != nil else { return nil }
       let author = UIAction(title: "查看作者", image: UIImage(systemName: "person.crop.circle")) { _ in
-        self?.openAuthor(indexPath.item)
+        self.openAuthor(ofThread: threadId)
       }
       let forum = UIAction(title: "进入吧", image: UIImage(systemName: "text.bubble")) { _ in
-        self?.openForum(indexPath.item)
+        self.openForum(ofThread: threadId)
       }
-      return UIMenu(children: [author, forum])
+      let share = UIAction(title: "分享帖子", image: UIImage(systemName: "square.and.arrow.up")) { _ in
+        self.shareThread(threadId)
+      }
+      let copy = UIAction(title: "复制帖子内容", image: UIImage(systemName: "doc.on.doc")) { _ in
+        self.copyPostContent(threadId)
+      }
+      let dislike = UIAction(title: "不感兴趣", image: UIImage(systemName: "hand.thumbsdown")) { _ in
+        self.presentDislikeSheet(threadId)
+      }
+      let block = UIAction(
+        title: "屏蔽作者",
+        image: UIImage(systemName: "person.crop.circle.badge.xmark")
+      ) { _ in
+        self.blockAuthor(ofThread: threadId)
+      }
+      return UIMenu(children: [author, forum, share, copy, dislike, block])
     }
   }
 }
@@ -355,35 +475,43 @@ final class TiebaHotListCell: UICollectionViewCell {
     cardView.backgroundColor = palette.card
     cardView.layer.cornerRadius = TiebaHotMetrics.cardRadius // Radius.card
     cardView.layer.cornerCurve = .continuous
-    // 1px 卡边框：displayScale 取视图 trait（UIScreen.main 自 iOS 26 废弃）。
-    cardView.layer.borderWidth = 1 / traitCollection.displayScale
+    // 1px 卡边框：displayScale 取视图 trait（UIScreen.main 自 iOS 26 废弃）；
+    // 下限 1：cell 在 init(frame:) 时尚未入窗，窗口外 displayScale=0，1/0 会把整卡糊成边框色。
+    cardView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     cardView.layer.borderColor = palette.borderCard.cgColor
 
     rankBadge.layer.cornerRadius = 10
     rankBadge.layer.cornerCurve = .continuous
     rankLabel.font = fonts.rank
+    rankLabel.adjustsFontForContentSizeCategory = true
     rankLabel.textAlignment = .center
     rankLabel.adjustsFontSizeToFitWidth = true
     rankLabel.minimumScaleFactor = 0.7
     rankBadge.addSubview(rankLabel)
 
     titleLabel.font = fonts.title
+
+    titleLabel.adjustsFontForContentSizeCategory = true
     titleLabel.textColor = palette.text
     titleLabel.numberOfLines = 2
     titleLabel.lineBreakMode = .byTruncatingTail
 
     authorLabel.font = fonts.author
+
+    authorLabel.adjustsFontForContentSizeCategory = true
     authorLabel.textColor = palette.textSecondary
     authorLabel.numberOfLines = 1
     authorLabel.lineBreakMode = .byTruncatingTail
     dotLabel.text = "·"
     dotLabel.font = fonts.author
+    dotLabel.adjustsFontForContentSizeCategory = true
     dotLabel.textColor = palette.textTertiary
 
     forumChip.backgroundColor = palette.placeholder
     forumChip.layer.cornerRadius = 8
     forumChip.layer.cornerCurve = .continuous
     forumLabel.font = fonts.forum
+    forumLabel.adjustsFontForContentSizeCategory = true
     forumLabel.textColor = palette.textSecondary
     forumLabel.numberOfLines = 1
     forumLabel.lineBreakMode = .byTruncatingTail
@@ -393,10 +521,13 @@ final class TiebaHotListCell: UICollectionViewCell {
     configureActionIcon(agreeIcon, systemImage: "hand.thumbsup")
     configureActionIcon(flameIcon, systemImage: "flame")
     replyLabel.font = fonts.action
+    replyLabel.adjustsFontForContentSizeCategory = true
     agreeLabel.font = fonts.action
+    agreeLabel.adjustsFontForContentSizeCategory = true
     replyLabel.textColor = palette.textTertiary
     agreeLabel.textColor = palette.textTertiary
     hotLabel.font = fonts.hot
+    hotLabel.adjustsFontForContentSizeCategory = true
     replyIcon.tintColor = palette.textTertiary
     agreeIcon.tintColor = palette.textTertiary
 
@@ -570,7 +701,9 @@ private enum TiebaHotMetrics {
   static let rankColumnWidth: CGFloat = 38
   static let bodyIndent: CGFloat = 10
 
-  static let fonts = Fonts()
+  /// 计算属性（不是 static let）：static let 会在进程内首次访问时把六个字号档解析死，
+  /// 之后改 Dynamic Type 新建的 cell 仍拿旧档字体。
+  static var fonts: Fonts { Fonts() }
 
   static func font(_ size: CGFloat, _ weight: UIFont.Weight, _ style: UIFont.TextStyle) -> UIFont {
     UIFontMetrics(forTextStyle: style).scaledFont(for: UIFont.systemFont(ofSize: size, weight: weight))
@@ -624,6 +757,7 @@ final class TiebaHotHeaderView: UICollectionReusableView {
     flame.contentMode = .scaleAspectFit
     topicsTitle.text = "热门话题"
     topicsTitle.font = TiebaHotMetrics.font(22, .semibold, .title2)
+    topicsTitle.adjustsFontForContentSizeCategory = true
     topicsTitle.textColor = palette.text
     topicsHeader.axis = .horizontal
     topicsHeader.spacing = 6
@@ -636,6 +770,7 @@ final class TiebaHotHeaderView: UICollectionReusableView {
 
     tipLabel.text = "排名按热度计算 · 实时更新"
     tipLabel.font = TiebaHotMetrics.font(12, .regular, .caption1)
+    tipLabel.adjustsFontForContentSizeCategory = true
     tipLabel.textColor = palette.textTertiary
 
     spinnerRow.addSubview(spinner)
@@ -926,9 +1061,11 @@ final class TiebaHotFooterView: UICollectionReusableView {
     card.layer.cornerCurve = .continuous
     titleLabel.text = "— 已展示全部热榜内容 —"
     titleLabel.font = TiebaHotMetrics.font(13, .semibold, .footnote)
+    titleLabel.adjustsFontForContentSizeCategory = true
     titleLabel.textColor = palette.textTertiary
     hintLabel.text = "下拉刷新看看有没有新内容"
     hintLabel.font = TiebaHotMetrics.font(12, .regular, .caption1)
+    hintLabel.adjustsFontForContentSizeCategory = true
     hintLabel.textColor = palette.textTertiary
     let stack = UIStackView(arrangedSubviews: [titleLabel, hintLabel])
     stack.axis = .vertical

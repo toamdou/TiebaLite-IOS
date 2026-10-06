@@ -5,7 +5,10 @@ import UIKit
 
 final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
   private let card = UIView()
-  private let cardMaterial = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+  // 卡片材质 = 系统液态玻璃（报告 31 §二-1：iOS 26 起"材质"的系统语义就是 UIGlassEffect；
+  // 旧 UIBlurEffect 的 systemThinMaterial 档位是历史包袱，与系统界面材质对不上）。
+  // 卡片上还压着一层 cardGradient 渐变色，所以这次换档只改透出内容的材质观感。
+  private let cardMaterial = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
   private let cardGradient = CAGradientLayer()
   private let avatar = TiebaForumAvatarView(size: 64)
   private let avatarPlaceholder = UIView()
@@ -142,9 +145,9 @@ final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
     config.image = UIImage(systemName: "person.crop.circle.badge.checkmark")
     config.imagePadding = 6
     config.cornerStyle = .capsule
-    config.baseBackgroundColor = TiebaNavigator.shared.chromeTheme.tint
     config.baseForegroundColor = .white
     loginButton.configuration = config
+    applyLoginButtonTheme()
     loginButton.addAction(UIAction { _ in
       TiebaSceneHaptics.fire("press")
       TiebaNavigator.shared.navigate(.login)
@@ -216,16 +219,27 @@ final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
     return nil
   }
 
+  /// 登录 CTA 取当前主题强调色（configuration 是值类型，改完要回写）。
+  /// 主题变了要重取：applyAccount 每次 viewWillAppear 必经，挂在这里才不会停旧色。
+  private func applyLoginButtonTheme() {
+    var config = loginButton.configuration ?? UIButton.Configuration.filled()
+    config.baseBackgroundColor = TiebaNavigator.shared.chromeTheme.tint
+    loginButton.configuration = config
+  }
+
   private func applyAccount() {
     let loggedIn = TiebaUserAPI.isLoggedIn
+    applyLoginButtonTheme()
     cardGradient.colors = [
       UIColor(red: 32 / 255, green: 138 / 255, blue: 239 / 255, alpha: loggedIn ? 0.16 : 0.10).cgColor,
       UIColor(red: 32 / 255, green: 138 / 255, blue: 239 / 255, alpha: 0.03).cgColor,
     ]
     avatar.isHidden = !loggedIn
     avatarPlaceholder.isHidden = loggedIn
-    loginButton.isHidden = loggedIn
-    statsRow.isHidden = !loggedIn
+    // 统计行是三列复合视图（每列 = 会滚数字的值 + 标签）：直接 isHidden 会"整块消失"。
+    // 快照淡出 + 只在可见性真的翻转时才拍（见 UIView.tiebaSetHidden）。
+    loginButton.tiebaSetHidden(loggedIn, animated: true)
+    statsRow.tiebaSetHidden(!loggedIn, animated: true)
     if loggedIn {
       // 昵称链：资料 nameShow → 缓存 nameShow → 缓存 name →「贴吧用户」
       //（原 JS：account?.nameShow || account?.name || '贴吧用户'，资料回填优先）。
@@ -275,30 +289,72 @@ final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
     return TiebaFormListView.hexString(from: TiebaNavigator.shared.chromeTheme.tint)
   }
 
-  private func buildSections(loggedIn: Bool) -> [[String: Any]] {
+  private func buildSections(loggedIn: Bool) -> [TiebaFormSection] {
     let uid = account?.uid ?? TiebaUserAPI.uid
-    var contentRows: [[String: Any]] = []
+    var contentRows: [TiebaFormRow] = []
     if loggedIn, !uid.isEmpty {
       contentRows += [
-        ["id": "profile", "kind": "link", "title": "个人主页", "icon": "person", "iconTint": "#5856D6"],
-        ["id": "threads", "kind": "link", "title": "我的帖子", "icon": "doc.text", "iconTint": "#FF9500"],
-        ["id": "forums", "kind": "link", "title": "关注的吧", "icon": "square.grid.2x2", "iconTint": "#34C759"],
+        TiebaFormRow(
+          id: "profile",
+          kind: .link,
+          title: "个人主页",
+          icon: "person",
+          iconTint: TiebaFormColor.resolve("#5856D6")
+        ),
+        TiebaFormRow(
+          id: "threads",
+          kind: .link,
+          title: "我的帖子",
+          icon: "doc.text",
+          iconTint: TiebaFormColor.resolve("#FF9500")
+        ),
+        TiebaFormRow(
+          id: "forums",
+          kind: .link,
+          title: "关注的吧",
+          icon: "square.grid.2x2",
+          iconTint: TiebaFormColor.resolve("#34C759")
+        ),
       ]
     }
     contentRows += [
-      ["id": "history", "kind": "link", "title": "浏览历史", "icon": "clock", "iconTint": "#FF9500"],
-      ["id": "threadstore", "kind": "link", "title": "我的收藏", "icon": "bookmark", "iconTint": "#FF3B30"],
+      TiebaFormRow(
+        id: "history",
+        kind: .link,
+        title: "浏览历史",
+        icon: "clock",
+        iconTint: TiebaFormColor.resolve("#FF9500")
+      ),
+      TiebaFormRow(
+        id: "threadstore",
+        kind: .link,
+        title: "我的收藏",
+        icon: "bookmark",
+        iconTint: TiebaFormColor.resolve("#FF3B30")
+      ),
     ]
     return [
-      ["title": "我的内容", "rows": contentRows],
-      [
-        "title": "设置",
-        "footerSpacer": 24,
-        "rows": [
-          ["id": "settings", "kind": "link", "title": "设置", "icon": "gearshape", "iconTint": "#8E8E93"],
-          ["id": "about", "kind": "link", "title": "关于 贴吧Lite", "icon": "info.circle", "iconTint": "#5AC8FA"],
-        ],
-      ],
+      TiebaFormSection(title: "我的内容", rows: contentRows),
+      TiebaFormSection(
+        title: "设置",
+        footerSpacer: 24,
+        rows: [
+          TiebaFormRow(
+            id: "settings",
+            kind: .link,
+            title: "设置",
+            icon: "gearshape",
+            iconTint: TiebaFormColor.resolve("#8E8E93")
+          ),
+          TiebaFormRow(
+            id: "about",
+            kind: .link,
+            title: "关于 贴吧Lite",
+            icon: "info.circle",
+            iconTint: TiebaFormColor.resolve("#5AC8FA")
+          ),
+        ]
+      ),
     ]
   }
 

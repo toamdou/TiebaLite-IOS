@@ -397,7 +397,8 @@ private final class TiebaRuleAuthorCell: UITableViewCell {
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   func configure(name: String, portrait: String, time: String) {
-    avatar.configure(url: portrait, initial: name.isEmpty ? "吧" : name)
+    // [N6] 同 Members：portrait 是裸 id，必须先过 avatarURL 归一化再下发。
+    avatar.configure(url: TiebaSimpleRowParser.avatarURL(portrait)?.absoluteString ?? "", initial: name.isEmpty ? "吧" : name)
     nameLabel.text = name
     timeLabel.text = time
     timeLabel.isHidden = time.isEmpty

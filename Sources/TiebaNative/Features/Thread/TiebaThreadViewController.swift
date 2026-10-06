@@ -108,6 +108,16 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     // 「原地换内容」，而不是行从下往上滑 10pt（用户报的"加载完突然往上瞬移"）。
     if knownSnapshot != nil { list.entranceAnimationEnabled = false }
     list.onScroll = { [weak self] scrollView in self?.handleScroll(scrollView) }
+    // C1：松手落点若停在"顶部静止位往下 8pt"之内，直接落到静止位。
+    // 移植自上游 submodules/ScrollComponent/Sources/ScrollComponent.swift:100-105（contentOffsetWillCommit）：
+    // 本页两处判据都是"是否已在顶部"——浮动栏的 y < contentInset.top + 10 与回顶刷新的
+    // isAtTop——落点差几 pt 就会"内容看着到顶了、状态却没到"。8pt 是吸合带宽，只朝顶部生效。
+    list.contentOffsetWillCommit = { scrollView, target in
+      let top = -scrollView.adjustedContentInset.top
+      if target.y > top, target.y - top <= 8 {
+        target.y = top
+      }
+    }
     floatingBar.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(floatingBar)
     // 手机维持屏宽 72%（iPhone 375 → 270）；iPad 上 72% 会到 737pt（四个 184pt
@@ -319,6 +329,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     keepMain: Bool = false
   ) {
     guard generation == loadGeneration else { return }
+    var trimmed = false
     if replacing {
       thread = page.thread ?? thread
       // 楼主楼恒按 floor == 1 定位；倒序/只看楼主时服务端可能整页都不回吐楼主楼，
@@ -336,6 +347,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       posts.append(contentsOf: page.posts.filter { !existing.contains($0.id) && $0.id != mainPost?.id })
       if posts.count > Self.maxPosts {
         posts = Array(posts.suffix(Self.maxPosts))
+        // 裁尾丢头会整体前移既有行下标，而快照标识是位置身份 (pageKey#index)：必须视同
+        // 整页替换（换页键重测），否则屏上 cell 还显旧楼、行内事件已指向别的楼。
+        trimmed = true
       }
     }
     currentPage = page.current
@@ -351,7 +365,13 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     } else {
       showList()
       list.footerState = posts.isEmpty ? .empty : (hasMore ? .more : .none)
-      publish(fresh: !keepMain)
+      // ⚠️ 只有"整页替换"才换页键。loadMore 是**追加**：换键 = 快照里所有
+      // item 标识 (pageKey#index) 全变 → TiebaKindListView 走 applySnapshotUsingReloadData，
+      // 可见楼层 cell 全部回收重建（每行 UITextView 全文重排 10-30ms、图片请求重发、
+      // 可见 GIF 从第 0 帧重播、滚动位置可能弹动）。
+      // 同页键 + 行数变化走的是另一条路（TiebaKindListView.setPage 的 isSamePage 分支）：
+      // diff 追加 + 可见行重配 → 页码等行内内容照样刷新，但 cell 不重建。
+      publish(fresh: (replacing && !keepMain) || trimmed)
     }
     floatingBar.configure(
       hasAgree: thread?.hasAgree ?? false,
@@ -391,6 +411,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     let accountUid = TiebaBackgroundSnapshot.shared.uid
     let hideBlocked = TiebaPreferenceSnapshot.bool("hideBlockedContent", default: false)
     // 行复用输入：上一轮模型/指纹 + 宽度/工具栏（变化即全量重造）。
+    // 工具栏指纹**不含页码**：翻页只刷工具栏，见下面 toolbarFingerprint 的注释。
     let previousById = Dictionary(
       lastPublishedModels.map { ($0.post.id, $0) },
       uniquingKeysWith: { first, _ in first }
@@ -398,10 +419,15 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     let previousFingerprints = lastPublishedFingerprints
     let previousWidth = lastPublishedWidth
     let previousToolbar = lastPublishedToolbar
-    let toolbarFingerprint = "\(toolbar.replyNum)|\(toolbar.pageLabel ?? "")|\(toolbar.seeLz)|\(toolbar.sort.rawValue)"
+    // 页码**不进**指纹：翻页只改工具栏那行文案，主贴行的行高/plan/正文都不变。
+    // 进了指纹就是每翻一页把主贴卡重建 + 重测一次（正文一次完整 CoreText 排版）。
+    let toolbarFingerprint = "\(toolbar.replyNum)|\(toolbar.seeLz)|\(toolbar.sort.rawValue)"
 
     Task { @MainActor in
-      let box = await Task.detached(priority: .userInitiated) { () -> (models: [TiebaPostRowModel], posts: [TiebaThreadPost]) in
+      // 离屏（被 push 盖住 / 还没上屏）时降档 .utility：与 TiebaRowPageDriver 同判据——
+      // 用户看不见的页没必要和滚动抢 CPU（改前一律 .userInitiated）。
+      let measurementPriority: TaskPriority = view.window == nil ? .utility : .userInitiated
+      let box = await Task.detached(priority: measurementPriority) { () -> (models: [TiebaPostRowModel], posts: [TiebaThreadPost]) in
         var models: [TiebaPostRowModel] = []
         var kept: [TiebaThreadPost] = []
         for (index, post) in source.enumerated() {
@@ -451,9 +477,16 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       )
       self.lastPublishedWidth = width
       self.lastPublishedToolbar = toolbarFingerprint
+      // 复用主贴行时把新页码就地写回模型：主贴行沿用同一实例，行视图的 apply 会按身份
+      // 提前返回，页码只能走「就地更新 + 只刷工具栏」；写回放在 MainActor 上，
+      // 避免后台测量线程去动行视图已经持有的模型。
+      if let main = box.models.first(where: { $0.isMain }) { main.updateToolbar(toolbar) }
       TiebaPostRowMetrics.shared.prepare(pageKey: key, models: box.models)
       TiebaKindRowPages.shared.publish(pageKey: key, kinds: Array(repeating: .post, count: box.models.count))
       self.list.setPage(pageKey: key)
+      // 主贴行（下标 0）的模型实例没换，重配时 apply 直接返回 —— 页码必须显式只刷工具栏，
+      // 否则翻页后工具栏还停在上一个页码。
+      self.list.refreshToolbar(index: 0)
       self.refreshMediaVisibility()
     }
   }
@@ -464,7 +497,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     var images = ""
     for segment in post.content {
       if case .image(let img) = segment {
-        images += "|\(img.src)|\(img.originSrc)|\(img.gifSrc)|\(img.width)|\(img.height)"
+        images += "|\(img.src)|\(img.bigSrc)|\(img.originSrc)|\(img.width)|\(img.height)"
       }
     }
     return "\(post.id)|\(post.floor)|\(post.authorId)|\(post.authorName)|\(post.authorNameShow)|\(post.authorPortrait)|\(post.authorLevel)|\(post.authorLevelName)|\(post.ipLocation)|\(post.createTimeMs)|\(post.agreeNum)|\(post.isAgree)|\(post.subPostNum)|\(post.content.count)|\(images)|\(post.plainText)"
@@ -585,33 +618,31 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     return (fromThread.isEmpty || fromThread == threadId) ? "" : fromThread
   }
 
-  /// 收藏/取消（乐观态在服务端成功后再翻转；图片快照写收藏页缩略图 KV）。
+  /// 收藏/取消：**乐观翻转 + 失败回滚**（先翻星标、先弹提示，不等网络）。
+  /// 图片快照（收藏页缩略图 KV）仍在服务端确认后才写——那写的是本地缓存，
+  /// 失败时留在里面等于把"没收藏成功"的帖子塞进收藏页。
   private func toggleCollect() {
     guard requireLogin(), runOnce("collect") else { return }
     let wasCollected = isCollected
+    let next = !wasCollected
+    applyCollectedState(next)
+    pill.showResult(success: true, text: next ? "已收藏" : "已取消收藏")
     Task { @MainActor in
       defer { finishOnce("collect") }
       do {
         try await TiebaThreadActionAPI.setStore(
           threadId: threadId,
           firstPostId: firstFloorPostId,
-          store: !wasCollected
+          store: next
         )
-        if wasCollected {
-          removeFavoriteImages(threadId: threadId)
-        } else {
+        if next {
           saveFavoriteImages(threadId: threadId)
+        } else {
+          removeFavoriteImages(threadId: threadId)
         }
-        isCollected.toggle()
-        floatingBar.configure(
-          hasAgree: thread?.hasAgree ?? false,
-          zanNum: thread?.zanNum ?? 0,
-          isCollected: isCollected,
-          palette: list.palette.base
-        )
         TiebaSceneHaptics.fire("action-success")
-        pill.showResult(success: true, text: wasCollected ? "已取消收藏" : "已收藏")
       } catch {
+        applyCollectedState(wasCollected)
         TiebaSceneHaptics.fire("action-fail")
         // 透出真实原因：LocalizedError 的文案优先；网络层错误（超时/断连）不是
         // LocalizedError，只有 localizedDescription 有内容——只读前者会让失败一律
@@ -621,6 +652,17 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
         pill.showResult(success: false, text: detail.isEmpty ? fallback : detail)
       }
     }
+  }
+
+  /// 收藏态落 UI（乐观写入与失败回滚**同一份**）：isCollected + 浮条星标。
+  private func applyCollectedState(_ value: Bool) {
+    isCollected = value
+    floatingBar.configure(
+      hasAgree: thread?.hasAgree ?? false,
+      zanNum: thread?.zanNum ?? 0,
+      isCollected: value,
+      palette: list.palette.base
+    )
   }
 
   private func toggleAgree(_ post: TiebaThreadPost) {
@@ -659,7 +701,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private func republishRow(postId: String) {
     guard let index = rowPosts.firstIndex(where: { $0.id == postId }),
           let current = TiebaPostRowMetrics.shared.row(pageKey: pageKey, index: index),
-          let updated = posts.first(where: { $0.id == postId })
+          let updated = sourcePost(id: postId)
     else { return }
     rowPosts[index] = updated
     let key = pageKey
@@ -675,6 +717,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
 
   private func agreeThread(_ thread: TiebaThreadInfo) {
     guard requireLogin(), runOnce("threadAgree") else { return }
+    // 触觉在**触摸回调里同步发**（改前在下面的 Task 体内：主 actor 调度一跳才振，
+    // 且排在乐观更新之后——主线程正忙时这一跳就是可感的延迟）。
+    TiebaSceneHaptics.fire("like")
     let next = !thread.hasAgree
     var updated = thread
     updated.hasAgree = next
@@ -692,7 +737,6 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     Task { @MainActor in
       defer { finishOnce("threadAgree") }
       do {
-        TiebaSceneHaptics.fire("like")
         try await TiebaThreadActionAPI.setAgree(
           threadId: threadId,
           // 拿不到首楼 id 时退回帖子 id（旧 JS 同判据 `firstPostId || id`；帖子页
@@ -726,9 +770,20 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     }
   }
 
+  /// 按 id 取当前楼：主贴钉在 mainPost、回复在 posts。
+  /// 主贴被排除出 posts（第 0 行单独发布），只查一个集合会让主贴的乐观更新、
+  /// 失败回滚、单行重建三条链路一起空转（点红心不动、失败也不回滚）。
+  private func sourcePost(id: String) -> TiebaThreadPost? {
+    if let parent = mainPost, parent.id == id { return parent }
+    return posts.first { $0.id == id }
+  }
+
   private func patchPost(_ postId: String, _ patch: (inout TiebaThreadPost) -> Void) {
     if let index = posts.firstIndex(where: { $0.id == postId }) {
       patch(&posts[index])
+    } else if var parent = mainPost, parent.id == postId {
+      patch(&parent)
+      mainPost = parent
     }
   }
 
@@ -1010,6 +1065,8 @@ final class TiebaThreadFloatingBar: UIView {
   private var palette: TiebaFeedRowPalette = .default
 
   private var barHidden = false
+  /// 滚动方向门：累积 ΔY > 14pt 才翻转（上游 ListView.swift:1023-1029），见 TiebaScrollDirectionGate。
+  private var scrollDirectionGate = TiebaScrollDirectionGate()
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -1073,18 +1130,28 @@ final class TiebaThreadFloatingBar: UIView {
   /// 手指上滑（翻看后面的楼）⇒ velocity.y < 0，此时收起；手指下滑（往回翻）⇒
   /// velocity.y > 0，此时露出。旧 JS 判的是 contentOffset 增量（上滑为正），
   /// 原生照抄阈值时用了 pan 速度却没翻符号，方向正好是反的（2026-09-17 修）。
+  ///
+  /// [按上游改判据] 改前是**瞬时 pan 速度 ±0.3pt/s** —— 0.3pt/s 等于"凡动必判"，
+  /// 手指抖一下浮条就翻一次（0.3 这个数只起了"非零"的作用）。
+  /// 改后走上游的**累积位移**判据：带符号 ΔY 累加，越过 14.0pt 才翻方向
+  ///（submodules/Display/Source/ListView.swift:1023-1029，见 TiebaScrollDirectionGate）。
+  /// 手感变化：显隐**更稳、更可预期** —— 轻轻抖不再切换；真的要往下看/往回翻时才收放，
+  /// 且同方向连读滚动只翻转一次（累加清零），不再每帧重判。
   func handleScroll(_ scrollView: UIScrollView) {
     let y = scrollView.contentOffset.y
     let threshold = max(scrollView.adjustedContentInset.top, 0) + 10
     if y < threshold {
       if barHidden { setBarHidden(false) }
+      // 回顶 = 位置被外力重置，累加量作废（否则回顶那一大段位移会被算成一次翻转）。
+      scrollDirectionGate.reset()
       return
     }
-    let velocity = scrollView.panGestureRecognizer.velocity(in: scrollView).y
-    if velocity < -0.3, !barHidden {
-      setBarHidden(true)
-    } else if velocity > 0.3, barHidden {
-      setBarHidden(false)
+    guard let direction = scrollDirectionGate.update(contentOffsetY: y) else { return }
+    switch direction {
+    case .forward:
+      if !barHidden { setBarHidden(true) }
+    case .backward:
+      if barHidden { setBarHidden(false) }
     }
   }
 
@@ -1118,25 +1185,27 @@ final class TiebaThreadFloatingBar: UIView {
     layoutAgreeContent()
   }
 
-  /// 点赞计数居中在图标正上方（ThreadFloatingBar 同排布的正上方版；原为按钮右上角角标）。
+  /// 点赞计数绝对定位在图标正上方；图标**恒钉按钮垂直中心**。
+  /// 改前症状：计数+图标整组垂直居中 ⇒ 计数从无到有使组高变化，心形图标被往下推约 7.5pt
+  ///（首楼点赞 0→1 的瞬间像误触抖动）。
+  /// 改后行为：图标位置与计数有无无关（与同排其它三键一致），计数固定在图标上方 2pt，只做显隐。
   private func layoutAgreeContent() {
     let iconSide: CGFloat = 20
     let hasCount = !(agreeCount.text ?? "").isEmpty
-    let countHeight = hasCount ? ceil(agreeCount.font.lineHeight) : 0
-    let gap: CGFloat = hasCount ? 2 : 0
-    let stackHeight = countHeight + gap + iconSide
-    let top = agreeButton.frame.minY + max((agreeButton.frame.height - stackHeight) / 2, 0)
-    let iconFrame = hasCount
-      ? CGRect(x: agreeButton.frame.midX - iconSide / 2, y: top + countHeight + gap, width: iconSide, height: iconSide)
-      : CGRect(x: agreeButton.frame.midX - iconSide / 2, y: agreeButton.frame.midY - iconSide / 2, width: iconSide, height: iconSide)
-    agreeIcon.frame = iconFrame.integral
+    agreeIcon.frame = CGRect(
+      x: agreeButton.frame.midX - iconSide / 2,
+      y: agreeButton.frame.midY - iconSide / 2,
+      width: iconSide,
+      height: iconSide
+    ).integral
     agreeCount.isHidden = !hasCount
     if hasCount {
       agreeCount.sizeToFit()
+      let countHeight = ceil(agreeCount.font.lineHeight)
       let width = ceil(agreeCount.bounds.width) + 2
       agreeCount.frame = CGRect(
         x: agreeButton.frame.midX - width / 2,
-        y: top,
+        y: agreeIcon.frame.minY - 2 - countHeight,
         width: width,
         height: countHeight
       )

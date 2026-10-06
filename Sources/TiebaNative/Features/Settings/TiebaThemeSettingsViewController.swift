@@ -50,7 +50,7 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     }
   }
 
-  override func makeSections(dark: Bool) -> [[String: Any]] {
+  override func makeSections(dark: Bool) -> [TiebaFormSection] {
     let lightTheme = TiebaPreferences.string(
       "lightTheme", allowed: Self.lightThemes.map(\.value), default: "default")
     let darkTheme = TiebaPreferences.string(
@@ -65,88 +65,114 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     let fontScale = TiebaPreferences.number("fontScale", default: 1)
     let fontValue = TiebaPreferences.numberLiteral(fontScale)
 
-    var themeRows: [[String: Any]] = [
-      [
-        "id": "lightTheme", "kind": "picker", "title": "浅色主题",
-        "value": lightTheme, "options": options(Self.lightThemes),
-      ],
-      [
-        "id": "darkTheme", "kind": "picker", "title": "深色主题",
-        "value": darkTheme, "options": options(Self.darkThemes),
-      ],
+    var themeRows = [
+      TiebaFormRow(
+        id: "lightTheme",
+        kind: .picker,
+        title: "浅色主题",
+        value: lightTheme,
+        options: options(Self.lightThemes)
+      ),
+      TiebaFormRow(
+        id: "darkTheme",
+        kind: .picker,
+        title: "深色主题",
+        value: darkTheme,
+        options: options(Self.darkThemes)
+      ),
     ]
     if lightTheme == "custom" || darkTheme == "custom" {
-      themeRows.append([
-        "id": "customPrimaryColor", "kind": "color", "title": "自定义主色",
-        "value": customPrimary,
-      ])
+      themeRows.append(TiebaFormRow(
+        id: "customPrimaryColor",
+        kind: .color,
+        title: "自定义主色",
+        value: customPrimary
+      ))
       showsCustomPrimaryRow = true
     } else {
       showsCustomPrimaryRow = false
     }
 
-    var toolbarRows: [[String: Any]] = [
-      [
-        "id": "toolbarPrimaryColor", "kind": "toggle", "title": "导航栏使用主色调",
-        "subtitle": "将导航栏标题与图标着色为主色调，并联动状态栏样式",
-        "icon": "paintpalette.fill", "value": toolbarPrimary ? "1" : "0",
-      ]
+    var toolbarRows = [
+      TiebaFormRow(
+        id: "toolbarPrimaryColor",
+        kind: .toggle,
+        title: "导航栏使用主色调",
+        subtitle: "将导航栏标题与图标着色为主色调，并联动状态栏样式",
+        icon: "paintpalette.fill",
+        value: toolbarPrimary ? "1" : "0"
+      )
     ]
     showsStatusBarFontRow = toolbarPrimary
     if toolbarPrimary {
-      toolbarRows.append([
-        "id": "statusBarFontDark", "kind": "toggle", "title": "状态栏深色字体",
-        "icon": "textformat",
-        "value": TiebaPreferences.bool("statusBarFontDark", default: false) ? "1" : "0",
-      ])
+      toolbarRows.append(TiebaFormRow(
+        id: "statusBarFontDark",
+        kind: .toggle,
+        title: "状态栏深色字体",
+        icon: "textformat",
+        value: TiebaPreferences.bool("statusBarFontDark", default: false) ? "1" : "0"
+      ))
     }
 
     return [
-      [
-        "title": "主题",
-        "footer": "「默认」= 初始内置配色，设置页行图标保持五颜六色；选任一具体主题后图标与强调色统一跟随主色。分组卡片、底栏与顶栏使用系统材质，不随主题变化。深色端可选「纯黑」（AMOLED）。",
-        "rows": themeRows,
-      ],
-      [
-        "title": "外观",
-        "footer": "「深色模式」在跟随系统时随系统自动同步；手动切换后即退出跟随。",
-        "rows": [
-          [
-            "id": "darkMode", "kind": "toggle", "title": "深色模式",
-            "subtitle": "黑底白字；系统变深色时自动跟随开启", "icon": "moon.fill",
-            "value": (followSystem ? isDarkNow : darkMode) ? "1" : "0",
-          ],
-          [
-            "id": "followSystemDarkMode", "kind": "toggle", "title": "跟随系统外观",
-            "subtitle": "界面颜色自动跟随系统浅色 / 深色设置", "icon": "iphone",
-            "value": followSystem ? "1" : "0",
-          ],
-        ],
-      ],
-      [
-        "title": "阅读字号",
-        "footer": "调整帖子正文与回复的字号，即时生效。",
-        "rows": [
-          [
-            "id": "fontScale", "kind": "picker", "title": "正文字号", "icon": "textformat.size",
-            "value": fontValue, "options": options(Self.fontScales),
-          ]
-        ],
-      ],
-      [
-        "title": "动效",
-        "footer": "入场动画：信息流与帖内首屏的级联渐入。系统「减弱动态效果」开启时自动停用。",
-        "rows": [
-          [
-            "id": "entranceAnimation", "kind": "toggle", "title": "入场动画", "icon": "sparkles",
-            "value": TiebaPreferences.bool("entranceAnimation", default: true) ? "1" : "0",
-          ]
-        ],
-      ],
-      [
-        "title": "工具栏选项",
-        "rows": toolbarRows,
-      ],
+      TiebaFormSection(
+        title: "主题",
+        footer: "「默认」= 初始内置配色，设置页行图标保持五颜六色；选任一具体主题后图标与强调色统一跟随主色。分组卡片、底栏与顶栏使用系统材质，不随主题变化。深色端可选「纯黑」（AMOLED）。",
+        rows: themeRows
+      ),
+      TiebaFormSection(
+        title: "外观",
+        footer: "「深色模式」在跟随系统时随系统自动同步；手动切换后即退出跟随。",
+        rows: [
+          TiebaFormRow(
+            id: "darkMode",
+            kind: .toggle,
+            title: "深色模式",
+            subtitle: "黑底白字；系统变深色时自动跟随开启",
+            icon: "moon.fill",
+            value: (followSystem ? isDarkNow : darkMode) ? "1" : "0"
+          ),
+          TiebaFormRow(
+            id: "followSystemDarkMode",
+            kind: .toggle,
+            title: "跟随系统外观",
+            subtitle: "界面颜色自动跟随系统浅色 / 深色设置",
+            icon: "iphone",
+            value: followSystem ? "1" : "0"
+          ),
+        ]
+      ),
+      TiebaFormSection(
+        title: "阅读字号",
+        footer: "调整帖子正文与回复的字号，即时生效。",
+        rows: [
+          TiebaFormRow(
+            id: "fontScale",
+            kind: .picker,
+            title: "正文字号",
+            icon: "textformat.size",
+            value: fontValue,
+            options: options(Self.fontScales)
+          )
+        ]
+      ),
+      TiebaFormSection(
+        title: "动效",
+        footer: "入场动画：信息流与帖内首屏的级联渐入。系统「减弱动态效果」开启时自动停用。",
+        rows: [
+          TiebaFormRow(
+            id: "entranceAnimation",
+            kind: .toggle,
+            title: "入场动画",
+            icon: "sparkles",
+            value: TiebaPreferences.bool("entranceAnimation", default: true) ? "1" : "0"
+          )
+        ]
+      ),
+      TiebaFormSection(
+        title: "工具栏选项",
+        rows: toolbarRows
+      ),
     ]
   }
 
@@ -214,7 +240,7 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
   private func handleToggle(_ id: String, _ value: Bool) {
     switch id {
     case "darkMode":
-      TiebaSceneHaptics.fire("toggle")
+      // 触觉由行内控件层统一发（cell.toggleChanged），页面层不补发（同帧双发手感发糊）。
       guard write("darkMode", bool: value) else { return }
       if TiebaPreferences.bool("followSystemDarkMode", default: true) {
         guard write("followSystemDarkMode", bool: false) else { return }
