@@ -33,36 +33,25 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
   }
 
   private let blur = UIVisualEffectView(effect: TiebaPhotoBrowserChromeOverlay.makeBarEffect())
-  /// A1（报告 37 第一优先）：顶栏这一行里的两块玻璃（关闭圆钮 + 保存/分享胶囊）放进同一个
+  /// A1（报告 37 第一优先）：顶栏这一行里的三块玻璃（关闭 + 保存 + 分享，各一枚圆钮）放进同一个
   /// UIGlassContainerEffect 容器 —— 与吧首页顶栏同一做法（见 UI/Components/TiebaGlassContainerView）。
-  /// 容器自己没有材质、不参与渲染；两块玻璃的中心距 ≈ 屏宽 − 2×16 − 40 − 80 ≫ spacing 7.0
+  /// 容器自己没有材质、不参与渲染；相邻两枚圆钮的中心距 = 40 + 8 = 48 ≫ spacing 7.0
   /// ⇒ **稳态观感一字不变**（A1 原来在弹层的落点随 UI/Popups 目录删除，这里重建）。
   private let glassHost = TiebaGlassContainerView()
   private let closeButton = TiebaPhotoBrowserCircleButton(type: .custom)
   /// C3：iPad 指针交互实例必须被**强引用**（UIPointerInteraction.delegate 是 weak），故留一个属性。
   private var closePointer: TiebaPointerInteraction?
-  /// C1：保存 + 分享 = **一整块**玻璃胶囊里的两颗等宽圆钮。
-  /// 改前：两颗各自带 .glass() 的独立圆钮（两颗玻璃小方块，8pt 缝）—— 看起来是"两个按钮"；
-  /// 改后：整组一块胶囊，按钮是它的等分分区（单按钮最小区 = 组高 ⇒ 永远是圆），
-  ///       按下反馈由整块胶囊的面积守恒形变承担（A3），按钮自己不再变暗。
-  private lazy var actionGroup: TiebaGlassControlGroup = TiebaGlassControlGroup(
-    items: [
-      TiebaGlassControlGroup.Item(
-        symbol: "square.and.arrow.down",
-        accessibilityLabel: "保存到相册",
-        action: { [weak self] in self?.handleSave() }
-      ),
-      TiebaGlassControlGroup.Item(
-        symbol: "square.and.arrow.up",
-        accessibilityLabel: "分享图片",
-        action: { [weak self] in self?.handleShare() }
-      ),
-    ],
-    height: TiebaPhotoBrowserChromeOverlay.buttonSize,
-    tintColor: .white,
-    // 与顶栏底同一枚 tint（查看器黑底 ⇒ 玻璃带深色调保证白字/白图标可读）。
-    glassTintColor: UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.4)
-  )
+  /// 保存 / 分享各自的圆形指针高亮（同 closePointer 的强引用理由）。
+  private var actionPointers: [TiebaPointerInteraction] = []
+  /// 保存 / 分享：各自一枚 40pt 圆形玻璃钮（用户口径：**每个按钮各自圆形、不共用背景**）。
+  /// 改前（C1 移植）：两颗挤在一整块 80×40 玻璃胶囊里（那个分组胶囊组件已随之整文件删除）——
+  ///       用户看到的是"一个矩形背景里两个图标"，明确要求退回"各自圆形"。
+  /// 改后：与左侧关闭钮**同一套**（TiebaPhotoBrowserCircleButton + .glass() + cornerStyle =
+  ///       .capsule，40×40 方形 ⇒ 圆角 = 高度/2 = 20），三颗圆钮同形同材质、各持各的玻璃。
+  /// 反馈口径全部保留：按下即时 0.55 + 松开 0.2s 回弹（TiebaPhotoBrowserCircleButton）、
+  /// 指针圆形高亮（actionPointers）、入场凝聚（playEntrance，见 setVisible）。
+  private let saveButton = TiebaPhotoBrowserCircleButton(type: .custom)
+  private let shareButton = TiebaPhotoBrowserCircleButton(type: .custom)
   private let counterLabel = UILabel()
   private let titleLabel = UILabel()
   /// 中间「页码 + 标题」列（持有它才能把这一行聚合成一个可访问单元，见 updateCounter）。
@@ -105,13 +94,12 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
 
     configureButton(closeButton, symbol: "xmark", weight: .bold, label: "关闭图片查看器")
     closeButton.addTarget(self, action: #selector(handleClose), for: .touchUpInside)
-
-    // C1：整组一块玻璃胶囊（自带阴影图 + 触摸形变 + 高光），按钮等宽分区。
-    actionGroup.translatesAutoresizingMaskIntoConstraints = false
-    // A1：同一行的两块玻璃进同一个容器（关闭圆钮见 configureButton）。
-    glassHost.contentView.addSubview(actionGroup)
-    // C3：iPad 指针 —— 每颗按钮一颗圆形高亮（hover 档显式关掉内容缩放，见 TiebaPointerInteraction）。
-    actionGroup.installPointerInteractions()
+    // C1 退回用户口径：保存 / 分享 = 两枚**各自独立**的圆形玻璃钮（同一个 configureButton，
+    // 与关闭钮同形同材质；不再有共用背景的胶囊）。
+    configureButton(saveButton, symbol: "square.and.arrow.down", weight: .medium, label: "保存到相册")
+    saveButton.addTarget(self, action: #selector(handleSave), for: .touchUpInside)
+    configureButton(shareButton, symbol: "square.and.arrow.up", weight: .medium, label: "分享图片")
+    shareButton.addTarget(self, action: #selector(handleShare), for: .touchUpInside)
 
     counterLabel.textColor = .white
     counterLabel.font = .systemFont(ofSize: 16, weight: .semibold)
@@ -146,7 +134,9 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
       centerStack.centerXAnchor.constraint(equalTo: centerXAnchor),
       centerStack.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
       centerStack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 96),
-      centerStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -96),
+      // 右边界 = 两颗圆钮的占位宽（16 + 40 + 8 + 40 = 104；旧胶囊是 16 + 80 = 96），
+      // 否则长标题会钻到分享钮底下。
+      centerStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -104),
     ])
   }
 
@@ -169,7 +159,7 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
     config.cornerStyle = .capsule
     button.configuration = config
     button.accessibilityLabel = label
-    // A1：玻璃圆钮进顶栏的玻璃容器（与 actionGroup 同一个 UIGlassContainerEffect）。
+    // A1：玻璃圆钮进顶栏的玻璃容器（三枚圆钮同一个 UIGlassContainerEffect）。
     glassHost.contentView.addSubview(button)
     NSLayoutConstraint.activate([
       button.widthAnchor.constraint(equalToConstant: Self.buttonSize),
@@ -196,14 +186,20 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
     ).isActive = true
     topPaddingConstraint = closeButton.topAnchor.constraint(equalTo: glassHost.topAnchor, constant: Self.minimumTopPadding)
     topPaddingConstraint?.isActive = true
-    // C1：胶囊贴右，宽度由 intrinsicContentSize 给（按钮数 × 组高），高度 = 组高。
-    actionGroup.trailingAnchor.constraint(
+    // 保存 / 分享各自贴右排开（右→左：保存、分享），8pt 缝（= 旧两圆钮的间距）；
+    // 高度由 configureButton 的 40×40 + cornerStyle .capsule 给（方形 ⇒ 圆角 = 高度/2 = 20）。
+    saveButton.trailingAnchor.constraint(
       equalTo: glassHost.trailingAnchor,
       constant: -Self.horizontalPadding
     ).isActive = true
-    actionGroup.topAnchor.constraint(equalTo: closeButton.topAnchor).isActive = true
-    actionGroup.heightAnchor.constraint(equalToConstant: Self.buttonSize).isActive = true
+    saveButton.topAnchor.constraint(equalTo: closeButton.topAnchor).isActive = true
+    shareButton.trailingAnchor.constraint(equalTo: saveButton.leadingAnchor, constant: -8).isActive = true
+    shareButton.topAnchor.constraint(equalTo: closeButton.topAnchor).isActive = true
+    // C3：三枚圆钮各一枚圆形指针高亮（强引用见 closePointer / actionPointers 的声明）。
     closePointer = TiebaPointerInteraction(view: closeButton, style: .circle(nil))
+    actionPointers = [saveButton, shareButton].map {
+      TiebaPointerInteraction(view: $0, style: .circle(nil))
+    }
 
     updateMetrics()
   }
@@ -256,15 +252,17 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
   /// chrome 显隐：**可中断 + 可合并**的转场（ControlledTransition 的首个落点）。
   /// 改前症状：每次切换都是一段独立的 UIView 动画；连点（tap-tap-tap 切显隐）时后一段从自己的
   /// 起点重播曲线，与前一段「抢动画」，中间有一下顿挫，且两段之间没有语义接续。
-  /// 改后行为：新一段 merge 掉上一段未完成的属性，并从**当前呈现值**续跑（NativeAnimator 的
-  /// updateAlpha 以 layer.presentation() 为起点），全程只有一条曲线，随时可被下一次切换打断。
+  /// 改后行为：新一段 merge 掉上一段未完成的属性，并从**当前呈现值**续跑
+  /// （以 layer.presentation() 为起点），全程只有一条曲线，随时可被下一次切换打断。
   /// 时长/曲线与旧值同形：0.2s + easeInOut 的贝塞尔控制点 (0.42, 0, 0.58, 1)。
   func setVisible(_ visible: Bool, animated: Bool) {
     isUserInteractionEnabled = visible
-    // C5（按报告给的 scale + alpha 近似，**不引私有 CAFilter**）：按钮组从"略小 + 透明"
-    // 凝聚出来，几何与材质各有各的节奏（B1 的烘焙关键帧，见 TiebaGlassControlGroup.playEntrance）。
+    // C5（按报告给的 scale + alpha 近似，**不引私有 CAFilter**）：保存/分享两枚圆钮从"略小 +
+    // 透明"凝聚出来，几何与材质各有各的节奏（B1 的烘焙关键帧；逐字搬自原分组件的 playEntrance，
+    // 分组形态退回两枚独立圆钮后节奏参数不能跟着丢）。关闭钮照旧不参与（与改前一致）。
     if visible {
-      actionGroup.playEntrance()
+      saveButton.playEntrance(staggerIndex: 0)
+      shareButton.playEntrance(staggerIndex: 1)
     }
     let target: CGFloat = visible ? 1 : 0
     guard animated else {
@@ -325,6 +323,7 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
 
 /// 圆形按钮：按压 0.55 透明度（styles.ts topBarButtonPressed，旧查看器
 /// 顶栏按钮无高光，仅按压微降不透明度）。
+/// 顶栏三枚圆钮（关闭 / 保存 / 分享）共用本类 ⇒ 形态与反馈只有一份实现。
 final class TiebaPhotoBrowserCircleButton: UIButton {
   /// C2：按下**即时**、松开才走 0.2s 缓出（报告 ToolbarNode.swift:83-119 的六行配方）。
   /// 两个细节都不能省：
@@ -343,6 +342,42 @@ final class TiebaPhotoBrowserCircleButton: UIButton {
         layer.animateAlpha(from: 0.55, to: 1.0, duration: TiebaAnimationDuration.tapFeedback)
       }
     }
+  }
+
+  /// 入场动画键（重播前先摘掉在途的一段）。
+  private static let entranceKey = "tieba.glassControl.entrance"
+
+  /// C5：入场"凝聚"（scale 0.92 → 1 与透明度各走各的节奏）。
+  ///
+  /// 逐字搬自原分组胶囊组件的 `playEntrance()`（用户要求退回"每个按钮各自圆形"后，
+  /// 那个组件连同它的入场一起消失 —— 节奏参数按"只改分组形态"的口径原样保留）：
+  /// 缓动**烘进关键帧数组**、播放端一律 .linear（B1 的做法，上游 LensTransitionContainer
+  /// .swift:961-1015 同款），于是同一条时间轴上材质先到位、几何后落定。
+  /// - parameter staggerIndex: 级联序号（原组内每颗 +0.03s）。
+  func playEntrance(staggerIndex: Int) {
+    let key = Self.entranceKey
+    guard !UIAccessibility.isReduceMotionEnabled else {
+      layer.removeAnimation(forKey: key)
+      return
+    }
+    let count = 12
+    // 材质：透明度先到位（在时间轴的 60% 就收敛）。
+    let opacity = TiebaBakedKeyframes.numbers(from: 0.0, to: 1.0, count: count, easing: .easeOutStrong)
+    // 几何：缩放后收尾（曲线更慢，最后 20% 才落定）—— 两条属性不同步。
+    let scale = TiebaBakedKeyframes.numbers(from: 0.92, to: 1.0, count: count, easing: .easeOut)
+    let group = CAAnimationGroup()
+    let opacityAnimation = CAKeyframeAnimation(keyPath: "opacity")
+    opacityAnimation.values = opacity
+    let scaleAnimation = CAKeyframeAnimation(keyPath: "transform.scale")
+    scaleAnimation.values = scale
+    group.animations = [opacityAnimation, scaleAnimation]
+    group.duration = TiebaAnimationDuration.overlayAppear
+    group.beginTime = CACurrentMediaTime() + 0.03 * Double(staggerIndex)
+    group.fillMode = .backwards
+    group.timingFunction = CAMediaTimingFunction(name: .linear)
+    TiebaAnimationFrameRate.align(group, to: self)
+    layer.removeAnimation(forKey: key)
+    layer.add(group, forKey: key)
   }
 }
 

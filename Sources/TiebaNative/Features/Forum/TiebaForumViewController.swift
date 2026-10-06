@@ -368,12 +368,16 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     let tab = currentTab
     let next = pages[tab] + 1
     Task { @MainActor in
+      // [用户口径 2026-10-06] 正常态（.more）不显示「加载更多」药丸 —— 触底即自动加载就够了。
+      // 只有**这次翻页失败**才把页脚置成 .retry（那颗药丸现在只在失败态出现），
+      // 否则用户停在这一屏没有任何再试一次的入口。
+      var didFail = false
       defer {
         self.isLoadingMore = false
-        // 页脚是所有 tab 共享的：请求期间切了 tab 就别拿旧 tab 的 hasMore 覆写它
-        //（会把有更多内容的新 tab 置成"没有更多了"，按钮消失，只剩触底自动加载）。
+        // 页脚是所有 tab 共享的：请求期间切了 tab 就别拿旧 tab 的结果覆写它
+        //（会把有更多内容的新 tab 置成"没有更多了"，只剩触底自动加载）。
         if tab == self.currentTab {
-          self.list.footerState = self.hasMores[tab] ? .more : .none
+          self.list.footerState = didFail ? .retry : (self.hasMores[tab] ? .more : .none)
         }
       }
       do {
@@ -388,6 +392,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
         guard tab == self.currentTab else { return }
         self.apply(result, tab: tab, page: next, timeType: semantics.timeType)
       } catch {
+        didFail = true
         self.pill.showResult(success: false, text: "加载失败")
       }
     }
@@ -419,11 +424,14 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   private var rowCache: (version: String, rows: [[String: Any]])?
 
   private func makeRows() -> [[String: Any]] {
-    let version = "\(rowInputsVersion)|\(TiebaBlockStore.changeVersion)|\(TiebaPreferenceSnapshot.bool("hideMedia", default: false))|\(TiebaPreferenceSnapshot.bool("showIpLocation", default: true))|\(TiebaPreferenceSnapshot.string("fontScale") ?? "")"
+    // 版本串里的字号 = **正文级当前倍率**（新两级体系）。不能再读旧键 fontScale：
+    // 新体系只写 bodyFontSize，旧键不跟着动，版本串不变 ⇒ 行缓存把旧字号的整页行
+    // 原样吐回来，用户拖完滑杆回吧页"没反应"。
+    let version = "\(rowInputsVersion)|\(TiebaBlockStore.changeVersion)|\(TiebaPreferenceSnapshot.bool("hideMedia", default: false))|\(TiebaPreferenceSnapshot.bool("showIpLocation", default: true))|\(TiebaTypography.snapshot().bodyScale)"
     if let cached = rowCache, cached.version == version { return cached.rows }
     let hideMedia = TiebaPreferenceSnapshot.bool("hideMedia", default: false)
     let showIp = TiebaPreferenceSnapshot.bool("showIpLocation", default: true)
-    let fontScale = Double(TiebaPreferenceSnapshot.string("fontScale") ?? "") ?? 1
+    let fontScale = TiebaTypography.snapshot().bodyScale
     let blockFilter = TiebaPostBlockFilter.load()
     let timeType = semantics(currentTab).timeType
     var rows: [[String: Any]] = []
