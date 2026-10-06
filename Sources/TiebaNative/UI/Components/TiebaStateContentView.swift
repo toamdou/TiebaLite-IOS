@@ -8,6 +8,10 @@
 //   ContentUnavailableView  → UIContentUnavailableConfiguration（系统空态排版：
 //                             图标尺寸、标题/说明字号、行距、次级色全部由系统给）
 //   ProgressView()          → UIActivityIndicatorView（系统转圈）
+//                             [回滚记录 2026-10-05] 一度换成本仓自绘的 TiebaActivityIndicator，
+//                             按「用系统接口更优的就别动了」回滚：系统指示器本来就支持 color 与
+//                             两档尺寸（.medium/.large，需要更小用 transform 缩放），
+//                             自绘版没有任何系统给不了的能力，留着就是第二套。
 //   Button(borderedProminent/bordered/glassProminent) → UIButton.Configuration
 //                            （iOS 26 起 SwiftUI 的 borderedProminent/bordered 本身
 //                             就是液态玻璃按钮，UIKit 对位是 prominentGlass()/glass()，

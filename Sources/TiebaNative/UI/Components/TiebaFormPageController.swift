@@ -35,13 +35,13 @@ class TiebaFormPageController: UIViewController {
   // MARK: - 数据
 
   /// 子类给整份 sections（抽象点：子类必须实现）。
-  func makeSections(dark: Bool) -> [[String: Any]] {
+  func makeSections(dark: Bool) -> [TiebaFormSection] {
     fatalError("makeSections(dark:) 必须由子类实现")
   }
 
-  /// [(value, label)] → 行 options 形态（各页原先各写一份）。
-  func options(_ table: [(value: String, label: String)]) -> [[String: String]] {
-    table.map { ["value": $0.value, "label": $0.label] }
+  /// [(value, label)] → 行 options（各页原先各写一份）。
+  func options(_ table: [(value: String, label: String)]) -> [TiebaFormOption] {
+    table.map { TiebaFormOption(value: $0.value, label: $0.label) }
   }
 
   /// 重刷：主题（主色/深浅）+ 整份 sections。
@@ -72,7 +72,9 @@ class TiebaFormPageController: UIViewController {
   func write(_ key: String, bool value: Bool, row rowID: String? = nil) -> Bool {
     guard TiebaPreferences.set(key, bool: value) else {
       reportWriteFailure()
-      form.setValue(id: rowID ?? key, value: TiebaPreferences.bool(key, default: false) ? "1" : "0")
+      // 回滚到**写前显示值**：开关只可能从 !value 拨到 value。原来读存储 + 硬编码 false 兜底，
+      // 在「键从未写过」时（default:true 的几行）会把开关显示成关、与生效偏好分裂。
+      form.setValue(id: rowID ?? key, value: value ? "0" : "1")
       return false
     }
     form.setValue(id: rowID ?? key, value: value ? "1" : "0")

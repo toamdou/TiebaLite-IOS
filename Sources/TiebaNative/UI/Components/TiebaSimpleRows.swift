@@ -260,6 +260,107 @@ nonisolated struct TiebaSimpleTextBlock {
   let lineHeight: CGFloat
   let height: CGFloat
   let text: String
+  /// 测量时用的行数上限。**绘制必须用同一个值**（N4：消息正文按 2 行测量、label 却是 numberOfLines=1 ⇒
+  /// 第二行不画，UILabel 再把单行垂直居中在 2 行高的 frame 里，下方空出一整行）。
+  let lines: Int
+}
+
+// MARK: - 行变体载荷（H12）
+
+/// 四个变体各自的字段：互斥由类型保证（一个模型只可能持有一个 case）。
+/// 字段与类型从原平铺并集原样搬来；取值表达式一字未改。
+struct TiebaSimpleRowUserPayload {
+  let marginV: CGFloat
+  let paddingH: CGFloat
+  let paddingV: CGFloat
+  let cornerRadius: CGFloat
+  let borderWidth: CGFloat
+  let backgroundColor: UIColor?
+  let borderColor: UIColor?
+  let avatarSize: CGFloat
+  let avatarURL: URL?
+  let avatarInitial: String
+  let showsChevron: Bool
+  let chevronSize: CGFloat
+  let chevronColor: UIColor?
+  let subtitleBlock: TiebaSimpleTextBlock?
+  let subtitleMarginTop: CGFloat
+  let badgeText: String?
+  let badgeBlock: TiebaSimpleTextBlock?
+  let badgeTextColor: UIColor?
+  let badgeBackgroundColor: UIColor?
+  let badgePaddingH: CGFloat
+  let badgePaddingV: CGFloat
+  let badgeRadius: CGFloat
+  let badgeSpacing: CGFloat
+  let typeIconSize: CGFloat
+  let bodyGap: CGFloat
+  let headerGap: CGFloat
+}
+
+struct TiebaSimpleRowMessagePayload {
+  let marginV: CGFloat
+  let paddingH: CGFloat
+  let paddingV: CGFloat
+  let cornerRadius: CGFloat
+  let borderWidth: CGFloat
+  let backgroundColor: UIColor?
+  let borderColor: UIColor?
+  let avatarSize: CGFloat
+  let avatarURL: URL?
+  let avatarInitial: String
+  let isUnread: Bool
+  let unreadDotColor: UIColor?
+  let typeIconName: String?
+  let typeIconSize: CGFloat
+  let typeIconColor: UIColor?
+  let bodyGap: CGFloat
+  let headerGap: CGFloat
+  let contentBlock: TiebaSimpleTextBlock?
+  let threadBlock: TiebaSimpleTextBlock?
+  let timeBlock: TiebaSimpleTextBlock?
+}
+
+struct TiebaSimpleRowSectionPayload {
+  let topSpacing: CGFloat
+  let sectionDotColor: UIColor?
+  let sectionDotSpacing: CGFloat
+  let countChipText: String?
+  let countChipBlock: TiebaSimpleTextBlock?
+  let countChipBackgroundColor: UIColor?
+  let countChipTextColor: UIColor?
+  let countChipPaddingH: CGFloat
+  let countChipPaddingV: CGFloat
+  let countChipRadius: CGFloat
+}
+
+struct TiebaSimpleRowSummaryPayload {
+  let paddingH: CGFloat
+  let paddingV: CGFloat
+  let cornerRadius: CGFloat
+  let backgroundColor: UIColor?
+  let iconName: String?
+  let iconSize: CGFloat
+  let iconColor: UIColor?
+  let iconBoxSize: CGFloat
+  let iconBoxRadius: CGFloat
+  let iconBoxColor: UIColor?
+  let subtitleBlock: TiebaSimpleTextBlock?
+  let subtitleMarginTop: CGFloat
+}
+
+enum TiebaSimpleRowPayload {
+  case user(TiebaSimpleRowUserPayload)
+  case message(TiebaSimpleRowMessagePayload)
+  case section(TiebaSimpleRowSectionPayload)
+  case summary(TiebaSimpleRowSummaryPayload)
+}
+
+extension TiebaSimpleRowPayload {
+  var userValue: TiebaSimpleRowUserPayload? { if case .user(let payload) = self { return payload }; return nil }
+  var messageValue: TiebaSimpleRowMessagePayload? { if case .message(let payload) = self { return payload }; return nil }
+  var sectionValue: TiebaSimpleRowSectionPayload? { if case .section(let payload) = self { return payload }; return nil }
+  var summaryValue: TiebaSimpleRowSummaryPayload? { if case .summary(let payload) = self { return payload }; return nil }
 }
 
 // MARK: - 行模型
@@ -276,71 +377,16 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
   public let accessibilityLabel: String
 
   // ── 卡片几何（四个变体共用；无卡片变体 margin/padding 为 0）──
-  let marginH: CGFloat
-  let marginV: CGFloat
-  let bottomMargin: CGFloat
-  let paddingH: CGFloat
-  let paddingV: CGFloat
-  let gap: CGFloat
-  let cornerRadius: CGFloat
-  let borderWidth: CGFloat
-  let backgroundColor: UIColor?
-  let borderColor: UIColor?
 
   // ── user / message 共用：头像 ──
-  let avatarURL: URL?
-  let avatarInitial: String
-  let avatarSize: CGFloat
 
   // ── user ──
-  let titleBlock: TiebaSimpleTextBlock?
-  let badgeText: String?
-  let badgeBlock: TiebaSimpleTextBlock?
-  let badgeTextColor: UIColor?
-  let badgeBackgroundColor: UIColor?
-  let badgePaddingH: CGFloat
-  let badgePaddingV: CGFloat
-  let badgeRadius: CGFloat
-  let badgeSpacing: CGFloat
-  let subtitleBlock: TiebaSimpleTextBlock?
-  let subtitleMarginTop: CGFloat
-  let showsChevron: Bool
-  let chevronSize: CGFloat
-  let chevronWeight: UIFont.Weight
-  let chevronColor: UIColor?
 
   // ── message ──
-  let isUnread: Bool
-  let unreadDotColor: UIColor?
-  let typeIconName: String?
-  let typeIconSize: CGFloat
-  let typeIconColor: UIColor?
-  let bodyGap: CGFloat
-  let headerGap: CGFloat
-  let contentBlock: TiebaSimpleTextBlock?
-  let threadBlock: TiebaSimpleTextBlock?
-  let timeBlock: TiebaSimpleTextBlock?
 
   // ── section ──
-  let sectionDotColor: UIColor?
-  let sectionDotSize: CGSize
-  let sectionDotSpacing: CGFloat
-  let countChipText: String?
-  let countChipBlock: TiebaSimpleTextBlock?
-  let countChipBackgroundColor: UIColor?
-  let countChipTextColor: UIColor?
-  let countChipPaddingH: CGFloat
-  let countChipPaddingV: CGFloat
-  let countChipRadius: CGFloat
-  let topSpacing: CGFloat
 
   // ── summary ──
-  let iconName: String?
-  let iconSize: CGFloat
-  let iconColor: UIColor?
-  let iconBoxSize: CGFloat
-  let iconBoxRadius: CGFloat
-  let iconBoxColor: UIColor?
 
   // ── 绘制期派生（纯算术）──
   /// 卡片盒（相对行视图坐标）：上下 marginV 各一次 + bottomMargin 一次。
@@ -369,6 +415,68 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
     }
   }
 
+
+  /// 变体载荷（H12）：字段按变体收进各自 case，互斥由类型保证。
+  /// 下面每个旧字段保留一行只读转发，取值与原「平铺并集 + 未参与变体清零」逐字等价，
+  /// 因此消费点无需改动即可编译且显示不变。
+  let payload: TiebaSimpleRowPayload
+
+  let marginH: CGFloat
+  let bottomMargin: CGFloat
+  let gap: CGFloat
+  let titleBlock: TiebaSimpleTextBlock?
+  let chevronWeight: UIFont.Weight
+  let sectionDotSize: CGSize
+
+  var marginV: CGFloat { payload.userValue?.marginV ?? payload.messageValue?.marginV ?? 0 }
+  var paddingH: CGFloat { payload.userValue?.paddingH ?? payload.messageValue?.paddingH ?? payload.summaryValue?.paddingH ?? 0 }
+  var paddingV: CGFloat { payload.userValue?.paddingV ?? payload.messageValue?.paddingV ?? payload.summaryValue?.paddingV ?? 0 }
+  var cornerRadius: CGFloat { payload.userValue?.cornerRadius ?? payload.messageValue?.cornerRadius ?? payload.summaryValue?.cornerRadius ?? 0 }
+  var borderWidth: CGFloat { payload.userValue?.borderWidth ?? payload.messageValue?.borderWidth ?? 0 }
+  var backgroundColor: UIColor? { payload.userValue?.backgroundColor ?? payload.messageValue?.backgroundColor ?? payload.summaryValue?.backgroundColor ?? nil }
+  var borderColor: UIColor? { payload.userValue?.borderColor ?? payload.messageValue?.borderColor ?? nil }
+  var avatarURL: URL? { payload.userValue?.avatarURL ?? payload.messageValue?.avatarURL ?? nil }
+  var avatarInitial: String { payload.userValue?.avatarInitial ?? payload.messageValue?.avatarInitial ?? "" }
+  var avatarSize: CGFloat { payload.userValue?.avatarSize ?? payload.messageValue?.avatarSize ?? 0 }
+  var badgeText: String? { payload.userValue?.badgeText ?? nil }
+  var badgeBlock: TiebaSimpleTextBlock? { payload.userValue?.badgeBlock ?? nil }
+  var badgeTextColor: UIColor? { payload.userValue?.badgeTextColor ?? nil }
+  var badgeBackgroundColor: UIColor? { payload.userValue?.badgeBackgroundColor ?? nil }
+  var badgePaddingH: CGFloat { payload.userValue?.badgePaddingH ?? 0 }
+  var badgePaddingV: CGFloat { payload.userValue?.badgePaddingV ?? 0 }
+  var badgeRadius: CGFloat { payload.userValue?.badgeRadius ?? 0 }
+  var badgeSpacing: CGFloat { payload.userValue?.badgeSpacing ?? 0 }
+  var subtitleBlock: TiebaSimpleTextBlock? { payload.userValue?.subtitleBlock ?? payload.summaryValue?.subtitleBlock ?? nil }
+  var subtitleMarginTop: CGFloat { payload.userValue?.subtitleMarginTop ?? payload.summaryValue?.subtitleMarginTop ?? 0 }
+  var showsChevron: Bool { payload.userValue?.showsChevron ?? false }
+  var chevronSize: CGFloat { payload.userValue?.chevronSize ?? 0 }
+  var chevronColor: UIColor? { payload.userValue?.chevronColor ?? nil }
+  var isUnread: Bool { payload.messageValue?.isUnread ?? false }
+  var unreadDotColor: UIColor? { payload.messageValue?.unreadDotColor ?? nil }
+  var typeIconName: String? { payload.messageValue?.typeIconName ?? nil }
+  var typeIconSize: CGFloat { payload.userValue?.typeIconSize ?? payload.messageValue?.typeIconSize ?? 0 }
+  var typeIconColor: UIColor? { payload.messageValue?.typeIconColor ?? nil }
+  var bodyGap: CGFloat { payload.userValue?.bodyGap ?? payload.messageValue?.bodyGap ?? 0 }
+  var headerGap: CGFloat { payload.userValue?.headerGap ?? payload.messageValue?.headerGap ?? 0 }
+  var contentBlock: TiebaSimpleTextBlock? { payload.messageValue?.contentBlock ?? nil }
+  var threadBlock: TiebaSimpleTextBlock? { payload.messageValue?.threadBlock ?? nil }
+  var timeBlock: TiebaSimpleTextBlock? { payload.messageValue?.timeBlock ?? nil }
+  var sectionDotColor: UIColor? { payload.sectionValue?.sectionDotColor ?? nil }
+  var sectionDotSpacing: CGFloat { payload.sectionValue?.sectionDotSpacing ?? 0 }
+  var countChipText: String? { payload.sectionValue?.countChipText ?? nil }
+  var countChipBlock: TiebaSimpleTextBlock? { payload.sectionValue?.countChipBlock ?? nil }
+  var countChipBackgroundColor: UIColor? { payload.sectionValue?.countChipBackgroundColor ?? nil }
+  var countChipTextColor: UIColor? { payload.sectionValue?.countChipTextColor ?? nil }
+  var countChipPaddingH: CGFloat { payload.sectionValue?.countChipPaddingH ?? 0 }
+  var countChipPaddingV: CGFloat { payload.sectionValue?.countChipPaddingV ?? 0 }
+  var countChipRadius: CGFloat { payload.sectionValue?.countChipRadius ?? 0 }
+  var topSpacing: CGFloat { payload.sectionValue?.topSpacing ?? 0 }
+  var iconName: String? { payload.summaryValue?.iconName ?? nil }
+  var iconSize: CGFloat { payload.summaryValue?.iconSize ?? 0 }
+  var iconColor: UIColor? { payload.summaryValue?.iconColor ?? nil }
+  var iconBoxSize: CGFloat { payload.summaryValue?.iconBoxSize ?? 0 }
+  var iconBoxRadius: CGFloat { payload.summaryValue?.iconBoxRadius ?? 0 }
+  var iconBoxColor: UIColor? { payload.summaryValue?.iconBoxColor ?? nil }
   init(pageKey: String, index: Int, raw: [String: Any], containerWidth: CGFloat) {
     let width = max(containerWidth, 0)
     let variant = TiebaSimpleRowVariant(
@@ -402,7 +510,8 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
         font: font,
         lineHeight: lineHeight,
         height: height,
-        text: text
+        text: text,
+        lines: max(lines, 1)
       )
     }
 
@@ -424,24 +533,11 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
       let chevronSize = number("chevronSize", 14)
       let subtitleMarginTop = number("subtitleMarginTop", 0)
       self.marginH = marginH
-      self.marginV = marginV
       self.bottomMargin = bottomMargin
-      self.paddingH = paddingH
-      self.paddingV = paddingV
       self.gap = gap
-      self.cornerRadius = number("radius", 20)
-      self.borderWidth = borderWidth
       // 缺省卡底 = 主题卡片色：消息列表/吧务组都显式传 bg，而搜索结果的
       // user/message 行不传，写死 .white 在深色下就是白卡（用户实证）。
-      self.backgroundColor = color("bg", TiebaSimpleRowPalette.default.base.card)
-      self.borderColor = color("borderColor", nil)
-      self.avatarSize = avatarSize
-      self.avatarURL = TiebaSimpleRowParser.avatarURL(TiebaSimpleRowParser.nonEmpty(raw["avatar"]) ?? "")
-      self.avatarInitial = TiebaSimpleRowParser.nonEmpty(raw["avatarInitial"]) ?? ""
-      self.showsChevron = showsChevron
-      self.chevronSize = chevronSize
       self.chevronWeight = TiebaSimpleText.weight(TiebaSimpleRowParser.double(raw["chevronWeight"]) ?? 400)
-      self.chevronColor = color("chevronColor", nil)
       // 文本列宽：内容区 - 头像 - gap - 箭头（有箭头时让位箭头 + gap）。
       let contentWidth = max(width - marginH * 2 - (paddingH + borderWidth) * 2, 0)
       let textWidth = max(
@@ -449,16 +545,8 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
         0
       )
       self.titleBlock = block("title", width: textWidth, fallbackSize: 14, fallbackWeight: 600)
-      self.subtitleBlock = block("subtitle", width: textWidth, fallbackSize: 11, fallbackWeight: 400)
-      self.subtitleMarginTop = subtitleMarginTop
-      self.badgeText = TiebaSimpleRowParser.nonEmpty(raw["badge"])
-      self.badgeBlock = block("badge", width: textWidth, fallbackSize: 10, fallbackWeight: 700)
-      self.badgeTextColor = color("badgeColor", nil)
-      self.badgeBackgroundColor = color("badgeBg", nil)
-      self.badgePaddingH = number("badgePaddingH", 5)
-      self.badgePaddingV = number("badgePaddingV", 1)
-      self.badgeRadius = number("badgeRadius", 8)
-      self.badgeSpacing = number("badgeSpacing", 6)
+      // 载荷字段（计算属性）在 init 全量初始化前不可读 self，这里先落局部量。
+      let subtitleBlock = block("subtitle", width: textWidth, fallbackSize: 11, fallbackWeight: 400)
       // 高度 = 描边×2 + 上下 marginV + 上下 padding + max(头像, 文本列) + bottomMargin。
       let textHeight = (titleBlock?.height ?? 0)
         + (subtitleBlock.map { subtitleMarginTop + $0.height } ?? 0)
@@ -467,35 +555,37 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
       self.accessibilityLabel = TiebaSimpleRowParser.nonEmpty(raw["a11y"])
         ?? (titleBlock?.text ?? "")
       // 未参与本变体的字段置空（Swift 要求全量初始化）。
-      self.isUnread = false
-      self.unreadDotColor = nil
-      self.typeIconName = nil
-      self.typeIconSize = 13
-      self.typeIconColor = nil
-      self.bodyGap = 3
-      self.headerGap = 8
-      self.contentBlock = nil
-      self.threadBlock = nil
-      self.timeBlock = nil
-      self.sectionDotColor = nil
       self.sectionDotSize = .zero
-      self.sectionDotSpacing = 0
-      self.countChipText = nil
-      self.countChipBlock = nil
-      self.countChipBackgroundColor = nil
-      self.countChipTextColor = nil
-      self.countChipPaddingH = 0
-      self.countChipPaddingV = 0
-      self.countChipRadius = 0
-      self.topSpacing = 0
-      self.iconName = nil
-      self.iconSize = 0
-      self.iconColor = nil
-      self.iconBoxSize = 0
-      self.iconBoxRadius = 0
-      self.iconBoxColor = nil
 
     // ──────────────────────── message ────────────────────────
+      self.payload = .user(.init(
+        marginV: marginV,
+        paddingH: paddingH,
+        paddingV: paddingV,
+        cornerRadius: number("radius", 20),
+        borderWidth: borderWidth,
+        backgroundColor: color("bg", TiebaSimpleRowPalette.default.base.card),
+        borderColor: color("borderColor", nil),
+        avatarSize: avatarSize,
+        avatarURL: TiebaSimpleRowParser.avatarURL(TiebaSimpleRowParser.nonEmpty(raw["avatar"]) ?? ""),
+        avatarInitial: TiebaSimpleRowParser.nonEmpty(raw["avatarInitial"]) ?? "",
+        showsChevron: showsChevron,
+        chevronSize: chevronSize,
+        chevronColor: color("chevronColor", nil),
+        subtitleBlock: subtitleBlock,
+        subtitleMarginTop: subtitleMarginTop,
+        badgeText: TiebaSimpleRowParser.nonEmpty(raw["badge"]),
+        badgeBlock: block("badge", width: textWidth, fallbackSize: 10, fallbackWeight: 700),
+        badgeTextColor: color("badgeColor", nil),
+        badgeBackgroundColor: color("badgeBg", nil),
+        badgePaddingH: number("badgePaddingH", 5),
+        badgePaddingV: number("badgePaddingV", 1),
+        badgeRadius: number("badgeRadius", 8),
+        badgeSpacing: number("badgeSpacing", 6),
+        typeIconSize: 13,
+        bodyGap: 3,
+        headerGap: 8
+      ))
     case .message:
       // 默认 = 消息行（MessageRow.tsx messageRow：padding Spacing.md 12 /
       // marginBottom Spacing.sm 8 / RadiusStyle.card 20 / gap 10 / 头像 40 /
@@ -513,25 +603,8 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
       let bodyGap = number("bodyGap", 3)
       let headerGap = number("headerGap", 8)
       self.marginH = marginH
-      self.marginV = marginV
       self.bottomMargin = bottomMargin
-      self.paddingH = paddingH
-      self.paddingV = paddingV
       self.gap = gap
-      self.cornerRadius = number("radius", 20)
-      self.borderWidth = borderWidth
-      self.backgroundColor = color("bg", TiebaSimpleRowPalette.default.base.card)
-      self.borderColor = color("borderColor", nil)
-      self.avatarSize = avatarSize
-      self.avatarURL = TiebaSimpleRowParser.avatarURL(TiebaSimpleRowParser.nonEmpty(raw["avatar"]) ?? "")
-      self.avatarInitial = TiebaSimpleRowParser.nonEmpty(raw["avatarInitial"]) ?? ""
-      self.isUnread = TiebaSimpleRowParser.bool(raw["unread"]) == true
-      self.unreadDotColor = color("unreadDotColor", nil)
-      self.typeIconName = typeIconName
-      self.typeIconSize = typeIconSize
-      self.typeIconColor = color("iconColor", nil)
-      self.bodyGap = bodyGap
-      self.headerGap = headerGap
       let bodyWidth = max(
         width - marginH * 2 - (paddingH + borderWidth) * 2 - avatarSize - gap,
         0
@@ -543,10 +616,10 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
       )
       self.titleBlock = block("name", width: nameWidth, fallbackSize: 15, fallbackWeight: 600, styleKey: "name")
       let contentLines = Int(TiebaSimpleRowParser.double(raw["contentLines"]) ?? 2)
-      self.contentBlock = block("content", lines: max(contentLines, 1), width: bodyWidth,
-                               fallbackSize: 15, fallbackWeight: 400)
-      self.threadBlock = block("threadTitle", width: bodyWidth, fallbackSize: 12, fallbackWeight: 400)
-      self.timeBlock = block("time", width: bodyWidth, fallbackSize: 11, fallbackWeight: 400)
+      // 载荷字段（计算属性）在 init 全量初始化前不可读 self，这里先落局部量。
+      let contentBlock = block("content", lines: max(contentLines, 1), width: bodyWidth, fallbackSize: 15, fallbackWeight: 400)
+      let threadBlock = block("threadTitle", width: bodyWidth, fallbackSize: 12, fallbackWeight: 400)
+      let timeBlock = block("time", width: bodyWidth, fallbackSize: 11, fallbackWeight: 400)
       // 高度 = 描边×2 + 上下 marginV + 上下 padding + max(头像, body 列) + bottomMargin。
       var bodyHeight = (titleBlock?.height ?? 0)
       bodyHeight += bodyGap + (contentBlock?.height ?? 0)
@@ -556,39 +629,32 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
         + max(avatarSize, bodyHeight) + bottomMargin
       self.accessibilityLabel = TiebaSimpleRowParser.nonEmpty(raw["a11y"]) ?? ""
       // 其余变体字段置空。
-      self.showsChevron = false
-      self.chevronSize = 0
       self.chevronWeight = .regular
-      self.chevronColor = nil
-      self.subtitleBlock = nil
-      self.subtitleMarginTop = 0
-      self.badgeText = nil
-      self.badgeBlock = nil
-      self.badgeTextColor = nil
-      self.badgeBackgroundColor = nil
-      self.badgePaddingH = 0
-      self.badgePaddingV = 0
-      self.badgeRadius = 0
-      self.badgeSpacing = 0
-      self.sectionDotColor = nil
       self.sectionDotSize = .zero
-      self.sectionDotSpacing = 0
-      self.countChipText = nil
-      self.countChipBlock = nil
-      self.countChipBackgroundColor = nil
-      self.countChipTextColor = nil
-      self.countChipPaddingH = 0
-      self.countChipPaddingV = 0
-      self.countChipRadius = 0
-      self.topSpacing = 0
-      self.iconName = nil
-      self.iconSize = 0
-      self.iconColor = nil
-      self.iconBoxSize = 0
-      self.iconBoxRadius = 0
-      self.iconBoxColor = nil
 
     // ──────────────────────── section ────────────────────────
+      self.payload = .message(.init(
+        marginV: marginV,
+        paddingH: paddingH,
+        paddingV: paddingV,
+        cornerRadius: number("radius", 20),
+        borderWidth: borderWidth,
+        backgroundColor: color("bg", TiebaSimpleRowPalette.default.base.card),
+        borderColor: color("borderColor", nil),
+        avatarSize: avatarSize,
+        avatarURL: TiebaSimpleRowParser.avatarURL(TiebaSimpleRowParser.nonEmpty(raw["avatar"]) ?? ""),
+        avatarInitial: TiebaSimpleRowParser.nonEmpty(raw["avatarInitial"]) ?? "",
+        isUnread: TiebaSimpleRowParser.bool(raw["unread"]) == true,
+        unreadDotColor: color("unreadDotColor", nil),
+        typeIconName: typeIconName,
+        typeIconSize: typeIconSize,
+        typeIconColor: color("iconColor", nil),
+        bodyGap: bodyGap,
+        headerGap: headerGap,
+        contentBlock: contentBlock,
+        threadBlock: threadBlock,
+        timeBlock: timeBlock
+      ))
     case .section:
       // 默认 = 分组标题（bawu.tsx roleHeader / members.tsx groupHeader：
       // marginTop 18 / marginBottom Spacing.sm 8 / marginHorizontal Spacing.xxl 28 /
@@ -606,28 +672,11 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
       let chipPaddingH = number("chipPaddingH", 8)
       let chipPaddingV = number("chipPaddingV", 2)
       self.marginH = marginH
-      self.marginV = 0
-      self.topSpacing = topSpacing
       self.bottomMargin = bottomMargin
-      self.paddingH = 0
-      self.paddingV = 0
       self.gap = number("gap", 7)
-      self.cornerRadius = 0
-      self.borderWidth = 0
-      self.backgroundColor = nil
-      self.borderColor = nil
-      self.sectionDotColor = dotColor
       self.sectionDotSize = dotSize
-      self.sectionDotSpacing = dotSpacing
       let contentWidth = max(width - marginH * 2, 0)
-      self.countChipText = TiebaSimpleRowParser.nonEmpty(raw["count"])
       let chipBlock = block("count", width: contentWidth, fallbackSize: 11, fallbackWeight: 600)
-      self.countChipBlock = chipBlock
-      self.countChipBackgroundColor = color("chipBg", nil)
-      self.countChipTextColor = color("chipTextColor", nil)
-      self.countChipPaddingH = chipPaddingH
-      self.countChipPaddingV = chipPaddingV
-      self.countChipRadius = number("chipRadius", 8)
       let chipTextWidth = chipBlock.map {
         TiebaSimpleText.singleLineWidth($0.text, font: $0.font)
       } ?? 0
@@ -644,41 +693,21 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
       self.accessibilityLabel = TiebaSimpleRowParser.nonEmpty(raw["a11y"])
         ?? (titleBlock?.text ?? "")
       // 其余变体字段置空。
-      self.avatarURL = nil
-      self.avatarInitial = ""
-      self.avatarSize = 0
-      self.subtitleBlock = nil
-      self.subtitleMarginTop = 0
-      self.badgeText = nil
-      self.badgeBlock = nil
-      self.badgeTextColor = nil
-      self.badgeBackgroundColor = nil
-      self.badgePaddingH = 0
-      self.badgePaddingV = 0
-      self.badgeRadius = 0
-      self.badgeSpacing = 0
-      self.showsChevron = false
-      self.chevronSize = 0
       self.chevronWeight = .regular
-      self.chevronColor = nil
-      self.isUnread = false
-      self.unreadDotColor = nil
-      self.typeIconName = nil
-      self.typeIconSize = 0
-      self.typeIconColor = nil
-      self.bodyGap = 0
-      self.headerGap = 0
-      self.contentBlock = nil
-      self.threadBlock = nil
-      self.timeBlock = nil
-      self.iconName = nil
-      self.iconSize = 0
-      self.iconColor = nil
-      self.iconBoxSize = 0
-      self.iconBoxRadius = 0
-      self.iconBoxColor = nil
 
     // ──────────────────────── summary ────────────────────────
+      self.payload = .section(.init(
+        topSpacing: topSpacing,
+        sectionDotColor: dotColor,
+        sectionDotSpacing: dotSpacing,
+        countChipText: TiebaSimpleRowParser.nonEmpty(raw["count"]),
+        countChipBlock: chipBlock,
+        countChipBackgroundColor: color("chipBg", nil),
+        countChipTextColor: color("chipTextColor", nil),
+        countChipPaddingH: chipPaddingH,
+        countChipPaddingV: chipPaddingV,
+        countChipRadius: number("chipRadius", 8)
+      ))
     case .summary:
       // 默认 = 吧务说明卡（bawu.tsx summaryCard：marginHorizontal Spacing.lg 16 /
       // marginBottom 6 / paddingH 14 / paddingV 13 / RadiusStyle.card 20 /
@@ -692,68 +721,35 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
       let iconBoxSize = number("iconBox", 40)
       let subtitleMarginTop = number("subtitleMarginTop", 2)
       self.marginH = marginH
-      self.marginV = 0
       self.bottomMargin = bottomMargin
-      self.paddingH = paddingH
-      self.paddingV = paddingV
       self.gap = gap
-      self.cornerRadius = number("radius", 20)
-      self.borderWidth = 0
-      self.backgroundColor = color("bg", nil)
-      self.borderColor = nil
-      self.iconName = TiebaSimpleRowParser.nonEmpty(raw["icon"])
-      self.iconSize = number("iconSize", 20)
-      self.iconColor = color("iconColor", nil)
-      self.iconBoxSize = iconBoxSize
-      self.iconBoxRadius = number("iconBoxRadius", 12)
-      self.iconBoxColor = color("iconBg", nil)
       let contentWidth = max(width - marginH * 2 - paddingH * 2, 0)
       let textWidth = max(contentWidth - iconBoxSize - gap, 0)
       self.titleBlock = block("title", width: textWidth, fallbackSize: 16, fallbackWeight: 600)
-      self.subtitleBlock = block("subtitle", width: textWidth, fallbackSize: 12, fallbackWeight: 400)
-      self.subtitleMarginTop = subtitleMarginTop
+      // 载荷字段（计算属性）在 init 全量初始化前不可读 self，这里先落局部量。
+      let subtitleBlock = block("subtitle", width: textWidth, fallbackSize: 12, fallbackWeight: 400)
       let textHeight = (titleBlock?.height ?? 0)
         + (subtitleBlock.map { subtitleMarginTop + $0.height } ?? 0)
       self.measuredHeight = paddingV * 2 + max(iconBoxSize, textHeight) + bottomMargin
       self.accessibilityLabel = TiebaSimpleRowParser.nonEmpty(raw["a11y"])
         ?? (titleBlock?.text ?? "")
       // 其余变体字段置空。
-      self.avatarURL = nil
-      self.avatarInitial = ""
-      self.avatarSize = 0
-      self.badgeText = nil
-      self.badgeBlock = nil
-      self.badgeTextColor = nil
-      self.badgeBackgroundColor = nil
-      self.badgePaddingH = 0
-      self.badgePaddingV = 0
-      self.badgeRadius = 0
-      self.badgeSpacing = 0
-      self.showsChevron = false
-      self.chevronSize = 0
       self.chevronWeight = .regular
-      self.chevronColor = nil
-      self.isUnread = false
-      self.unreadDotColor = nil
-      self.typeIconName = nil
-      self.typeIconSize = 0
-      self.typeIconColor = nil
-      self.bodyGap = 0
-      self.headerGap = 0
-      self.contentBlock = nil
-      self.threadBlock = nil
-      self.timeBlock = nil
-      self.sectionDotColor = nil
       self.sectionDotSize = .zero
-      self.sectionDotSpacing = 0
-      self.countChipText = nil
-      self.countChipBlock = nil
-      self.countChipBackgroundColor = nil
-      self.countChipTextColor = nil
-      self.countChipPaddingH = 0
-      self.countChipPaddingV = 0
-      self.countChipRadius = 0
-      self.topSpacing = 0
+      self.payload = .summary(.init(
+        paddingH: paddingH,
+        paddingV: paddingV,
+        cornerRadius: number("radius", 20),
+        backgroundColor: color("bg", nil),
+        iconName: TiebaSimpleRowParser.nonEmpty(raw["icon"]),
+        iconSize: number("iconSize", 20),
+        iconColor: color("iconColor", nil),
+        iconBoxSize: iconBoxSize,
+        iconBoxRadius: number("iconBoxRadius", 12),
+        iconBoxColor: color("iconBg", nil),
+        subtitleBlock: subtitleBlock,
+        subtitleMarginTop: subtitleMarginTop
+      ))
     }
   }
 }
@@ -793,8 +789,11 @@ nonisolated enum TiebaSimpleRowParser {
 
 // MARK: - 页面级缓存（本批行专用；与 TiebaRowMetrics 并列）
 
-/// 页键 =（pageKey, 容器宽度）：宽度是键的一部分，查询显式传宽度，多个列表
-/// 各自的宽度互不清页（与 TiebaRowMetrics 同一纪律）。
+/// 页索引键 =（pageKey, 容器宽度）：**只剩位置**，每行存的是它的**内容键**。
+/// [精简] 原键直接挂 Page(rows:)：位置即内容，整页一被 LRU 挤掉这些行的测量就跟着没了
+///（→ 兜底高 / 缺页自愈 / 在显页 pin）。行内容改走 TiebaRowStore（键 = 内容身份 + 量化
+/// 宽度，同一行内容跨页命中同一份测量），本索引只给位置查询、行数与顺序用。
+/// 宽度仍是键的一部分：多个列表各自的宽度互不清页（与 TiebaRowMetrics 同一纪律）。
 public nonisolated final class TiebaSimpleRowMetrics: @unchecked Sendable {
   public static let shared = TiebaSimpleRowMetrics()
 
@@ -803,23 +802,51 @@ public nonisolated final class TiebaSimpleRowMetrics: @unchecked Sendable {
     let width: CGFloat
   }
 
-  private struct Page {
-    let rows: [TiebaSimpleRowModel]
-  }
-
   /// prepareRows 的入参快照盒（字典来自 JS 桥，投递后调用方不再触碰）。
   private struct SendableRows: @unchecked Sendable {
     let rows: [[String: Any]]
   }
 
-  /// 整页缓存（LRU + 在显页跳过）：四族度量缓存共用 TiebaPageStore。
-  private let pages = TiebaPageStore<PageKey, Page>(pinKey: { $0.pageKey })
+  /// 行内容存储：键 =（内容身份, 量化宽度）。
+  /// 行预算 512 ≈ 旧整页 LRU(8) × 每页 64 行；本族模型很轻（几个 label），去重后能盖住
+  /// 消息/搜索/主页这类长页。
+  private let rows = TiebaRowStore<TiebaRowCacheKey, TiebaSimpleRowModel>(maxRows: 512)
+
+  /// 内容键 → **原始行字典**（宽度无关）：与 TiebaRowMetrics.raws 同款，唯一用途是
+  /// 「单行同步补测」——内容键含宽度，换宽后旧测量不命中，留着源字典就能当场按新宽度重测，
+  /// 而不是让布局拿一个假高度。
+  private let raws = TiebaRowStore<TiebaRowDiff.Entry.Identity, [String: Any]>(maxRows: 512)
+
+  /// 页索引缓存（LRU + 在显页跳过）：四族度量缓存共用 TiebaPageStore。
+  /// [精简] 预算 8 → 32 页：索引不含几何、很轻，位置查询不该因为别的屏又插了几页就查不到。
+  private let pages = TiebaPageStore<PageKey, [TiebaRowCacheKey]>(
+    maxPages: 32,
+    pinKey: { $0.pageKey }
+  )
   private let queue = DispatchQueue(
     label: "com.tiebalite.app.simple-row-metrics",
     qos: .userInitiated
   )
 
-  private init() {}
+  private init() {
+    // 系统内容尺寸档（动态字体）变化 → 已测高度全部失效（UIFontMetrics 随之变）。
+    // 行级缓存键只含内容身份 + 宽度、**不含字号档**：不整体作废的话，消息/搜索/浏览历史
+    // 这一族会永久停在旧字号旧行高（feed 族同一通知已这么清，见 TiebaRowMetrics.init）。
+    NotificationCenter.default.addObserver(
+      forName: UIContentSizeCategory.didChangeNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      self?.invalidateAll()
+    }
+  }
+
+  /// 丢弃全部缓存（字号档变化时用）。行内容存储是**跨页**共享的：只清页索引会留下
+  /// 「别的页还在引用」的旧测量（字号变了却复用旧高度）。
+  private func invalidateAll() {
+    pages.removeAll()
+    rows.removeAll()
+  }
 
   /// 0.5pt 量化统一走 TiebaLayout（全仓唯一实现；本入口保留给既有调用方）。
   static func quantize(_ width: CGFloat) -> CGFloat {
@@ -827,38 +854,72 @@ public nonisolated final class TiebaSimpleRowMetrics: @unchecked Sendable {
   }
 
   /// 异步整页测量（非阻塞；本批界面走 prepareRowsBlocking）。
-  public func prepareRows(pageKey: String, rows: [[String: Any]], containerWidth: CGFloat) {
+  /// - Parameter identities: 每行的内容身份（与 rows 同序）—— 行级缓存键的一半。
+  public func prepareRows(
+    pageKey: String,
+    rows: [[String: Any]],
+    containerWidth: CGFloat,
+    identities: [TiebaRowDiff.Entry.Identity]? = nil
+  ) {
     guard let width = gate(pageKey: pageKey, containerWidth: containerWidth) else { return }
     let box = SendableRows(rows: rows)
+    let ids = identities
     queue.async { [weak self] in
       guard let self else { return }
-      self.publish(pageKey: pageKey, width: width, rows: Self.measureRows(rows: box.rows, width: width))
+      let index = self.measureAndIndex(rows: box.rows, width: width, identities: ids)
+      self.pages.publish(index, forKey: PageKey(pageKey: pageKey, width: width))
     }
   }
 
   /// 同步整页测量（JS 的 AsyncFunction 后台队列调用；resolve 返回即可查）。
-  public func prepareRowsBlocking(pageKey: String, rows: [[String: Any]], containerWidth: CGFloat) {
+  public func prepareRowsBlocking(
+    pageKey: String,
+    rows: [[String: Any]],
+    containerWidth: CGFloat,
+    identities: [TiebaRowDiff.Entry.Identity]? = nil
+  ) {
     guard let width = gate(pageKey: pageKey, containerWidth: containerWidth) else { return }
-    publish(pageKey: pageKey, width: width, rows: Self.measureRows(rows: rows, width: width))
+    // 顺序有讲究：先保证内容在、再发布索引（索引一发布，位置查询就必须取得到内容）。
+    let index = measureAndIndex(rows: rows, width: width, identities: identities)
+    publish(pageKey: pageKey, width: width, index: index)
   }
 
+  /// 页内**位置**行数（索引在就算，不代表内容还在）。
   public func rowCount(pageKey: String, containerWidth: CGFloat) -> Int {
     let width = TiebaSimpleRowMetrics.quantize(containerWidth)
-    return pages.value(forKey: PageKey(pageKey: pageKey, width: width))?.rows.count ?? 0
+    return pages.value(forKey: PageKey(pageKey: pageKey, width: width))?.count ?? 0
+  }
+
+  /// 本页在本宽度下**真正可渲染**的行数（索引在、内容也在）。
+  /// [精简] 行级缓存的淘汰粒度是行，「整页行数」给不出这个信息（liveRowCount 用它）。
+  public func presentRowCount(pageKey: String, containerWidth: CGFloat) -> Int {
+    let width = TiebaSimpleRowMetrics.quantize(containerWidth)
+    guard let index = pages.value(forKey: PageKey(pageKey: pageKey, width: width)) else { return 0 }
+    var present = 0
+    for key in index where rows.contains(key) { present += 1 }
+    return present
   }
 
   public func rowHeight(pageKey: String, containerWidth: CGFloat, index: Int) -> CGFloat? {
-    let width = TiebaSimpleRowMetrics.quantize(containerWidth)
-    guard let page = pages.value(forKey: PageKey(pageKey: pageKey, width: width)),
-          index >= 0, index < page.rows.count else { return nil }
-    return page.rows[index].measuredHeight
+    row(pageKey: pageKey, containerWidth: containerWidth, index: index)?.measuredHeight
   }
 
+  /// 取行模型（位置 → 内容键 → 行内容存储）。
   public func row(pageKey: String, containerWidth: CGFloat, index: Int) -> TiebaSimpleRowModel? {
     let width = TiebaSimpleRowMetrics.quantize(containerWidth)
-    guard let page = pages.value(forKey: PageKey(pageKey: pageKey, width: width)),
-          index >= 0, index < page.rows.count else { return nil }
-    return page.rows[index]
+    guard let keys = pages.value(forKey: PageKey(pageKey: pageKey, width: width)),
+          index >= 0, index < keys.count else { return nil }
+    return rows.value(forKey: keys[index])
+  }
+
+  /// **内容键查询**（列表侧用：TiebaKindItem.identity 就是它）：与 pageKey、与页索引的
+  /// 整页淘汰都无关 —— 同一行内容在任何页里都命中同一份测量。
+  public func row(
+    identity: TiebaRowDiff.Entry.Identity,
+    containerWidth: CGFloat
+  ) -> TiebaSimpleRowModel? {
+    let width = TiebaSimpleRowMetrics.quantize(containerWidth)
+    return rows.value(forKey: TiebaRowCacheKey(identity: identity, width: width))
   }
 
   // MARK: - 内部
@@ -868,17 +929,47 @@ public nonisolated final class TiebaSimpleRowMetrics: @unchecked Sendable {
     return TiebaSimpleRowMetrics.quantize(containerWidth)
   }
 
-  private static func measureRows(rows: [[String: Any]], width: CGFloat) -> [TiebaSimpleRowModel] {
-    var measured: [TiebaSimpleRowModel] = []
-    measured.reserveCapacity(rows.count)
-    for (index, raw) in rows.enumerated() {
-      measured.append(TiebaSimpleRowModel(pageKey: "", index: index, raw: raw, containerWidth: width))
+  /// 整页测量 + **写内容缓存**，返回页索引（位置 → 内容键）。
+  /// [精简] 原 measureRows 无条件逐行重建模型（本族原本没有页内复用），重推即整页重测；
+  /// 现在复用判据 = 内容键命中（TiebaRowStore.resolve），跨页/跨屏都命中。
+  private func measureAndIndex(
+    rows raws: [[String: Any]],
+    width: CGFloat,
+    identities: [TiebaRowDiff.Entry.Identity]?
+  ) -> [TiebaRowCacheKey] {
+    let ids = (identities?.count == raws.count ? identities : nil)
+      ?? TiebaRowDiff.entries(for: raws).map(\.identity)
+    let keys = ids.map { TiebaRowCacheKey(identity: $0, width: width) }
+    // 源字典与模型一起留一份（宽度无关的键）：换宽度时才有东西可重测。
+    for (offset, identity) in ids.enumerated() where offset < raws.count {
+      self.raws.insert(raws[offset], forKey: identity)
     }
-    return measured
+    _ = self.rows.resolve(Array(raws.enumerated()), keys: keys) { pair in
+      TiebaSimpleRowModel(pageKey: "", index: pair.offset, raw: pair.element, containerWidth: width)
+    }
+    return keys
   }
 
-  private func publish(pageKey: String, width: CGFloat, rows: [TiebaSimpleRowModel]) {
-    pages.publish(Page(rows: rows), forKey: PageKey(pageKey: pageKey, width: width))
+  /// **单行同步补测**（与 TiebaRowMetrics.ensureFeedRow 同款）：用内容键对应的原始行字典
+  /// 在当前宽度重测一次并写回内容键存储。
+  /// - Returns: nil = 源行字典也不在了（这一行确实没数据），调用方应重推而不是编高度。
+  public func ensureRow(
+    identity: TiebaRowDiff.Entry.Identity,
+    pageKey: String,
+    index: Int,
+    containerWidth: CGFloat
+  ) -> TiebaSimpleRowModel? {
+    // 判定与写回顺序与 feed 族共用 TiebaRowSyncRemeasure（见该类型的注释）。
+    TiebaRowSyncRemeasure.ensure(
+      identity: identity, pageKey: pageKey, index: index, containerWidth: containerWidth,
+      rows: rows, raws: raws
+    ) { raw, pageKey, index, width in
+      TiebaSimpleRowModel(pageKey: pageKey, index: index, raw: raw, containerWidth: width)
+    }
+  }
+
+  private func publish(pageKey: String, width: CGFloat, index: [TiebaRowCacheKey]) {
+    pages.publish(index, forKey: PageKey(pageKey: pageKey, width: width))
   }
 }
 
@@ -1134,6 +1225,9 @@ public final class TiebaSimpleRowView: UIView {
   /// 按当前模型贴全部文本（configure 与换主题都走这里；幂等）。
   private func refreshTextColors() {
     guard let model else { return }
+    // [N4] subtitleLabel 的行数上限随变体复位：message 的正文按 contentBlock 测出的行数（生产方 2 行）绘制，
+    // 其余变体的 subtitle 仍是单行 —— 两者必须与测量同源，否则绘制多一行/少一行都会让行高与内容脱节。
+    subtitleLabel.numberOfLines = 1
     switch model.variant {
     case .user:
       setText(titleLabel, model.titleBlock)
@@ -1141,6 +1235,7 @@ public final class TiebaSimpleRowView: UIView {
       setText(badgeLabel, model.badgeBlock)
     case .message:
       setText(titleLabel, model.titleBlock)
+      subtitleLabel.numberOfLines = model.contentBlock?.lines ?? 1
       setText(subtitleLabel, model.contentBlock)
       setText(threadLabel, model.threadBlock)
       setText(timeLabel, model.timeBlock)

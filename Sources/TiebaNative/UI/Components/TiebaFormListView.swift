@@ -130,23 +130,34 @@ struct TiebaFormOption {
 
 /// 行尾 UIMenu 的一项（account 行的「移除账号」；原生画成 UIAction）。
 struct TiebaFormMenuItem {
-  let id: String
-  let title: String
-  let icon: String?
-  let destructive: Bool
+  var id: String
+  var title: String
+  var icon: String?
+  var destructive: Bool = false
 }
 
 /// status 行里的一簇「图标 + 数值」（oksign 的成功/失败计数、逐吧 +经验）。
 struct TiebaFormStatusItem {
-  let icon: String
-  let text: String
-  let color: UIColor?
+  var icon: String
+  var text: String
+  var color: UIColor?
   /// medium/semibold/bold 覆盖（默认 regular）
-  let weight: String
+  var weight: String = "regular"
 }
 
-/// 一行。解析失败的行直接丢弃：宁可少画一行，也不要在表格里留半行空白
-/// （JS 侧类型已收窄，这里是最后的防御）。
+/// 一个分组：title / footer / footerSpacer 与 rows 一起下发。
+/// 以前是 [String: Any]，视图布局时还要回读 section["footer"] 取高度——同一份数据
+/// 两个事实源；现在值类型一次到位，视图不再解析字典。
+struct TiebaFormSection {
+  var title: String?
+  var footer: String?
+  /// 无 footer 文案时的空白让位高度（profile 页底栏让位）
+  var footerSpacer: Double?
+  var rows: [TiebaFormRow] = []
+}
+
+/// 一行。字段声明即构造入口（memberwise init）：默认值与 JS 解析时期逐字一致，
+/// 调用方只写自己要覆盖的字段，键名写错是编译错误（以前拼字典只在运行时静默丢行）。
 struct TiebaFormRow {
   enum Kind: String {
     case link
@@ -180,151 +191,84 @@ struct TiebaFormRow {
     }
   }
 
-  let id: String
-  let kind: Kind
-  let title: String
-  let subtitle: String?
-  let icon: String?
-  let iconTint: UIColor?
+  var id: String
+  var kind: Kind
+  var title: String = ""
+  var subtitle: String?
+  var icon: String?
+  var iconTint: UIColor?
   /// 当前值。唯一可变字段：受控回推（setValue）就地在模型里改它，避免整表重解析。
   var value: String?
-  let options: [TiebaFormOption]
-  let destructive: Bool
-  let disabled: Bool
+  var options: [TiebaFormOption] = []
+  var destructive: Bool = false
+  var disabled: Bool = false
   /// 文本/图标覆盖色（button/text 行；如「崩溃与卡顿日志」的橙、错误行的次级灰）
-  let override: UIColor?
+  var override: UIColor?
   /// SwiftUI textStyle 名：body / subheadline / footnote / caption / headline / title
-  let textStyle: String
+  var textStyle: String = "body"
   /// hero 行的打包图（Bundle 相对路径，见 TiebaFormHeroCell）
-  let imageName: String?
-  let confirmTitle: String?
-  let confirmMessage: String?
-  let confirmLabel: String?
+  var imageName: String?
+  var confirmTitle: String?
+  var confirmMessage: String?
+  var confirmLabel: String?
   /// 点行内任意处是否等价于拨开关。SwiftUI 的 `Toggle` 行是（true），
   /// 而 ListItem + trailing Switch（设置首页那几行）不是——那一行没有 onPress，
   /// 点行不该动开关。默认 true（Toggle 形态更常见）。
-  let switchRowTap: Bool
+  var switchRowTap: Bool = true
   /// 只禁用开关、不灰整行文字（异步授权/写库挂起期间就是这状态：ListItem 的
   /// 标题/副标题保持正常色，只有 Switch 变灰不可点）。
-  let switchDisabled: Bool
+  var switchDisabled: Bool = false
 
   // ── 第二批（textField / segmented / option / menu / avatar / prominentButton /
   //    progress / status / spinner / datePicker / empty）──
   /// textField：占位文案（多行时由占位 UILabel 承担）
-  let placeholder: String?
+  var placeholder: String?
   /// textField：最大字符数（0 = 不限；超长在编辑回调里截断）
-  let maxLength: Int
+  var maxLength: Int = 0
   /// textField：多行（SwiftUI axis=vertical）
-  let multiline: Bool
+  var multiline: Bool = false
   /// option / menu：当前是否选中（打勾）
-  let selected: Bool
+  var selected: Bool = false
   /// menu：菜单项
-  let menuItems: [TiebaFormMenuItem]
+  var menuItems: [TiebaFormMenuItem] = []
   /// segmented：分档标题（options 复用 value/label）
   /// avatar：头像图 URL（空 = 首字占位）
-  let avatarURL: String?
+  var avatarURL: String?
   /// avatar：首字占位（无图/加载失败时）
-  let initials: String?
+  var initials: String?
   /// avatar：头像直径（默认 40）
-  let avatarSize: Double
+  var avatarSize: Double = 40
   /// avatar：尾部形态："" / "button" / "text"
-  let trailingStyle: String
+  var trailingStyle: String = ""
   /// avatar：尾部按钮标题或尾部说明文字
-  let trailingTitle: String?
+  var trailingTitle: String?
   /// avatar：尾部按钮图标（SF Symbol）
-  let trailingIcon: String?
+  var trailingIcon: String?
   /// avatar：尾部颜色（按钮着色 / 说明文字色；支持语义 token）
-  let trailingColor: UIColor?
+  var trailingColor: UIColor?
   /// avatar：尾部按钮 busy（转圈 + 禁用）
-  let trailingBusy: Bool
+  var trailingBusy: Bool = false
   /// avatar：尾部按钮禁用
-  let trailingDisabled: Bool
+  var trailingDisabled: Bool = false
   /// prominentButton：borderedProminent / bordered / glass / plain
-  let buttonStyle: String
+  var buttonStyle: String = "prominent"
   /// prominentButton：controlSize large
-  let buttonLarge: Bool
+  var buttonLarge: Bool = false
   /// prominentButton：capsule 圆角
-  let buttonCapsule: Bool
+  var buttonCapsule: Bool = false
   /// progress：0...1
-  let progress: Double
+  var progress: Double = 0
   /// status：图标 + 数值簇
-  let statusItems: [TiebaFormStatusItem]
+  var statusItems: [TiebaFormStatusItem] = []
   /// status：尾部说明文字（如「等待中」「+12 经验」）
-  let trailingText: String?
+  var trailingText: String?
   /// status：尾部文字色（支持语义 token）
-  let trailingTextColor: UIColor?
+  var trailingTextColor: UIColor?
   /// status：标题字重 regular / medium / semibold（默认 regular）
-  let titleWeight: String
+  var titleWeight: String = "regular"
   /// status：尾部转圈（「签到中」的行）
-  let showsSpinner: Bool
+  var showsSpinner: Bool = false
 
-  init?(raw: [String: Any], fallbackID: String) {
-    guard let kindRaw = raw["kind"] as? String, let kind = Kind(rawValue: kindRaw) else { return nil }
-    let rawID = raw["id"] as? String
-    self.id = (rawID?.isEmpty == false) ? (rawID ?? fallbackID) : fallbackID
-    self.kind = kind
-    self.title = raw["title"] as? String ?? ""
-    self.subtitle = raw["subtitle"] as? String
-    self.icon = raw["icon"] as? String
-    self.iconTint = TiebaFormColor.resolve(raw["iconTint"] as? String)
-    self.value = raw["value"] as? String
-    self.options = (raw["options"] as? [[String: Any]] ?? []).compactMap { option in
-      guard let value = option["value"] as? String else { return nil }
-      return TiebaFormOption(value: value, label: option["label"] as? String ?? value)
-    }
-    self.destructive = raw["destructive"] as? Bool ?? false
-    self.disabled = raw["disabled"] as? Bool ?? false
-    self.override = TiebaFormColor.resolve(raw["color"] as? String)
-    let style = raw["textStyle"] as? String ?? "body"
-    self.textStyle = style
-    self.imageName = raw["imageName"] as? String
-    self.confirmTitle = raw["confirmTitle"] as? String
-    self.confirmMessage = raw["confirmMessage"] as? String
-    self.confirmLabel = raw["confirmLabel"] as? String
-    self.switchRowTap = raw["switchRowTap"] as? Bool ?? true
-    self.switchDisabled = raw["switchDisabled"] as? Bool ?? false
-
-    self.placeholder = raw["placeholder"] as? String
-    // NSNumber 中转：JS 数字过来是 NSNumber(double)，直接 as? Int 在非整值上会失败。
-    self.maxLength = (raw["maxLength"] as? NSNumber)?.intValue ?? 0
-    self.multiline = raw["multiline"] as? Bool ?? false
-    self.selected = raw["selected"] as? Bool ?? false
-    self.menuItems = (raw["menuItems"] as? [[String: Any]] ?? []).compactMap { item in
-      guard let id = item["id"] as? String, let title = item["title"] as? String else { return nil }
-      return TiebaFormMenuItem(
-        id: id,
-        title: title,
-        icon: item["icon"] as? String,
-        destructive: item["destructive"] as? Bool ?? false
-      )
-    }
-    self.avatarURL = raw["avatarURL"] as? String
-    self.initials = raw["initials"] as? String
-    self.avatarSize = (raw["avatarSize"] as? NSNumber)?.doubleValue ?? 40
-    self.trailingStyle = raw["trailingStyle"] as? String ?? ""
-    self.trailingTitle = raw["trailingTitle"] as? String
-    self.trailingIcon = raw["trailingIcon"] as? String
-    self.trailingColor = TiebaFormColor.resolve(raw["trailingColor"] as? String)
-    self.trailingBusy = raw["trailingBusy"] as? Bool ?? false
-    self.trailingDisabled = raw["trailingDisabled"] as? Bool ?? false
-    self.buttonStyle = raw["buttonStyle"] as? String ?? "prominent"
-    self.buttonLarge = raw["buttonLarge"] as? Bool ?? false
-    self.buttonCapsule = raw["buttonCapsule"] as? Bool ?? false
-    self.progress = (raw["progress"] as? NSNumber)?.doubleValue ?? 0
-    self.statusItems = (raw["statusItems"] as? [[String: Any]] ?? []).compactMap { item in
-      guard let icon = item["icon"] as? String, let text = item["text"] as? String else { return nil }
-      return TiebaFormStatusItem(
-        icon: icon,
-        text: text,
-        color: TiebaFormColor.resolve(item["color"] as? String),
-        weight: item["weight"] as? String ?? "regular"
-      )
-    }
-    self.trailingText = raw["trailingText"] as? String
-    self.trailingTextColor = TiebaFormColor.resolve(raw["trailingTextColor"] as? String)
-    self.titleWeight = raw["titleWeight"] as? String ?? "regular"
-    self.showsSpinner = raw["showsSpinner"] as? Bool ?? false
-  }
 
   /// 行内文字字体（SwiftUI textStyle 名 → 系统动态字体，跟随 Dynamic Type）。
   var font: UIFont {
@@ -367,8 +311,7 @@ final class TiebaFormListView: UIView {
 
   /// 整份替换 → 重解析 + reload。结构性变化（增删行/换分组）才走这里；
   /// 单纯改值走 setValue(id:value:)。
-  /// [{ title?, footer?, rows: [row] }, …]
-  var sections: [[String: Any]] = [] {
+  var sections: [TiebaFormSection] = [] {
     didSet { rebuild() }
   }
 
@@ -410,9 +353,17 @@ final class TiebaFormListView: UIView {
   private var model: [[TiebaFormRow]] = []
   /// 主色（nil = 系统默认，见 tintHex）
   private var accent: UIColor?
+  /// trait 登记令牌（registerForTraitChanges 的返回值需持有）。
+  private var styleRegistration: UITraitChangeRegistration?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
+    // 行首色块图标把当时的动态色烘进位图并缓存：系统切深浅时 UITableView 只下发 trait、
+    // 不重新 cellForRow，位图不重烘就会出现「标题/底色换了、色块停旧档」。
+    styleRegistration = registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
+      (view: TiebaFormListView, _) in
+      view.invalidateIconCache()
+    }
     setUp()
   }
 
@@ -450,12 +401,7 @@ final class TiebaFormListView: UIView {
   }
 
   private func rebuild() {
-    model = sections.enumerated().map { sectionIndex, section in
-      let rows = section["rows"] as? [[String: Any]] ?? []
-      return rows.enumerated().compactMap { rowIndex, raw in
-        TiebaFormRow(raw: raw, fallbackID: "s\(sectionIndex)r\(rowIndex)")
-      }
-    }
+    model = sections.map(\.rows)
     tableView.reloadData()
   }
 
@@ -478,6 +424,12 @@ final class TiebaFormListView: UIView {
   }
 
   /// 主色变化后重配可见行（离屏行出队时本来就会按新主色配置）。
+  /// 作废行首色块位图缓存并重配可见行（外观档变化时调用；缓存键含解析后的色值）。
+  private func invalidateIconCache() {
+    TiebaFormRowCell.iconCache.removeAll()
+    reconfigureVisibleRows()
+  }
+
   private func reconfigureVisibleRows() {
     guard let indexPaths = tableView.indexPathsForVisibleRows, !indexPaths.isEmpty else { return }
     tableView.reconfigureRows(at: indexPaths)
@@ -575,29 +527,14 @@ extension TiebaFormListView: UITableViewDataSource, UITableViewDelegate {
       onTextChange: { [weak self] text in self?.onTextChange?(row.id, text) },
       onColorChange: { [weak self] hex in self?.onColorChange?(row.id, hex) }
     )
-    switch cell {
-    case let cell as TiebaFormRowCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormInputCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormSegmentedCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormAvatarCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormActionCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormProgressCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormStatusCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormSpinnerCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormDateCell:
-      cell.apply(row, context: context)
-    case let cell as TiebaFormEmptyCell:
-      cell.apply(row, context: context)
-    default:
-      break
+    // 一次协议转换代替原来的 10 分支 switch：注册表保证 dequeue 出来的就是映射表里的类，
+    // 而映射表里的类全部实现协议（见文件下方一致性扩展）。
+    if let configuring = cell as? TiebaFormCellConfiguring {
+      configuring.apply(row, context: context)
+    } else {
+      // 走到这里 = 新增行类型时漏了协议一致性（改动前这里是静默 break：cell 拿到却不配置，
+      // 用户看到一行空白且没有任何线索）。DEBUG 下直接暴露，Release 下保持不崩。
+      assertionFailure("cell \(type(of: cell)) 未实现 TiebaFormCellConfiguring")
     }
     return cell
   }
@@ -627,16 +564,15 @@ extension TiebaFormListView: UITableViewDataSource, UITableViewDelegate {
   /// 定高 View）。仅在**没有** footer 文案时生效；有文案时走系统 footer 排版。
   public func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
     guard section < sections.count else { return UITableView.automaticDimension }
-    let footer = sections[section]["footer"] as? String
-    if footer?.isEmpty == false { return UITableView.automaticDimension }
-    if let spacer = (sections[section]["footerSpacer"] as? NSNumber)?.doubleValue {
+    if sections[section].footer?.isEmpty == false { return UITableView.automaticDimension }
+    if let spacer = sections[section].footerSpacer {
       return CGFloat(spacer)
     }
     return UITableView.automaticDimension
   }
 
   public func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-    guard section < sections.count, let title = sections[section]["title"] as? String, !title.isEmpty else {
+    guard section < sections.count, let title = sections[section].title, !title.isEmpty else {
       return nil
     }
     let view = headerFooter(tableView: tableView)
@@ -647,10 +583,10 @@ extension TiebaFormListView: UITableViewDataSource, UITableViewDelegate {
   }
 
   public func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
-    guard section < sections.count, let footer = sections[section]["footer"] as? String, !footer.isEmpty else {
+    guard section < sections.count, let footer = sections[section].footer, !footer.isEmpty else {
       // 无 footer 文案但声明了 footerSpacer：给一个空 view，高度由
       // heightForFooterInSection 给（否则 UITableView 可能把这段空白吃掉）。
-      if section < sections.count, sections[section]["footerSpacer"] != nil {
+      if section < sections.count, sections[section].footerSpacer != nil {
         let view = headerFooter(tableView: tableView)
         view.contentConfiguration = nil
         return view
@@ -695,54 +631,71 @@ struct TiebaFormCellContext {
   let onColorChange: (String) -> Void
 }
 
-/// 行种类 → cell 类 / 复用 id。集中在注册表里，tableView 注册与 cellForRow 共用一份。
-/// @MainActor：cell 类的 reuseID 是主 actor 隔离的（UIKit 类），注册表跟着隔离。
+/// 表单行 cell 的统一契约。存在的理由是**消除第四份分发事实**：
+/// cellForRowAt 原先用 10 分支 switch 逐个做条件转换再调同一个 apply（default 静默 break），
+/// 与注册表里的 kind→类、类→复用 id 两张 switch 表互为副本——新增一种行类型要同步改 6 处，
+/// 漏一处就是"cell 拿到却不配置"的静默空白。
+/// 现在 cellForRowAt 只做一次协议转换；复用 id 由**类自己**给出。
+/// @MainActor：UIKit 类的静态成员是主 actor 隔离的，协议跟着隔离。
+@MainActor
+protocol TiebaFormCellConfiguring: AnyObject {
+  static var reuseID: String { get }
+  func apply(_ row: TiebaFormRow, context: TiebaFormCellContext)
+}
+
+/// 行种类 → cell 类。**唯一**一张映射表：注册（allReuseIDs）、按复用 id 取类
+/// （cellClass(for:)）、按种类取复用 id（reuseID(for:)）全部由它派生。
+/// 加一种行类型只需要动三处：Kind 加 case、这张表加一行、新 cell 实现协议。
 @MainActor
 enum TiebaFormCellRegistry {
-  static let allReuseIDs: [String] = [
-    TiebaFormRowCell.reuseID,
-    TiebaFormInputCell.reuseID,
-    TiebaFormSegmentedCell.reuseID,
-    TiebaFormAvatarCell.reuseID,
-    TiebaFormActionCell.reuseID,
-    TiebaFormProgressCell.reuseID,
-    TiebaFormStatusCell.reuseID,
-    TiebaFormSpinnerCell.reuseID,
-    TiebaFormDateCell.reuseID,
-    TiebaFormEmptyCell.reuseID,
+  /// 未显式映射的种类走通用行 cell（与改动前 default 分支的目标一致）。
+  static let fallbackCellType: TiebaFormCellConfiguring.Type = TiebaFormRowCell.self
+
+  static let mapping: [TiebaFormRow.Kind: TiebaFormCellConfiguring.Type] = [
+    .textField: TiebaFormInputCell.self,
+    .segmented: TiebaFormSegmentedCell.self,
+    .avatar: TiebaFormAvatarCell.self,
+    .prominentButton: TiebaFormActionCell.self,
+    .progress: TiebaFormProgressCell.self,
+    .status: TiebaFormStatusCell.self,
+    .spinner: TiebaFormSpinnerCell.self,
+    .datePicker: TiebaFormDateCell.self,
+    .empty: TiebaFormEmptyCell.self,
   ]
 
-  static func cellClass(for reuseID: String) -> UITableViewCell.Type {
-    switch reuseID {
-    case TiebaFormInputCell.reuseID: return TiebaFormInputCell.self
-    case TiebaFormSegmentedCell.reuseID: return TiebaFormSegmentedCell.self
-    case TiebaFormAvatarCell.reuseID: return TiebaFormAvatarCell.self
-    case TiebaFormActionCell.reuseID: return TiebaFormActionCell.self
-    case TiebaFormProgressCell.reuseID: return TiebaFormProgressCell.self
-    case TiebaFormStatusCell.reuseID: return TiebaFormStatusCell.self
-    case TiebaFormSpinnerCell.reuseID: return TiebaFormSpinnerCell.self
-    case TiebaFormDateCell.reuseID: return TiebaFormDateCell.self
-    case TiebaFormEmptyCell.reuseID: return TiebaFormEmptyCell.self
-    default: return TiebaFormRowCell.self
-    }
+  static func cellType(for kind: TiebaFormRow.Kind) -> TiebaFormCellConfiguring.Type {
+    mapping[kind] ?? fallbackCellType
   }
 
-  /// 行种类 → 复用 id。
+  /// 行种类 → 复用 id（由 cell 类派生，不再手抄）。
   static func reuseID(for kind: TiebaFormRow.Kind) -> String {
-    switch kind {
-    case .textField: return TiebaFormInputCell.reuseID
-    case .segmented: return TiebaFormSegmentedCell.reuseID
-    case .avatar: return TiebaFormAvatarCell.reuseID
-    case .prominentButton: return TiebaFormActionCell.reuseID
-    case .progress: return TiebaFormProgressCell.reuseID
-    case .status: return TiebaFormStatusCell.reuseID
-    case .spinner: return TiebaFormSpinnerCell.reuseID
-    case .datePicker: return TiebaFormDateCell.reuseID
-    case .empty: return TiebaFormEmptyCell.reuseID
-    default: return TiebaFormRowCell.reuseID
-    }
+    cellType(for: kind).reuseID
+  }
+
+  /// 注册用清单：映射表里的全部 + 兜底（兜底那类也要注册，否则 dequeue 会拿到未注册 id）。
+  static var allReuseIDs: [String] {
+    var ids = mapping.values.map { $0.reuseID }
+    ids.append(fallbackCellType.reuseID)
+    // 去重后排序：注册顺序无意义，排序只为输出稳定（便于对拍）。
+    return Array(Set(ids)).sorted()
+  }
+
+  static func cellClass(for reuseID: String) -> TiebaFormCellConfiguring.Type {
+    mapping.values.first { $0.reuseID == reuseID } ?? fallbackCellType
   }
 }
+
+// 十种 cell 的协议一致性（apply 签名本来就一致，这里只是把"事实"声明出来）。
+extension TiebaFormRowCell: TiebaFormCellConfiguring {}
+extension TiebaFormInputCell: TiebaFormCellConfiguring {}
+extension TiebaFormSegmentedCell: TiebaFormCellConfiguring {}
+extension TiebaFormAvatarCell: TiebaFormCellConfiguring {}
+extension TiebaFormActionCell: TiebaFormCellConfiguring {}
+extension TiebaFormProgressCell: TiebaFormCellConfiguring {}
+extension TiebaFormStatusCell: TiebaFormCellConfiguring {}
+extension TiebaFormSpinnerCell: TiebaFormCellConfiguring {}
+extension TiebaFormDateCell: TiebaFormCellConfiguring {}
+extension TiebaFormEmptyCell: TiebaFormCellConfiguring {}
 
 /// 系统表单行的共用底座：卡片底色 + 内容视图透明 + 行高下限 44
 /// （Dynamic Type 放大时内容更高、自然被撑开——行高仍由内容/系统给）。
@@ -785,7 +738,9 @@ final class TiebaFormRowCell: UITableViewCell {
   static let minimumHeight: CGFloat = 44
 
   /// (symbol|色) → 合成图。主 actor 隔离（cell 只在主线程配置），滚动时不重绘。
-  private static var iconCache: [String: UIImage] = [:]
+  /// 行首色块位图缓存。fileprivate：同文件的 TiebaFormListView 在外观档变化时要作废它
+  ///（缓存键含解析后的色值，trait 翻转后旧键永不再命中）。
+  fileprivate static var iconCache: [String: UIImage] = [:]
 
   private let toggle = UISwitch()
   /// picker 行的系统菜单按钮：**铺满整行**（点行内任意处都弹菜单，与系统设置一致），
@@ -1749,6 +1704,13 @@ final class TiebaFormProgressCell: TiebaFormBaseCell {
     ])
   }
 
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    // 复用池里的进度条带上一行的残留值：apply 恒 animated:true，会从残留值插值到新值，
+    // 用户看到一段与实际进度无关的补涨/回退（与 avatar 行的复位纪律对齐）。
+    bar.setProgress(0, animated: false)
+  }
+
   func apply(_ row: TiebaFormRow, context: TiebaFormCellContext) {
     let value = Float(min(max(row.progress, 0), 1))
     bar.setProgress(value, animated: true)
@@ -1819,10 +1781,10 @@ final class TiebaFormStatusCell: TiebaFormBaseCell {
     titleLabel.isHidden = !hasTitle
     if hasTitle {
       titleLabel.text = row.title
-      titleLabel.font = .systemFont(
-        ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize,
-        weight: row.resolvedTitleWeight
-      )
+      // 用本文件既有的 tiebaFormFont（Dynamic Type 档位 + trait 加字重）：把 preferredFont
+      // 的 pointSize 包成静态 systemFont 会让 adjustsFontForContentSizeCategory 变成空操作。
+      titleLabel.font = UIFont.tiebaFormFont(
+        .preferredFont(forTextStyle: .body), weight: row.resolvedTitleWeight)
     }
     while itemViews.count < row.statusItems.count { itemViews.append(makeItemPair()) }
     for (index, pair) in itemViews.enumerated() {
@@ -1833,10 +1795,8 @@ final class TiebaFormStatusCell: TiebaFormBaseCell {
       pair.icon.image = TiebaFormSymbol.image(item.icon, pointSize: 15, weight: .regular)
       pair.icon.tintColor = item.color ?? context.tint
       pair.label.text = item.text
-      pair.label.font = .systemFont(
-        ofSize: UIFont.preferredFont(forTextStyle: .subheadline).pointSize,
-        weight: Self.weight(item.weight)
-      )
+      pair.label.font = UIFont.tiebaFormFont(
+        .preferredFont(forTextStyle: .subheadline), weight: Self.weight(item.weight))
       pair.label.textColor = item.color ?? .label
     }
     trailingLabel.text = row.trailingText

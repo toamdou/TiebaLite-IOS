@@ -371,8 +371,9 @@ enum TiebaChrome {
   //     软边，但不是系统渲染的玻璃，观感与 Liquid Glass 不同、栏底还会留一条亮边
   //     ⇒ "非常拉跨，根本不是 iOS 26 里 UIKit 实现模糊的接口"。
   //
-  // 定案（2026-09-16）：顶栏玻璃 = **UIGlassEffect**（iOS 26 的玻璃接口，仓库既有配方，
-  // 见 applyNavGlassLayer），栏自身 appearance 置透明，玻璃只由这一个提供者画。
+  // 定案（2026-09-16）见下方两态 appearance：栏级 appearance 只在 standard/scrollEdge 两态
+  // 之间切换，**不自建玻璃层**。历史上这里写过「UIGlassEffect + applyNavGlassLayer」，
+  // 该函数与那条路都已被否并删除——幽灵引用一并清掉（见 docs/uikit-migration/30-review复检.md Q7-7）。
   // 此外本文件对栏只做：装手势（双击回顶、栏内按压触觉）、底边滚动边缘效果关掉。
   // 顶边滚动边缘效果**不写**——它渲出来的那一层被玻璃层盖住，只会白花每帧的 GPU。
   // **不手写材质、不挂渐变 mask**（UIBlurEffect + mask 那版用户评价"非常拉跨、栏底一条亮边"）。
@@ -498,8 +499,11 @@ enum TiebaChrome {
     for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
       for window in scene.windows
       where window.isKeyWindow && window.windowLevel == .normal {
-        if window.backgroundColor != TiebaChrome.chromeWindowColor {
-          window.backgroundColor = TiebaChrome.chromeWindowColor
+        // 求值一次再比较/赋值：改前这里访问两遍 chromeWindowColor
+        //（动态色时代两遍就是**两个不同实例**，比较必然为真）。
+        let windowColor = TiebaChrome.chromeWindowColor
+        if window.backgroundColor != windowColor {
+          window.backgroundColor = windowColor
         }
       }
     }
@@ -602,17 +606,20 @@ enum TiebaChrome {
 
   /// 应用主题对应的窗口底色：push 转场期间新屏内容未渲染、透出窗口背景时
   /// 不发白的兜底（深色模式"先白后黑"的最后一环，2026-08-26）。
-  /// nil 随系统：动态色跟随系统 trait（自动切换模式下不锁应用值，
-  /// 系统切深/浅时转场底色同步变化——2026-09-02 修复）。
+  ///
+  /// H5 修复（两件事）：
+  ///   1. **与主题链共用同一个色值**：这里改读 TiebaNavigator.chromeTheme.background ——
+  ///      主题链（TiebaSettingsSupport → TiebaSystemUI.setBackgroundColor）写的正是它。
+  ///      改前 chrome 自带一套固定 白/rgb(0.07,0.07,0.09)：主题应用后窗口先是主题色、
+  ///      下一次 chrome 重扫又被这套固定色覆盖，两个域对"转场露底"的预期不一致。
+  ///   2. **不再现造动态色**：UIColor 的 trait 闭包动态色每次访问都是**新实例**，
+  ///      参与 != / isEqual 恒为 false（发现者实测 two fresh dynamic colors isEqual: false），
+  ///      于是下面两处「幂等比较，零成本」会退化成每轮重扫都真实重写主窗口与全部导航容器底色
+  ///      （转场/挂载/回前台，双档节流 —— 与同文件对"周期性写边缘效果"的警惕自相矛盾）。
+  ///      chromeTheme.background 在 applyTheme 之前是同一个实例，比较因此才成立：
+  ///      改前症状是每轮都写，改后只在该色真正变化时写一次。
   static var chromeWindowColor: UIColor {
-    guard let dark = ChromeState.darkMode else {
-      return UIColor { trait in
-        trait.userInterfaceStyle == .dark
-          ? UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1)
-          : .white
-      }
-    }
-    return dark ? UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1) : .white
+    return TiebaNavigator.shared.chromeTheme.background
   }
 
   /// 应用主题 → 窗口/chrome trait：nil 还原 .unspecified（跟随系统，不锁窗口）。

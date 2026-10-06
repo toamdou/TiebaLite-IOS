@@ -1,0 +1,139 @@
+// TiebaGlassContainerView —— 多块自建玻璃的宿主容器：只有放进同一个 UIGlassContainerEffect
+// 的 contentView，它们之间才有 iOS 26 的"液态融合"（靠近时互相牵引、边缘融合）。
+//
+// 移植自上游 submodules/GlassBackgroundComponent/Sources/GlassBackgroundComponent.swift
+//   :841-974（GlassBackgroundContainerView）。上游把**几乎每一处玻璃**都套在这个容器里
+//   （grep GlassBackgroundContainerView = 112 处，例如 GlassControlPanel.swift:124-129 把一排
+//   玻璃控件组塞进 contentView、HeaderPanelContainerComponent.swift:104-114 把顶栏玻璃塞进去）。
+//
+// 逐条对应：
+//   · ① 容器 = UIVisualEffectView(effect: UIGlassContainerEffect())，effect.spacing 默认 7.0
+//     （上游 :857-861 同默认）。SDK 头 UIGlassEffect.h 原文："The spacing specifies the distance
+//     between elements at which they begin to merge." ⇒ **spacing 是观感参数**：玻璃间实际距离
+//     大于 spacing 时，稳态观感与"不套容器"完全一致（本仓玻璃件之间多为 8pt ⇒ 默认 7 不改变现状）；
+//     只有它们靠近到 spacing 以内（动画中、布局挤压时）才开始融合。要强制融合就调大它 —— 那是一次
+//     视觉决策，改一个数字即可。
+//   · ② 子玻璃**只允许**加进 `contentView`，加错位置直接断言（上游 :888-894）。
+//   · ③ hitTest 三段结构（上游 :896-946）：三重早退 → 逆序遍历 contentView.subviews 逐个 hitTest
+//     （只接受 isUserInteractionEnabled 的结果）→ 兜底命中 contentView 自己则返回 nil。
+//     语义：容器只负责"托住"内容，**它的空白区是穿透的**。这是自绘玻璃/遮罩容器最常见的 bug
+//     来源（"面板关掉之后那块区域点不动了"/"工具条玻璃把下面的列表滑动吃掉了"）。
+//   · ④ 明暗由 overrideUserInterfaceStyle 驱动（上游 :950），不写自建 isDark 分支。
+//
+// 本仓差异（三条，都是铁律所致，不是简化）：
+//   1. 上游额外挂了 EffectSettingsContainerView（swizzle 私有 UISDFBackdropView 的
+//      backdropLayer:didChangeLuma: 压玻璃亮度）——**不移植**：报告 37 A8 已把"碰系统件外观就付私有债"
+//      升级为团队规则，替代品是 UIGlassEffect.tintColor + overrideUserInterfaceStyle（本仓已在用）。
+//   2. 上游的 useCustomGlassImpl / legacyView 分支是"iOS 26 以下自绘玻璃"那条路；本仓部署底线
+//      iOS 26 ⇒ 只留系统玻璃一条路（判据③：不留第二实现）。
+//   3. 上游用 ContainedViewLayoutTransition 摆 frame；本仓这里是普通 UIView，直接设 frame/约束。
+//
+// 并发：UIView 子类天然 @MainActor。
+
+import UIKit
+
+final class TiebaGlassContainerView: UIView {
+    /// 玻璃容器本体。它自己**没有**材质 —— 只提供玻璃分组上下文，所以没有子玻璃时它是全透明的。
+    private let effectView: UIVisualEffectView
+
+    /// 子玻璃与内容都加到这里（上游 :849-855 的同一约定）。
+    var contentView: UIView {
+        return self.effectView.contentView
+    }
+
+    init(spacing: CGFloat = 7.0) {
+        let effect = UIGlassContainerEffect()
+        effect.spacing = spacing
+        self.effectView = UIVisualEffectView(effect: effect)
+        super.init(frame: .zero)
+        self.backgroundColor = .clear
+        self.addSubview(self.effectView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("TiebaGlassContainerView 只支持代码创建")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        self.effectView.frame = self.bounds
+    }
+
+    /// ② 只允许 contentView 承载子视图（effectView 自身由本类管理）。
+    override func didAddSubview(_ subview: UIView) {
+        super.didAddSubview(subview)
+        assert(subview === self.effectView, "玻璃容器的内容要加进 contentView，不能直接 addSubview")
+    }
+
+    /// ④ 明暗只走系统 trait（上游 :950），不引入自建 isDark 分支。
+    func update(isDark: Bool) {
+        let style: UIUserInterfaceStyle = isDark ? .dark : .light
+        if self.effectView.overrideUserInterfaceStyle != style {
+            self.effectView.overrideUserInterfaceStyle = style
+        }
+    }
+
+    /// ③ 只让内容子视图参与命中，自己绝不吃点击（上游 :896-946）。
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if self.alpha.isZero {
+            return nil
+        }
+        if self.isHidden {
+            return nil
+        }
+        if !self.isUserInteractionEnabled {
+            return nil
+        }
+        for view in self.contentView.subviews.reversed() {
+            if let result = view.hitTest(self.convert(point, to: view), with: event), result.isUserInteractionEnabled {
+                return result
+            }
+        }
+        guard let result = self.contentView.hitTest(point, with: event) else {
+            return nil
+        }
+        // 命中的是 contentView 自己 = 落在内容之间的空白：穿透。
+        if result === self.contentView {
+            return nil
+        }
+        return result
+    }
+}
+
+// MARK: - A2：给 UIVisualEffectView.effect 赋值前的比较护栏
+
+extension UIVisualEffectView {
+    /// 报告 37 A2（上游 :797-808 与 :777-796）。
+    ///
+    /// 两条配套规则：
+    ///   · **只在真的变了才重新赋 effect** —— 赋一个等价值也会让系统重建整棵 backdrop 层树，
+    ///     代价远大于一次属性比较。UIGlassEffect 没有 Equatable，按上游 :801-806 比较
+    ///     tintColor + isInteractive 两个可见维度（style 没有公开 getter）。
+    ///   · **关掉玻璃要把 effect 置空**，并且包在 UIView.animate 里才有系统的溶解过渡
+    ///     （直接 isHidden = true 是瞬间消失）。带版本分支：iOS 26.0 只能设空效果对象
+    ///     `UIVisualEffect()`，26.1 起才可以设 nil（上游 :779-795 的同款 workaround）。
+    func tiebaSetGlassEffect(_ glass: UIGlassEffect?, animated: Bool) {
+        let apply: () -> Void
+        if let glass {
+            if let current = self.effect as? UIGlassEffect,
+               current.tintColor == glass.tintColor,
+               current.isInteractive == glass.isInteractive {
+                return
+            }
+            apply = { [weak self] in self?.effect = glass }
+        } else {
+            guard self.effect is UIGlassEffect else { return }
+            if #available(iOS 26.1, *) {
+                apply = { [weak self] in self?.effect = nil }
+            } else {
+                apply = { [weak self] in self?.effect = UIVisualEffect() }
+            }
+        }
+        if animated {
+            TiebaAnimation.animate(duration: TiebaAnimationDuration.overlayDismiss, animations: apply)
+        } else {
+            apply()
+        }
+    }
+}
