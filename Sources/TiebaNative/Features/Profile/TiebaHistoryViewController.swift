@@ -111,7 +111,9 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
     // 一字不变，只把材质从 .gray()（灰底填充）换成系统 .glass() —— 本仓既有配方，
     // 同款见 Features/Home/TiebaHomeViewController.swift 的搜索胶囊与两颗圆钮、
     // UI/ListKit/TiebaKindListParts.swift 的「重试」；圆角档 .capsule 与前景色沿用原值。
-    var config = UIButton.Configuration.glass()
+    // 降级：.glass() 是 iOS 26 起；17 退回经典 gray（标题/图标/胶囊/字号逐值不变）。
+    var config: UIButton.Configuration =
+      if #available(iOS 26.0, *) { .glass() } else { .gray() }
     config.title = "清除全部"
     config.image = UIImage(
       systemName: "trash",

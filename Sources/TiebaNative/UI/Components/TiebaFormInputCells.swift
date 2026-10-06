@@ -463,12 +463,13 @@ final class TiebaFormActionCell: TiebaFormBaseCell {
     var config: UIButton.Configuration
     switch row.buttonStyle {
     case "bordered":
-      config = .glass()
+      // iOS 26 玻璃；17 退回经典 gray（形状/尺寸/其余属性逐项不变）。
+      config = if #available(iOS 26.0, *) { .glass() } else { .gray() }
     case "plain":
       config = .plain()
     default:
-      // borderedProminent / glass 都落系统玻璃主按钮（部署目标 26 恒可用）。
-      config = .prominentGlass()
+      // borderedProminent / glass 都落系统玻璃主按钮；17 退回经典 filled。
+      config = if #available(iOS 26.0, *) { .prominentGlass() } else { .filled() }
     }
     config.title = row.title
     config.image = TiebaFormSymbol.image(row.icon, pointSize: 17, weight: .regular)

@@ -436,7 +436,9 @@ final class TiebaKindFooterView: UICollectionReusableView {
   /// （圆角胶囊 / 13pt semibold / 文字宽 + 56），只有文案与**出现时机**变了：
   /// 只在翻页失败（.retry）时出现，正常态一律不显示。
   private static func retryConfiguration(palette: TiebaSimpleRowPalette) -> UIButton.Configuration {
-    var config = UIButton.Configuration.glass()
+    // 降级：.glass() 是 iOS 26 起；17 退回经典 gray（胶囊/字号/色/内边距逐值不变）。
+    var config: UIButton.Configuration =
+      if #available(iOS 26.0, *) { .glass() } else { .gray() }
     config.cornerStyle = .capsule
     config.baseForegroundColor = palette.base.primary
     config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in

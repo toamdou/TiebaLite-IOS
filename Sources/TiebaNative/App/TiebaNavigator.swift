@@ -47,16 +47,16 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// tab 控制器（底栏/玻璃 dock 一并盖住）。iPad 仍用每 tab 独立栈（侧边栏交互）。
   private var shellNav: UINavigationController?
   private var tabBar: TiebaMainTabBarController?
-  /// 四个 tab 的 UITab（**顺序 = 路由表声明顺序**，与屏幕上的排列无关）。索引一律走
-  /// 这里：侧边栏编辑会改视觉顺序，而 tabIndex / 角标 / 重按回调必须恒定。
-  private var tabItems: [UITab] = []
   private var theme: TiebaChromeTheme = .default
 
   /// 当前选中的 tab。读 UIKit 的 selectedTab：用户点底栏/侧边栏与程序化切 tab
   /// 都写这同一个属性，不必再自己记一份。
   private var currentTabIndex: Int {
-    guard let sel = tabBar?.selectedTab else { return 0 }
-    return tabItems.firstIndex { $0 === sel } ?? 0
+    // 索引一律走壳层的 selectedRouteIndex：18 按 UITab.identifier、17 按
+    // tabBarItem.accessibilityIdentifier 取**路由索引**（与屏幕排列无关，
+    // 侧边栏编辑改视觉顺序时 tabIndex / 角标 / 重按回调必须恒定）。
+    let index = tabBar?.selectedRouteIndex ?? 0
+    return index >= 0 ? index : 0
   }
 
   private var currentNav: TiebaRootNavigationController? { tabNavs[currentTabIndex] }
@@ -115,9 +115,13 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     }
     tabBar = tab
 
-    // 四个 tab 各挂一条自己的导航栈。用 iOS 18 起的 UITab 描述（tabs 一旦设置，
-    // viewControllers 就不再驱动界面），才能拿到 mode = .tabSidebar 的侧边栏形态。
-    var items: [UITab] = []
+    // 四个 tab 各挂一条自己的导航栈。iOS 18 起用 UITab 描述（tabs 一旦设置，
+    // viewControllers 就不再驱动界面），才能拿到 mode = .tabSidebar 的侧边栏形态；
+    // iOS 17 没有 UITab/tabs，退回 viewControllers + UITabBarItem（标识写在
+    // tabBarItem.accessibilityIdentifier 上）。
+    // 降级只换"底栏怎么描述"：选中态/角标/切 tab 全走壳层的
+    // selectedRouteIndex / selectRoute / setBadge 同一入口，导航语义一行未动。
+    var rootNavs: [UIViewController] = []
     for (idx, route) in TiebaRouteTable.tabRoots.enumerated() {
       let host = makeHost(route: route, eager: false)
       tabRootHosts[idx] = host
@@ -129,35 +133,60 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       // 而本仓顶栏系统靠 didShow 驱动 ⇒ 必须先设本仓 delegate 再开 Hero（本行之上已设）。
       nav.hero.navigationAnimationType = .auto
       tabNavs[idx] = nav
-      let spec = Self.tabSpec(index: idx)
-      let item = UITab(
-        title: spec.title,
-        image: UIImage(systemName: spec.normal),
-        identifier: TiebaRouteTable.tabNames[idx]
-      ) { _ in nav }
-      // 选中态实心变体是原 UITabBarItem 时代的既有观感，不能丢；但 `selectedImage`
-      // 的**声明**要 26.6+ 的 SDK 才有（CI 是 SDK 26.5，直接写编译不过），运行时
-      // 26.1+ 已支持 ⇒ 按 KVC 落值，缺这个键就跳过。
-      if #available(iOS 26.1, *), item.responds(to: NSSelectorFromString("setSelectedImage:")) {
-        item.setValue(UIImage(systemName: spec.selected), forKey: "selectedImage")
+      if #unavailable(iOS 18.0) {
+        // 降级：iOS 17 用经典 UITabBarItem（无 UITab / preferredPlacement /
+        // customizationIdentifier）。选中态实心图在低版本 SDK 上一直是
+        // `selectedImage` 构造参数，直接给；标识打在 accessibilityIdentifier 上，
+        // 供 index(of:)/selectedRouteIndex/selectRoute/setBadge 按标识回归。
+        // （UITab 是 18+ 类型，那一支的底栏项在循环之后统一建，见下。）
+        let spec = Self.tabSpec(index: idx)
+        let item = UITabBarItem(
+          title: spec.title,
+          image: UIImage(systemName: spec.normal),
+          selectedImage: UIImage(systemName: spec.selected)
+        )
+        item.accessibilityIdentifier = TiebaRouteTable.tabNames[idx]
+        nav.tabBarItem = item
       }
-      // 根 tab 的 automatic placement 解析成 .default（"可增可删"）——侧边栏 Edit
-      // 因此允许拖动却落不下来（用户实测"拖完保存顺序不变"）。.movable = 可移不可删，
-      // 正好是本 App 要的：四个 tab 是固定功能，只该排序。
-      item.preferredPlacement = .movable
-      items.append(item)
+      rootNavs.append(nav)
     }
-    tabItems = items
-    // 顺序按上次拖好的标识列表摆放：UIKit 自己的持久化存在系统库里、我们读不到也不可控，
-    // 所以顺序的唯一权威是本仓存的这份（见 saveTabOrder / displayOrderDidChangeFor）。
-    tab.tabs = Self.orderedForDisplay(items)
-    // ⚠️ 不要再试图设 allowsReordering：探针实测根级扁平 tab 的 `parent` 在
-    // 赋值后、willAppear、didAppear 三个时刻都是 nil（UIKit 的根分组不对外暴露，
-    // UITabSidebarItemRequest 也只给 tab/action），拿不到 UITabGroup 就没这个开关。
-    // 根 tab 的"可重排"由 preferredPlacement 决定（见上），顺序落盘见下方 saveTabOrder。
-    // 给系统侧的自定义状态一个稳定标识，别落到"系统默认"上（同一 App 只有一个
-    // tab bar controller，但显式声明后系统那侧的持久化范围才是确定的）。
-    tab.customizationIdentifier = "tieba-main-tabs"
+    if #available(iOS 18.0, *) {
+      // UITab 是 iOS 18 起的类型，只能在可用性分支里构造（循环里做不了类型声明）。
+      var items: [UITab] = []
+      for (idx, nav) in rootNavs.enumerated() {
+        let spec = Self.tabSpec(index: idx)
+        let item = UITab(
+          title: spec.title,
+          image: UIImage(systemName: spec.normal),
+          identifier: TiebaRouteTable.tabNames[idx]
+        ) { _ in nav }
+        // 选中态实心变体是原 UITabBarItem 时代的既有观感，不能丢；但 `selectedImage`
+        // 的**声明**要 26.6+ 的 SDK 才有（CI 是 SDK 26.5，直接写编译不过），运行时
+        // 26.1+ 已支持 ⇒ 按 KVC 落值，缺这个键就跳过。
+        if #available(iOS 26.1, *), item.responds(to: NSSelectorFromString("setSelectedImage:")) {
+          item.setValue(UIImage(systemName: spec.selected), forKey: "selectedImage")
+        }
+        // 根 tab 的 automatic placement 解析成 .default（"可增可删"）——侧边栏 Edit
+        // 因此允许拖动却落不下来（用户实测"拖完保存顺序不变"）。.movable = 可移不可删，
+        // 正好是本 App 要的：四个 tab 是固定功能，只该排序。
+        item.preferredPlacement = .movable
+        items.append(item)
+      }
+      // 顺序按上次拖好的标识列表摆放：UIKit 自己的持久化存在系统库里、我们读不到也不可控，
+      // 所以顺序的唯一权威是本仓存的这份（见 saveTabOrder / displayOrderDidChangeFor）。
+      tab.tabs = Self.orderedForDisplay(items)
+      // ⚠️ 不要再试图设 allowsReordering：探针实测根级扁平 tab 的 `parent` 在
+      // 赋值后、willAppear、didAppear 三个时刻都是 nil（UIKit 的根分组不对外暴露，
+      // UITabSidebarItemRequest 也只给 tab/action），拿不到 UITabGroup 就没这个开关。
+      // 根 tab 的"可重排"由 preferredPlacement 决定（见上），顺序落盘见下方 saveTabOrder。
+      // 给系统侧的自定义状态一个稳定标识，别落到"系统默认"上（同一 App 只有一个
+      // tab bar controller，但显式声明后系统那侧的持久化范围才是确定的）。
+      tab.customizationIdentifier = "tieba-main-tabs"
+    } else {
+      // 降级：iOS 17 由 viewControllers 驱动界面（顺序 = 路由表声明顺序，17 无
+      // 侧边栏编辑，故不存在"顺序落盘/回归"这回事）。
+      tab.setViewControllers(rootNavs, animated: false)
+    }
     tab.configureSidebar()
     tab.applyTheme(theme)
 
@@ -209,8 +238,9 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// bar 级 appearance 写入都会让 UIKit 退出自动 Liquid Glass 渲染管线，
   /// 底栏退化成旧磨砂（实心色带）——v34 起的既有结论。
   public func setTabBadge(index: Int, text: String) {
-    guard index >= 0, index < tabItems.count else { return }
-    tabItems[index].badgeValue = text.isEmpty ? nil : text
+    guard index >= 0, index < TiebaRouteTable.tabNames.count else { return }
+    // 18 写 UITab.badgeValue、17 写 tabBarItem.badgeValue；入口只有这一个。
+    tabBar?.setBadge(text.isEmpty ? nil : text, routeIndex: index)
   }
 
   /// 四个 tab 的图标/标签（与 NativeTabs.Trigger 的声明一致：systemImage 的
@@ -236,6 +266,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   }
 
   /// 按存下的顺序摆放：没记录的 tab 保持声明顺序跟在后面（新增 tab 不会被挤掉）。
+  @available(iOS 18.0, *)
   private static func orderedForDisplay(_ items: [UITab]) -> [UITab] {
     let saved = savedTabOrder()
     guard !saved.isEmpty else { return items }
@@ -323,6 +354,12 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
 
     switch entry?.presentation ?? .push {
     case .push:
+      // 降级：iOS 17 没有 setTabBarHidden(_:animated:)（18 起）。那一档用经典的
+      // hidesBottomBarWhenPushed：压栈页自带"藏底栏"标记，UIKit 负责布局与安全区，
+      // 返回时自动还原（18+ 仍由 syncTabChrome 的三写统一管，见那里的注释）。
+      if #unavailable(iOS 18.0) {
+        host.hidesBottomBarWhenPushed = true
+      }
       targetNav.pushViewController(host, animated: true)
     case .sheet(let detents, let grabber, let cornerRadius):
       // 表单要自带导航栏才能显示标题与 headerRight（登录页有"登录帮助"按钮、
@@ -390,7 +427,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   }
 
   public func selectTab(_ index: Int) {
-    guard let tabBar, index >= 0, index < tabItems.count else { return }
+    guard let tabBar, index >= 0, index < TiebaRouteTable.tabNames.count else { return }
     // 每个 tab 一条自己的栈 ⇒ 切 tab 只换选中的那条，各 tab 保留自己的去处。
     // （单栈时代这里要 pop 回根，否则会停在别的 tab 压出来的页上；分栈后那个
     // 问题不存在了，这也就成了 iPad 的常规交互。）
@@ -404,7 +441,8 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
         self.pruneHosts()
       }
     }
-    tabBar.selectedTab = tabItems[index]
+    // 18 写 selectedTab、17 写 selectedIndex；都按**标识**定位，不按屏幕位置。
+    tabBar.selectRoute(index)
   }
 
   /// 让当前这一屏的列表回到顶部（双击顶栏）。
@@ -691,7 +729,9 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     // 侧边栏只在"根屏 ↔ 二级页"翻转时动：它要记住用户当时的折叠状态。
     if atRoot != tabChromeAtRoot {
       tabChromeAtRoot = atRoot
-      if tabBar.traitCollection.userInterfaceIdiom == .pad {
+      // 降级：侧边栏（tabBar.sidebar）是 iOS 18 起的形态；17 只有底栏，
+      // 没有可折叠的 sidebar，这一段整体跳过。
+      if #available(iOS 18.0, *), tabBar.traitCollection.userInterfaceIdiom == .pad {
         if atRoot {
           tabBar.sidebar.isHidden = sidebarHiddenBeforePush
         } else {
@@ -702,7 +742,12 @@ extension TiebaNavigator: UINavigationControllerDelegate {
     }
     // 底栏可见性**每次转场都重写**：转场期间可能有别的东西动过它（Hero 收尾、
     // 系统收纳动画），只写一次就会漏。
-    tabBar.setTabBarHidden(!atRoot, animated: false)
+    // 降级：setTabBarHidden(_:animated:) 是 iOS 18 起的 API（同时管布局与安全区）；
+    // 17 上跳过这一写，由下面的 isHidden + removeAllAnimations 两写接管，压栈页
+    // 另有 hidesBottomBarWhenPushed（见 pushRoute）补上安全区那一半。
+    if #available(iOS 18.0, *) {
+      tabBar.setTabBarHidden(!atRoot, animated: false)
+    }
     // isHidden 写在 UITabBar 视图上：把整条栏（含液态玻璃背景、收纳态的圆）从屏上拿掉。
     tabBar.tabBar.isHidden = !atRoot
     // 挂在 layer 上的透明度动画不清掉，前两写的模型值就不生效（见上注释）。
