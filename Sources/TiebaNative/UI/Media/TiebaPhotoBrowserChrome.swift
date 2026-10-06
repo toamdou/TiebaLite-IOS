@@ -240,9 +240,7 @@ final class TiebaPhotoBrowserPillView: UIView {
 
   /// 玻璃底（部署底线 iOS 26，恒可用）。
   private let glassBackground: UIVisualEffectView = {
-    let effect = UIGlassEffect(style: .regular)
-    effect.tintColor = UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.55)
-    return UIVisualEffectView(effect: effect)
+    return TiebaGlassContainerView.makeEffect(tint: UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.55))
   }()
 
   /// A5：阴影烤成一张九宫格拉伸图，**不进 layer.shadow*** —— 后者会给每个玻璃面板带来一次

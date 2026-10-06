@@ -445,7 +445,7 @@ private final class TiebaSignToastView: UIView {
     isHidden = true
     alpha = 0
 
-    let backdrop = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    let backdrop = TiebaGlassContainerView.makeEffect()
     backdrop.translatesAutoresizingMaskIntoConstraints = false
     addSubview(backdrop)
 

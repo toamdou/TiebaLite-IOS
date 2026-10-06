@@ -8,7 +8,7 @@ final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
   // 卡片材质 = 系统液态玻璃（报告 31 §二-1：iOS 26 起"材质"的系统语义就是 UIGlassEffect；
   // 旧 UIBlurEffect 的 systemThinMaterial 档位是历史包袱，与系统界面材质对不上）。
   // 卡片上还压着一层 cardGradient 渐变色，所以这次换档只改透出内容的材质观感。
-  private let cardMaterial = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+  private let cardMaterial = TiebaGlassContainerView.makeEffect()
   private let cardGradient = CAGradientLayer()
   private let avatar = TiebaForumAvatarView(size: 64)
   private let avatarPlaceholder = UIView()

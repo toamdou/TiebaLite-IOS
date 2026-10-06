@@ -399,7 +399,7 @@ private final class TiebaThreadStoreUndoBar: UIView {
     layer.cornerCurve = .continuous
     clipsToBounds = true
     // 液态玻璃底（与同批 FAB 的 .glass() 同材质；部署底线 iOS 26，恒可用）。
-    let glass = UIVisualEffectView(effect: UIGlassEffect())
+    let glass = TiebaGlassContainerView.makeEffect()
     glass.translatesAutoresizingMaskIntoConstraints = false
     addSubview(glass)
     NSLayoutConstraint.activate([

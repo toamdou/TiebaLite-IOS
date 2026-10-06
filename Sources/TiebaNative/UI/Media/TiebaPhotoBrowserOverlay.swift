@@ -24,15 +24,10 @@ final class TiebaPhotoBrowserChromeOverlay: UIView, JXPhotoBrowserOverlay {
   private static let bottomPadding: CGFloat = 8
   private static let minimumTopPadding: CGFloat = 30
 
-  /// 顶栏底材质：系统液态玻璃（部署底线 iOS 26，恒可用）。
-  private static func makeBarEffect() -> UIVisualEffect {
-    let effect = UIGlassEffect(style: .regular)
-    // 顶栏恒深色（查看器黑底），玻璃带深色调保证白字/白图标可读。
-    effect.tintColor = UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.4)
-    return effect
-  }
-
-  private let blur = UIVisualEffectView(effect: TiebaPhotoBrowserChromeOverlay.makeBarEffect())
+  /// 顶栏底材质：系统液态玻璃（部署底线 iOS 26，恒可用），装配走全仓唯一入口。
+  /// 顶栏恒深色（查看器黑底），玻璃带深色调保证白字/白图标可读。
+  private let blur = TiebaGlassContainerView.makeEffect(
+    tint: UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 0.4))
   /// A1（报告 37 第一优先）：顶栏这一行里的三块玻璃（关闭 + 保存 + 分享，各一枚圆钮）放进同一个
   /// UIGlassContainerEffect 容器 —— 与吧首页顶栏同一做法（见 UI/Components/TiebaGlassContainerView）。
   /// 容器自己没有材质、不参与渲染；相邻两枚圆钮的中心距 = 40 + 8 = 48 ≫ spacing 7.0
