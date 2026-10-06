@@ -112,7 +112,14 @@ nonisolated enum TiebaFeedRowLayout {
   static let contentIndent: CGFloat = avatarSize + avatarGap // 54
   static let contentColumnGap: CGFloat = 6
   static let contentColumnTopOffset: CGFloat = -6
-  static let collapseLines = 6
+  /// 折叠前先显示的行数（标题最多 2 行 + 摘要其余行 = 2 + 3）。
+  /// 上调过一轮（6 → 10 → 5）：原值是 6（摘要 4 行），但用户报「显示字数太少」的真实原因是
+  /// 段落截断档把正文塌成一行（见 makeAttributed）；修好之后按用户口径「摘要顶多两三行」定在
+  /// 5 = 标题 2 + **摘要 3**，折叠态仍是紧凑一张卡，点「加载更多」原地展开全文。
+  static let collapseLines = 5
+  /// 折叠候选的字数阈值（weightedTextLength：CJK 记 1、其余记 0.5）= 上游 TweetCard 原值，
+  /// 不再跟着行数上下调：它的唯一作用是「这么长的正文才值得折」，而 5 行 ≈ 95 字 < 120
+  /// ⇒ 超过 5 行的帖子必然同时过阈值，按钮不会白长；比 5 行短的帖子本来就整段显示。
   static let longTextWeightedChars: CGFloat = 120
   static let topTitleMax = 28
   static let actionRowMinHeight: CGFloat = 32
@@ -316,7 +323,18 @@ nonisolated enum TiebaFeedRowLayout {
     return min(max(base, stripHeightMin), stripHeightMax).rounded()
   }
 
-  /// 单行文本宽度（仅用于排版定位；不改行高）。
+  /// 段落属性串（正文/摘要/引用/名字/时间…全行走这一个入口）。
+  ///
+  /// ⚠️ **段落的 lineBreakMode 必须是 .byWordWrapping，不能写 .byTruncatingTail**
+  ///（2026-10-06 用户报「正文过长只以 ... 隐藏、没有加载更多按钮、标题与图片之间大片空白」）：
+  /// 段落的截断档会盖住容器的 maximumNumberOfLines（TextKit 实测）——整段排版**直接塌成
+  /// 一行**，usedRect 也只报一行。于是：
+  ///   · 截断判据（TiebaRowText.measure 的 truncated）永远为假 ⇒ 折叠/展开永不触发、
+  ///     「加载更多」永远不出现（用户报的第一句）；
+  ///   · 行高按 1 行算、绘制也只画 1 行 +「…」，而模型可能已按多行预留了高度 ⇒ 预留而没画的
+  ///     那几行就是用户看到的空白（用户报的第二句）。
+  /// 截断职责只在两处，别再往段落里塞：测量期 = 容器的 lineBreakMode / maximumNumberOfLines
+  ///（TiebaRowText.measure），绘制期 = .truncatesLastVisibleLine（TiebaFeedGraphics.draw）。
   static func makeAttributed(
     text: String,
     font: UIFont,
@@ -326,7 +344,7 @@ nonisolated enum TiebaFeedRowLayout {
     let paragraph = NSMutableParagraphStyle()
     paragraph.minimumLineHeight = lineHeight
     paragraph.maximumLineHeight = lineHeight
-    paragraph.lineBreakMode = .byTruncatingTail
+    paragraph.lineBreakMode = .byWordWrapping
     return NSAttributedString(
       string: text,
       attributes: [

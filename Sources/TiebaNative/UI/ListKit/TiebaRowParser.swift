@@ -59,7 +59,6 @@ nonisolated enum TiebaRowText {
     container.maximumNumberOfLines = maxLines
     container.lineBreakMode = .byTruncatingTail
     layoutManager.ensureLayout(for: container)
-    let visible = layoutManager.glyphRange(for: container)
     // 阶段 0：**未取整**的 usedRect 高。绘制期旧实现那一趟 boundingRect 量出来的就是
     // 它；存下来供垂直居中直接取用 ⇒ 绘制期不再排版第二遍。这里绝不能 ceil：frame
     // 高是 ceil 过的，旧的居中偏移 (frame.height - used)/2 ∈ [0, 0.5) 全靠它复刻
@@ -67,7 +66,22 @@ nonisolated enum TiebaRowText {
     let exactHeight = layoutManager.usedRect(for: container).height
     // ceil：避免 22.0001 → 22 后 UILabel 最后一行被裁掉半像素。
     let height = ceil(exactHeight)
-    let truncated = maxLines > 0 && visible.upperBound < layoutManager.numberOfGlyphs
+    // 截断判据（截断态才给「加载更多」）——**不能**比 glyphRange(for:)：容器把整段字形都算作
+    // 「在容器里」，限行只体现在排版出的**行数**上（实测：216 字限 4 行时 glyphRange 仍报
+    // 216/216）。这里问 NSLayoutManager 本人：最后一行有没有被截掉的字形。
+    //（改前那一版恒为 false ⇒ 长文永远不长出展开入口，用户 2026-10-06 报「没有加载更多按钮」。）
+    var truncated = false
+    if maxLines > 0, layoutManager.numberOfGlyphs > 0 {
+      var lastLineStart = 0
+      layoutManager.enumerateLineFragments(
+        forGlyphRange: NSRange(location: 0, length: layoutManager.numberOfGlyphs)
+      ) { _, _, _, range, _ in
+        lastLineStart = range.location
+      }
+      truncated = layoutManager.truncatedGlyphRange(
+        inLineFragmentForGlyphAt: lastLineStart
+      ).length > 0
+    }
     return (height, exactHeight, truncated)
   }
 
@@ -95,6 +109,15 @@ nonisolated enum TiebaRowDict {
 
   static func nonEmpty(_ value: Any?) -> String? {
     guard let string = string(value), !string.isEmpty else { return nil }
+    return string
+  }
+
+  /// 可见文案（缺省 = ""）：非空**且含非空白字符**才算有值。
+  /// 与 nonEmpty 的分工：需要「有这段内容」的渲染输入（标题/摘要）用它 —— 纯空白的串
+  /// 排出来是一行高度却没有字形，留着就是一条无内容的空白（见 TiebaFeedRowModel 正文段）。
+  static func visible(_ value: Any?) -> String {
+    guard let string = nonEmpty(value),
+          string.contains(where: { !$0.isWhitespace }) else { return "" }
     return string
   }
 
@@ -172,55 +195,6 @@ nonisolated enum TiebaFeedRowParser {
     return total
   }
 
-  /// JS relativeTime（src/utils/index.ts:59）。
-  static func relativeTime(ms: Double) -> String {
-    guard ms > 0, ms >= 946_684_800_000 else { return "" }
-    let nowMs = Date().timeIntervalSince1970 * 1000
-    let diff = max(0, nowMs - ms)
-    let minute = 60_000.0
-    let hour = 60 * minute
-    let day = 24 * hour
-    if diff < minute { return "刚刚" }
-    if diff < hour { return "\(Int(diff / minute))分钟前" }
-    if diff < day { return "\(Int(diff / hour))小时前" }
-    let date = Date(timeIntervalSince1970: ms / 1000)
-    let calendar = Calendar.current
-    let startOfToday = calendar.startOfDay(for: Date())
-    let startOfThen = calendar.startOfDay(for: date)
-    if let yesterday = calendar.date(byAdding: .day, value: -1, to: startOfToday),
-       calendar.isDate(startOfThen, inSameDayAs: yesterday) {
-      return "昨天 \(clockFormatter.string(from: date))"
-    }
-    if diff < 7 * day { return "\(Int(diff / day))天前" }
-    return dayOnlyFormatter.string(from: date)
-  }
-
-  /// JS absoluteTime（src/utils/index.ts:81）。
-  static func absoluteTime(ms: Double) -> String {
-    guard ms > 0, ms >= 946_684_800_000 else { return "" }
-    return absoluteTimeFormatter.string(from: Date(timeIntervalSince1970: ms / 1000))
-  }
-
-  // 三个格式化档按需缓存（与 TiebaPostRowMetrics 同款）。
-  // DateFormatter 的构造要解析 locale/历法/时区，是重对象；而行模型是**逐行**构造的，
-  // 现建现用等于每页几十次纯浪费（且测量跑在 .userInitiated 的后台任务上，与滚动抢 CPU）。
-  // 线程安全依据（SDK 原文）：NSDateFormatter.h:158 "On iOS 7 and later NSDateFormatter is
-  // thread safe"，且该类型标了 NS_SWIFT_SENDABLE —— 建好后只调 string(from:)、不再改动。
-  // 地区/历法固定，避免佛历等脏输出。
-  private static let clockFormatter = timeFormatter("HH:mm")
-  private static let dayOnlyFormatter = timeFormatter("yyyy-MM-dd")
-  private static let absoluteTimeFormatter = timeFormatter("yyyy-MM-dd HH:mm")
-
-  private static func timeFormatter(_ format: String) -> DateFormatter {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.dateFormat = format
-    return formatter
-  }
-
-  /// mediaList → 图片数组（type=="image"）。显示档 = src（服务端 big_pic，对
-  /// GIF 即 g=0 静态压缩档）；动图档 = smallSrc（服务端 src_pic，GIF 动图字节）。
   static func parseMedia(_ raw: [String: Any]) -> [TiebaFeedRowMedia] {
     guard let list = array(raw["mediaList"]) else { return [] }
     var result: [TiebaFeedRowMedia] = []

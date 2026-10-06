@@ -49,7 +49,8 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
   public let threadId: String
   /// 测量所用容器宽度（= JS 给行的显式宽度）。
   public let containerWidth: CGFloat
-  /// 应用内阅读字号倍率（设置→fontScale；缺省 1，仅参与截断启发式，不参与字号）。
+  /// 应用内**正文级**字号倍率（设置→个性化→阅读字号→正文字号；缺省 1，
+  /// 仅参与截断启发式，不参与字号）。
   public let fontScale: CGFloat
   /// 整行高度（含卡片外 10pt 左右 / 4pt 上下边距）——JS 直接把它设为行高。
   public let measuredHeight: CGFloat
@@ -147,7 +148,8 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
   let bannerAttributed: NSAttributedString?
 
   init(pageKey: String, index: Int, raw: [String: Any], containerWidth: CGFloat) {
-    let fontScale = min(max(CGFloat(TiebaRowDict.double(raw["fontScale"]) ?? 1), 0.8), 2.0)
+    // 钳制域覆盖新字号的整段（12…24pt ⇒ 0.706…1.412）：窄域会把小字号端压平。
+    let fontScale = min(max(CGFloat(TiebaRowDict.double(raw["fontScale"]) ?? 1), 0.7), 1.45)
     let geometry = TiebaFeedRowLayout.geometry(containerWidth: containerWidth, fontScale: fontScale)
     let fonts = geometry.fonts
     let lineHeights = geometry.lineHeights
@@ -176,8 +178,8 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
       if let rawValue, rawValue > 0 {
         let style = TiebaRowDict.string(raw["timestampStyle"]) ?? "relative"
         let label = style == "absolute"
-          ? TiebaFeedRowParser.absoluteTime(ms: rawValue)
-          : TiebaFeedRowParser.relativeTime(ms: rawValue)
+          ? TiebaTimeText.absolute(ms: rawValue)
+          : TiebaTimeText.relative(ms: rawValue)
         if !label.isEmpty {
           timeText = (timeType == "last" ? "回复于 " : "发帖于 ") + label
         }
@@ -196,8 +198,12 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
     let avatarInitial = displayName.first.map(String.init) ?? "?"
 
     // ── 正文 ──
-    let titleText = TiebaRowDict.string(raw["title"]) ?? ""
-    let abstractText = TiebaRowDict.nonEmpty(raw["abstract"]) ?? ""
+    // 只有**看得见**的正文才算正文：服务端/上游偶发下发纯空白（"\n"、全角空格）时，
+    // 改前 nonEmpty 判为有值 ⇒ 摘要照样占一行高（4 + 22pt）却一个字形都不画，
+    // 标题与图片之间就空出那一条（用户 2026-10-06 报「没有正文、只有标题+图片的帖子：
+    // 标题与图片之间空白过多」）。判据与渲染一致：画不出字的串 = 没有这一段。
+    let titleText = TiebaRowDict.visible(raw["title"])
+    let abstractText = TiebaRowDict.visible(raw["abstract"])
     let isGood = TiebaRowDict.bool(raw["isGood"]) == true
     let isTop = TiebaRowDict.bool(raw["isTop"]) == true
     let expanded = TiebaRowDict.bool(raw["expanded"]) == true
@@ -295,7 +301,9 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
     // isCollapsible 不参与任何绘制。
     let isCollapsible = expanded ? collapseCandidate : (collapseCandidate && truncated)
     let showMoreVisible = collapsed && truncated
-    let showMoreText = "显示更多"
+    // 文案 = 用户口径的「加载更多」（2026-10-06 报「没有加载更多按钮」）：点它原地展开
+    // 整段正文，卡片高度跟着正文一起长（行高走「内容身份 → 新测量」的既有通道）。
+    let showMoreText = "加载更多"
     let showMoreHeight: CGFloat? = showMoreVisible ? lineHeights.subhead + 4 : nil
 
     // ── 媒体 ──
