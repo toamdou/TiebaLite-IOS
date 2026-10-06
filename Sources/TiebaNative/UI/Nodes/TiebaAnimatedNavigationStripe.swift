@@ -313,14 +313,21 @@ public final class TiebaAnimatedNavigationStripe: UIView {
         var backgroundLinesToOffset: [BackgroundLine] = []
         var resolvedOffset: CGFloat = 0.0
 
+        // 局部函数捕获的是这两个 Sendable 标量，而不是整个 Configuration：
+        // 更严的编译器把"任务隔离的结构体被主 actor 闭包捕获"判成 data race 错误
+        //（region-based isolation：闭包里的主 actor 使用可能与之后的 nonisolated 使用竞争）。
+        // 这两个值在本函数内是常量，取出来不改变任何行为。
+        let containerHeight = configuration.height
+        let currentIndex = configuration.index
+
         // 把某一格摆到它该在的位置；返回 false 表示这一格已经完全在可视区外（可以停止向两侧扩散）。
         func updateBackgroundLine(index: Int) -> Bool {
-            let indexDifference = index - configuration.index
+            let indexDifference = index - currentIndex
             let offsetDistance = CGFloat(indexDifference) * (segmentHeight + segmentSpacing)
 
             let itemFrame = CGRect(origin: CGPoint(x: 0.0, y: itemScreenOffset + offsetDistance), size: CGSize(width: 2.0, height: segmentHeight))
 
-            if itemFrame.maxY <= 0.0 || itemFrame.minY > configuration.height {
+            if itemFrame.maxY <= 0.0 || itemFrame.minY > containerHeight {
                 return false
             }
 
