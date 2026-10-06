@@ -27,13 +27,11 @@ enum TiebaImageWatermarkError: LocalizedError {
 }
 
 enum TiebaImageWatermark {
-  /// 给 `sourceUri`（远程 http(s) 或本地 file URL）渲染 `text` 水印，返回
-  /// 落盘后的 file URL 字符串。text 为空时仍走完整流程（与旧实现一致）。
-  static func applyWatermark(sourceUri: String, text: String) async throws -> String {
-    let sourceUri = upgradeToHTTPS(sourceUri)
-    guard let url = URL(string: sourceUri), let data = try? Data(contentsOf: url) else {
-      throw TiebaImageWatermarkError.invalidSource
-    }
+  /// 水印**数据入口**：已经拿到字节的调用方（图片查看器保存/分享时手里就是原图数据）直接用它，
+  /// 不必再走一次 URL 下载 —— 这正是 H14「保存/分享统一入口」需要的那一半。
+  /// 返回编码后的 JPEG 数据，**不落盘**（落盘由调用方决定，查看器直接进相册就不必写临时文件）。
+  /// text 为空时仍走完整流程（与旧实现一致）。
+  static func applyWatermark(data: Data, text: String) throws -> Data {
     guard let image = UIImage(data: data) else {
       throw TiebaImageWatermarkError.decodeFailed
     }
@@ -41,6 +39,15 @@ enum TiebaImageWatermark {
     // 固定 scale=1：默认 renderer 使用屏幕 scale（3x 设备放大 9 倍位图），
     // 4000×3000 源图在低内存设备上会直接 OOM 被系统强杀。水印按 1x 像素
     // 对齐源图坐标绘制，视觉无差。
+    //
+    // ⚠️ 为什么这里**没有**收敛到 TiebaBitmapContext（UI/Drawing/TiebaDrawingSupport.swift）：
+    // 试过，实测结果不满足「输出逐像素不变」，所以按约定回退了。实测（iPhone 17 / iOS 27 模拟器，
+    // 见 docs/uikit-migration/22-接线-drawing-kit.md）：
+    //   · 只画源图（text 为空）：新旧逐像素完全一致（sRGB 0 差异；P3 差 45px / 最大 1 LSB，属色彩转换舍入）；
+    //   · 画水印文字：文字 bbox 内 1830px 不同、最大通道差 67。排查过三条假设都不成立 ——
+    //     关字体平滑（setShouldSmoothFonts(false)）、opaque 上下文、跟随源图色彩空间，三者都无改善：
+    //     UIGraphicsImageRenderer 显然还设置了别的上下文状态，成本内无法定位到。
+    // 由于本任务是「渲染热路径、显示结果不变」，这里保留原实现（这不是漏做，是有测量的取舍）。
     let format = UIGraphicsImageRendererFormat()
     format.scale = 1
     let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
@@ -76,6 +83,19 @@ enum TiebaImageWatermark {
     guard let jpeg = watermarked.jpegData(compressionQuality: 0.92) else {
       throw TiebaImageWatermarkError.encodeFailed
     }
+    // 数据入口只负责"渲染"，不落盘 —— 调用方（图片查看器）手里已有字节，
+    // 直接把它交给相册写入或分享，省掉一次临时文件往返。
+    return jpeg
+  }
+
+  /// 兼容入口（信息流/分享路径用它）：读 URL → 调上面的数据入口 → 落盘临时文件并返回 file URL。
+  /// **行为与拆分前逐字一致**（同一渲染、同一 0.92 质量、同一临时目录命名）。
+  static func applyWatermark(sourceUri: String, text: String) async throws -> String {
+    let sourceUri = upgradeToHTTPS(sourceUri)
+    guard let url = URL(string: sourceUri), let data = try? Data(contentsOf: url) else {
+      throw TiebaImageWatermarkError.invalidSource
+    }
+    let jpeg = try Self.applyWatermark(data: data, text: text)
     let destination = FileManager.default.temporaryDirectory
       .appendingPathComponent("watermark-\(UUID().uuidString).jpg")
     do {
