@@ -1095,7 +1095,9 @@ final class TiebaThreadFloatingBar: UIView {
     agreeIcon.contentMode = .scaleAspectFit
     agreeIcon.isUserInteractionEnabled = false
     addSubview(agreeIcon)
-    agreeCount.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+    // 帖子详情的点赞数（正文级）：等宽数字保留，字号随正文字号走。
+    agreeCount.font = TiebaFont.with(
+      size: 11 * TiebaTypography.bodyScale(), weight: .semibold, traits: .monospacedNumbers)
     agreeCount.textAlignment = .center
     agreeCount.isUserInteractionEnabled = false
     addSubview(agreeCount)

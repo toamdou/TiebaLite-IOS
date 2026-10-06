@@ -16,10 +16,8 @@ final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
   private let nameLabel = UILabel()
   private let introLabel = UILabel()
   private let statsRow = TiebaStatColumnsRow(
-    valueFont: UIFontMetrics(forTextStyle: .title3).scaledFont(
-      for: .systemFont(ofSize: 20, weight: .semibold)
-    ),
-    labelFont: UIFontMetrics(forTextStyle: .caption1).scaledFont(for: .systemFont(ofSize: 12)),
+    valueFont: TiebaSimpleText.font(size: 20, weight: .semibold),
+    labelFont: TiebaSimpleText.font(size: 12, weight: .regular),
     separator: .fill(inset: 4)
   )
   private let loginButton = UIButton(type: .system)
@@ -126,10 +124,10 @@ final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
   }
 
   private func makeTextColumn() -> UIView {
-    nameLabel.font = UIFontMetrics(forTextStyle: .title3).scaledFont(for: .systemFont(ofSize: 20, weight: .semibold))
+    nameLabel.font = TiebaSimpleText.font(size: 20, weight: .semibold)
     nameLabel.adjustsFontForContentSizeCategory = true
     nameLabel.numberOfLines = 1
-    introLabel.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .systemFont(ofSize: 13))
+    introLabel.font = TiebaSimpleText.font(size: 13, weight: .regular)
     introLabel.adjustsFontForContentSizeCategory = true
     introLabel.textColor = .secondaryLabel
     introLabel.numberOfLines = 2

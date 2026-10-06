@@ -1014,7 +1014,8 @@ final class TiebaPostPlaceholderView: UIView {
     layer.cornerCurve = .continuous
     iconView.contentMode = .scaleAspectFit
     addSubview(iconView)
-    label.font = TiebaSimpleText.font(size: 13, weight: .regular)
+    // 帖内媒体占位条（"[图片]"/"[视频已屏蔽]"）：属于帖子卡片内容，走正文级。
+    label.font = TiebaSimpleText.bodyFont(size: 13, weight: .regular)
     addSubview(label)
   }
 

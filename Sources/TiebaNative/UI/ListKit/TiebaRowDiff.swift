@@ -72,6 +72,13 @@ public nonisolated enum TiebaRowDiff {
     var mixer = TiebaRowFingerprint.Mixer()
     mixer.mix(domain)
     mixer.mix(version)
+    // 字号世代（TiebaTypography.generation）：字号一变，**每一行**的指纹都变 ⇒
+    // 全仓按「内容身份」键控的度量缓存（TiebaRowStore / TiebaSimpleRowMetrics /
+    // 页索引）自动整体失配并重测。这是"字号改了但行族还停在旧档"那个坑的结构性
+    // 解法：不逐个缓存去清（清漏一处就是静默旧档），而是让"字体变了"直接等于
+    // "这一行是另一行内容"。世代只在字号真的变化时 +1，稳态下是常量，不影响
+    // 跨页/跨屏复用命中率。
+    mixer.mix(TiebaTypography.generation)
     mixValue(row, into: &mixer)
     return mixer.value
   }

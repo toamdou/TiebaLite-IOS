@@ -628,15 +628,15 @@ final class MemberCardCell: UICollectionViewCell {
     card.backgroundColor = TiebaSimpleRowPalette.default.groupFill
     contentView.addSubview(card)
 
-    badge.font = .systemFont(ofSize: 12, weight: .bold)
+    badge.font = TiebaSimpleText.font(size: 12, weight: .bold)
     badge.layer.cornerRadius = 8
     badge.layer.masksToBounds = true
     badge.setContentHuggingPriority(.required, for: .horizontal)
 
-    titleLabel.font = .preferredFont(forTextStyle: .subheadline)
+    titleLabel.font = TiebaSimpleText.uiFont(style: .subheadline)
     titleLabel.adjustsFontForContentSizeCategory = true
     titleLabel.textColor = .label
-    subtitleLabel.font = .preferredFont(forTextStyle: .caption1)
+    subtitleLabel.font = TiebaSimpleText.uiFont(style: .caption1)
     subtitleLabel.adjustsFontForContentSizeCategory = true
     subtitleLabel.textColor = .tertiaryLabel
 
@@ -713,16 +713,16 @@ final class MemberGridCell: UICollectionViewCell {
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    nameLabel.font = .preferredFont(forTextStyle: .footnote)
+    nameLabel.font = TiebaSimpleText.uiFont(style: .footnote)
     nameLabel.adjustsFontForContentSizeCategory = true
     nameLabel.textColor = .label
     nameLabel.textAlignment = .center
     nameLabel.numberOfLines = 1
-    levelNameLabel.font = .preferredFont(forTextStyle: .caption2)
+    levelNameLabel.font = TiebaSimpleText.uiFont(style: .caption2)
     levelNameLabel.textColor = .tertiaryLabel
     levelNameLabel.textAlignment = .center
     levelNameLabel.numberOfLines = 1
-    levelBadge.font = .systemFont(ofSize: 10, weight: .bold)
+    levelBadge.font = TiebaSimpleText.font(size: 10, weight: .bold)
     levelBadge.layer.cornerRadius = 8
     levelBadge.layer.masksToBounds = true
 
@@ -791,15 +791,15 @@ final class RankRowCell: UICollectionViewCell {
     card.backgroundColor = TiebaSimpleRowPalette.default.base.card
     contentView.addSubview(card)
 
-    rankLabel.font = .systemFont(ofSize: 17, weight: .heavy)
+    rankLabel.font = TiebaSimpleText.font(size: 17, weight: .heavy)
     rankLabel.textAlignment = .center
     rankLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-    nameLabel.font = .preferredFont(forTextStyle: .subheadline)
+    nameLabel.font = TiebaSimpleText.uiFont(style: .subheadline)
     nameLabel.adjustsFontForContentSizeCategory = true
     nameLabel.textColor = .label
     nameLabel.lineBreakMode = .byTruncatingTail
-    subtitleLabel.font = .preferredFont(forTextStyle: .caption1)
+    subtitleLabel.font = TiebaSimpleText.uiFont(style: .caption1)
     subtitleLabel.adjustsFontForContentSizeCategory = true
     subtitleLabel.textColor = .tertiaryLabel
 
@@ -810,7 +810,7 @@ final class RankRowCell: UICollectionViewCell {
     crownView.tintColor = .systemOrange
     crownView.setContentHuggingPriority(.required, for: .horizontal)
 
-    levelBadge.font = .systemFont(ofSize: 11, weight: .bold)
+    levelBadge.font = TiebaSimpleText.font(size: 11, weight: .bold)
     levelBadge.layer.cornerRadius = 8
     levelBadge.layer.masksToBounds = true
 
@@ -892,9 +892,9 @@ final class MemberGroupHeaderView: UICollectionReusableView {
     super.init(frame: frame)
     dot.layer.cornerRadius = 2
     dot.translatesAutoresizingMaskIntoConstraints = false
-    titleLabel.font = .systemFont(ofSize: 15, weight: .bold)
+    titleLabel.font = TiebaSimpleText.font(size: 15, weight: .bold)
     titleLabel.textColor = .label
-    countChip.font = .systemFont(ofSize: 11, weight: .bold)
+    countChip.font = TiebaSimpleText.font(size: 11, weight: .bold)
     countChip.textColor = .tertiaryLabel
     countChip.backgroundColor = TiebaSimpleRowPalette.default.surfaceSecondary
     countChip.layer.cornerRadius = 8

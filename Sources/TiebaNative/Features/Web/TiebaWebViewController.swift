@@ -178,7 +178,7 @@ final class TiebaWebViewController: UIViewController {
     titleRow.setContentHuggingPriority(.defaultLow, for: .horizontal)
     titleRow.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-    titleLabel.font = .systemFont(ofSize: 16, weight: .medium)  // fontSize 16 / weight 500
+    titleLabel.font = TiebaSimpleText.font(size: 16, weight: .medium)  // fontSize 16 / weight 500
     titleLabel.textColor = .label  // colors.text
     titleLabel.numberOfLines = 1
     titleLabel.lineBreakMode = .byTruncatingTail
@@ -703,7 +703,7 @@ final class TiebaWebLoadingOverlayView: UIView {
     hintSpinner.startAnimating()
     let hintLabel = UILabel()
     hintLabel.text = "正在加载页面…"
-    hintLabel.font = .preferredFont(forTextStyle: .footnote)
+    hintLabel.font = TiebaSimpleText.uiFont(style: .footnote)
     hintLabel.textColor = .secondaryLabel  // colors.textSecondary
     let hintRow = UIStackView(arrangedSubviews: [hintSpinner, hintLabel])
     hintRow.axis = .horizontal

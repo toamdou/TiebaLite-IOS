@@ -21,6 +21,8 @@ enum TiebaFormEvent {
   case confirm(String)
   case color(String, String)
   case text(String, String)
+  /// 无级滑杆被拖动（slider 行；参数 = 当前值）。连续事件，落库节流在页面层。
+  case slide(String, Double)
 }
 
 class TiebaFormPageController: UIViewController {
@@ -62,7 +64,7 @@ class TiebaFormPageController: UIViewController {
       write(id, bool: value)
     case .pick(let id, let value):
       write(id, string: value)
-    case .press, .confirm, .color, .text:
+    case .press, .confirm, .color, .text, .slide:
       break
     }
   }
@@ -128,6 +130,7 @@ class TiebaFormPageController: UIViewController {
     form.onConfirm = { [weak self] id in self?.handle(.confirm(id)) }
     form.onColorChange = { [weak self] id, value in self?.handle(.color(id, value)) }
     form.onTextChange = { [weak self] id, value in self?.handle(.text(id, value)) }
+    form.onSlide = { [weak self] id, value in self?.handle(.slide(id, value)) }
     view.addSubview(form)
     TiebaSettingsForm.pin(form, in: view)
     reload()

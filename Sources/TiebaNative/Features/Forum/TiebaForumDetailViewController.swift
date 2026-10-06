@@ -270,7 +270,7 @@ private final class TiebaForumSelectableCell: UITableViewCell {
   private let iconView = UIImageView()
   private let titleLabel = UILabel()
   private let textView = TiebaSelectableLabel(
-    font: .preferredFont(forTextStyle: .body), color: .label
+    font: TiebaSimpleText.uiFont(style: .body), color: .label
   )
 
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -281,7 +281,7 @@ private final class TiebaForumSelectableCell: UITableViewCell {
     iconView.setContentHuggingPriority(.required, for: .horizontal)
     iconView.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-    titleLabel.font = .preferredFont(forTextStyle: .body)
+    titleLabel.font = TiebaSimpleText.uiFont(style: .body)
     titleLabel.textColor = .secondaryLabel
     titleLabel.adjustsFontForContentSizeCategory = true
     titleLabel.setContentHuggingPriority(.required, for: .horizontal)
@@ -344,11 +344,11 @@ private final class TiebaForumProfileCell: UITableViewCell {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
     selectionStyle = .none
 
-    nameLabel.font = .systemFont(ofSize: 24, weight: .bold)
+    nameLabel.font = TiebaSimpleText.font(size: 24, weight: .bold)
     nameLabel.textColor = .label
     nameLabel.textAlignment = .center
     nameLabel.adjustsFontForContentSizeCategory = true
-    sloganLabel.font = .preferredFont(forTextStyle: .footnote)
+    sloganLabel.font = TiebaSimpleText.uiFont(style: .footnote)
     sloganLabel.textColor = .secondaryLabel
     sloganLabel.textAlignment = .center
     sloganLabel.numberOfLines = 2
@@ -357,7 +357,7 @@ private final class TiebaForumProfileCell: UITableViewCell {
     let chipIcon = UIImageView(image: UIImage(systemName: "checkmark.seal.fill"))
     chipIcon.contentMode = .scaleAspectFit
     let chipLabel = UILabel()
-    chipLabel.font = .preferredFont(forTextStyle: .caption1)
+    chipLabel.font = TiebaSimpleText.uiFont(style: .caption1)
     chipLabel.text = "已关注"
     chip.axis = .horizontal
     chip.alignment = .center
@@ -412,8 +412,8 @@ private final class TiebaForumStatsCell: UITableViewCell {
   static let reuseID = "TiebaForumStatsCell"
 
   private let statsRow = TiebaStatColumnsRow(
-    valueFont: .monospacedDigitSystemFont(ofSize: 21, weight: .bold),
-    labelFont: .preferredFont(forTextStyle: .caption1),
+    valueFont: TiebaSimpleText.font(size: 21, weight: .bold),
+    labelFont: TiebaSimpleText.uiFont(style: .caption1),
     separator: .fixed(height: 30)
   )
 

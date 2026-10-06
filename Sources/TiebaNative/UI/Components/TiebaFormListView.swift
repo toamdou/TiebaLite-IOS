@@ -179,16 +179,8 @@ struct TiebaFormRow {
     case spinner
     case datePicker
     case empty
-
-    /// 行内容由 UIListContentConfiguration 画的种类（其余走专用 cell）。
-    var usesContentConfiguration: Bool {
-      switch self {
-      case .link, .toggle, .picker, .button, .confirm, .text, .color, .option, .menu:
-        return true
-      default:
-        return false
-      }
-    }
+    /// 无级滑杆行（二级字号的正文级/界面级调节杆，见 TiebaFormSliderCell）。
+    case slider
   }
 
   var id: String
@@ -269,16 +261,24 @@ struct TiebaFormRow {
   /// status：尾部转圈（「签到中」的行）
   var showsSpinner: Bool = false
 
+  // ── slider（无级调节）──
+  /// slider：可调下限 / 上限 / 量化步长（step = 0 = 不量化，取值连续）。
+  var minValue: Double = 0
+  var maxValue: Double = 1
+  var step: Double = 0
+  /// slider：实时示例文案（无级调节时用户要能看到字号在变）。
+  var previewText: String?
+
 
   /// 行内文字字体（SwiftUI textStyle 名 → 系统动态字体，跟随 Dynamic Type）。
   var font: UIFont {
     switch textStyle {
-    case "subheadline": return UIFont.preferredFont(forTextStyle: .subheadline)
-    case "footnote": return UIFont.preferredFont(forTextStyle: .footnote)
-    case "caption": return UIFont.preferredFont(forTextStyle: .caption1)
-    case "headline": return UIFont.preferredFont(forTextStyle: .headline)
-    case "title": return UIFont.systemFont(ofSize: 28, weight: .bold)
-    default: return UIFont.preferredFont(forTextStyle: .body)
+    case "subheadline": return TiebaSimpleText.uiFont(style: .subheadline)
+    case "footnote": return TiebaSimpleText.uiFont(style: .footnote)
+    case "caption": return TiebaSimpleText.uiFont(style: .caption1)
+    case "headline": return TiebaSimpleText.uiFont(style: .headline)
+    case "title": return TiebaSimpleText.font(size: 28, weight: .bold)
+    default: return TiebaSimpleText.uiFont(style: .body)
     }
   }
 
@@ -346,11 +346,20 @@ final class TiebaFormListView: UIView {
   var onColorChange: ((String, String) -> Void)?
   /// 输入框每次编辑（textField 行；受控：视图不改真值，等调用方下发回来）
   var onTextChange: ((String, String) -> Void)?
+  /// 无级滑杆被拖动（slider 行；每次 valueChanged 一次，调用方自行节流落库）
+  var onSlide: ((String, Double) -> Void)?
+  /// slider 行实时示例的字体提供者（页面注入，入参 = 行 id + 当前值）。
+  /// 缺省 = 界面级：表单文本本来属于"界面"，不注入时跟界面字号走是对的。
+  var slidePreviewFont: ((String, Double) -> UIFont)?
 
   // MARK: - Private
 
   private let tableView = UITableView(frame: .zero, style: .insetGrouped)
   private var model: [[TiebaFormRow]] = []
+  /// 被隐藏的行 id（本页「界面字号跟随正文字号」= ON 时隐藏界面字号滑杆）。
+  /// 隐藏是**数据源级**的删行：这样 tableView 的插入/删除动画才能给出"杆子
+  /// 收回/展开"的高度动画，而不是瞬切（用户明确要求显隐要有动画）。
+  private var hiddenRowIDs: Set<String> = []
   /// 主色（nil = 系统默认，见 tintHex）
   private var accent: UIColor?
   /// trait 登记令牌（registerForTraitChanges 的返回值需持有）。
@@ -401,7 +410,49 @@ final class TiebaFormListView: UIView {
   }
 
   private func rebuild() {
-    model = sections.map(\.rows)
+    model = sections.indices.map { visibleRows(inSection: $0) }
+    tableView.reloadData()
+  }
+
+  /// 某分组当前应显示的行（整份 sections 减去被隐藏的 id）。
+  private func visibleRows(inSection index: Int) -> [TiebaFormRow] {
+    guard sections.indices.contains(index) else { return [] }
+    return sections[index].rows.filter { !hiddenRowIDs.contains($0.id) }
+  }
+
+  /// 显隐某一行（带系统插入/删除动画）。本页用于「界面字号跟随正文字号」开关：
+  /// ON ⇒ 界面字号滑杆收回去，OFF ⇒ 展开。行高与 alpha 由 UITableView 的
+  /// insert/delete 动画一起做，不是瞬切（用户明确要求显隐要有动画）。
+  /// ⚠️ 模型先改、再调 insert/delete（UITableView 读的是改后的行数）。
+  func setHidden(id: String, hidden: Bool, animated: Bool = true) {
+    guard sections.contains(where: { $0.rows.contains { $0.id == id } }) else { return }
+    guard hiddenRowIDs.contains(id) != hidden else { return }
+    if hidden { hiddenRowIDs.insert(id) } else { hiddenRowIDs.remove(id) }
+    guard let section = sections.firstIndex(where: { $0.rows.contains { $0.id == id } }) else {
+      rebuild()
+      return
+    }
+    let old = model.indices.contains(section) ? model[section] : []
+    let next = visibleRows(inSection: section)
+    guard animated, abs(old.count - next.count) == 1 else {
+      rebuild()
+      return
+    }
+    model[section] = next
+    if next.count > old.count {
+      let row = next.firstIndex { $0.id == id } ?? 0
+      tableView.insertRows(at: [IndexPath(row: row, section: section)], with: .fade)
+    } else {
+      let row = old.firstIndex { $0.id == id } ?? 0
+      tableView.deleteRows(at: [IndexPath(row: row, section: section)], with: .fade)
+    }
+  }
+
+  /// 字号变化后重排整表（行字体与行高都由 cell 现算）：整表 reloadData 是唯一
+  /// 能让**离屏行**也换字体的做法（reconfigure 只覆盖可见行）。设置页行数很少，
+  /// 一次 reload 的代价可忽略；调用方负责在拖动结束后再调（拖动中 reload 会把
+  /// 正在被按住的滑杆一起重建，手感直接断）。
+  func refreshTypography() {
     tableView.reloadData()
   }
 
@@ -525,7 +576,13 @@ extension TiebaFormListView: UITableViewDataSource, UITableViewDelegate {
       onRowPress: { [weak self] in self?.onRowPress?(row.id) },
       onMenuPick: { [weak self] menuID in self?.onPick?(row.id, menuID) },
       onTextChange: { [weak self] text in self?.onTextChange?(row.id, text) },
-      onColorChange: { [weak self] hex in self?.onColorChange?(row.id, hex) }
+      onColorChange: { [weak self] hex in self?.onColorChange?(row.id, hex) },
+      onSlide: { [weak self] value in self?.onSlide?(row.id, value) },
+      previewFont: { [weak self] value in
+        self?.slidePreviewFont?(row.id, value)
+          ?? TiebaSimpleText.scaledFont(
+            size: CGFloat(value), weight: .regular, scale: TiebaTypography.uiScale())
+      }
     )
     // 一次协议转换代替原来的 10 分支 switch：注册表保证 dequeue 出来的就是映射表里的类，
     // 而映射表里的类全部实现协议（见文件下方一致性扩展）。
@@ -629,6 +686,12 @@ struct TiebaFormCellContext {
   let onTextChange: (String) -> Void
   /// color 行选了颜色（参数 = #RRGGBB 大写）
   let onColorChange: (String) -> Void
+  /// slider 行被拖动（参数 = 当前值）。**每次变化都上报**：调用方负责节流落库，
+  /// 而 cell 自己的实时示例不等落库（见 TiebaFormSliderCell）。
+  let onSlide: (Double) -> Void
+  /// slider 行的实时示例字体：入参 = 当前值，出参 = 示例字体。
+  /// 由页面决定是正文级还是界面级（表单层不认识字号体系）。
+  let previewFont: (Double) -> UIFont
 }
 
 /// 表单行 cell 的统一契约。存在的理由是**消除第四份分发事实**：
@@ -661,6 +724,7 @@ enum TiebaFormCellRegistry {
     .spinner: TiebaFormSpinnerCell.self,
     .datePicker: TiebaFormDateCell.self,
     .empty: TiebaFormEmptyCell.self,
+    .slider: TiebaFormSliderCell.self,
   ]
 
   static func cellType(for kind: TiebaFormRow.Kind) -> TiebaFormCellConfiguring.Type {
@@ -876,7 +940,7 @@ final class TiebaFormRowCell: UITableViewCell {
       // ⚠️ 字号必须显式对齐：系统 .subtitleCell 的次行是 subheadline(15)，
       // 而迁移前 ListItem 的 supportingText 是 SwiftUI 行内默认 body(17)；
       // Button 的子 Text 在 SwiftUI 里也是行内默认字号（这里跟 body）。
-      config.secondaryTextProperties.font = UIFont.preferredFont(forTextStyle: .body)
+      config.secondaryTextProperties.font = TiebaSimpleText.uiFont(style: .body)
       config.secondaryTextProperties.color = row.disabled ? disabledColor : .secondaryLabel
       config.secondaryTextProperties.numberOfLines = 0
     }
@@ -952,6 +1016,10 @@ final class TiebaFormRowCell: UITableViewCell {
       selectionStyle = row.disabled ? .none : .default
 
     case .text:
+      selectionStyle = .none
+
+    case .slider:
+      // 无级滑杆行：附件/形态全部由 TiebaFormSliderCell 自己实现（本 cell 不参与）。
       selectionStyle = .none
 
     case .color:
@@ -1169,7 +1237,7 @@ final class TiebaFormHeroCell: UITableViewCell {
     titleLabel.font = row.font
     titleLabel.textColor = .label
     subtitleLabel.text = row.subtitle
-    subtitleLabel.font = UIFont.preferredFont(forTextStyle: .subheadline)
+    subtitleLabel.font = TiebaSimpleText.uiFont(style: .subheadline)
     subtitleLabel.textColor = .secondaryLabel
   }
 }
@@ -1212,7 +1280,7 @@ final class TiebaFormInputCell: TiebaFormBaseCell {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
     let margins = Self.rowMargins
 
-    field.font = .preferredFont(forTextStyle: .body)
+    field.font = TiebaSimpleText.uiFont(style: .body)
     field.adjustsFontForContentSizeCategory = true
     field.textColor = .label
     field.borderStyle = .none
@@ -1222,7 +1290,7 @@ final class TiebaFormInputCell: TiebaFormBaseCell {
     field.translatesAutoresizingMaskIntoConstraints = false
     contentView.addSubview(field)
 
-    textView.font = .preferredFont(forTextStyle: .body)
+    textView.font = TiebaSimpleText.uiFont(style: .body)
     textView.adjustsFontForContentSizeCategory = true
     textView.textColor = .label
     textView.backgroundColor = .clear
@@ -1233,7 +1301,7 @@ final class TiebaFormInputCell: TiebaFormBaseCell {
     textView.translatesAutoresizingMaskIntoConstraints = false
     contentView.addSubview(textView)
 
-    placeholderLabel.font = .preferredFont(forTextStyle: .body)
+    placeholderLabel.font = TiebaSimpleText.uiFont(style: .body)
     placeholderLabel.adjustsFontForContentSizeCategory = true
     placeholderLabel.textColor = .placeholderText
     placeholderLabel.numberOfLines = 0
@@ -1482,11 +1550,11 @@ final class TiebaFormAvatarCell: TiebaFormBaseCell {
     avatarBox.translatesAutoresizingMaskIntoConstraints = false
     avatarBox.clipsToBounds = true
 
-    titleLabel.font = .preferredFont(forTextStyle: .body)
+    titleLabel.font = TiebaSimpleText.uiFont(style: .body)
     titleLabel.adjustsFontForContentSizeCategory = true
     titleLabel.textColor = .label
     titleLabel.numberOfLines = 1
-    subtitleLabel.font = .preferredFont(forTextStyle: .footnote)
+    subtitleLabel.font = TiebaSimpleText.uiFont(style: .footnote)
     subtitleLabel.adjustsFontForContentSizeCategory = true
     subtitleLabel.textColor = .secondaryLabel
     subtitleLabel.numberOfLines = 1
@@ -1497,9 +1565,9 @@ final class TiebaFormAvatarCell: TiebaFormBaseCell {
     textStack.addArrangedSubview(titleLabel)
     textStack.addArrangedSubview(subtitleLabel)
 
-    trailingButton.titleLabel?.font = .preferredFont(forTextStyle: .body)
+    trailingButton.titleLabel?.font = TiebaSimpleText.uiFont(style: .body)
     trailingButton.addTarget(self, action: #selector(trailingPressed), for: .touchUpInside)
-    trailingLabel.font = .preferredFont(forTextStyle: .footnote)
+    trailingLabel.font = TiebaSimpleText.uiFont(style: .footnote)
     trailingLabel.textColor = .tertiaryLabel
     trailingLabel.numberOfLines = 1
 
@@ -1739,11 +1807,11 @@ final class TiebaFormStatusCell: TiebaFormBaseCell {
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
     let margins = Self.rowMargins
-    titleLabel.font = .preferredFont(forTextStyle: .body)
+    titleLabel.font = TiebaSimpleText.uiFont(style: .body)
     titleLabel.adjustsFontForContentSizeCategory = true
     titleLabel.textColor = .label
     titleLabel.numberOfLines = 0
-    trailingLabel.font = .preferredFont(forTextStyle: .body)
+    trailingLabel.font = TiebaSimpleText.uiFont(style: .body)
     trailingLabel.adjustsFontForContentSizeCategory = true
     trailingLabel.textColor = .secondaryLabel
     trailingLabel.numberOfLines = 1
@@ -1784,7 +1852,7 @@ final class TiebaFormStatusCell: TiebaFormBaseCell {
       // 用本文件既有的 tiebaFormFont（Dynamic Type 档位 + trait 加字重）：把 preferredFont
       // 的 pointSize 包成静态 systemFont 会让 adjustsFontForContentSizeCategory 变成空操作。
       titleLabel.font = UIFont.tiebaFormFont(
-        .preferredFont(forTextStyle: .body), weight: row.resolvedTitleWeight)
+        TiebaSimpleText.uiFont(style: .body), weight: row.resolvedTitleWeight)
     }
     while itemViews.count < row.statusItems.count { itemViews.append(makeItemPair()) }
     for (index, pair) in itemViews.enumerated() {
@@ -1796,7 +1864,7 @@ final class TiebaFormStatusCell: TiebaFormBaseCell {
       pair.icon.tintColor = item.color ?? context.tint
       pair.label.text = item.text
       pair.label.font = UIFont.tiebaFormFont(
-        .preferredFont(forTextStyle: .subheadline), weight: Self.weight(item.weight))
+        TiebaSimpleText.uiFont(style: .subheadline), weight: Self.weight(item.weight))
       pair.label.textColor = item.color ?? .label
     }
     trailingLabel.text = row.trailingText
@@ -1875,7 +1943,7 @@ final class TiebaFormDateCell: TiebaFormBaseCell {
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
     let margins = Self.rowMargins
-    titleLabel.font = .preferredFont(forTextStyle: .body)
+    titleLabel.font = TiebaSimpleText.uiFont(style: .body)
     titleLabel.adjustsFontForContentSizeCategory = true
     titleLabel.textColor = .label
     titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -1929,12 +1997,7 @@ final class TiebaFormDateCell: TiebaFormBaseCell {
     return Calendar.current.date(from: components) ?? Date()
   }
 
-  private static let formatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.dateFormat = "HH:mm"
-    return formatter
-  }()
+  private static let formatter: DateFormatter = TiebaDateFormats.fixed("HH:mm")
 }
 
 // MARK: - 空态行（empty）

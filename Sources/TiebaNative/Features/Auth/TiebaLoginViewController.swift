@@ -161,7 +161,7 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     icon.contentMode = .scaleAspectFit
     icon.translatesAutoresizingMaskIntoConstraints = false
     noticeLabel.text = "登录凭据仅保存在本机安全存储（Keychain）与 Cookie 存储中，仅用于请求百度接口。"
-    noticeLabel.font = UIFont.preferredFont(forTextStyle: .caption1)
+    noticeLabel.font = TiebaSimpleText.uiFont(style: .caption1)
     noticeLabel.textColor = .secondaryLabel
     noticeLabel.numberOfLines = 0
     noticeRow.axis = .horizontal

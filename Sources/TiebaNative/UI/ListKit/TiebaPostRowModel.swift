@@ -32,7 +32,8 @@ struct TiebaPostPreferences: Sendable {
     prefs.showLevelBadge = TiebaPreferenceSnapshot.bool("showLevelBadge", default: true)
     prefs.showLevelTitle = TiebaPreferenceSnapshot.bool("showLevelTitle", default: false)
     prefs.showBothUsername = TiebaPreferenceSnapshot.bool("showBothUsername", default: false)
-    prefs.fontScale = CGFloat(Double(TiebaPreferenceSnapshot.string("fontScale") ?? "") ?? 1)
+    // 正文级字号倍率（设置→个性化→阅读字号→正文字号；旧键 fontScale 由 TiebaTypography 迁移）
+    prefs.fontScale = TiebaTypography.bodyScale()
     prefs.hideMedia = TiebaPreferenceSnapshot.bool("hideMedia", default: false)
     prefs.blockVideo = TiebaPreferenceSnapshot.bool("blockVideo", default: false)
     prefs.imageDarkenWhenNight = TiebaPreferenceSnapshot.bool("imageDarkenWhenNight", default: false)
@@ -45,7 +46,9 @@ struct TiebaPostPreferences: Sendable {
     return prefs
   }
 
-  var fontScaleClamped: CGFloat { min(max(fontScale, 0.8), 2.0) }
+  /// 钳制域必须**覆盖整个偏好范围**（12…24pt ⇒ 0.706…1.412）：原来写死 0.8…2.0
+  /// 会把 12～13.6pt 一档全部压成 0.8（用户在小字号端拖滑杆"没反应"）。
+  var fontScaleClamped: CGFloat { min(max(fontScale, 0.7), 1.45) }
 }
 
 // MARK: - 屏蔽过滤（BlockManager.shouldBlockContent / shouldBlockUser 的原生等价）
@@ -261,15 +264,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
       title: sourceTitle,
       heroThreadId: heroThreadId
     )
-  }
-
-  var prefetchURLs: [URL] {
-    var urls: [URL] = []
-    if let avatarURL { urls.append(avatarURL) }
-    for image in images {
-      if let url = TiebaPostRowText.displayURL(image, preferences: preferences) { urls.append(url) }
-    }
-    return urls
   }
 
 

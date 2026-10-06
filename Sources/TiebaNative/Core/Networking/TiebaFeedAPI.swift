@@ -50,14 +50,7 @@ enum TiebaFeedAPI {
   nonisolated(unsafe) private static var lastUserLikeUnix = 0
   nonisolated(unsafe) private static var lastUserLikeDay = ""
 
-  private static let cursorDayFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
-    formatter.dateFormat = "yyyy-MM-dd"
-    return formatter
-  }()
+  private static let cursorDayFormatter: DateFormatter = TiebaDateFormats.fixed("yyyy-MM-dd", timeZone: TimeZone(identifier: "Asia/Shanghai") ?? .current)
 
   private static func cursorDay() -> String { cursorDayFormatter.string(from: Date()) }
 
@@ -289,7 +282,8 @@ enum TiebaFeedRowBuilder {
         hideMedia: TiebaPreferenceSnapshot.bool("hideMedia", default: false),
         showIpLocation: TiebaPreferenceSnapshot.bool("showIpLocation", default: true),
         showBothUsername: TiebaPreferenceSnapshot.bool("showBothUsername", default: false),
-        fontScale: Double(TiebaPreferenceSnapshot.string("fontScale") ?? "") ?? 1,
+        // 正文级字号（两级体系；旧 fontScale 键由 TiebaTypography 迁移）
+        fontScale: TiebaTypography.snapshot().bodyScale,
         timestampStyle: TiebaPreferenceSnapshot.string("timestampStyle") ?? "relative"
       )
     }
