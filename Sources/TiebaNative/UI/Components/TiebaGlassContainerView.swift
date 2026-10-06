@@ -101,7 +101,15 @@ final class TiebaGlassContainerView: UIView {
     }
 }
 
-// MARK: - A2：给 UIVisualEffectView.effect 赋值前的比较护栏
+// MARK: - 玻璃装配
 
-extension UIVisualEffectView {
+/// 全仓**唯一**的玻璃装配入口（iOS 26 系统语义材质 UIGlassEffect）。
+/// 收敛前 7 处各写一遍「effect + tint + UIVisualEffectView」的装配，材质规则散在各页；
+/// 现在统一从这里出，观感规则（.regular + 可选 tint）只此一份。
+extension TiebaGlassContainerView {
+  static func makeEffect(tint: UIColor? = nil) -> UIVisualEffectView {
+    let effect = UIGlassEffect(style: .regular)
+    if let tint { effect.tintColor = tint }
+    return UIVisualEffectView(effect: effect)
+  }
 }

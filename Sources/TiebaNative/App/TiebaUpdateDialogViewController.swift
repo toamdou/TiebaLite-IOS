@@ -24,7 +24,7 @@ import UIKit
 final class TiebaUpdateDialogViewController: UIViewController {
   private let service = TiebaUpdateService.shared
 
-  private let card = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+  private let card = TiebaGlassContainerView.makeEffect()
   private let stack = UIStackView()
   private let titleLabel = UILabel()
   private let metaLabel = UILabel()

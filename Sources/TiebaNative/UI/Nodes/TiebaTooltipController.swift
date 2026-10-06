@@ -237,9 +237,7 @@ public final class TiebaTooltipBubbleView: UIView {
             // 而 iOS 26 的系统语义材质就是 UIGlassEffect（其余 6+ 处玻璃件早已统一）。
             // 深浅语义不变：.dark* 档 ⇒ 深色 tint，其余 ⇒ 浅色 tint；公开 API 形状不动
             //（调用方仍传 blurEffectStyle）。
-            let glass = UIGlassEffect(style: .regular)
-            glass.tintColor = TiebaTooltipBubbleView.glassTintColor(for: blurEffectStyle)
-            let effectView = UIVisualEffectView(effect: glass)
+            let effectView = TiebaGlassContainerView.makeEffect(tint: TiebaTooltipBubbleView.glassTintColor(for: blurEffectStyle))
             self.containerView.addSubview(effectView)
             self.effectView = effectView
         } else {
