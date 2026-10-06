@@ -27,6 +27,9 @@ private enum ProfileHeaderMetrics {
   static let segmentPadH: CGFloat = 10
   static let segmentPadV: CGFloat = 12
   static let segmentMinHeight: CGFloat = 48
+  /// 位置指示条尺寸（宽 2pt = 上游 AnimatedNavigationStripeNode 的固定宽）。
+  static let stripeWidth: CGFloat = 2
+  static let stripeHeight: CGFloat = 24
 }
 
 public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
@@ -90,25 +93,16 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
   private let ipItem = TiebaProfileMetaItem()
   private let ageItem = TiebaProfileMetaItem()
   private let statsRow = UIStackView()
-  private let followsStat = TiebaStatColumnView(
-    axis: .horizontal,
-    valueFont: TiebaSimpleText.font(size: 16, weight: .bold),
-    labelFont: TiebaSimpleText.font(size: 13, weight: .medium),
-    spacing: 4
-  )
-  private let fansStat = TiebaStatColumnView(
-    axis: .horizontal,
-    valueFont: TiebaSimpleText.font(size: 16, weight: .bold),
-    labelFont: TiebaSimpleText.font(size: 13, weight: .medium),
-    spacing: 4
-  )
-  private let agreeStat = TiebaStatColumnView(
-    axis: .horizontal,
-    valueFont: TiebaSimpleText.font(size: 16, weight: .bold),
-    labelFont: TiebaSimpleText.font(size: 13, weight: .medium),
-    spacing: 4
-  )
+  /// 关注/粉丝/获赞：值走会滚数字的 TiebaAnimatedCountLabel（见 UI/Nodes/），
+  /// 原来是 TiebaStatColumnView 的静态 UILabel —— 数字变化时是硬跳。
+  private let followsStat = TiebaProfileStatView()
+  private let fansStat = TiebaProfileStatView()
+  private let agreeStat = TiebaProfileStatView()
   private let segment = UISegmentedControl()
+  /// 分段位置指示条（2pt 竖条：当前是第几段 / 共几段）。挂在分段控件右侧留白里。
+  private let tabStripe = TiebaAnimatedNavigationStripe(frame: .zero)
+  /// 上一次下发的分段下标：只有真的换段才播条纹动画（重刷色板/重装 spec 不播）。
+  private var lastStripeIndex: Int?
 
   /// 段：标签给显示、值给回传（数据 tab 名，页头不许把标签当值用）。
   private var tabs: [(label: String, value: String)] = []
@@ -166,6 +160,9 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
     let segmentSlot = UIView()
     segmentSlot.addSubview(segment)
     segment.translatesAutoresizingMaskIntoConstraints = false
+    tabStripe.isUserInteractionEnabled = false
+    segmentSlot.addSubview(tabStripe)
+    tabStripe.translatesAutoresizingMaskIntoConstraints = false
 
     // 页头在全屏列表顶部：顶部留白由 contentInset.top 承担。这些行是绝对约束到
     // self 锚点的，自身不参与安全区边距，但显式关掉免得将来改成边距式布局时复发
@@ -223,8 +220,9 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
       segment.leadingAnchor.constraint(
         equalTo: segmentSlot.leadingAnchor, constant: ProfileHeaderMetrics.segmentPadH
       ),
+      // 右侧比左边多留 8pt：位置指示条就放这段留白里（不给它腾地方就会压在分段控件上）。
       segment.trailingAnchor.constraint(
-        equalTo: segmentSlot.trailingAnchor, constant: -ProfileHeaderMetrics.segmentPadH
+        equalTo: segmentSlot.trailingAnchor, constant: -(ProfileHeaderMetrics.segmentPadH + 8)
       ),
       segment.topAnchor.constraint(
         equalTo: segmentSlot.topAnchor, constant: ProfileHeaderMetrics.segmentPadV
@@ -232,6 +230,14 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
       segment.bottomAnchor.constraint(
         equalTo: segmentSlot.bottomAnchor, constant: -ProfileHeaderMetrics.segmentPadV
       ),
+
+      // 位置指示条：2pt 宽，跟分段控件等高，贴在它右边 8pt 处。
+      tabStripe.trailingAnchor.constraint(
+        equalTo: segmentSlot.trailingAnchor, constant: -ProfileHeaderMetrics.segmentPadH
+      ),
+      tabStripe.widthAnchor.constraint(equalToConstant: ProfileHeaderMetrics.stripeWidth),
+      tabStripe.heightAnchor.constraint(equalToConstant: ProfileHeaderMetrics.stripeHeight),
+      tabStripe.centerYAnchor.constraint(equalTo: segment.centerYAnchor),
     ])
 
     let tap = UITapGestureRecognizer(target: self, action: #selector(handleAvatarTap))
@@ -297,17 +303,18 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
       )
     }
 
+    // 传原始数值而不是格式化后的字符串：滚动方向要按大小判，格式化（万/k）后判不出来。
     followsStat.configure(
-      value: TiebaForumFormat.count(TiebaSimpleRowParser.double(spec["concernNum"]) ?? 0),
-      label: "关注", valueColor: text, labelColor: tertiary
+      value: TiebaSimpleRowParser.double(spec["concernNum"]) ?? 0,
+      label: "关注", valueColor: text, labelColor: tertiary, animated: true
     )
     fansStat.configure(
-      value: TiebaForumFormat.count(TiebaSimpleRowParser.double(spec["fansNum"]) ?? 0),
-      label: "粉丝", valueColor: text, labelColor: tertiary
+      value: TiebaSimpleRowParser.double(spec["fansNum"]) ?? 0,
+      label: "粉丝", valueColor: text, labelColor: tertiary, animated: true
     )
     agreeStat.configure(
-      value: TiebaForumFormat.count(TiebaSimpleRowParser.double(spec["agreeNum"]) ?? 0),
-      label: "获赞", valueColor: text, labelColor: tertiary
+      value: TiebaSimpleRowParser.double(spec["agreeNum"]) ?? 0,
+      label: "获赞", valueColor: text, labelColor: tertiary, animated: true
     )
 
     // 分段：标签/值成对，选中项按 value 反查（下标会随过滤错位；标签与值不同名）。
@@ -325,6 +332,7 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
       let index = tabs.firstIndex(where: { $0.value == value }) {
       segment.selectedSegmentIndex = index
     }
+    updateTabStripe(tint: tint)
 
     headerRow.avatarView.configure(
       url: portrait.isEmpty ? "" : TiebaSimpleRowParser.avatarURL(portrait)?.absoluteString ?? portrait,
@@ -424,11 +432,120 @@ public final class TiebaUserProfileHeaderView: UIView, TiebaKindListHeaderView {
     TiebaSceneHaptics.fire("segment")
     let index = segment.selectedSegmentIndex
     guard index >= 0, index < tabs.count else { return }
+    // 先就地跟手更新指示条，页面回灌 spec 时同一下标不会再播一次。
+    updateTabStripe(tint: palette.base.primary)
     onAction?(.userProfile(.tab(value: tabs[index].value)), [:])
+  }
+
+  /// 位置指示条：index/count 由当前分段推出；只有真的换段才播动画。
+  private func updateTabStripe(tint: UIColor) {
+    let index = max(0, segment.selectedSegmentIndex)
+    let count = tabs.count
+    tabStripe.isHidden = count == 0
+    guard count > 0 else { return }
+    let transition: TiebaNodesTransition =
+      (lastStripeIndex != nil && lastStripeIndex != index) ? .animated(duration: 0.2) : .immediate
+    lastStripeIndex = index
+    tabStripe.update(
+      colors: TiebaAnimatedNavigationStripe.Colors(
+        foreground: tint,
+        background: tint.withAlphaComponent(0.5),
+        // 这一色只作为遮罩的「不透明载体」（遮罩只看 alpha），取系统不透明底色即可。
+        clearBackground: .systemBackground
+      ),
+      configuration: TiebaAnimatedNavigationStripe.Configuration(
+        height: ProfileHeaderMetrics.stripeHeight,
+        index: index,
+        count: count
+      ),
+      transition: transition
+    )
   }
 }
 
 // MARK: - 小件
+
+/// 统计列：值 + 标签（关注 / 粉丝 / 获赞）。
+/// 值走 UI/Nodes/TiebaAnimatedCountLabel（数字变化时旧数字飞出去、新数字滚进来），
+/// 标签仍是静态 UILabel。排布与原 TiebaStatColumnView(.horizontal) 一致：
+/// 值在左标签在右、间距 4、**基线对齐**（不是垂直居中，1pt 的差在 16/13 两种字号间看得出来）。
+private final class TiebaProfileStatView: UIControl {
+  private static let spacing: CGFloat = 4
+
+  private let countLabel = TiebaAnimatedCountLabel(frame: .zero)
+  private let titleLabel = UILabel()
+  private let valueFont = TiebaSimpleText.font(size: 16, weight: .bold)
+  private let titleFont = TiebaSimpleText.font(size: 13, weight: .medium)
+  private var valueSize = CGSize.zero
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    // 值在左、标签在右 ⇒ 值的右缘是稳定参照：数字变宽向左长，标签不被数字动画顶着走
+    //（移植自上游 AnimatedCounterComponent.swift:241-248 的 anchorPoint 分支）。
+    countLabel.alignment = .trailing
+    titleLabel.font = titleFont
+    titleLabel.adjustsFontForContentSizeCategory = true
+    titleLabel.numberOfLines = 1
+    addSubview(countLabel)
+    addSubview(titleLabel)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  /// value 是**原始数值**（不是格式化后的字符串）：滚动方向要按大小判。
+  /// 同一个数值重复下发不会播动画 —— 段没变，countLabel 自己就不动。
+  func configure(value: Double, label: String, valueColor: UIColor, labelColor: UIColor, animated: Bool) {
+    titleLabel.text = label
+    titleLabel.textColor = labelColor
+
+    let formatted = TiebaForumFormat.count(value)
+    let attributes: [NSAttributedString.Key: Any] = [
+      .font: valueFont,
+      .foregroundColor: valueColor,
+    ]
+    // 整串格式化结果按字符切段（"1.2万" 里只有数字位会滚，"万" 是固定段）。
+    let segments: [TiebaAnimatedCountLabel.Segment] = [
+      .number(Int(value.rounded()), NSAttributedString(string: formatted, attributes: attributes))
+    ]
+    let layout = countLabel.update(
+      size: CGSize(width: 260, height: ceil(valueFont.lineHeight)),
+      segments: segments,
+      transition: animated ? .animated(duration: 0.2) : .immediate
+    )
+    valueSize = CGSize(
+      width: ceil(layout.size.width),
+      height: max(ceil(layout.size.height), ceil(valueFont.lineHeight))
+    )
+    isAccessibilityElement = true
+    accessibilityLabel = "\(label) \(formatted)"
+    setNeedsLayout()
+    invalidateIntrinsicContentSize()
+  }
+
+  override var intrinsicContentSize: CGSize {
+    return CGSize(
+      width: valueSize.width + Self.spacing + titleLabel.intrinsicContentSize.width,
+      height: max(valueSize.height, ceil(titleFont.lineHeight))
+    )
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+
+    // 值整体居中（两行高不一致时上下各让一半），标签按基线对齐到值的基线上。
+    countLabel.frame = CGRect(
+      x: 0, y: (bounds.height - valueSize.height) / 2,
+      width: valueSize.width, height: valueSize.height
+    )
+    let titleSize = titleLabel.intrinsicContentSize
+    let baseline = countLabel.frame.minY + valueFont.ascender
+    titleLabel.frame = CGRect(
+      x: valueSize.width + Self.spacing, y: baseline - titleFont.ascender,
+      width: titleSize.width, height: ceil(titleFont.lineHeight)
+    )
+  }
+}
 
 /// 认证徽章（图标 + 文案，底 = 主色 12%）。
 private final class TiebaProfileBadgeView: UIView {

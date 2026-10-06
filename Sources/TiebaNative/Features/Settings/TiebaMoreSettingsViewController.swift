@@ -13,9 +13,11 @@ final class TiebaMoreSettingsViewController: TiebaFormPageController {
     ("0", "关闭"), ("1", "每 1 天"), ("3", "每 3 天"), ("7", "每 7 天"),
     ("15", "每 15 天"), ("30", "每 30 天"),
   ]
-  private static let maxSizeOptions: [(value: String, label: String)] = [
-    ("100", "100 MB"), ("200", "200 MB"), ("400", "400 MB"), ("1000", "1000 MB"),
-  ]
+  /// 缓存上限选项：文案里的数字用系统 Int.formatted()（locale 感知，1000 → 1,000），
+  /// 不再手写字符串。四档里只有 1000 这一档的文案会因此变化。
+  private static let maxSizeOptions: [(value: String, label: String)] = [100, 200, 400, 1000].map {
+    (value: String($0), label: "\($0.formatted()) MB")
+  }
   /// JS clearAllKvSync 点名保留的旧搬运标记；本仓的一次性标记统一由
   /// TiebaKvStore.internalMarkerKeys 提供（clear 内部已强制保留）。
   private static let migrationKey = "@tiebalite:unified_migration_v1"
@@ -61,66 +63,85 @@ final class TiebaMoreSettingsViewController: TiebaFormPageController {
         TiebaPreferences.number("cacheMaxSizeMb", default: 400)))
   }
 
-  override func makeSections(dark: Bool) -> [[String: Any]] {
+  override func makeSections(dark: Bool) -> [TiebaFormSection] {
     let poll = TiebaPreferences.string(
       "notificationPollMinutes", allowed: Self.pollOptions.map(\.value), default: "30")
     let autoClean = TiebaPreferences.number("cacheAutoCleanDays", default: 0)
     let maxSize = TiebaPreferences.number("cacheMaxSizeMb", default: 400)
 
     return [
-      [
-        "title": "通知",
-        "footer": "前台消息检查频率；低电量模式自动加倍，后台任务由系统统一调度。",
-        "rows": [
-          [
-            "id": "notificationPollMinutes", "kind": "picker", "title": "消息检查频率",
-            "value": poll, "options": options(Self.pollOptions),
-          ]
-        ],
-      ],
-      [
-        "title": "数据",
-        "rows": [
-          [
-            "id": "cacheAutoCleanDays", "kind": "picker", "title": "自动清理缓存",
-            "value": TiebaPreferences.numberLiteral(autoClean),
-            "options": options(Self.autoCleanOptions),
-          ],
-          [
-            "id": "cacheMaxSizeMb", "kind": "picker", "title": "最大缓存大小",
-            "value": TiebaPreferences.numberLiteral(maxSize),
-            "options": options(Self.maxSizeOptions),
-          ],
-          [
-            "id": "clearCache", "kind": "confirm", "title": "清除图片缓存", "icon": "trash.fill",
-            "confirmTitle": "清除图片缓存",
-            "confirmMessage": "图片与吧头像缓存将被清除（可在下次浏览时重新加载）；登录状态和应用设置不会被清除。",
-            "confirmLabel": "确定清除",
-          ],
-          [
-            "id": "resetAll", "kind": "confirm", "title": "重置所有设置", "icon": "arrow.counterclockwise",
-            "confirmTitle": "重置所有设置",
-            "confirmMessage": "这将恢复默认主题、偏好等，请重启应用以生效。",
-            "confirmLabel": "确定重置",
-          ],
-          [
-            "id": "clearAll", "kind": "confirm", "title": "清除全部数据", "icon": "trash.slash",
-            "confirmTitle": "清除全部数据",
-            "confirmMessage": "将清除登录状态、设置、历史、屏蔽数据与本地凭据，且不可恢复。",
-            "confirmLabel": "确定清除",
-          ],
-        ],
-      ],
-      [
-        "title": "更多",
-        "footer": "系统应用设置可管理通知、权限与后台任务。",
-        "rows": [
-          [
-            "id": "systemSettings", "kind": "button", "title": "系统应用设置",
-            "icon": "gear", "color": "#007AFF",
-          ]
-        ],
-      ],
+      TiebaFormSection(
+        title: "通知",
+        footer: "前台消息检查频率；低电量模式自动加倍，后台任务由系统统一调度。",
+        rows: [
+          TiebaFormRow(
+            id: "notificationPollMinutes",
+            kind: .picker,
+            title: "消息检查频率",
+            value: poll,
+            options: options(Self.pollOptions)
+          )
+        ]
+      ),
+      TiebaFormSection(
+        title: "数据",
+        rows: [
+          TiebaFormRow(
+            id: "cacheAutoCleanDays",
+            kind: .picker,
+            title: "自动清理缓存",
+            value: TiebaPreferences.numberLiteral(autoClean),
+            options: options(Self.autoCleanOptions)
+          ),
+          TiebaFormRow(
+            id: "cacheMaxSizeMb",
+            kind: .picker,
+            title: "最大缓存大小",
+            value: TiebaPreferences.numberLiteral(maxSize),
+            options: options(Self.maxSizeOptions)
+          ),
+          TiebaFormRow(
+            id: "clearCache",
+            kind: .confirm,
+            title: "清除图片缓存",
+            icon: "trash.fill",
+            confirmTitle: "清除图片缓存",
+            confirmMessage: "图片与吧头像缓存将被清除（可在下次浏览时重新加载）；登录状态和应用设置不会被清除。",
+            confirmLabel: "确定清除"
+          ),
+          TiebaFormRow(
+            id: "resetAll",
+            kind: .confirm,
+            title: "重置所有设置",
+            icon: "arrow.counterclockwise",
+            confirmTitle: "重置所有设置",
+            confirmMessage: "这将恢复默认主题、偏好等，请重启应用以生效。",
+            confirmLabel: "确定重置"
+          ),
+          TiebaFormRow(
+            id: "clearAll",
+            kind: .confirm,
+            title: "清除全部数据",
+            icon: "trash.slash",
+            confirmTitle: "清除全部数据",
+            confirmMessage: "将清除登录状态、设置、历史、屏蔽数据与本地凭据，且不可恢复。",
+            confirmLabel: "确定清除"
+          ),
+        ]
+      ),
+      TiebaFormSection(
+        title: "更多",
+        footer: "系统应用设置可管理通知、权限与后台任务。",
+        rows: [
+          TiebaFormRow(
+            id: "systemSettings",
+            kind: .button,
+            title: "系统应用设置",
+            icon: "gear",
+            override: TiebaFormColor.resolve("#007AFF")
+          )
+        ]
+      ),
     ]
   }
 

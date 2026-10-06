@@ -36,7 +36,8 @@ final class TiebaForumMembersViewController: UIViewController {
   private let forumName: String
   private let forumId: String
 
-  private let segmented = UISegmentedControl(items: ["成员", "等级排行"])
+  /// 分段 = TiebaTabSelector（选中/未选中两份文本交叉淡化 + 指示器连续插值，见 UI/Components）。
+  private let segmented = TiebaTabSelector(items: ["成员", "等级排行"])
   private let stateView = UIContentUnavailableView(configuration: .loading())
   /// 首屏骨架：成员段 = card count 6、排行段 = row count 8（原 members.tsx 同判据）
   private let skeletonView = TiebaSkeletonList(variant: .card, count: 6)
@@ -74,9 +75,9 @@ final class TiebaForumMembersViewController: UIViewController {
     // = 旧 colors.background（浅 #F2F2F7 / 深 #000）；卡片用 palette.card 才对比得出来
     view.backgroundColor = .systemGroupedBackground
 
-    segmented.selectedSegmentIndex = Segment.members.rawValue
+    segmented.select(Segment.members.rawValue, animated: false)
     segmented.translatesAutoresizingMaskIntoConstraints = false
-    segmented.addTarget(self, action: #selector(segmentChanged), for: .valueChanged)
+    segmented.onSelect = { [weak self] _ in self?.segmentChanged() }
 
     collectionView.translatesAutoresizingMaskIntoConstraints = false
     collectionView.backgroundColor = .clear
@@ -740,7 +741,9 @@ final class MemberGridCell: UICollectionViewCell {
 
   func configure(member: TiebaForumAPI.TiebaForumMembers.Member) {
     let displayName = member.displayName
-    avatar.configure(url: member.portrait, initial: displayName)
+    // [N6] proto portrait 是裸 id（非 http）：直塞 URL(string:) 得到的是无 scheme 的相对 URL，
+    // 请求必然 NSURLErrorUnsupportedURL → 首字占位永远不消失。走全仓同一归一化口径（对完整 URL 幂等）。
+    avatar.configure(url: TiebaSimpleRowParser.avatarURL(member.portrait)?.absoluteString ?? "", initial: displayName)
     nameLabel.text = displayName
     let hasLevel = member.userLevel > 0
     levelBadge.isHidden = !hasLevel
@@ -834,7 +837,9 @@ final class RankRowCell: UICollectionViewCell {
       card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
       card.topAnchor.constraint(equalTo: contentView.topAnchor),
       card.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-      rankLabel.widthAnchor.constraint(equalToConstant: 26),
+      // ≥26：17pt heavy 的三位数（「100」）约 29pt，定宽会被截成「1…」；
+      // 排行最多 200 名，放到 stack 里按内容自然放宽。
+      rankLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 26),
       levelBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 48),
       placeholderSlot.widthAnchor.constraint(greaterThanOrEqualToConstant: 48),
       row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),

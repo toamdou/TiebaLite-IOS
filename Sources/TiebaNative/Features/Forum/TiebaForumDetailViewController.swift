@@ -167,7 +167,8 @@ final class TiebaForumDetailViewController: UIViewController, TiebaNativeScreen 
       TiebaSceneHaptics.fire("press")
       // 原 handleOpenInBrowser = openLink(buildForumUrl(name))：贴吧吧链接命中
       // tryTiebaInApp，站内 push 到 /forum/<name>（不是开浏览器），保持一致。
-      let kw = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
+      // [采用] 单个参数值编码集，见 TiebaURLQueryValue。
+      let kw = name.addingPercentEncoding(withAllowedCharacters: .tiebaURLQueryValueAllowed) ?? name
       TiebaLinkOpener.open("https://tieba.baidu.com/f?kw=\(kw)")
     default:
       break
@@ -400,7 +401,8 @@ private final class TiebaForumProfileCell: UITableViewCell {
     sloganLabel.text = slogan
     sloganLabel.isHidden = slogan.isEmpty
     chipView.isHidden = !isLike
-    avatarView.configure(url: avatar, initial: name)
+    // [N6] 同 Members：吧头像字段也是裸 id（对齐吧页 TiebaForumViewController 的现成口径）。
+    avatarView.configure(url: TiebaSimpleRowParser.avatarURL(avatar)?.absoluteString ?? "", initial: name)
   }
 }
 

@@ -42,6 +42,11 @@ final class TiebaMessageListViewController: UIViewController {
     // 首屏骨架：通用列表行（原 MessageTabList.tsx variant="row" count={8}）
     stateView.skeletonVariant = .row
     stateView.skeletonInsets = UIEdgeInsets(top: 8, left: 16, bottom: 24, right: 16)
+    // 评审 H9：消息行是 radius 20 的卡片，必须与同页骨架（上面 left/right 16）及全 App 卡片内缩口径一致。
+    // 改前症状：行字典不传 marginH、这里也没设 horizontalInset ⇒ 卡片 x=0、宽=整屏，20pt 圆角被屏幕两缘切成
+    // 楔形缺口；加载完成瞬间头像列从 x=16 跳到 12、卡片由内缩变满幅（全 App 唯一满幅贴边的卡列表）。
+    // 改后行为：左右各内缩 16，与骨架无缝衔接；行宽契约（updateWidth 里的 −2×horizontalInset）随之生效。
+    list.horizontalInset = 16
     stateView.onButtonPress = { [weak self] _ in self?.reload() }
     for subview in [list, stateView, pill] as [UIView] {
       subview.translatesAutoresizingMaskIntoConstraints = false
@@ -84,6 +89,11 @@ final class TiebaMessageListViewController: UIViewController {
   /// 主题变化（含跟随系统时的实时切换）→ 重取主题重刷自绘色（页面底色/列表色板/页头）。
   func screenThemeDidChange() {
     applyPalette()
+    // 行字典里的颜色（卡片底 / @赞图标等）是发布期按当时档解析成 hex 烘进去的，内容指纹
+    // 含这些 hex：只重刷列表色板不重推，行内会停在旧档（白卡贴深色页）。同页键重推一次
+    // 即可（fresh: false：指纹变化自动作废旧模型，滚动位置不跳）。
+    guard !visibleItems.isEmpty else { return }
+    publish(fresh: false)
   }
 
   private func applyPalette() {
@@ -208,33 +218,25 @@ final class TiebaMessageListViewController: UIViewController {
   }
 
   /// 屏蔽词/屏蔽用户过滤（原 useBlockFilter + BlockManager 判据）。
+  ///
+  /// [算法审查 40 §4.E] 判据收敛：本页原来自己实现了一份「白名单放行 / 黑名单屏蔽 + 屏蔽用户」，
+  /// 现在直接用 TiebaPostBlockFilter —— 与帖子行测量（最热路径）、Explore 页同一张表、同一份实现；
+  /// 字面量词合成一条交替正则也由它统一负责（[算法审查 40] 的 27.8× 就在那一处）。
   private func applyFilter() {
-    let words = TiebaBlockStore.words()
-    let users = TiebaBlockStore.users()
-    if words.isEmpty, users.isEmpty {
+    let filter = TiebaPostBlockFilter.load()
+    if filter.isEmpty, filter.users.isEmpty {
       visibleItems = items
       return
     }
     visibleItems = items.filter { item in
-      if blockedContent(item.content, words: words) { return false }
+      if filter.isContentBlocked(item.content) { return false }
       if !item.fromUserId.isEmpty,
-        users.contains(where: { $0.uid == item.fromUserId || (!item.fromUserName.isEmpty && $0.username == item.fromUserName) })
+        filter.isUserBlocked(uid: item.fromUserId, name: item.fromUserName)
       {
         return false
       }
       return true
     }
-  }
-
-  private func blockedContent(_ content: String, words: [TiebaBlockedWord]) -> Bool {
-    if words.contains(where: { $0.isWhitelist && matches(content, $0) }) { return false }
-    return words.contains { !$0.isWhitelist && matches(content, $0) }
-  }
-
-  private func matches(_ content: String, _ word: TiebaBlockedWord) -> Bool {
-    guard word.isRegex == true else { return content.contains(word.keyword) }
-    guard let regex = try? NSRegularExpression(pattern: word.keyword) else { return false }
-    return regex.firstMatch(in: content, range: NSRange(content.startIndex..<content.endIndex, in: content)) != nil
   }
 
   // MARK: - 发布

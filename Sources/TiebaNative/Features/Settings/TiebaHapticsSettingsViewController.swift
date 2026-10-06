@@ -104,14 +104,18 @@ final class TiebaHapticsSettingsViewController: TiebaFormPageController {
     return raw
   }
 
-  private func pickerRow(_ id: String, _ title: String, value: String, options: [(value: String, label: String)]) -> [String: Any] {
-    [
-      "id": id, "kind": "picker", "title": title, "value": value, "options": self.options(options),
-    ]
+  private func pickerRow(_ id: String, _ title: String, value: String, options: [(value: String, label: String)]) -> TiebaFormRow {
+    TiebaFormRow(
+      id: id,
+      kind: .picker,
+      title: title,
+      value: value,
+      options: self.options(options)
+    )
   }
 
-  private func sceneRows(_ group: String, styles: [String: String], waveforms: [String: String]) -> [[String: Any]] {
-    Self.scenes.filter { $0.group == group }.flatMap { meta -> [[String: Any]] in
+  private func sceneRows(_ group: String, styles: [String: String], waveforms: [String: String]) -> [TiebaFormRow] {
+    Self.scenes.filter { $0.group == group }.flatMap { meta -> [TiebaFormRow] in
       [
         pickerRow(
           "strength:\(meta.scene)", "\(meta.label) · 力度",
@@ -123,37 +127,37 @@ final class TiebaHapticsSettingsViewController: TiebaFormPageController {
     }
   }
 
-  override func makeSections(dark: Bool) -> [[String: Any]] {
+  override func makeSections(dark: Bool) -> [TiebaFormSection] {
     let styles = overrides("hapticsSceneStyles")
     let waveforms = overrides("hapticsWaveforms")
     let realtime = overrides("hapticsRealtimeStyles")
 
     return [
-      [
-        "title": "操作反馈",
-        "footer": "力度：「跟随默认」使用应用内置 AHAP 模式；轻/中/强为整体浓淡缩放。波形：改变触觉节奏（内置/单次/双脉冲/渐强三连/轻柔），与力度叠加生效。选择后立即回放一次以便试听。",
-        "rows": sceneRows("action", styles: styles, waveforms: waveforms),
-      ],
-      [
-        "title": "切换与结果通知",
-        "rows": sceneRows("signal", styles: styles, waveforms: waveforms),
-      ],
-      [
-        "title": "实时触觉（手势跟随）",
-        "footer": "跟随手指连续变化：大图下滑关闭的剥离感、横滑退出边缘的抵抗感、点赞按住的蓄力。只在对应手势进行时生效；信息流滚动等高频场景刻意未加入。",
-        "rows": Self.realtimeEffects.map { effect in
+      TiebaFormSection(
+        title: "操作反馈",
+        footer: "力度：「跟随默认」使用应用内置 AHAP 模式；轻/中/强为整体浓淡缩放。波形：改变触觉节奏（内置/单次/双脉冲/渐强三连/轻柔），与力度叠加生效。选择后立即回放一次以便试听。",
+        rows: sceneRows("action", styles: styles, waveforms: waveforms)
+      ),
+      TiebaFormSection(
+        title: "切换与结果通知",
+        rows: sceneRows("signal", styles: styles, waveforms: waveforms)
+      ),
+      TiebaFormSection(
+        title: "实时触觉（手势跟随）",
+        footer: "跟随手指连续变化：大图下滑关闭的剥离感、横滑退出边缘的抵抗感、点赞按住的蓄力。只在对应手势进行时生效；信息流滚动等高频场景刻意未加入。",
+        rows: Self.realtimeEffects.map { effect in
           pickerRow(
             "realtime:\(effect.id)", effect.label,
             value: safe(realtime[effect.id], Self.realtimeLevels, fallback: "medium"),
             options: Self.realtimeLevels)
-        },
-      ],
-      [
-        "footer": "恢复默认会清除所有场景的自定义覆盖（不影响总开关「振动反馈」）。",
-        "rows": [
-          ["id": "resetAll", "kind": "button", "title": "恢复默认", "icon": "arrow.counterclockwise"]
-        ],
-      ],
+        }
+      ),
+      TiebaFormSection(
+        footer: "恢复默认会清除所有场景的自定义覆盖（不影响总开关「振动反馈」）。",
+        rows: [
+          TiebaFormRow(id: "resetAll", kind: .button, title: "恢复默认", icon: "arrow.counterclockwise")
+        ]
+      ),
     ]
   }
 

@@ -390,7 +390,9 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     loginProcessed = false
     phase = .loading
     startTimeout()
-    webView.reload()
+    // 首载失败（离线进页等连接级失败）时 WKWebView 没有已提交导航，reload() 什么都不做、
+    // 也不发导航回调——页面停在加载遮罩直到超时。登录页单一用途，显式重载同一 URL。
+    webView.load(URLRequest(url: Self.loginURL))
   }
 
   private func handleClose() {

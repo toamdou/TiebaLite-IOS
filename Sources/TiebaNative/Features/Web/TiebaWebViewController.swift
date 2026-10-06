@@ -330,21 +330,23 @@ final class TiebaWebViewController: UIViewController {
     currentURL = urlString
     updateChrome()
     installCookieObserver()
-    // 加载前把 Foundation 的会话 cookie 灌进 WK 存储（原 sharedCookiesEnabled 的
-    // 行为 + ensureNativeWkCookies 的目的），全部落定再发起请求。
-    Task { @MainActor [weak self] in
-      guard let self else { return }
-      await Self.syncSharedCookiesToWebKit(webView: self.webView)
-      self.webView.load(URLRequest(url: url))
-    }
+    // **先发起加载**，再并行把 Foundation 的会话 cookie 灌进 WK 存储。
+    // 改前是"逐条 await setCookie 的完成回调、全部落定才 load"：任一回调不来
+    //（跨进程 IPC 回调没有超时保证），load 就永远不会发出 —— 本页没有超时安全网，
+    // isLoading 恒 true、骨架/转圈/加载条无限停留，didFailProvisionalNavigation 等
+    // 错误出口也永远不会触发。登录页早已因同款真机现象改成不等待并行写入（见其注释），
+    // 本页此前漏跟。副作用（有意接受）：极端情况下页面 JS 首次读 cookie 可能早于最后
+    // 一条 setCookie 落定；会话 cookie 在下一次导航/请求前写入即可。
+    webView.load(URLRequest(url: url))
+    Self.syncSharedCookiesToWebKit(webView: webView)
   }
 
-  private static func syncSharedCookiesToWebKit(webView: WKWebView) async {
+  /// 共享 Cookie → WebKit（同名时 WK 覆盖，与 JS getNativeCookies 一致）。
+  /// **不等待完成**：这条链路只影响页面看到的登录态，一条坏 cookie 不该让整页卡在加载中。
+  private static func syncSharedCookiesToWebKit(webView: WKWebView) {
     let store = webView.configuration.websiteDataStore.httpCookieStore
     for cookie in HTTPCookieStorage.shared.cookies ?? [] {
-      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-        store.setCookie(cookie) { continuation.resume() }
-      }
+      store.setCookie(cookie, completionHandler: nil)
     }
   }
 

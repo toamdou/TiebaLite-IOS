@@ -52,7 +52,11 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   private lazy var driver = TiebaRowPageDriver(list: list, keyPrefix: "forum-\(forumName)")
   private var recordedVisit = false
   private var lastScrollY: CGFloat = 0
+  /// C3：iPad 指针高亮（圆形）。实例必须强引用（UIPointerInteraction.delegate 是 weak）。
+  private var fabPointer: TiebaPointerInteraction?
   private var fabHidden = false
+  /// 滚动方向门：累积 ΔY > 14pt 才翻转（上游 ListView.swift:1023-1029），见 TiebaScrollDirectionGate。
+  private var fabDirectionGate = TiebaScrollDirectionGate()
   private var fabFunction = "refresh"
 
   private var isLoggedIn: Bool { !TiebaBackgroundSnapshot.shared.bduss.isEmpty }
@@ -84,6 +88,10 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     stateView.skeletonVariant = .thread
     stateView.skeletonCount = 6
     stateView.onButtonPress = { [weak self] _ in self?.load(tab: self?.currentTab ?? 0, page: 1) }
+    // 改前症状：加载态骨架从 view 顶边（y=0）起画，被状态栏+玻璃导航栏压住上沿；
+    // 同屏对比的首页/消息页骨架都有 top 8 内白。
+    // 改后行为：骨架顶部留 8pt（左右 0，行卡自带 marginH），与 ExploreFeed 同口径。
+    stateView.skeletonInsets = UIEdgeInsets(top: 8, left: 0, bottom: 24, right: 0)
     stateHeaderHost.isHidden = true
     fab.tintColor = TiebaSimpleRowPalette.default.base.text
     for subview in [list, stateHeaderHost, stateView, fab, pill] as [UIView] {
@@ -101,7 +109,10 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       list.topAnchor.constraint(equalTo: view.topAnchor),
       list.bottomAnchor.constraint(equalTo: view.bottomAnchor),
       stateHeaderHost.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-      stateHeaderHost.topAnchor.constraint(equalTo: view.topAnchor),
+      // 评审 H7：推入页的 view 从屏幕最顶开始（导航栏浮在上面），空态页头钉 view.topAnchor 会被
+      // 状态栏 + 玻璃导航栏遮掉上半部（40pt 图标徽章 / 名称 / 简介），加载态宿主高度归 0 后骨架也从 y=0 起画。
+      // 改后行为：贴安全区，与同页列表路径（contentInsetTop = safeAreaInsets.top）及用户主页名片口径一致。
+      stateHeaderHost.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
       headerWidth,
       headerHeight,
       stateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -458,6 +469,9 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     // 原 TweetCard 未传 closeMenuOptions → 默认只有「屏蔽作者」；不感兴趣按用户要求
     // 与动态流对齐（同一原因面板 + submitDislike + 折叠退场）。
     row["closeMenuOptions"] = ["dislike", "block"]
+    // 卡片长按菜单（分享帖子/复制帖子内容/不感兴趣/屏蔽作者）：接线在本页
+    // handleMenuAction，与行字典开关同生同灭（见 TiebaFeedRowModel）。
+    row["cardContextMenu"] = true
     return row
   }
 
@@ -612,6 +626,14 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     case "media":
       // 真图点击已由原生查看器直开；到这里的只有视频 poster（进帖）。
       openThread(row)
+    case "quote":
+      // 转发引用卡 → 原帖；老数据缺 tid 退回整卡进帖。
+      if let quoteId = TiebaFeedRowInteraction.quotedThreadId(in: row) {
+        TiebaSceneHaptics.fire("press")
+        TiebaNavigator.shared.navigate(.thread(id: quoteId))
+      } else {
+        openThread(row)
+      }
     default:
       openThread(row)
     }
@@ -622,6 +644,11 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     guard rows.indices.contains(index) else { return }
     let row = rows[index]
     switch action {
+    case "share":
+      // 长按卡片菜单的「分享帖子」：与操作栏分享同一份实现（同一入口，不另写一套）。
+      shareThread(row)
+    case "copy-content":
+      copyPostContent(row)
     case "block":
       blockAuthor(row)
     case "dislike":
@@ -715,6 +742,16 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     )
   }
 
+  /// 复制帖子内容（长按卡片菜单）：标题 + 正文纯文本，**不含图片**。
+  /// 取段与拼接的唯一定义在 TiebaFeedRowInteraction.postPlainText（动态流共用）。
+  private func copyPostContent(_ row: [String: Any]) {
+    let text = TiebaFeedRowInteraction.postPlainText(row)
+    guard !text.isEmpty else { return }
+    TiebaClipboard.setString(text)
+    TiebaSceneHaptics.fire("action-success")
+    pill.showResult(success: true, text: "已复制帖子内容")
+  }
+
   /// 点赞：乐观翻转 + 失败回滚（原 useFeedCardActions 的三桶更新收成本页）。
   private func toggleLike(_ row: [String: Any]) {
     let id = TiebaSimpleRowParser.string(row["id"]) ?? ""
@@ -800,11 +837,17 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     }
     guard let card else { return }
     TiebaSceneHaptics.fire("favorite")
+    // 先翻页头（关注/已关注按钮与更多菜单同一判据），失败回滚——与主页关注
+    // （TiebaUserProfileViewController.toggleFollow）同一条乐观策略：不等网络。
+    let wasLike = card.isLike
+    self.card?.isLike = !wasLike
+    updateHeader()
     Task { @MainActor in
       // 卡片带的 tbs 优先；否则现取（缺失会向 /c/s/login 续期，对齐原 JS requireTbs）
       let tbs = card.tbs.isEmpty ? ((try? await TiebaSession.requireTbs()) ?? "") : card.tbs
       do {
-        if card.isLike {
+        // 用捕获时的原态分派（card 是值类型快照，但乐观翻转后读它容易误判方向）。
+        if wasLike {
           try await TiebaForumFeedAPI.unlike(forumId: card.forumId, forumName: self.forumName, tbs: tbs)
           self.card?.isLike = false
           self.updateHeader()
@@ -830,6 +873,9 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
         (self.parent as? TiebaRouteHostViewController)?.syncNativeScreenChrome()
         self.refreshMoreMenu()
       } catch {
+        // 回滚乐观翻转：按钮/菜单一起回到原态，再报错。
+        self.card?.isLike = wasLike
+        self.updateHeader()
         TiebaSceneHaptics.fire("action-fail")
         let message = (error as? TiebaViewModelError)?.message ?? "网络错误，请稍后重试"
         self.pill.showResult(success: false, text: message)
@@ -913,7 +959,6 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
         TiebaPhotoItem(
           url: url,
           thumbUrl: url,
-          isGif: false,
           isLong: false,
           width: 0,
           height: 0
@@ -1054,6 +1099,9 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
       action: #selector(fabTouchUp),
       for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit]
     )
+    // C3：iPad + 触控板/鼠标悬停时给一圈圆形指针高亮（改前 0 命中 —— 本仓 UIPointerInteraction
+    // 一处都没有，而 TiebaNavigationShell 用了 .tabSidebar ⇒ iPad 是受支持形态）。
+    fabPointer = TiebaPointerInteraction(view: fab, style: .circle(nil))
   }
 
   private func handleFabPress() {
@@ -1078,7 +1126,9 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   }
 
   @objc private func fabTouchDown() {
-    UIView.animate(withDuration: 0.12) {
+    // [按上游归位] 0.12 → TiebaAnimationDuration.microFeedback（上游 0.12 档，值逐字不变）：
+    // 上游这一档的典型用法就是"按下反馈"。
+    TiebaAnimation.animate(duration: TiebaAnimationDuration.microFeedback) {
       self.fab.transform = CGAffineTransform(scaleX: 0.85, y: 0.85)
     }
   }
@@ -1109,19 +1159,29 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
 
   private func handleScroll(_ scrollView: UIScrollView) {
     let y = scrollView.contentOffset.y
-    let delta = y - lastScrollY
     lastScrollY = y
     if y <= 1, fabHidden {
       fabHidden = false
       animateFab(translate: 0)
     }
-    guard abs(delta) > 8, fabFunction != "hide" else { return }
-    if delta > 0, !fabHidden {
-      fabHidden = true
-      animateFab(translate: 120)
-    } else if delta < 0, fabHidden {
-      fabHidden = false
-      animateFab(translate: 0)
+    if y <= 1 { fabDirectionGate.reset() }
+    // [按上游改判据] 改前判**单帧位移** |Δy| > 8 —— 120Hz 下一帧走 8pt 太容易，按钮爱翻。
+    // 改后走上游的累积判据：带符号 ΔY 累加，越过 14.0pt 才翻方向
+    //（submodules/Display/Source/ListView.swift:1023-1029，见 TiebaScrollDirectionGate）。
+    // 手感：悬浮按钮的收放**更稳**（抖动不再触发），一次同向滚动只判一次。
+    guard fabFunction != "hide",
+      let direction = fabDirectionGate.update(contentOffsetY: y) else { return }
+    switch direction {
+    case .forward:
+      if !fabHidden {
+        fabHidden = true
+        animateFab(translate: 120)
+      }
+    case .backward:
+      if fabHidden {
+        fabHidden = false
+        animateFab(translate: 0)
+      }
     }
   }
 

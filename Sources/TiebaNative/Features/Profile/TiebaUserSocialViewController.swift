@@ -16,6 +16,8 @@ final class TiebaUserSocialViewController: UIViewController {
   private var isLoading = false
   private var isLoadingMore = false
   private var loadSeq = 0
+  /// 切段撞上在途请求时把重置挂起（早退分支只作废在途结果，不能把这次切段丢掉）。
+  private var pendingReset = false
   /// 行页发布（页键守卫 + 整页后台测量都收敛在 driver）。
   private lazy var driver = TiebaRowPageDriver(list: list, keyPrefix: "social-\(uid)")
 
@@ -67,6 +69,11 @@ final class TiebaUserSocialViewController: UIViewController {
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
+    // [N5] 本页在 sheet 里是裸 UINavigationController 的子页：列表四边钉满 view（y=0），而列表
+    // 固定不自调 inset（contentInsetAdjustmentBehavior = .never）、本页此前只设了 bottom ⇒
+    // 首行用户卡上半被悬浮导航栏盖住、scrollToTop 停在栏下、下拉刷新 spinner 静止位也在栏后。
+    // 与全仓其它列表页同口径（Forum / UserProfile / History / ThreadStore）补上顶部让位。
+    list.contentInsetTop = view.safeAreaInsets.top
     list.contentInsetBottom = view.safeAreaInsets.bottom + 24
     // 行宽契约 = 列表宽 − 2×horizontalInset（本表 10pt 内缩）。
     driver.updateWidth(list.bounds.width - list.horizontalInset * 2)
@@ -76,6 +83,12 @@ final class TiebaUserSocialViewController: UIViewController {
 
   private func reload(reset: Bool) {
     guard !isLoading else {
+      // 在途请求只认 loadSeq：切段（reset）时必须先作废它，否则旧段（粉丝/关注）结果
+      // 会照常通过守卫写进已清空的新段，页号与 hasMore 也被旧段续写。
+      if reset {
+        loadSeq += 1
+        pendingReset = true
+      }
       list.endRefreshing()
       return
     }
@@ -93,6 +106,11 @@ final class TiebaUserSocialViewController: UIViewController {
       defer {
         isLoading = false
         list.endRefreshing()
+        // 刚才被作废的那次切段在这里补做（不补的话页面会一直停在空列表上）。
+        if pendingReset {
+          pendingReset = false
+          reload(reset: true)
+        }
       }
       do {
         let result = try await TiebaProfileAPI.socialList(uid: uid, fans: fans, page: target)
