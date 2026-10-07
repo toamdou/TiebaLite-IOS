@@ -107,6 +107,20 @@ jobs:
           EOF
           cat .bazelrc.user
 
+      # 拆分卡口：//Sources/TiebaNative:Proto 这个 target 依赖那 267 个 protoc 产物是 public
+      # （protoc-gen-swift 默认生成 internal，跨 module 不可见）。若有人用默认可见性重新生成，
+      # 拆分会在编译期挂掉且报错点在生成物里、很难定位 —— 所以在构建前先拦一次，并给出正确姿势。
+      - name: Verify protoc-generated visibility
+        run: |
+          total=$(ls Sources/TiebaNative/Proto/Generated/*.pb.swift | wc -l | tr -d ' ')
+          missing=$(grep -L 'public ' Sources/TiebaNative/Proto/Generated/*.pb.swift | wc -l | tr -d ' ')
+          echo "protoc 产物: $total 个，其中不含任何 public 声明的: $missing 个"
+          if [ "$missing" != "0" ]; then
+            echo "::error::有 $missing 个 protoc 产物不含 public 声明。拆分（//Sources/TiebaNative:Proto）依赖它们跨 module 可见，请用 protoc-gen-swift --swift_opt=Visibility=Public 重新生成后再提交。"
+            grep -L 'public ' Sources/TiebaNative/Proto/Generated/*.pb.swift | head -5
+            exit 1
+          fi
+
       - name: Build (bazel, ad-hoc signed device IPA)
         run: |
           brew install bazelisk
