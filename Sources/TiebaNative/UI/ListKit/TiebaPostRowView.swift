@@ -1136,7 +1136,6 @@ extension TiebaPostRowView: @MainActor UIEditMenuInteractionDelegate {
     selectionMenu ?? UIMenu(children: suggestedActions)
   }
 }
-// MARK: - TextNode 连线（本轮已接）
 //
 // 正文与楼中楼现在都由 TextNode 渲染（textNode / subPostTextNodes），系统 UITextView / UILabel 退场。
 // 四层的接法见 buildSubviews：文本 → 链接按压高亮（TiebaLinkHighlightingNode）→ 无障碍元素层

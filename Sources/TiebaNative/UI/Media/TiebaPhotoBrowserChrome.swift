@@ -452,4 +452,3 @@ final class TiebaPhotoBrowserPillView: UIView {
   }
 }
 
-// MARK: - 浏览器 VC 子类（关闭上报 / 状态栏 / 安全区）

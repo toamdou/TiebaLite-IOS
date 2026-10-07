@@ -5,6 +5,9 @@ import JXPhotoBrowser
 import Nuke
 import UIKit
 
+/// item 的值类型投影；调用方（列表/帖子页/吧页/资料页）从行模型直构，
+/// url 非法的条目由调用方丢弃（不再有字典编组与解析回值）。
+/// public + Sendable：present（公开入口）的入参，跨主队列派发只带值。
 public struct TiebaPhotoItem: Sendable {
   let url: URL
   let thumbUrl: URL?

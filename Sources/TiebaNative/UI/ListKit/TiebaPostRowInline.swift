@@ -238,7 +238,6 @@ func tiebaLoadGifImage(
   }
 }
 
-// MARK: - 头像
 //
 // 行视图不自己实现头像：直接复用 TiebaForumViews 的 TiebaForumAvatarView
 // （首字占位 + Nuke 取图）。它是 init 定尺视图（主贴 40 / 回复 36），尺寸变化

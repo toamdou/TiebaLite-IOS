@@ -1,13 +1,12 @@
-// ============================================================
 // TiebaLite — 异步位图管线 · 色板指纹（R1 的落地，接入第一件事）
 //
 // ⚠️ 本文件是 BitmapPipeline/ 里**唯一**引用 TiebaNative 其他类型的文件
-//（TiebaFeedRowPalette，TiebaRowMetrics.swift:1253）。其余 5 个文件只吃传入的
+//（TiebaFeedRowPalette，见 TiebaRowMetrics.swift）。其余 5 个文件只吃传入的
 // 值类型，可独立 typecheck（见交付说明）。
 //
 // 为什么需要它（报告 §6 R1，接入前必读）：
-//   TiebaFeedRowPalette 是 Equatable **不是 Hashable**（:1253），旧缓存查找是
-//   逐字段比对（TiebaFeedRowView.swift:869-880 的 entries[index].palette == palette），
+//   TiebaFeedRowPalette 是 Equatable **不是 Hashable**，旧缓存查找是
+//   逐字段比对（旧缓存实现里的 entries[index].palette == palette），
 //   所以一直没暴露。而新的位图缓存键 TiebaFeedBitmapKey 必须在 Set / Dictionary 里用。
 //
 //   把 UIColor 直接塞进 Hasher 是**错的**：UIColor.hash 对动态色（.label /
@@ -17,7 +16,6 @@
 //
 // 顺带订正一处旧行为：指纹按传入的外观档解析，所以「同一色板 + 换深浅档」也是不同键
 //（键里另有 styleRaw，双保险）。
-// ============================================================
 
 import UIKit
 

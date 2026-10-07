@@ -152,4 +152,3 @@ enum TiebaPostRowLayout {
   }
 }
 
-// MARK: - 时间文案（共享工具：相对/绝对两种风格一套实现）
