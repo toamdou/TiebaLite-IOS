@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite RN — proto view-model mapper（Foundation-only）
 //
 // 与 src/services/api/endpoints/helpers.ts 纯映射层逐语义对齐的原生移植：
@@ -30,7 +29,6 @@
 //   5. 非空数组作 author（typeof [] === 'object' 且 Object.keys 非空）时，TS 会
 //      丢弃 userList 回退、原生仍回退 userList —— 仅当 author 是数组且 userList
 //      含同 id 时可见；proto3 message 字段不会解码成数组。
-// ============================================================
 
 import Foundation
 

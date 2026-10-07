@@ -1,4 +1,3 @@
-// ============================================================
 // Query 值编码集（TiebaURLQueryValue）
 //
 // [采用] 移植自上游: submodules/UrlEscaping/Sources/UrlEscaping.swift:21-31
@@ -17,7 +16,6 @@
 //
 // 用法：**只在编码"单个 query 参数值"时用它**；编码整条 query 串仍应用
 // `.urlQueryAllowed`（否则分隔符会被一起转义）。
-// ============================================================
 
 import Foundation
 
