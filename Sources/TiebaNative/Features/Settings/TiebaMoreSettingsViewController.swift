@@ -1,8 +1,6 @@
-// ============================================================
 // TiebaMoreSettingsViewController —— 更多设置（原 src/app/settings/more.tsx）
 // 确认弹窗由表单原生画（actionSheet）；「崩溃与卡顿日志」入口已删（数据源从未
 // 编进 App）。⚠️「清除全部数据」清不掉 JS 会话内存态，JS 页面需重启才反映。
-// ============================================================
 import UIKit
 
 final class TiebaMoreSettingsViewController: TiebaFormPageController {

@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaAboutViewController —— 「关于」页（原 src/app/settings/about.tsx）
 //
 // 整屏原生：视图 = TiebaFormListView（plain UIView，系统表单行），数据与动作全在
@@ -21,7 +20,6 @@
 //   - 表单染色的「默认主题不染色」规则：从原生 KV 现读 lightTheme/darkTheme，
 //     主题名为 default 时不下发 tint（行图标五彩、按钮走系统蓝）——与
 //     useFormTintHex() 逐字同义；主色取导航壳的 themeTint（= colors.primary）。
-// ============================================================
 import UIKit
 
 final class TiebaAboutViewController: UIViewController {

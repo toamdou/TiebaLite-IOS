@@ -26,7 +26,7 @@ final class TiebaThreadKnownPostView: UIView {
       && CGFloat(snapshot.imageHeight / snapshot.imageWidth) > 2.4
   }
 
-  /// 图片高度与真实主贴卡同一套规则（TiebaPostRowMetrics.swift:953-957）：竖长图
+  /// 图片高度与真实主贴卡同一套规则（见 TiebaPostRowLayout.longImageHeight / singleImageMaxHeight）：竖长图
   /// 固定 300，其余按宽高比、上限 520。两边算不一样时，换卡那一刻图片与它下面的
   /// 内容会整体跳一次——用户报的"加载完突然往上瞬移"就有这一份。
   private func imageHeight(forWidth width: CGFloat) -> CGFloat {

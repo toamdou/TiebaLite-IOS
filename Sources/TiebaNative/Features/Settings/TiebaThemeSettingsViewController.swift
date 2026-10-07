@@ -1,8 +1,6 @@
-// ============================================================
 // TiebaThemeSettingsViewController —— 个性化（原 src/app/settings/theme.tsx）
 // 主题类偏好改动后立刻重刷原生壳；⚠️ JS ThemeContext 的内存副本要到下次启动
 // 才看到原生写入（过渡期，见批次报告）。
-// ============================================================
 import UIKit
 
 final class TiebaThemeSettingsViewController: TiebaFormPageController {
