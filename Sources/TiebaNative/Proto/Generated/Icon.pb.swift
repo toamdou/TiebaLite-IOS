@@ -20,44 +20,44 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Icon: Sendable {
+nonisolated public struct Tieba_Icon: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var name: String = String()
+  public var name: String = String()
 
-  var weight: Int32 = 0
+  public var weight: Int32 = 0
 
-  var url: String = String()
+  public var url: String = String()
 
-  var icon: String = String()
+  public var icon: String = String()
 
-  var value: Int32 = 0
+  public var value: Int32 = 0
 
-  var terminal: Tieba_Terminal {
+  public var terminal: Tieba_Terminal {
     get {_terminal ?? Tieba_Terminal()}
     set {_terminal = newValue}
   }
   /// Returns true if `terminal` has been explicitly set.
-  var hasTerminal: Bool {self._terminal != nil}
+  public var hasTerminal: Bool {self._terminal != nil}
   /// Clears the value of `terminal`. Subsequent reads from it will return its default value.
-  mutating func clearTerminal() {self._terminal = nil}
+  mutating public func clearTerminal() {self._terminal = nil}
 
-  var position: Tieba_Position {
+  public var position: Tieba_Position {
     get {_position ?? Tieba_Position()}
     set {_position = newValue}
   }
   /// Returns true if `position` has been explicitly set.
-  var hasPosition: Bool {self._position != nil}
+  public var hasPosition: Bool {self._position != nil}
   /// Clears the value of `position`. Subsequent reads from it will return its default value.
-  mutating func clearPosition() {self._position = nil}
+  mutating public func clearPosition() {self._position = nil}
 
-  var spriteInfo: [String] = []
+  public var spriteInfo: [String] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _terminal: Tieba_Terminal? = nil
   fileprivate var _position: Tieba_Position? = nil
@@ -68,10 +68,10 @@ nonisolated struct Tieba_Icon: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Icon: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Icon"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}weight\0\u{1}url\0\u{1}icon\0\u{1}value\0\u{1}terminal\0\u{1}position\0\u{3}sprite_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".Icon"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}weight\0\u{1}url\0\u{1}icon\0\u{1}value\0\u{1}terminal\0\u{1}position\0\u{3}sprite_info\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -90,7 +90,7 @@ nonisolated extension Tieba_Icon: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -122,7 +122,7 @@ nonisolated extension Tieba_Icon: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Icon, rhs: Tieba_Icon) -> Bool {
+  static public func ==(lhs: Tieba_Icon, rhs: Tieba_Icon) -> Bool {
     if lhs.name != rhs.name {return false}
     if lhs.weight != rhs.weight {return false}
     if lhs.url != rhs.url {return false}

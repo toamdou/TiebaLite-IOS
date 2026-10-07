@@ -20,220 +20,220 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_UserPost_UserPostRequestData: @unchecked Sendable {
+nonisolated public struct Tieba_UserPost_UserPostRequestData: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var uid: Int64 {
+  public var uid: Int64 {
     get {_storage._uid}
     set {_uniqueStorage()._uid = newValue}
   }
 
-  var rn: UInt32 {
+  public var rn: UInt32 {
     get {_storage._rn}
     set {_uniqueStorage()._rn = newValue}
   }
 
-  var offset: UInt32 {
+  public var offset: UInt32 {
     get {_storage._offset}
     set {_uniqueStorage()._offset = newValue}
   }
 
-  var isThread: UInt32 {
+  public var isThread: UInt32 {
     get {_storage._isThread ?? 0}
     set {_uniqueStorage()._isThread = newValue}
   }
   /// Returns true if `isThread` has been explicitly set.
-  var hasIsThread: Bool {_storage._isThread != nil}
+  public var hasIsThread: Bool {_storage._isThread != nil}
   /// Clears the value of `isThread`. Subsequent reads from it will return its default value.
-  mutating func clearIsThread() {_uniqueStorage()._isThread = nil}
+  mutating public func clearIsThread() {_uniqueStorage()._isThread = nil}
 
-  var needContent: UInt32 {
+  public var needContent: UInt32 {
     get {_storage._needContent}
     set {_uniqueStorage()._needContent = newValue}
   }
 
-  var forumID: UInt64 {
+  public var forumID: UInt64 {
     get {_storage._forumID}
     set {_uniqueStorage()._forumID = newValue}
   }
 
-  var beginTime: UInt32 {
+  public var beginTime: UInt32 {
     get {_storage._beginTime}
     set {_uniqueStorage()._beginTime = newValue}
   }
 
-  var endTime: UInt32 {
+  public var endTime: UInt32 {
     get {_storage._endTime}
     set {_uniqueStorage()._endTime = newValue}
   }
 
-  var subtype: UInt32 {
+  public var subtype: UInt32 {
     get {_storage._subtype ?? 0}
     set {_uniqueStorage()._subtype = newValue}
   }
   /// Returns true if `subtype` has been explicitly set.
-  var hasSubtype: Bool {_storage._subtype != nil}
+  public var hasSubtype: Bool {_storage._subtype != nil}
   /// Clears the value of `subtype`. Subsequent reads from it will return its default value.
-  mutating func clearSubtype() {_uniqueStorage()._subtype = nil}
+  mutating public func clearSubtype() {_uniqueStorage()._subtype = nil}
 
-  var checkLogin: UInt32 {
+  public var checkLogin: UInt32 {
     get {_storage._checkLogin}
     set {_uniqueStorage()._checkLogin = newValue}
   }
 
-  var ipStr: String {
+  public var ipStr: String {
     get {_storage._ipStr}
     set {_uniqueStorage()._ipStr = newValue}
   }
 
-  var ipInt: UInt32 {
+  public var ipInt: UInt32 {
     get {_storage._ipInt}
     set {_uniqueStorage()._ipInt = newValue}
   }
 
-  var moduleName: String {
+  public var moduleName: String {
     get {_storage._moduleName}
     set {_uniqueStorage()._moduleName = newValue}
   }
 
-  var stType: UInt32 {
+  public var stType: UInt32 {
     get {_storage._stType}
     set {_uniqueStorage()._stType = newValue}
   }
 
-  var stParam: UInt32 {
+  public var stParam: UInt32 {
     get {_storage._stParam}
     set {_uniqueStorage()._stParam = newValue}
   }
 
-  var smileGrade: UInt32 {
+  public var smileGrade: UInt32 {
     get {_storage._smileGrade}
     set {_uniqueStorage()._smileGrade = newValue}
   }
 
-  var supportNoun: UInt32 {
+  public var supportNoun: UInt32 {
     get {_storage._supportNoun}
     set {_uniqueStorage()._supportNoun = newValue}
   }
 
-  var login: UInt32 {
+  public var login: UInt32 {
     get {_storage._login}
     set {_uniqueStorage()._login = newValue}
   }
 
-  var userID: Int64 {
+  public var userID: Int64 {
     get {_storage._userID}
     set {_uniqueStorage()._userID = newValue}
   }
 
-  var userName: String {
+  public var userName: String {
     get {_storage._userName}
     set {_uniqueStorage()._userName = newValue}
   }
 
-  var noUn: UInt32 {
+  public var noUn: UInt32 {
     get {_storage._noUn}
     set {_uniqueStorage()._noUn = newValue}
   }
 
-  var portrait: String {
+  public var portrait: String {
     get {_storage._portrait}
     set {_uniqueStorage()._portrait = newValue}
   }
 
-  var mobile: String {
+  public var mobile: String {
     get {_storage._mobile}
     set {_uniqueStorage()._mobile = newValue}
   }
 
-  var email: String {
+  public var email: String {
     get {_storage._email}
     set {_uniqueStorage()._email = newValue}
   }
 
-  var cookie: String {
+  public var cookie: String {
     get {_storage._cookie}
     set {_uniqueStorage()._cookie = newValue}
   }
 
-  var pn: UInt32 {
+  public var pn: UInt32 {
     get {_storage._pn}
     set {_uniqueStorage()._pn = newValue}
   }
 
-  var common: Tieba_CommonRequest {
+  public var common: Tieba_CommonRequest {
     get {_storage._common ?? Tieba_CommonRequest()}
     set {_uniqueStorage()._common = newValue}
   }
   /// Returns true if `common` has been explicitly set.
-  var hasCommon: Bool {_storage._common != nil}
+  public var hasCommon: Bool {_storage._common != nil}
   /// Clears the value of `common`. Subsequent reads from it will return its default value.
-  mutating func clearCommon() {_uniqueStorage()._common = nil}
+  mutating public func clearCommon() {_uniqueStorage()._common = nil}
 
-  var isTwzhibo: UInt32 {
+  public var isTwzhibo: UInt32 {
     get {_storage._isTwzhibo}
     set {_uniqueStorage()._isTwzhibo = newValue}
   }
 
-  var scrW: Int32 {
+  public var scrW: Int32 {
     get {_storage._scrW}
     set {_uniqueStorage()._scrW = newValue}
   }
 
-  var scrH: Int32 {
+  public var scrH: Int32 {
     get {_storage._scrH}
     set {_uniqueStorage()._scrH = newValue}
   }
 
-  var scrDip: Double {
+  public var scrDip: Double {
     get {_storage._scrDip}
     set {_uniqueStorage()._scrDip = newValue}
   }
 
-  var qType: Int32 {
+  public var qType: Int32 {
     get {_storage._qType}
     set {_uniqueStorage()._qType = newValue}
   }
 
-  var isViewCard: Int32 {
+  public var isViewCard: Int32 {
     get {_storage._isViewCard ?? 0}
     set {_uniqueStorage()._isViewCard = newValue}
   }
   /// Returns true if `isViewCard` has been explicitly set.
-  var hasIsViewCard: Bool {_storage._isViewCard != nil}
+  public var hasIsViewCard: Bool {_storage._isViewCard != nil}
   /// Clears the value of `isViewCard`. Subsequent reads from it will return its default value.
-  mutating func clearIsViewCard() {_uniqueStorage()._isViewCard = nil}
+  mutating public func clearIsViewCard() {_uniqueStorage()._isViewCard = nil}
 
-  var lastThreadTime: UInt32 {
+  public var lastThreadTime: UInt32 {
     get {_storage._lastThreadTime}
     set {_uniqueStorage()._lastThreadTime = newValue}
   }
 
-  var workTabID: UInt32 {
+  public var workTabID: UInt32 {
     get {_storage._workTabID}
     set {_uniqueStorage()._workTabID = newValue}
   }
 
-  var type: UInt32 {
+  public var type: UInt32 {
     get {_storage._type}
     set {_uniqueStorage()._type = newValue}
   }
 
-  var fromType: UInt32 {
+  public var fromType: UInt32 {
     get {_storage._fromType}
     set {_uniqueStorage()._fromType = newValue}
   }
 
-  var beginThreadID: UInt64 {
+  public var beginThreadID: UInt64 {
     get {_storage._beginThreadID}
     set {_uniqueStorage()._beginThreadID = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -243,8 +243,8 @@ nonisolated struct Tieba_UserPost_UserPostRequestData: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.userPost"
 
 nonisolated extension Tieba_UserPost_UserPostRequestData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UserPostRequestData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{1}rn\0\u{1}offset\0\u{3}is_thread\0\u{3}need_content\0\u{3}forum_id\0\u{3}begin_time\0\u{3}end_time\0\u{1}subtype\0\u{3}check_login\0\u{3}ip_str\0\u{3}ip_int\0\u{3}module_name\0\u{3}st_type\0\u{3}st_param\0\u{3}smile_grade\0\u{3}support_noun\0\u{1}login\0\u{3}user_id\0\u{3}user_name\0\u{3}no_un\0\u{1}portrait\0\u{1}mobile\0\u{1}email\0\u{1}cookie\0\u{1}pn\0\u{1}common\0\u{3}is_twzhibo\0\u{3}scr_w\0\u{3}scr_h\0\u{3}scr_dip\0\u{3}q_type\0\u{3}is_view_card\0\u{3}last_thread_time\0\u{3}work_tab_id\0\u{1}type\0\u{3}from_type\0\u{3}begin_thread_id\0")
+  static public let protoMessageName: String = _protobuf_package + ".UserPostRequestData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{1}rn\0\u{1}offset\0\u{3}is_thread\0\u{3}need_content\0\u{3}forum_id\0\u{3}begin_time\0\u{3}end_time\0\u{1}subtype\0\u{3}check_login\0\u{3}ip_str\0\u{3}ip_int\0\u{3}module_name\0\u{3}st_type\0\u{3}st_param\0\u{3}smile_grade\0\u{3}support_noun\0\u{1}login\0\u{3}user_id\0\u{3}user_name\0\u{3}no_un\0\u{1}portrait\0\u{1}mobile\0\u{1}email\0\u{1}cookie\0\u{1}pn\0\u{1}common\0\u{3}is_twzhibo\0\u{3}scr_w\0\u{3}scr_h\0\u{3}scr_dip\0\u{3}q_type\0\u{3}is_view_card\0\u{3}last_thread_time\0\u{3}work_tab_id\0\u{1}type\0\u{3}from_type\0\u{3}begin_thread_id\0")
 
   fileprivate class _StorageClass {
     var _uid: Int64 = 0
@@ -343,7 +343,7 @@ nonisolated extension Tieba_UserPost_UserPostRequestData: SwiftProtobuf.Message,
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -395,7 +395,7 @@ nonisolated extension Tieba_UserPost_UserPostRequestData: SwiftProtobuf.Message,
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -519,7 +519,7 @@ nonisolated extension Tieba_UserPost_UserPostRequestData: SwiftProtobuf.Message,
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_UserPost_UserPostRequestData, rhs: Tieba_UserPost_UserPostRequestData) -> Bool {
+  static public func ==(lhs: Tieba_UserPost_UserPostRequestData, rhs: Tieba_UserPost_UserPostRequestData) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

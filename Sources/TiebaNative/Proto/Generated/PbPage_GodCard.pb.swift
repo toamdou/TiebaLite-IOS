@@ -20,30 +20,30 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbPage_GodCard: Sendable {
+nonisolated public struct Tieba_PbPage_GodCard: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var userName: String = String()
+  public var userName: String = String()
 
-  var portrait: String = String()
+  public var portrait: String = String()
 
-  var timeEx: String = String()
+  public var timeEx: String = String()
 
-  var text: String = String()
+  public var text: String = String()
 
-  var picURL: String = String()
+  public var picURL: String = String()
 
-  var buttonText: String = String()
+  public var buttonText: String = String()
 
-  var buttonURL: String = String()
+  public var buttonURL: String = String()
 
-  var showFloor: UInt32 = 0
+  public var showFloor: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -51,10 +51,10 @@ nonisolated struct Tieba_PbPage_GodCard: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.pbPage"
 
 nonisolated extension Tieba_PbPage_GodCard: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GodCard"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_name\0\u{1}portrait\0\u{3}time_ex\0\u{1}text\0\u{3}pic_url\0\u{3}button_text\0\u{3}button_url\0\u{3}show_floor\0")
+  static public let protoMessageName: String = _protobuf_package + ".GodCard"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_name\0\u{1}portrait\0\u{3}time_ex\0\u{1}text\0\u{3}pic_url\0\u{3}button_text\0\u{3}button_url\0\u{3}show_floor\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -73,7 +73,7 @@ nonisolated extension Tieba_PbPage_GodCard: SwiftProtobuf.Message, SwiftProtobuf
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.userName.isEmpty {
       try visitor.visitSingularStringField(value: self.userName, fieldNumber: 1)
     }
@@ -101,7 +101,7 @@ nonisolated extension Tieba_PbPage_GodCard: SwiftProtobuf.Message, SwiftProtobuf
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbPage_GodCard, rhs: Tieba_PbPage_GodCard) -> Bool {
+  static public func ==(lhs: Tieba_PbPage_GodCard, rhs: Tieba_PbPage_GodCard) -> Bool {
     if lhs.userName != rhs.userName {return false}
     if lhs.portrait != rhs.portrait {return false}
     if lhs.timeEx != rhs.timeEx {return false}

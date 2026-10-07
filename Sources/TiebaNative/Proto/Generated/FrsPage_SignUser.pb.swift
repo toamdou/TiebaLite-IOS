@@ -20,36 +20,36 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_FrsPage_SignUser: Sendable {
+nonisolated public struct Tieba_FrsPage_SignUser: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var userID: Int64 = 0
+  public var userID: Int64 = 0
 
-  var isSignIn: Int32 = 0
+  public var isSignIn: Int32 = 0
 
-  var userSignRank: Int32 = 0
+  public var userSignRank: Int32 = 0
 
-  var signTime: Int32 = 0
+  public var signTime: Int32 = 0
 
-  var contSignNum: Int32 = 0
+  public var contSignNum: Int32 = 0
 
-  var coutTotalSignNum: Int32 = 0
+  public var coutTotalSignNum: Int32 = 0
 
-  var isOrgDisabled: Int32 = 0
+  public var isOrgDisabled: Int32 = 0
 
-  var cSignNum: Int32 = 0
+  public var cSignNum: Int32 = 0
 
-  var hunSignNum: Int32 = 0
+  public var hunSignNum: Int32 = 0
 
-  var totalResignNum: Int32 = 0
+  public var totalResignNum: Int32 = 0
 
-  var missSignNum: Int32 = 0
+  public var missSignNum: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -57,10 +57,10 @@ nonisolated struct Tieba_FrsPage_SignUser: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.frsPage"
 
 nonisolated extension Tieba_FrsPage_SignUser: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SignUser"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}is_sign_in\0\u{3}user_sign_rank\0\u{3}sign_time\0\u{3}cont_sign_num\0\u{3}cout_total_sign_num\0\u{3}is_org_disabled\0\u{3}c_sign_num\0\u{3}hun_sign_num\0\u{3}total_resign_num\0\u{3}miss_sign_num\0")
+  static public let protoMessageName: String = _protobuf_package + ".SignUser"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}is_sign_in\0\u{3}user_sign_rank\0\u{3}sign_time\0\u{3}cont_sign_num\0\u{3}cout_total_sign_num\0\u{3}is_org_disabled\0\u{3}c_sign_num\0\u{3}hun_sign_num\0\u{3}total_resign_num\0\u{3}miss_sign_num\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -82,7 +82,7 @@ nonisolated extension Tieba_FrsPage_SignUser: SwiftProtobuf.Message, SwiftProtob
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.userID != 0 {
       try visitor.visitSingularInt64Field(value: self.userID, fieldNumber: 1)
     }
@@ -119,7 +119,7 @@ nonisolated extension Tieba_FrsPage_SignUser: SwiftProtobuf.Message, SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_FrsPage_SignUser, rhs: Tieba_FrsPage_SignUser) -> Bool {
+  static public func ==(lhs: Tieba_FrsPage_SignUser, rhs: Tieba_FrsPage_SignUser) -> Bool {
     if lhs.userID != rhs.userID {return false}
     if lhs.isSignIn != rhs.isSignIn {return false}
     if lhs.userSignRank != rhs.userSignRank {return false}

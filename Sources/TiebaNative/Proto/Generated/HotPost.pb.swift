@@ -20,41 +20,41 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_HotPost: Sendable {
+nonisolated public struct Tieba_HotPost: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var threadID: UInt64 = 0
+  public var threadID: UInt64 = 0
 
-  var postID: UInt64 = 0
+  public var postID: UInt64 = 0
 
-  var userName: String = String()
+  public var userName: String = String()
 
-  var userID: UInt64 = 0
+  public var userID: UInt64 = 0
 
-  var postZan: Tieba_PbPostZan {
+  public var postZan: Tieba_PbPostZan {
     get {_postZan ?? Tieba_PbPostZan()}
     set {_postZan = newValue}
   }
   /// Returns true if `postZan` has been explicitly set.
-  var hasPostZan: Bool {self._postZan != nil}
+  public var hasPostZan: Bool {self._postZan != nil}
   /// Clears the value of `postZan`. Subsequent reads from it will return its default value.
-  mutating func clearPostZan() {self._postZan = nil}
+  mutating public func clearPostZan() {self._postZan = nil}
 
-  var postNum: Int32 = 0
+  public var postNum: Int32 = 0
 
-  var content: [Tieba_PbContent] = []
+  public var content: [Tieba_PbContent] = []
 
-  var createTime: UInt32 = 0
+  public var createTime: UInt32 = 0
 
-  var floor: UInt32 = 0
+  public var floor: UInt32 = 0
 
-  var portrait: String = String()
+  public var portrait: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _postZan: Tieba_PbPostZan? = nil
 }
@@ -64,10 +64,10 @@ nonisolated struct Tieba_HotPost: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_HotPost: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".HotPost"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}thread_id\0\u{3}post_id\0\u{3}user_name\0\u{3}user_id\0\u{3}post_zan\0\u{3}post_num\0\u{1}content\0\u{3}create_time\0\u{1}floor\0\u{1}portrait\0")
+  static public let protoMessageName: String = _protobuf_package + ".HotPost"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}thread_id\0\u{3}post_id\0\u{3}user_name\0\u{3}user_id\0\u{3}post_zan\0\u{3}post_num\0\u{1}content\0\u{3}create_time\0\u{1}floor\0\u{1}portrait\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -88,7 +88,7 @@ nonisolated extension Tieba_HotPost: SwiftProtobuf.Message, SwiftProtobuf._Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -126,7 +126,7 @@ nonisolated extension Tieba_HotPost: SwiftProtobuf.Message, SwiftProtobuf._Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_HotPost, rhs: Tieba_HotPost) -> Bool {
+  static public func ==(lhs: Tieba_HotPost, rhs: Tieba_HotPost) -> Bool {
     if lhs.threadID != rhs.threadID {return false}
     if lhs.postID != rhs.postID {return false}
     if lhs.userName != rhs.userName {return false}

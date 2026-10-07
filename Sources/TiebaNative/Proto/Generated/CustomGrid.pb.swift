@@ -20,30 +20,30 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_CustomGrid: Sendable {
+nonisolated public struct Tieba_CustomGrid: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var title: String = String()
+  public var title: String = String()
 
-  var actionUri: String = String()
+  public var actionUri: String = String()
 
-  var actionType: Int32 = 0
+  public var actionType: Int32 = 0
 
-  var icon: String = String()
+  public var icon: String = String()
 
-  var type: Int32 = 0
+  public var type: Int32 = 0
 
-  var redPointVersion: Int64 = 0
+  public var redPointVersion: Int64 = 0
 
-  var desc: String = String()
+  public var desc: String = String()
 
-  var markText: String = String()
+  public var markText: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -51,10 +51,10 @@ nonisolated struct Tieba_CustomGrid: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_CustomGrid: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".CustomGrid"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{3}action_uri\0\u{3}action_type\0\u{1}icon\0\u{2}\u{2}type\0\u{3}red_point_version\0\u{1}desc\0\u{3}mark_text\0")
+  static public let protoMessageName: String = _protobuf_package + ".CustomGrid"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{3}action_uri\0\u{3}action_type\0\u{1}icon\0\u{2}\u{2}type\0\u{3}red_point_version\0\u{1}desc\0\u{3}mark_text\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -73,7 +73,7 @@ nonisolated extension Tieba_CustomGrid: SwiftProtobuf.Message, SwiftProtobuf._Me
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.title.isEmpty {
       try visitor.visitSingularStringField(value: self.title, fieldNumber: 1)
     }
@@ -101,7 +101,7 @@ nonisolated extension Tieba_CustomGrid: SwiftProtobuf.Message, SwiftProtobuf._Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_CustomGrid, rhs: Tieba_CustomGrid) -> Bool {
+  static public func ==(lhs: Tieba_CustomGrid, rhs: Tieba_CustomGrid) -> Bool {
     if lhs.title != rhs.title {return false}
     if lhs.actionUri != rhs.actionUri {return false}
     if lhs.actionType != rhs.actionType {return false}

@@ -20,18 +20,18 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbPage_FeedExtInfo: Sendable {
+nonisolated public struct Tieba_PbPage_FeedExtInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var feedTab: [String] = []
+  public var feedTab: [String] = []
 
-  var feedBar: [String] = []
+  public var feedBar: [String] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -39,10 +39,10 @@ nonisolated struct Tieba_PbPage_FeedExtInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.pbPage"
 
 nonisolated extension Tieba_PbPage_FeedExtInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".FeedExtInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}feed_tab\0\u{3}feed_bar\0")
+  static public let protoMessageName: String = _protobuf_package + ".FeedExtInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}feed_tab\0\u{3}feed_bar\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -55,7 +55,7 @@ nonisolated extension Tieba_PbPage_FeedExtInfo: SwiftProtobuf.Message, SwiftProt
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.feedTab.isEmpty {
       try visitor.visitRepeatedStringField(value: self.feedTab, fieldNumber: 1)
     }
@@ -65,7 +65,7 @@ nonisolated extension Tieba_PbPage_FeedExtInfo: SwiftProtobuf.Message, SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbPage_FeedExtInfo, rhs: Tieba_PbPage_FeedExtInfo) -> Bool {
+  static public func ==(lhs: Tieba_PbPage_FeedExtInfo, rhs: Tieba_PbPage_FeedExtInfo) -> Bool {
     if lhs.feedTab != rhs.feedTab {return false}
     if lhs.feedBar != rhs.feedBar {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

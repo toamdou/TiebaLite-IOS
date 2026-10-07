@@ -20,59 +20,59 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_AppPosInfo: Sendable {
+nonisolated public struct Tieba_AppPosInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var addrTimestamp: Int64 {
+  public var addrTimestamp: Int64 {
     get {_addrTimestamp ?? 0}
     set {_addrTimestamp = newValue}
   }
   /// Returns true if `addrTimestamp` has been explicitly set.
-  var hasAddrTimestamp: Bool {self._addrTimestamp != nil}
+  public var hasAddrTimestamp: Bool {self._addrTimestamp != nil}
   /// Clears the value of `addrTimestamp`. Subsequent reads from it will return its default value.
-  mutating func clearAddrTimestamp() {self._addrTimestamp = nil}
+  mutating public func clearAddrTimestamp() {self._addrTimestamp = nil}
 
-  var apConnected: Bool {
+  public var apConnected: Bool {
     get {_apConnected ?? false}
     set {_apConnected = newValue}
   }
   /// Returns true if `apConnected` has been explicitly set.
-  var hasApConnected: Bool {self._apConnected != nil}
+  public var hasApConnected: Bool {self._apConnected != nil}
   /// Clears the value of `apConnected`. Subsequent reads from it will return its default value.
-  mutating func clearApConnected() {self._apConnected = nil}
+  mutating public func clearApConnected() {self._apConnected = nil}
 
-  var apMac: String {
+  public var apMac: String {
     get {_apMac ?? String()}
     set {_apMac = newValue}
   }
   /// Returns true if `apMac` has been explicitly set.
-  var hasApMac: Bool {self._apMac != nil}
+  public var hasApMac: Bool {self._apMac != nil}
   /// Clears the value of `apMac`. Subsequent reads from it will return its default value.
-  mutating func clearApMac() {self._apMac = nil}
+  mutating public func clearApMac() {self._apMac = nil}
 
-  var aspShownInfo: String {
+  public var aspShownInfo: String {
     get {_aspShownInfo ?? String()}
     set {_aspShownInfo = newValue}
   }
   /// Returns true if `aspShownInfo` has been explicitly set.
-  var hasAspShownInfo: Bool {self._aspShownInfo != nil}
+  public var hasAspShownInfo: Bool {self._aspShownInfo != nil}
   /// Clears the value of `aspShownInfo`. Subsequent reads from it will return its default value.
-  mutating func clearAspShownInfo() {self._aspShownInfo = nil}
+  mutating public func clearAspShownInfo() {self._aspShownInfo = nil}
 
-  var coordinateType: String {
+  public var coordinateType: String {
     get {_coordinateType ?? String()}
     set {_coordinateType = newValue}
   }
   /// Returns true if `coordinateType` has been explicitly set.
-  var hasCoordinateType: Bool {self._coordinateType != nil}
+  public var hasCoordinateType: Bool {self._coordinateType != nil}
   /// Clears the value of `coordinateType`. Subsequent reads from it will return its default value.
-  mutating func clearCoordinateType() {self._coordinateType = nil}
+  mutating public func clearCoordinateType() {self._coordinateType = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _addrTimestamp: Int64? = nil
   fileprivate var _apConnected: Bool? = nil
@@ -86,10 +86,10 @@ nonisolated struct Tieba_AppPosInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_AppPosInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AppPosInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ap_mac\0\u{3}ap_connected\0\u{3}coordinate_type\0\u{4}\u{3}addr_timestamp\0\u{3}asp_shown_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".AppPosInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ap_mac\0\u{3}ap_connected\0\u{3}coordinate_type\0\u{4}\u{3}addr_timestamp\0\u{3}asp_shown_info\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -105,7 +105,7 @@ nonisolated extension Tieba_AppPosInfo: SwiftProtobuf.Message, SwiftProtobuf._Me
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -128,7 +128,7 @@ nonisolated extension Tieba_AppPosInfo: SwiftProtobuf.Message, SwiftProtobuf._Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_AppPosInfo, rhs: Tieba_AppPosInfo) -> Bool {
+  static public func ==(lhs: Tieba_AppPosInfo, rhs: Tieba_AppPosInfo) -> Bool {
     if lhs._addrTimestamp != rhs._addrTimestamp {return false}
     if lhs._apConnected != rhs._apConnected {return false}
     if lhs._apMac != rhs._apMac {return false}

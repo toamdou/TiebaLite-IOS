@@ -20,500 +20,500 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbPage_PbPageRequestData: @unchecked Sendable {
+nonisolated public struct Tieba_PbPage_PbPageRequestData: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var pbRn: Int32 {
+  public var pbRn: Int32 {
     get {_storage._pbRn ?? 0}
     set {_uniqueStorage()._pbRn = newValue}
   }
   /// Returns true if `pbRn` has been explicitly set.
-  var hasPbRn: Bool {_storage._pbRn != nil}
+  public var hasPbRn: Bool {_storage._pbRn != nil}
   /// Clears the value of `pbRn`. Subsequent reads from it will return its default value.
-  mutating func clearPbRn() {_uniqueStorage()._pbRn = nil}
+  mutating public func clearPbRn() {_uniqueStorage()._pbRn = nil}
 
-  var mark: Int32 {
+  public var mark: Int32 {
     get {_storage._mark}
     set {_uniqueStorage()._mark = newValue}
   }
 
-  var back: Int32 {
+  public var back: Int32 {
     get {_storage._back ?? 0}
     set {_uniqueStorage()._back = newValue}
   }
   /// Returns true if `back` has been explicitly set.
-  var hasBack: Bool {_storage._back != nil}
+  public var hasBack: Bool {_storage._back != nil}
   /// Clears the value of `back`. Subsequent reads from it will return its default value.
-  mutating func clearBack() {_uniqueStorage()._back = nil}
+  mutating public func clearBack() {_uniqueStorage()._back = nil}
 
-  var kz: Int64 {
+  public var kz: Int64 {
     get {_storage._kz}
     set {_uniqueStorage()._kz = newValue}
   }
 
-  var lz: Int32 {
+  public var lz: Int32 {
     get {_storage._lz}
     set {_uniqueStorage()._lz = newValue}
   }
 
-  var r: Int32 {
+  public var r: Int32 {
     get {_storage._r}
     set {_uniqueStorage()._r = newValue}
   }
 
-  var pid: Int64 {
+  public var pid: Int64 {
     get {_storage._pid ?? 0}
     set {_uniqueStorage()._pid = newValue}
   }
   /// Returns true if `pid` has been explicitly set.
-  var hasPid: Bool {_storage._pid != nil}
+  public var hasPid: Bool {_storage._pid != nil}
   /// Clears the value of `pid`. Subsequent reads from it will return its default value.
-  mutating func clearPid() {_uniqueStorage()._pid = nil}
+  mutating public func clearPid() {_uniqueStorage()._pid = nil}
 
-  var withFloor: Int32 {
+  public var withFloor: Int32 {
     get {_storage._withFloor}
     set {_uniqueStorage()._withFloor = newValue}
   }
 
-  var floorRn: Int32 {
+  public var floorRn: Int32 {
     get {_storage._floorRn}
     set {_uniqueStorage()._floorRn = newValue}
   }
 
-  var weipost: Int32 {
+  public var weipost: Int32 {
     get {_storage._weipost ?? 0}
     set {_uniqueStorage()._weipost = newValue}
   }
   /// Returns true if `weipost` has been explicitly set.
-  var hasWeipost: Bool {_storage._weipost != nil}
+  public var hasWeipost: Bool {_storage._weipost != nil}
   /// Clears the value of `weipost`. Subsequent reads from it will return its default value.
-  mutating func clearWeipost() {_uniqueStorage()._weipost = nil}
+  mutating public func clearWeipost() {_uniqueStorage()._weipost = nil}
 
-  var messageID: Int32 {
+  public var messageID: Int32 {
     get {_storage._messageID}
     set {_uniqueStorage()._messageID = newValue}
   }
 
-  var sModel: Int32 {
+  public var sModel: Int32 {
     get {_storage._sModel ?? 0}
     set {_uniqueStorage()._sModel = newValue}
   }
   /// Returns true if `sModel` has been explicitly set.
-  var hasSModel: Bool {_storage._sModel != nil}
+  public var hasSModel: Bool {_storage._sModel != nil}
   /// Clears the value of `sModel`. Subsequent reads from it will return its default value.
-  mutating func clearSModel() {_uniqueStorage()._sModel = nil}
+  mutating public func clearSModel() {_uniqueStorage()._sModel = nil}
 
-  var rn: Int32 {
+  public var rn: Int32 {
     get {_storage._rn}
     set {_uniqueStorage()._rn = newValue}
   }
 
-  var scrW: Int32 {
+  public var scrW: Int32 {
     get {_storage._scrW}
     set {_uniqueStorage()._scrW = newValue}
   }
 
-  var scrH: Int32 {
+  public var scrH: Int32 {
     get {_storage._scrH}
     set {_uniqueStorage()._scrH = newValue}
   }
 
-  var scrDip: Double {
+  public var scrDip: Double {
     get {_storage._scrDip}
     set {_uniqueStorage()._scrDip = newValue}
   }
 
-  var qType: Int32 {
+  public var qType: Int32 {
     get {_storage._qType}
     set {_uniqueStorage()._qType = newValue}
   }
 
-  var pn: Int32 {
+  public var pn: Int32 {
     get {_storage._pn}
     set {_uniqueStorage()._pn = newValue}
   }
 
-  var stType: String {
+  public var stType: String {
     get {_storage._stType}
     set {_uniqueStorage()._stType = newValue}
   }
 
-  var threadType: Int32 {
+  public var threadType: Int32 {
     get {_storage._threadType ?? 0}
     set {_uniqueStorage()._threadType = newValue}
   }
   /// Returns true if `threadType` has been explicitly set.
-  var hasThreadType: Bool {_storage._threadType != nil}
+  public var hasThreadType: Bool {_storage._threadType != nil}
   /// Clears the value of `threadType`. Subsequent reads from it will return its default value.
-  mutating func clearThreadType() {_uniqueStorage()._threadType = nil}
+  mutating public func clearThreadType() {_uniqueStorage()._threadType = nil}
 
-  var banner: Int32 {
+  public var banner: Int32 {
     get {_storage._banner ?? 0}
     set {_uniqueStorage()._banner = newValue}
   }
   /// Returns true if `banner` has been explicitly set.
-  var hasBanner: Bool {_storage._banner != nil}
+  public var hasBanner: Bool {_storage._banner != nil}
   /// Clears the value of `banner`. Subsequent reads from it will return its default value.
-  mutating func clearBanner() {_uniqueStorage()._banner = nil}
+  mutating public func clearBanner() {_uniqueStorage()._banner = nil}
 
-  var arround: Int32 {
+  public var arround: Int32 {
     get {_storage._arround}
     set {_uniqueStorage()._arround = newValue}
   }
 
-  var last: Int32 {
+  public var last: Int32 {
     get {_storage._last}
     set {_uniqueStorage()._last = newValue}
   }
 
-  var msgClick: String {
+  public var msgClick: String {
     get {_storage._msgClick}
     set {_uniqueStorage()._msgClick = newValue}
   }
 
-  var common: Tieba_CommonRequest {
+  public var common: Tieba_CommonRequest {
     get {_storage._common ?? Tieba_CommonRequest()}
     set {_uniqueStorage()._common = newValue}
   }
   /// Returns true if `common` has been explicitly set.
-  var hasCommon: Bool {_storage._common != nil}
+  public var hasCommon: Bool {_storage._common != nil}
   /// Clears the value of `common`. Subsequent reads from it will return its default value.
-  mutating func clearCommon() {_uniqueStorage()._common = nil}
+  mutating public func clearCommon() {_uniqueStorage()._common = nil}
 
-  var lastids: String {
+  public var lastids: String {
     get {_storage._lastids}
     set {_uniqueStorage()._lastids = newValue}
   }
 
-  var stFrom: String {
+  public var stFrom: String {
     get {_storage._stFrom}
     set {_uniqueStorage()._stFrom = newValue}
   }
 
-  var stLink: String {
+  public var stLink: String {
     get {_storage._stLink}
     set {_uniqueStorage()._stLink = newValue}
   }
 
-  var stStat: Int32 {
+  public var stStat: Int32 {
     get {_storage._stStat}
     set {_uniqueStorage()._stStat = newValue}
   }
 
-  var stTask: Int64 {
+  public var stTask: Int64 {
     get {_storage._stTask}
     set {_uniqueStorage()._stTask = newValue}
   }
 
-  var issdk: Int32 {
+  public var issdk: Int32 {
     get {_storage._issdk}
     set {_uniqueStorage()._issdk = newValue}
   }
 
-  var queryWord: String {
+  public var queryWord: String {
     get {_storage._queryWord}
     set {_uniqueStorage()._queryWord = newValue}
   }
 
-  var isCommReverse: Int32 {
+  public var isCommReverse: Int32 {
     get {_storage._isCommReverse ?? 0}
     set {_uniqueStorage()._isCommReverse = newValue}
   }
   /// Returns true if `isCommReverse` has been explicitly set.
-  var hasIsCommReverse: Bool {_storage._isCommReverse != nil}
+  public var hasIsCommReverse: Bool {_storage._isCommReverse != nil}
   /// Clears the value of `isCommReverse`. Subsequent reads from it will return its default value.
-  mutating func clearIsCommReverse() {_uniqueStorage()._isCommReverse = nil}
+  mutating public func clearIsCommReverse() {_uniqueStorage()._isCommReverse = nil}
 
-  var isJumpfloor: Int32 {
+  public var isJumpfloor: Int32 {
     get {_storage._isJumpfloor ?? 0}
     set {_uniqueStorage()._isJumpfloor = newValue}
   }
   /// Returns true if `isJumpfloor` has been explicitly set.
-  var hasIsJumpfloor: Bool {_storage._isJumpfloor != nil}
+  public var hasIsJumpfloor: Bool {_storage._isJumpfloor != nil}
   /// Clears the value of `isJumpfloor`. Subsequent reads from it will return its default value.
-  mutating func clearIsJumpfloor() {_uniqueStorage()._isJumpfloor = nil}
+  mutating public func clearIsJumpfloor() {_uniqueStorage()._isJumpfloor = nil}
 
-  var jumpfloorNum: Int32 {
+  public var jumpfloorNum: Int32 {
     get {_storage._jumpfloorNum ?? 0}
     set {_uniqueStorage()._jumpfloorNum = newValue}
   }
   /// Returns true if `jumpfloorNum` has been explicitly set.
-  var hasJumpfloorNum: Bool {_storage._jumpfloorNum != nil}
+  public var hasJumpfloorNum: Bool {_storage._jumpfloorNum != nil}
   /// Clears the value of `jumpfloorNum`. Subsequent reads from it will return its default value.
-  mutating func clearJumpfloorNum() {_uniqueStorage()._jumpfloorNum = nil}
+  mutating public func clearJumpfloorNum() {_uniqueStorage()._jumpfloorNum = nil}
 
-  var daIdfa: String {
+  public var daIdfa: String {
     get {_storage._daIdfa}
     set {_uniqueStorage()._daIdfa = newValue}
   }
 
-  var platform: String {
+  public var platform: String {
     get {_storage._platform}
     set {_uniqueStorage()._platform = newValue}
   }
 
-  var jid: UInt64 {
+  public var jid: UInt64 {
     get {_storage._jid}
     set {_uniqueStorage()._jid = newValue}
   }
 
-  var fid: UInt64 {
+  public var fid: UInt64 {
     get {_storage._fid}
     set {_uniqueStorage()._fid = newValue}
   }
 
-  var jfrom: String {
+  public var jfrom: String {
     get {_storage._jfrom}
     set {_uniqueStorage()._jfrom = newValue}
   }
 
-  var yuelaouLocate: String {
+  public var yuelaouLocate: String {
     get {_storage._yuelaouLocate}
     set {_uniqueStorage()._yuelaouLocate = newValue}
   }
 
-  var yuelaouParams: String {
+  public var yuelaouParams: String {
     get {_storage._yuelaouParams}
     set {_uniqueStorage()._yuelaouParams = newValue}
   }
 
-  var objSource: String {
+  public var objSource: String {
     get {_storage._objSource ?? String()}
     set {_uniqueStorage()._objSource = newValue}
   }
   /// Returns true if `objSource` has been explicitly set.
-  var hasObjSource: Bool {_storage._objSource != nil}
+  public var hasObjSource: Bool {_storage._objSource != nil}
   /// Clears the value of `objSource`. Subsequent reads from it will return its default value.
-  mutating func clearObjSource() {_uniqueStorage()._objSource = nil}
+  mutating public func clearObjSource() {_uniqueStorage()._objSource = nil}
 
-  var objLocate: String {
+  public var objLocate: String {
     get {_storage._objLocate ?? String()}
     set {_uniqueStorage()._objLocate = newValue}
   }
   /// Returns true if `objLocate` has been explicitly set.
-  var hasObjLocate: Bool {_storage._objLocate != nil}
+  public var hasObjLocate: Bool {_storage._objLocate != nil}
   /// Clears the value of `objLocate`. Subsequent reads from it will return its default value.
-  mutating func clearObjLocate() {_uniqueStorage()._objLocate = nil}
+  mutating public func clearObjLocate() {_uniqueStorage()._objLocate = nil}
 
-  var objParam1: String {
+  public var objParam1: String {
     get {_storage._objParam1 ?? String()}
     set {_uniqueStorage()._objParam1 = newValue}
   }
   /// Returns true if `objParam1` has been explicitly set.
-  var hasObjParam1: Bool {_storage._objParam1 != nil}
+  public var hasObjParam1: Bool {_storage._objParam1 != nil}
   /// Clears the value of `objParam1`. Subsequent reads from it will return its default value.
-  mutating func clearObjParam1() {_uniqueStorage()._objParam1 = nil}
+  mutating public func clearObjParam1() {_uniqueStorage()._objParam1 = nil}
 
-  var appPos: Tieba_AppPosInfo {
+  public var appPos: Tieba_AppPosInfo {
     get {_storage._appPos ?? Tieba_AppPosInfo()}
     set {_uniqueStorage()._appPos = newValue}
   }
   /// Returns true if `appPos` has been explicitly set.
-  var hasAppPos: Bool {_storage._appPos != nil}
+  public var hasAppPos: Bool {_storage._appPos != nil}
   /// Clears the value of `appPos`. Subsequent reads from it will return its default value.
-  mutating func clearAppPos() {_uniqueStorage()._appPos = nil}
+  mutating public func clearAppPos() {_uniqueStorage()._appPos = nil}
 
-  var fromSmartFrs: UInt32 {
+  public var fromSmartFrs: UInt32 {
     get {_storage._fromSmartFrs ?? 0}
     set {_uniqueStorage()._fromSmartFrs = newValue}
   }
   /// Returns true if `fromSmartFrs` has been explicitly set.
-  var hasFromSmartFrs: Bool {_storage._fromSmartFrs != nil}
+  public var hasFromSmartFrs: Bool {_storage._fromSmartFrs != nil}
   /// Clears the value of `fromSmartFrs`. Subsequent reads from it will return its default value.
-  mutating func clearFromSmartFrs() {_uniqueStorage()._fromSmartFrs = nil}
+  mutating public func clearFromSmartFrs() {_uniqueStorage()._fromSmartFrs = nil}
 
-  var feedNid: String {
+  public var feedNid: String {
     get {_storage._feedNid}
     set {_uniqueStorage()._feedNid = newValue}
   }
 
-  var forumID: Int64 {
+  public var forumID: Int64 {
     get {_storage._forumID ?? 0}
     set {_uniqueStorage()._forumID = newValue}
   }
   /// Returns true if `forumID` has been explicitly set.
-  var hasForumID: Bool {_storage._forumID != nil}
+  public var hasForumID: Bool {_storage._forumID != nil}
   /// Clears the value of `forumID`. Subsequent reads from it will return its default value.
-  mutating func clearForumID() {_uniqueStorage()._forumID = nil}
+  mutating public func clearForumID() {_uniqueStorage()._forumID = nil}
 
-  var needRepostRecommendForum: Int32 {
+  public var needRepostRecommendForum: Int32 {
     get {_storage._needRepostRecommendForum ?? 0}
     set {_uniqueStorage()._needRepostRecommendForum = newValue}
   }
   /// Returns true if `needRepostRecommendForum` has been explicitly set.
-  var hasNeedRepostRecommendForum: Bool {_storage._needRepostRecommendForum != nil}
+  public var hasNeedRepostRecommendForum: Bool {_storage._needRepostRecommendForum != nil}
   /// Clears the value of `needRepostRecommendForum`. Subsequent reads from it will return its default value.
-  mutating func clearNeedRepostRecommendForum() {_uniqueStorage()._needRepostRecommendForum = nil}
+  mutating public func clearNeedRepostRecommendForum() {_uniqueStorage()._needRepostRecommendForum = nil}
 
-  var adParam: Tieba_PbPage_AdParam {
+  public var adParam: Tieba_PbPage_AdParam {
     get {_storage._adParam ?? Tieba_PbPage_AdParam()}
     set {_uniqueStorage()._adParam = newValue}
   }
   /// Returns true if `adParam` has been explicitly set.
-  var hasAdParam: Bool {_storage._adParam != nil}
+  public var hasAdParam: Bool {_storage._adParam != nil}
   /// Clears the value of `adParam`. Subsequent reads from it will return its default value.
-  mutating func clearAdParam() {_uniqueStorage()._adParam = nil}
+  mutating public func clearAdParam() {_uniqueStorage()._adParam = nil}
 
-  var needLog: Int32 {
+  public var needLog: Int32 {
     get {_storage._needLog}
     set {_uniqueStorage()._needLog = newValue}
   }
 
-  var callURL: String {
+  public var callURL: String {
     get {_storage._callURL}
     set {_uniqueStorage()._callURL = newValue}
   }
 
-  var shoubaiCuid: String {
+  public var shoubaiCuid: String {
     get {_storage._shoubaiCuid}
     set {_uniqueStorage()._shoubaiCuid = newValue}
   }
 
-  var oriUgcNid: String {
+  public var oriUgcNid: String {
     get {_storage._oriUgcNid}
     set {_uniqueStorage()._oriUgcNid = newValue}
   }
 
-  var oriUgcTid: String {
+  public var oriUgcTid: String {
     get {_storage._oriUgcTid}
     set {_uniqueStorage()._oriUgcTid = newValue}
   }
 
-  var oriUgcType: Int32 {
+  public var oriUgcType: Int32 {
     get {_storage._oriUgcType ?? 0}
     set {_uniqueStorage()._oriUgcType = newValue}
   }
   /// Returns true if `oriUgcType` has been explicitly set.
-  var hasOriUgcType: Bool {_storage._oriUgcType != nil}
+  public var hasOriUgcType: Bool {_storage._oriUgcType != nil}
   /// Clears the value of `oriUgcType`. Subsequent reads from it will return its default value.
-  mutating func clearOriUgcType() {_uniqueStorage()._oriUgcType = nil}
+  mutating public func clearOriUgcType() {_uniqueStorage()._oriUgcType = nil}
 
-  var oriUgcVid: String {
+  public var oriUgcVid: String {
     get {_storage._oriUgcVid}
     set {_uniqueStorage()._oriUgcVid = newValue}
   }
 
-  var adContextList: String {
+  public var adContextList: String {
     get {_storage._adContextList}
     set {_uniqueStorage()._adContextList = newValue}
   }
 
-  var upSchema: String {
+  public var upSchema: String {
     get {_storage._upSchema}
     set {_uniqueStorage()._upSchema = newValue}
   }
 
-  var fromPush: Int32 {
+  public var fromPush: Int32 {
     get {_storage._fromPush ?? 0}
     set {_uniqueStorage()._fromPush = newValue}
   }
   /// Returns true if `fromPush` has been explicitly set.
-  var hasFromPush: Bool {_storage._fromPush != nil}
+  public var hasFromPush: Bool {_storage._fromPush != nil}
   /// Clears the value of `fromPush`. Subsequent reads from it will return its default value.
-  mutating func clearFromPush() {_uniqueStorage()._fromPush = nil}
+  mutating public func clearFromPush() {_uniqueStorage()._fromPush = nil}
 
-  var adExtParams: String {
+  public var adExtParams: String {
     get {_storage._adExtParams}
     set {_uniqueStorage()._adExtParams = newValue}
   }
 
-  var broadcastID: Int64 {
+  public var broadcastID: Int64 {
     get {_storage._broadcastID ?? 0}
     set {_uniqueStorage()._broadcastID = newValue}
   }
   /// Returns true if `broadcastID` has been explicitly set.
-  var hasBroadcastID: Bool {_storage._broadcastID != nil}
+  public var hasBroadcastID: Bool {_storage._broadcastID != nil}
   /// Clears the value of `broadcastID`. Subsequent reads from it will return its default value.
-  mutating func clearBroadcastID() {_uniqueStorage()._broadcastID = nil}
+  mutating public func clearBroadcastID() {_uniqueStorage()._broadcastID = nil}
 
-  var floorSortType: Int32 {
+  public var floorSortType: Int32 {
     get {_storage._floorSortType}
     set {_uniqueStorage()._floorSortType = newValue}
   }
 
-  var sourceType: Int32 {
+  public var sourceType: Int32 {
     get {_storage._sourceType}
     set {_uniqueStorage()._sourceType = newValue}
   }
 
-  var immersionVideoCommentSource: Int32 {
+  public var immersionVideoCommentSource: Int32 {
     get {_storage._immersionVideoCommentSource ?? 0}
     set {_uniqueStorage()._immersionVideoCommentSource = newValue}
   }
   /// Returns true if `immersionVideoCommentSource` has been explicitly set.
-  var hasImmersionVideoCommentSource: Bool {_storage._immersionVideoCommentSource != nil}
+  public var hasImmersionVideoCommentSource: Bool {_storage._immersionVideoCommentSource != nil}
   /// Clears the value of `immersionVideoCommentSource`. Subsequent reads from it will return its default value.
-  mutating func clearImmersionVideoCommentSource() {_uniqueStorage()._immersionVideoCommentSource = nil}
+  mutating public func clearImmersionVideoCommentSource() {_uniqueStorage()._immersionVideoCommentSource = nil}
 
-  var appTransmitData: AppTransmitData {
+  public var appTransmitData: AppTransmitData {
     get {_storage._appTransmitData ?? AppTransmitData()}
     set {_uniqueStorage()._appTransmitData = newValue}
   }
   /// Returns true if `appTransmitData` has been explicitly set.
-  var hasAppTransmitData: Bool {_storage._appTransmitData != nil}
+  public var hasAppTransmitData: Bool {_storage._appTransmitData != nil}
   /// Clears the value of `appTransmitData`. Subsequent reads from it will return its default value.
-  mutating func clearAppTransmitData() {_uniqueStorage()._appTransmitData = nil}
+  mutating public func clearAppTransmitData() {_uniqueStorage()._appTransmitData = nil}
 
-  var isFoldCommentReq: Int32 {
+  public var isFoldCommentReq: Int32 {
     get {_storage._isFoldCommentReq ?? 0}
     set {_uniqueStorage()._isFoldCommentReq = newValue}
   }
   /// Returns true if `isFoldCommentReq` has been explicitly set.
-  var hasIsFoldCommentReq: Bool {_storage._isFoldCommentReq != nil}
+  public var hasIsFoldCommentReq: Bool {_storage._isFoldCommentReq != nil}
   /// Clears the value of `isFoldCommentReq`. Subsequent reads from it will return its default value.
-  mutating func clearIsFoldCommentReq() {_uniqueStorage()._isFoldCommentReq = nil}
+  mutating public func clearIsFoldCommentReq() {_uniqueStorage()._isFoldCommentReq = nil}
 
-  var isEditCommentReq: Int32 {
+  public var isEditCommentReq: Int32 {
     get {_storage._isEditCommentReq ?? 0}
     set {_uniqueStorage()._isEditCommentReq = newValue}
   }
   /// Returns true if `isEditCommentReq` has been explicitly set.
-  var hasIsEditCommentReq: Bool {_storage._isEditCommentReq != nil}
+  public var hasIsEditCommentReq: Bool {_storage._isEditCommentReq != nil}
   /// Clears the value of `isEditCommentReq`. Subsequent reads from it will return its default value.
-  mutating func clearIsEditCommentReq() {_uniqueStorage()._isEditCommentReq = nil}
+  mutating public func clearIsEditCommentReq() {_uniqueStorage()._isEditCommentReq = nil}
 
-  var requestTimes: Int32 {
+  public var requestTimes: Int32 {
     get {_storage._requestTimes ?? 0}
     set {_uniqueStorage()._requestTimes = newValue}
   }
   /// Returns true if `requestTimes` has been explicitly set.
-  var hasRequestTimes: Bool {_storage._requestTimes != nil}
+  public var hasRequestTimes: Bool {_storage._requestTimes != nil}
   /// Clears the value of `requestTimes`. Subsequent reads from it will return its default value.
-  mutating func clearRequestTimes() {_uniqueStorage()._requestTimes = nil}
+  mutating public func clearRequestTimes() {_uniqueStorage()._requestTimes = nil}
 
-  var lastPid: Int64 {
+  public var lastPid: Int64 {
     get {_storage._lastPid ?? 0}
     set {_uniqueStorage()._lastPid = newValue}
   }
   /// Returns true if `lastPid` has been explicitly set.
-  var hasLastPid: Bool {_storage._lastPid != nil}
+  public var hasLastPid: Bool {_storage._lastPid != nil}
   /// Clears the value of `lastPid`. Subsequent reads from it will return its default value.
-  mutating func clearLastPid() {_uniqueStorage()._lastPid = nil}
+  mutating public func clearLastPid() {_uniqueStorage()._lastPid = nil}
 
-  var similarFrom: Int32 {
+  public var similarFrom: Int32 {
     get {_storage._similarFrom ?? 0}
     set {_uniqueStorage()._similarFrom = newValue}
   }
   /// Returns true if `similarFrom` has been explicitly set.
-  var hasSimilarFrom: Bool {_storage._similarFrom != nil}
+  public var hasSimilarFrom: Bool {_storage._similarFrom != nil}
   /// Clears the value of `similarFrom`. Subsequent reads from it will return its default value.
-  mutating func clearSimilarFrom() {_uniqueStorage()._similarFrom = nil}
+  mutating public func clearSimilarFrom() {_uniqueStorage()._similarFrom = nil}
 
-  var comeFrom: String {
+  public var comeFrom: String {
     get {_storage._comeFrom}
     set {_uniqueStorage()._comeFrom = newValue}
   }
 
-  var searchQuery: String {
+  public var searchQuery: String {
     get {_storage._searchQuery}
     set {_uniqueStorage()._searchQuery = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -523,8 +523,8 @@ nonisolated struct Tieba_PbPage_PbPageRequestData: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.pbPage"
 
 nonisolated extension Tieba_PbPage_PbPageRequestData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PbPageRequestData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pb_rn\0\u{1}mark\0\u{1}back\0\u{1}kz\0\u{1}lz\0\u{1}r\0\u{1}pid\0\u{3}with_floor\0\u{3}floor_rn\0\u{1}weipost\0\u{3}message_id\0\u{3}s_model\0\u{1}rn\0\u{3}scr_w\0\u{3}scr_h\0\u{3}scr_dip\0\u{3}q_type\0\u{1}pn\0\u{3}st_type\0\u{3}thread_type\0\u{1}banner\0\u{1}arround\0\u{1}last\0\u{3}msg_click\0\u{1}common\0\u{1}lastids\0\u{3}st_from\0\u{3}st_link\0\u{3}st_stat\0\u{3}st_task\0\u{1}issdk\0\u{3}query_word\0\u{3}is_comm_reverse\0\u{3}is_jumpfloor\0\u{3}jumpfloor_num\0\u{4}\u{7}da_idfa\0\u{1}platform\0\u{1}jid\0\u{1}fid\0\u{1}jfrom\0\u{3}yuelaou_locate\0\u{3}yuelaou_params\0\u{4}\u{2}obj_source\0\u{3}obj_locate\0\u{3}obj_param1\0\u{3}app_pos\0\u{3}from_smart_frs\0\u{3}feed_nid\0\u{3}forum_id\0\u{3}need_repost_recommend_forum\0\u{3}ad_param\0\u{3}need_log\0\u{3}call_url\0\u{3}shoubai_cuid\0\u{3}ori_ugc_nid\0\u{3}ori_ugc_tid\0\u{4}\u{2}ori_ugc_type\0\u{3}ori_ugc_vid\0\u{4}\u{2}ad_context_list\0\u{3}up_schema\0\u{4}\u{2}from_push\0\u{3}ad_ext_params\0\u{3}broadcast_id\0\u{3}floor_sort_type\0\u{3}source_type\0\u{3}immersion_video_comment_source\0\u{3}app_transmit_data\0\u{3}is_fold_comment_req\0\u{3}is_edit_comment_req\0\u{3}request_times\0\u{3}last_pid\0\u{3}similar_from\0\u{3}come_from\0\u{3}search_query\0")
+  static public let protoMessageName: String = _protobuf_package + ".PbPageRequestData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pb_rn\0\u{1}mark\0\u{1}back\0\u{1}kz\0\u{1}lz\0\u{1}r\0\u{1}pid\0\u{3}with_floor\0\u{3}floor_rn\0\u{1}weipost\0\u{3}message_id\0\u{3}s_model\0\u{1}rn\0\u{3}scr_w\0\u{3}scr_h\0\u{3}scr_dip\0\u{3}q_type\0\u{1}pn\0\u{3}st_type\0\u{3}thread_type\0\u{1}banner\0\u{1}arround\0\u{1}last\0\u{3}msg_click\0\u{1}common\0\u{1}lastids\0\u{3}st_from\0\u{3}st_link\0\u{3}st_stat\0\u{3}st_task\0\u{1}issdk\0\u{3}query_word\0\u{3}is_comm_reverse\0\u{3}is_jumpfloor\0\u{3}jumpfloor_num\0\u{4}\u{7}da_idfa\0\u{1}platform\0\u{1}jid\0\u{1}fid\0\u{1}jfrom\0\u{3}yuelaou_locate\0\u{3}yuelaou_params\0\u{4}\u{2}obj_source\0\u{3}obj_locate\0\u{3}obj_param1\0\u{3}app_pos\0\u{3}from_smart_frs\0\u{3}feed_nid\0\u{3}forum_id\0\u{3}need_repost_recommend_forum\0\u{3}ad_param\0\u{3}need_log\0\u{3}call_url\0\u{3}shoubai_cuid\0\u{3}ori_ugc_nid\0\u{3}ori_ugc_tid\0\u{4}\u{2}ori_ugc_type\0\u{3}ori_ugc_vid\0\u{4}\u{2}ad_context_list\0\u{3}up_schema\0\u{4}\u{2}from_push\0\u{3}ad_ext_params\0\u{3}broadcast_id\0\u{3}floor_sort_type\0\u{3}source_type\0\u{3}immersion_video_comment_source\0\u{3}app_transmit_data\0\u{3}is_fold_comment_req\0\u{3}is_edit_comment_req\0\u{3}request_times\0\u{3}last_pid\0\u{3}similar_from\0\u{3}come_from\0\u{3}search_query\0")
 
   fileprivate class _StorageClass {
     var _pbRn: Int32? = nil
@@ -695,7 +695,7 @@ nonisolated extension Tieba_PbPage_PbPageRequestData: SwiftProtobuf.Message, Swi
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -783,7 +783,7 @@ nonisolated extension Tieba_PbPage_PbPageRequestData: SwiftProtobuf.Message, Swi
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -1015,7 +1015,7 @@ nonisolated extension Tieba_PbPage_PbPageRequestData: SwiftProtobuf.Message, Swi
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbPage_PbPageRequestData, rhs: Tieba_PbPage_PbPageRequestData) -> Bool {
+  static public func ==(lhs: Tieba_PbPage_PbPageRequestData, rhs: Tieba_PbPage_PbPageRequestData) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

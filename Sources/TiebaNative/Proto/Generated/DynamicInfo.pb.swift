@@ -20,47 +20,47 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_DynamicInfo: Sendable {
+nonisolated public struct Tieba_DynamicInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var threadDynamic: Tieba_ThreadInfo {
+  public var threadDynamic: Tieba_ThreadInfo {
     get {_threadDynamic ?? Tieba_ThreadInfo()}
     set {_threadDynamic = newValue}
   }
   /// Returns true if `threadDynamic` has been explicitly set.
-  var hasThreadDynamic: Bool {self._threadDynamic != nil}
+  public var hasThreadDynamic: Bool {self._threadDynamic != nil}
   /// Clears the value of `threadDynamic`. Subsequent reads from it will return its default value.
-  mutating func clearThreadDynamic() {self._threadDynamic = nil}
+  mutating public func clearThreadDynamic() {self._threadDynamic = nil}
 
-  var dynamicTimestamp: Int64 = 0
+  public var dynamicTimestamp: Int64 = 0
 
-  var forumDynamic: Tieba_ForumDynamic {
+  public var forumDynamic: Tieba_ForumDynamic {
     get {_forumDynamic ?? Tieba_ForumDynamic()}
     set {_forumDynamic = newValue}
   }
   /// Returns true if `forumDynamic` has been explicitly set.
-  var hasForumDynamic: Bool {self._forumDynamic != nil}
+  public var hasForumDynamic: Bool {self._forumDynamic != nil}
   /// Clears the value of `forumDynamic`. Subsequent reads from it will return its default value.
-  mutating func clearForumDynamic() {self._forumDynamic = nil}
+  mutating public func clearForumDynamic() {self._forumDynamic = nil}
 
-  var userDynamic: Tieba_UserDynamic {
+  public var userDynamic: Tieba_UserDynamic {
     get {_userDynamic ?? Tieba_UserDynamic()}
     set {_userDynamic = newValue}
   }
   /// Returns true if `userDynamic` has been explicitly set.
-  var hasUserDynamic: Bool {self._userDynamic != nil}
+  public var hasUserDynamic: Bool {self._userDynamic != nil}
   /// Clears the value of `userDynamic`. Subsequent reads from it will return its default value.
-  mutating func clearUserDynamic() {self._userDynamic = nil}
+  mutating public func clearUserDynamic() {self._userDynamic = nil}
 
-  var type: Int32 = 0
+  public var type: Int32 = 0
 
-  var isHide: String = String()
+  public var isHide: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _threadDynamic: Tieba_ThreadInfo? = nil
   fileprivate var _forumDynamic: Tieba_ForumDynamic? = nil
@@ -72,10 +72,10 @@ nonisolated struct Tieba_DynamicInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_DynamicInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DynamicInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}thread_dynamic\0\u{3}dynamic_timestamp\0\u{3}forum_dynamic\0\u{3}user_dynamic\0\u{1}type\0\u{3}is_hide\0")
+  static public let protoMessageName: String = _protobuf_package + ".DynamicInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}thread_dynamic\0\u{3}dynamic_timestamp\0\u{3}forum_dynamic\0\u{3}user_dynamic\0\u{1}type\0\u{3}is_hide\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -92,7 +92,7 @@ nonisolated extension Tieba_DynamicInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -118,7 +118,7 @@ nonisolated extension Tieba_DynamicInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_DynamicInfo, rhs: Tieba_DynamicInfo) -> Bool {
+  static public func ==(lhs: Tieba_DynamicInfo, rhs: Tieba_DynamicInfo) -> Bool {
     if lhs._threadDynamic != rhs._threadDynamic {return false}
     if lhs.dynamicTimestamp != rhs.dynamicTimestamp {return false}
     if lhs._forumDynamic != rhs._forumDynamic {return false}

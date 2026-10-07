@@ -20,20 +20,20 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_LinkInfo: Sendable {
+nonisolated public struct Tieba_LinkInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var desc: String = String()
+  public var desc: String = String()
 
-  var link: String = String()
+  public var link: String = String()
 
-  var type: String = String()
+  public var type: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -41,10 +41,10 @@ nonisolated struct Tieba_LinkInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_LinkInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".LinkInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}desc\0\u{1}link\0\u{1}type\0")
+  static public let protoMessageName: String = _protobuf_package + ".LinkInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}desc\0\u{1}link\0\u{1}type\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -58,7 +58,7 @@ nonisolated extension Tieba_LinkInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.desc.isEmpty {
       try visitor.visitSingularStringField(value: self.desc, fieldNumber: 1)
     }
@@ -71,7 +71,7 @@ nonisolated extension Tieba_LinkInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_LinkInfo, rhs: Tieba_LinkInfo) -> Bool {
+  static public func ==(lhs: Tieba_LinkInfo, rhs: Tieba_LinkInfo) -> Bool {
     if lhs.desc != rhs.desc {return false}
     if lhs.link != rhs.link {return false}
     if lhs.type != rhs.type {return false}

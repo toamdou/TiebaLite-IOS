@@ -20,38 +20,38 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_FrsTabInfo: Sendable {
+nonisolated public struct Tieba_FrsTabInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var tabID: Int32 = 0
+  public var tabID: Int32 = 0
 
-  var tabType: Int32 = 0
+  public var tabType: Int32 = 0
 
-  var tabName: String = String()
+  public var tabName: String = String()
 
-  var tabURL: String = String()
+  public var tabURL: String = String()
 
-  var tabGid: String = String()
+  public var tabGid: String = String()
 
-  var tabTitle: String = String()
+  public var tabTitle: String = String()
 
-  var isGeneralTab: Int32 = 0
+  public var isGeneralTab: Int32 = 0
 
-  var tabCode: String = String()
+  public var tabCode: String = String()
 
-  var tabVersion: UInt32 = 0
+  public var tabVersion: UInt32 = 0
 
-  var isDefault: Int32 = 0
+  public var isDefault: Int32 = 0
 
-  var sortMenu: [Tieba_SortButton] = []
+  public var sortMenu: [Tieba_SortButton] = []
 
-  var subTabList: [Tieba_TabMenu] = []
+  public var subTabList: [Tieba_TabMenu] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -59,10 +59,10 @@ nonisolated struct Tieba_FrsTabInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_FrsTabInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".FrsTabInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tabId\0\u{1}tabType\0\u{1}tabName\0\u{1}tabUrl\0\u{1}tabGid\0\u{1}tabTitle\0\u{1}isGeneralTab\0\u{1}tabCode\0\u{1}tabVersion\0\u{1}isDefault\0\u{4}\u{9}sort_menu\0\u{3}sub_tab_list\0")
+  static public let protoMessageName: String = _protobuf_package + ".FrsTabInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tabId\0\u{1}tabType\0\u{1}tabName\0\u{1}tabUrl\0\u{1}tabGid\0\u{1}tabTitle\0\u{1}isGeneralTab\0\u{1}tabCode\0\u{1}tabVersion\0\u{1}isDefault\0\u{4}\u{9}sort_menu\0\u{3}sub_tab_list\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -85,7 +85,7 @@ nonisolated extension Tieba_FrsTabInfo: SwiftProtobuf.Message, SwiftProtobuf._Me
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.tabID != 0 {
       try visitor.visitSingularInt32Field(value: self.tabID, fieldNumber: 1)
     }
@@ -125,7 +125,7 @@ nonisolated extension Tieba_FrsTabInfo: SwiftProtobuf.Message, SwiftProtobuf._Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_FrsTabInfo, rhs: Tieba_FrsTabInfo) -> Bool {
+  static public func ==(lhs: Tieba_FrsTabInfo, rhs: Tieba_FrsTabInfo) -> Bool {
     if lhs.tabID != rhs.tabID {return false}
     if lhs.tabType != rhs.tabType {return false}
     if lhs.tabName != rhs.tabName {return false}

@@ -20,177 +20,177 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_OriginThreadInfo: @unchecked Sendable {
+nonisolated public struct Tieba_OriginThreadInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var title: String {
+  public var title: String {
     get {_storage._title}
     set {_uniqueStorage()._title = newValue}
   }
 
-  var media: [Tieba_Media] {
+  public var media: [Tieba_Media] {
     get {_storage._media}
     set {_uniqueStorage()._media = newValue}
   }
 
-  var abstract: [Tieba_Abstract] {
+  public var abstract: [Tieba_Abstract] {
     get {_storage._abstract}
     set {_uniqueStorage()._abstract = newValue}
   }
 
-  var fname: String {
+  public var fname: String {
     get {_storage._fname}
     set {_uniqueStorage()._fname = newValue}
   }
 
-  var tid: String {
+  public var tid: String {
     get {_storage._tid}
     set {_uniqueStorage()._tid = newValue}
   }
 
-  var alaInfo: Tieba_AlaLiveInfo {
+  public var alaInfo: Tieba_AlaLiveInfo {
     get {_storage._alaInfo ?? Tieba_AlaLiveInfo()}
     set {_uniqueStorage()._alaInfo = newValue}
   }
   /// Returns true if `alaInfo` has been explicitly set.
-  var hasAlaInfo: Bool {_storage._alaInfo != nil}
+  public var hasAlaInfo: Bool {_storage._alaInfo != nil}
   /// Clears the value of `alaInfo`. Subsequent reads from it will return its default value.
-  mutating func clearAlaInfo() {_uniqueStorage()._alaInfo = nil}
+  mutating public func clearAlaInfo() {_uniqueStorage()._alaInfo = nil}
 
-  var fid: Int64 {
+  public var fid: Int64 {
     get {_storage._fid}
     set {_uniqueStorage()._fid = newValue}
   }
 
-  var threadType: Int32 {
+  public var threadType: Int32 {
     get {_storage._threadType}
     set {_uniqueStorage()._threadType = newValue}
   }
 
-  var isDeleted: Int32 {
+  public var isDeleted: Int32 {
     get {_storage._isDeleted}
     set {_uniqueStorage()._isDeleted = newValue}
   }
 
-  var isUgc: Int32 {
+  public var isUgc: Int32 {
     get {_storage._isUgc}
     set {_uniqueStorage()._isUgc = newValue}
   }
 
-  var oriUgcInfo: Tieba_Baijiahao {
+  public var oriUgcInfo: Tieba_Baijiahao {
     get {_storage._oriUgcInfo ?? Tieba_Baijiahao()}
     set {_uniqueStorage()._oriUgcInfo = newValue}
   }
   /// Returns true if `oriUgcInfo` has been explicitly set.
-  var hasOriUgcInfo: Bool {_storage._oriUgcInfo != nil}
+  public var hasOriUgcInfo: Bool {_storage._oriUgcInfo != nil}
   /// Clears the value of `oriUgcInfo`. Subsequent reads from it will return its default value.
-  mutating func clearOriUgcInfo() {_uniqueStorage()._oriUgcInfo = nil}
+  mutating public func clearOriUgcInfo() {_uniqueStorage()._oriUgcInfo = nil}
 
-  var voiceInfo: [Tieba_Voice] {
+  public var voiceInfo: [Tieba_Voice] {
     get {_storage._voiceInfo}
     set {_uniqueStorage()._voiceInfo = newValue}
   }
 
-  var videoInfo: Tieba_VideoInfo {
+  public var videoInfo: Tieba_VideoInfo {
     get {_storage._videoInfo ?? Tieba_VideoInfo()}
     set {_uniqueStorage()._videoInfo = newValue}
   }
   /// Returns true if `videoInfo` has been explicitly set.
-  var hasVideoInfo: Bool {_storage._videoInfo != nil}
+  public var hasVideoInfo: Bool {_storage._videoInfo != nil}
   /// Clears the value of `videoInfo`. Subsequent reads from it will return its default value.
-  mutating func clearVideoInfo() {_uniqueStorage()._videoInfo = nil}
+  mutating public func clearVideoInfo() {_uniqueStorage()._videoInfo = nil}
 
-  var content: [Tieba_PbContent] {
+  public var content: [Tieba_PbContent] {
     get {_storage._content}
     set {_uniqueStorage()._content = newValue}
   }
 
-  var isNewStyle: Int32 {
+  public var isNewStyle: Int32 {
     get {_storage._isNewStyle}
     set {_uniqueStorage()._isNewStyle = newValue}
   }
 
-  var replyNum: Int32 {
+  public var replyNum: Int32 {
     get {_storage._replyNum}
     set {_uniqueStorage()._replyNum = newValue}
   }
 
-  var author: Tieba_User {
+  public var author: Tieba_User {
     get {_storage._author ?? Tieba_User()}
     set {_uniqueStorage()._author = newValue}
   }
   /// Returns true if `author` has been explicitly set.
-  var hasAuthor: Bool {_storage._author != nil}
+  public var hasAuthor: Bool {_storage._author != nil}
   /// Clears the value of `author`. Subsequent reads from it will return its default value.
-  mutating func clearAuthor() {_uniqueStorage()._author = nil}
+  mutating public func clearAuthor() {_uniqueStorage()._author = nil}
 
-  var agree: Tieba_Agree {
+  public var agree: Tieba_Agree {
     get {_storage._agree ?? Tieba_Agree()}
     set {_uniqueStorage()._agree = newValue}
   }
   /// Returns true if `agree` has been explicitly set.
-  var hasAgree: Bool {_storage._agree != nil}
+  public var hasAgree: Bool {_storage._agree != nil}
   /// Clears the value of `agree`. Subsequent reads from it will return its default value.
-  mutating func clearAgree() {_uniqueStorage()._agree = nil}
+  mutating public func clearAgree() {_uniqueStorage()._agree = nil}
 
-  var sharedNum: Int32 {
+  public var sharedNum: Int32 {
     get {_storage._sharedNum}
     set {_uniqueStorage()._sharedNum = newValue}
   }
 
-  var pollInfo: Tieba_PollInfo {
+  public var pollInfo: Tieba_PollInfo {
     get {_storage._pollInfo ?? Tieba_PollInfo()}
     set {_uniqueStorage()._pollInfo = newValue}
   }
   /// Returns true if `pollInfo` has been explicitly set.
-  var hasPollInfo: Bool {_storage._pollInfo != nil}
+  public var hasPollInfo: Bool {_storage._pollInfo != nil}
   /// Clears the value of `pollInfo`. Subsequent reads from it will return its default value.
-  mutating func clearPollInfo() {_uniqueStorage()._pollInfo = nil}
+  mutating public func clearPollInfo() {_uniqueStorage()._pollInfo = nil}
 
-  var item: Tieba_Item {
+  public var item: Tieba_Item {
     get {_storage._item ?? Tieba_Item()}
     set {_uniqueStorage()._item = newValue}
   }
   /// Returns true if `item` has been explicitly set.
-  var hasItem: Bool {_storage._item != nil}
+  public var hasItem: Bool {_storage._item != nil}
   /// Clears the value of `item`. Subsequent reads from it will return its default value.
-  mutating func clearItem() {_uniqueStorage()._item = nil}
+  mutating public func clearItem() {_uniqueStorage()._item = nil}
 
-  var itemStar: [Tieba_HeadItem] {
+  public var itemStar: [Tieba_HeadItem] {
     get {_storage._itemStar}
     set {_uniqueStorage()._itemStar = newValue}
   }
 
-  var pbLinkInfo: [Tieba_PbLinkInfo] {
+  public var pbLinkInfo: [Tieba_PbLinkInfo] {
     get {_storage._pbLinkInfo}
     set {_uniqueStorage()._pbLinkInfo = newValue}
   }
 
-  var pid: Int64 {
+  public var pid: Int64 {
     get {_storage._pid}
     set {_uniqueStorage()._pid = newValue}
   }
 
-  var goodTypes: Int32 {
+  public var goodTypes: Int32 {
     get {_storage._goodTypes}
     set {_uniqueStorage()._goodTypes = newValue}
   }
 
-  var topTypes: Int32 {
+  public var topTypes: Int32 {
     get {_storage._topTypes}
     set {_uniqueStorage()._topTypes = newValue}
   }
 
-  var isFrsMask: Int32 {
+  public var isFrsMask: Int32 {
     get {_storage._isFrsMask}
     set {_uniqueStorage()._isFrsMask = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -200,8 +200,8 @@ nonisolated struct Tieba_OriginThreadInfo: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_OriginThreadInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".OriginThreadInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{1}media\0\u{3}_abstract\0\u{1}fname\0\u{1}tid\0\u{3}ala_info\0\u{1}fid\0\u{3}thread_type\0\u{3}is_deleted\0\u{3}is_ugc\0\u{3}ori_ugc_info\0\u{3}voice_info\0\u{3}video_info\0\u{1}content\0\u{3}is_new_style\0\u{3}reply_num\0\u{2}\u{2}author\0\u{1}agree\0\u{3}shared_num\0\u{3}poll_info\0\u{1}item\0\u{3}item_star\0\u{3}pb_link_info\0\u{1}pid\0\u{3}good_types\0\u{3}top_types\0\u{3}is_frs_mask\0")
+  static public let protoMessageName: String = _protobuf_package + ".OriginThreadInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{1}media\0\u{3}_abstract\0\u{1}fname\0\u{1}tid\0\u{3}ala_info\0\u{1}fid\0\u{3}thread_type\0\u{3}is_deleted\0\u{3}is_ugc\0\u{3}ori_ugc_info\0\u{3}voice_info\0\u{3}video_info\0\u{1}content\0\u{3}is_new_style\0\u{3}reply_num\0\u{2}\u{2}author\0\u{1}agree\0\u{3}shared_num\0\u{3}poll_info\0\u{1}item\0\u{3}item_star\0\u{3}pb_link_info\0\u{1}pid\0\u{3}good_types\0\u{3}top_types\0\u{3}is_frs_mask\0")
 
   fileprivate class _StorageClass {
     var _title: String = String()
@@ -278,7 +278,7 @@ nonisolated extension Tieba_OriginThreadInfo: SwiftProtobuf.Message, SwiftProtob
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -319,7 +319,7 @@ nonisolated extension Tieba_OriginThreadInfo: SwiftProtobuf.Message, SwiftProtob
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -410,7 +410,7 @@ nonisolated extension Tieba_OriginThreadInfo: SwiftProtobuf.Message, SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_OriginThreadInfo, rhs: Tieba_OriginThreadInfo) -> Bool {
+  static public func ==(lhs: Tieba_OriginThreadInfo, rhs: Tieba_OriginThreadInfo) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

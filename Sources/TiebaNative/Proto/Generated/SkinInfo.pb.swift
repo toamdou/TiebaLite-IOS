@@ -20,24 +20,24 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_SkinInfo: Sendable {
+nonisolated public struct Tieba_SkinInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var skin: String = String()
+  public var skin: String = String()
 
-  var skinSize: String = String()
+  public var skinSize: String = String()
 
-  var url: String = String()
+  public var url: String = String()
 
-  var objID: String = String()
+  public var objID: String = String()
 
-  var monitorID: String = String()
+  public var monitorID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -45,10 +45,10 @@ nonisolated struct Tieba_SkinInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_SkinInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SkinInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}skin\0\u{3}skin_size\0\u{1}url\0\u{3}obj_id\0\u{3}monitor_id\0")
+  static public let protoMessageName: String = _protobuf_package + ".SkinInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}skin\0\u{3}skin_size\0\u{1}url\0\u{3}obj_id\0\u{3}monitor_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -64,7 +64,7 @@ nonisolated extension Tieba_SkinInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.skin.isEmpty {
       try visitor.visitSingularStringField(value: self.skin, fieldNumber: 1)
     }
@@ -83,7 +83,7 @@ nonisolated extension Tieba_SkinInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_SkinInfo, rhs: Tieba_SkinInfo) -> Bool {
+  static public func ==(lhs: Tieba_SkinInfo, rhs: Tieba_SkinInfo) -> Bool {
     if lhs.skin != rhs.skin {return false}
     if lhs.skinSize != rhs.skinSize {return false}
     if lhs.url != rhs.url {return false}

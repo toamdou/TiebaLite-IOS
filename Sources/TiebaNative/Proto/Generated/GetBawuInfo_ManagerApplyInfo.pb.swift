@@ -20,22 +20,22 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_GetBawuInfo_ManagerApplyInfo: Sendable {
+nonisolated public struct Tieba_GetBawuInfo_ManagerApplyInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var managerLeftNum: Int32 = 0
+  public var managerLeftNum: Int32 = 0
 
-  var managerApplyURL: String = String()
+  public var managerApplyURL: String = String()
 
-  var assistLeftNum: Int32 = 0
+  public var assistLeftNum: Int32 = 0
 
-  var assistApplyURL: String = String()
+  public var assistApplyURL: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -43,10 +43,10 @@ nonisolated struct Tieba_GetBawuInfo_ManagerApplyInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.getBawuInfo"
 
 nonisolated extension Tieba_GetBawuInfo_ManagerApplyInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ManagerApplyInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}manager_left_num\0\u{3}manager_apply_url\0\u{3}assist_left_num\0\u{3}assist_apply_url\0")
+  static public let protoMessageName: String = _protobuf_package + ".ManagerApplyInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}manager_left_num\0\u{3}manager_apply_url\0\u{3}assist_left_num\0\u{3}assist_apply_url\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_GetBawuInfo_ManagerApplyInfo: SwiftProtobuf.Message,
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.managerLeftNum != 0 {
       try visitor.visitSingularInt32Field(value: self.managerLeftNum, fieldNumber: 1)
     }
@@ -77,7 +77,7 @@ nonisolated extension Tieba_GetBawuInfo_ManagerApplyInfo: SwiftProtobuf.Message,
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GetBawuInfo_ManagerApplyInfo, rhs: Tieba_GetBawuInfo_ManagerApplyInfo) -> Bool {
+  static public func ==(lhs: Tieba_GetBawuInfo_ManagerApplyInfo, rhs: Tieba_GetBawuInfo_ManagerApplyInfo) -> Bool {
     if lhs.managerLeftNum != rhs.managerLeftNum {return false}
     if lhs.managerApplyURL != rhs.managerApplyURL {return false}
     if lhs.assistLeftNum != rhs.assistLeftNum {return false}

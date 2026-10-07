@@ -20,35 +20,35 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_SimpleThreadInfo: Sendable {
+nonisolated public struct Tieba_SimpleThreadInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var tid: UInt64 = 0
+  public var tid: UInt64 = 0
 
-  var title: String = String()
+  public var title: String = String()
 
-  var replyNum: Int32 = 0
+  public var replyNum: Int32 = 0
 
-  var lastTimeInt: Int32 = 0
+  public var lastTimeInt: Int32 = 0
 
-  var abstract: [Tieba_Abstract] = []
+  public var abstract: [Tieba_Abstract] = []
 
-  var zan: Tieba_Zan {
+  public var zan: Tieba_Zan {
     get {_zan ?? Tieba_Zan()}
     set {_zan = newValue}
   }
   /// Returns true if `zan` has been explicitly set.
-  var hasZan: Bool {self._zan != nil}
+  public var hasZan: Bool {self._zan != nil}
   /// Clears the value of `zan`. Subsequent reads from it will return its default value.
-  mutating func clearZan() {self._zan = nil}
+  mutating public func clearZan() {self._zan = nil}
 
-  var threadType: UInt64 = 0
+  public var threadType: UInt64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _zan: Tieba_Zan? = nil
 }
@@ -58,10 +58,10 @@ nonisolated struct Tieba_SimpleThreadInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_SimpleThreadInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SimpleThreadInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tid\0\u{1}title\0\u{3}reply_num\0\u{3}last_time_int\0\u{3}_abstract\0\u{1}zan\0\u{3}thread_type\0")
+  static public let protoMessageName: String = _protobuf_package + ".SimpleThreadInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tid\0\u{1}title\0\u{3}reply_num\0\u{3}last_time_int\0\u{3}_abstract\0\u{1}zan\0\u{3}thread_type\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -79,7 +79,7 @@ nonisolated extension Tieba_SimpleThreadInfo: SwiftProtobuf.Message, SwiftProtob
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -108,7 +108,7 @@ nonisolated extension Tieba_SimpleThreadInfo: SwiftProtobuf.Message, SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_SimpleThreadInfo, rhs: Tieba_SimpleThreadInfo) -> Bool {
+  static public func ==(lhs: Tieba_SimpleThreadInfo, rhs: Tieba_SimpleThreadInfo) -> Bool {
     if lhs.tid != rhs.tid {return false}
     if lhs.title != rhs.title {return false}
     if lhs.replyNum != rhs.replyNum {return false}

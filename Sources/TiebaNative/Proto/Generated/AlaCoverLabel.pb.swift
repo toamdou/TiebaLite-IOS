@@ -20,20 +20,20 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_AlaCoverLabel: Sendable {
+nonisolated public struct Tieba_AlaCoverLabel: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var labelID: UInt32 = 0
+  public var labelID: UInt32 = 0
 
-  var labelName: String = String()
+  public var labelName: String = String()
 
-  var labelRgb: String = String()
+  public var labelRgb: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -41,10 +41,10 @@ nonisolated struct Tieba_AlaCoverLabel: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_AlaCoverLabel: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AlaCoverLabel"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}label_id\0\u{3}label_name\0\u{3}label_rgb\0")
+  static public let protoMessageName: String = _protobuf_package + ".AlaCoverLabel"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}label_id\0\u{3}label_name\0\u{3}label_rgb\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -58,7 +58,7 @@ nonisolated extension Tieba_AlaCoverLabel: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.labelID != 0 {
       try visitor.visitSingularUInt32Field(value: self.labelID, fieldNumber: 1)
     }
@@ -71,7 +71,7 @@ nonisolated extension Tieba_AlaCoverLabel: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_AlaCoverLabel, rhs: Tieba_AlaCoverLabel) -> Bool {
+  static public func ==(lhs: Tieba_AlaCoverLabel, rhs: Tieba_AlaCoverLabel) -> Bool {
     if lhs.labelID != rhs.labelID {return false}
     if lhs.labelName != rhs.labelName {return false}
     if lhs.labelRgb != rhs.labelRgb {return false}

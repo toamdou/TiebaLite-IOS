@@ -20,24 +20,24 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_SendCardInfo: Sendable {
+nonisolated public struct Tieba_SendCardInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var cardLogo: String = String()
+  public var cardLogo: String = String()
 
-  var cardName: String = String()
+  public var cardName: String = String()
 
-  var cardPro: String = String()
+  public var cardPro: String = String()
 
-  var cardGetStatus: Int32 = 0
+  public var cardGetStatus: Int32 = 0
 
-  var packetID: Int64 = 0
+  public var packetID: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -45,10 +45,10 @@ nonisolated struct Tieba_SendCardInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_SendCardInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SendCardInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}card_logo\0\u{3}card_name\0\u{3}card_pro\0\u{3}card_get_status\0\u{3}packet_id\0")
+  static public let protoMessageName: String = _protobuf_package + ".SendCardInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}card_logo\0\u{3}card_name\0\u{3}card_pro\0\u{3}card_get_status\0\u{3}packet_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -64,7 +64,7 @@ nonisolated extension Tieba_SendCardInfo: SwiftProtobuf.Message, SwiftProtobuf._
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.cardLogo.isEmpty {
       try visitor.visitSingularStringField(value: self.cardLogo, fieldNumber: 1)
     }
@@ -83,7 +83,7 @@ nonisolated extension Tieba_SendCardInfo: SwiftProtobuf.Message, SwiftProtobuf._
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_SendCardInfo, rhs: Tieba_SendCardInfo) -> Bool {
+  static public func ==(lhs: Tieba_SendCardInfo, rhs: Tieba_SendCardInfo) -> Bool {
     if lhs.cardLogo != rhs.cardLogo {return false}
     if lhs.cardName != rhs.cardName {return false}
     if lhs.cardPro != rhs.cardPro {return false}

@@ -20,153 +20,153 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_FrsPage_HeadImgs: @unchecked Sendable {
+nonisolated public struct Tieba_FrsPage_HeadImgs: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var imgURL: String {
+  public var imgURL: String {
     get {_storage._imgURL}
     set {_uniqueStorage()._imgURL = newValue}
   }
 
-  var pcURL: String {
+  public var pcURL: String {
     get {_storage._pcURL}
     set {_uniqueStorage()._pcURL = newValue}
   }
 
-  var title: String {
+  public var title: String {
     get {_storage._title}
     set {_uniqueStorage()._title = newValue}
   }
 
-  var subtitle: String {
+  public var subtitle: String {
     get {_storage._subtitle}
     set {_uniqueStorage()._subtitle = newValue}
   }
 
-  var btnText: String {
+  public var btnText: String {
     get {_storage._btnText}
     set {_uniqueStorage()._btnText = newValue}
   }
 
-  var tagNameURL: String {
+  public var tagNameURL: String {
     get {_storage._tagNameURL}
     set {_uniqueStorage()._tagNameURL = newValue}
   }
 
-  var tagNameWh: String {
+  public var tagNameWh: String {
     get {_storage._tagNameWh}
     set {_uniqueStorage()._tagNameWh = newValue}
   }
 
-  var schema: String {
+  public var schema: String {
     get {_storage._schema}
     set {_uniqueStorage()._schema = newValue}
   }
 
-  var thirdStatisticsURL: [String] {
+  public var thirdStatisticsURL: [String] {
     get {_storage._thirdStatisticsURL}
     set {_uniqueStorage()._thirdStatisticsURL = newValue}
   }
 
-  var hasSecondPage_p: UInt32 {
+  public var hasSecondPage_p: UInt32 {
     get {_storage._hasSecondPage_p}
     set {_uniqueStorage()._hasSecondPage_p = newValue}
   }
 
-  var packageName: String {
+  public var packageName: String {
     get {_storage._packageName}
     set {_uniqueStorage()._packageName = newValue}
   }
 
-  var downloadIsThirdpage: Int32 {
+  public var downloadIsThirdpage: Int32 {
     get {_storage._downloadIsThirdpage}
     set {_uniqueStorage()._downloadIsThirdpage = newValue}
   }
 
-  var downloadAppname: String {
+  public var downloadAppname: String {
     get {_storage._downloadAppname}
     set {_uniqueStorage()._downloadAppname = newValue}
   }
 
-  var downloadDeveloper: String {
+  public var downloadDeveloper: String {
     get {_storage._downloadDeveloper}
     set {_uniqueStorage()._downloadDeveloper = newValue}
   }
 
-  var downloadPackageSize: String {
+  public var downloadPackageSize: String {
     get {_storage._downloadPackageSize}
     set {_uniqueStorage()._downloadPackageSize = newValue}
   }
 
-  var downloadURL: String {
+  public var downloadURL: String {
     get {_storage._downloadURL}
     set {_uniqueStorage()._downloadURL = newValue}
   }
 
-  var downloadImg: String {
+  public var downloadImg: String {
     get {_storage._downloadImg}
     set {_uniqueStorage()._downloadImg = newValue}
   }
 
-  var downloadVersion: String {
+  public var downloadVersion: String {
     get {_storage._downloadVersion}
     set {_uniqueStorage()._downloadVersion = newValue}
   }
 
-  var downloadUserPower: String {
+  public var downloadUserPower: String {
     get {_storage._downloadUserPower}
     set {_uniqueStorage()._downloadUserPower = newValue}
   }
 
-  var downloadPrivacyPolicy: String {
+  public var downloadPrivacyPolicy: String {
     get {_storage._downloadPrivacyPolicy}
     set {_uniqueStorage()._downloadPrivacyPolicy = newValue}
   }
 
-  var downloadPackageName: String {
+  public var downloadPackageName: String {
     get {_storage._downloadPackageName}
     set {_uniqueStorage()._downloadPackageName = newValue}
   }
 
-  var downloadItemID: Int32 {
+  public var downloadItemID: Int32 {
     get {_storage._downloadItemID}
     set {_uniqueStorage()._downloadItemID = newValue}
   }
 
-  var downloadAppid: String {
+  public var downloadAppid: String {
     get {_storage._downloadAppid}
     set {_uniqueStorage()._downloadAppid = newValue}
   }
 
-  var coverURL: String {
+  public var coverURL: String {
     get {_storage._coverURL}
     set {_uniqueStorage()._coverURL = newValue}
   }
 
-  var playURL: String {
+  public var playURL: String {
     get {_storage._playURL}
     set {_uniqueStorage()._playURL = newValue}
   }
 
-  var coverImageColor: Tieba_FrsPage_CoverImageColor {
+  public var coverImageColor: Tieba_FrsPage_CoverImageColor {
     get {_storage._coverImageColor ?? Tieba_FrsPage_CoverImageColor()}
     set {_uniqueStorage()._coverImageColor = newValue}
   }
   /// Returns true if `coverImageColor` has been explicitly set.
-  var hasCoverImageColor: Bool {_storage._coverImageColor != nil}
+  public var hasCoverImageColor: Bool {_storage._coverImageColor != nil}
   /// Clears the value of `coverImageColor`. Subsequent reads from it will return its default value.
-  mutating func clearCoverImageColor() {_uniqueStorage()._coverImageColor = nil}
+  mutating public func clearCoverImageColor() {_uniqueStorage()._coverImageColor = nil}
 
-  var videoImageColor: [Tieba_FrsPage_VideoImageColor] {
+  public var videoImageColor: [Tieba_FrsPage_VideoImageColor] {
     get {_storage._videoImageColor}
     set {_uniqueStorage()._videoImageColor = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -176,8 +176,8 @@ nonisolated struct Tieba_FrsPage_HeadImgs: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.frsPage"
 
 nonisolated extension Tieba_FrsPage_HeadImgs: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".HeadImgs"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}img_url\0\u{3}pc_url\0\u{1}title\0\u{1}subtitle\0\u{3}btn_text\0\u{3}tag_name_url\0\u{3}tag_name_wh\0\u{1}schema\0\u{3}third_statistics_url\0\u{3}has_second_page\0\u{3}package_name\0\u{3}download_is_thirdpage\0\u{3}download_appname\0\u{3}download_developer\0\u{3}download_package_size\0\u{3}download_url\0\u{3}download_img\0\u{3}download_version\0\u{3}download_user_power\0\u{3}download_privacy_policy\0\u{3}download_package_name\0\u{3}download_item_id\0\u{3}download_appid\0\u{3}cover_url\0\u{3}play_url\0\u{3}cover_image_color\0\u{3}video_image_color\0")
+  static public let protoMessageName: String = _protobuf_package + ".HeadImgs"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}img_url\0\u{3}pc_url\0\u{1}title\0\u{1}subtitle\0\u{3}btn_text\0\u{3}tag_name_url\0\u{3}tag_name_wh\0\u{1}schema\0\u{3}third_statistics_url\0\u{3}has_second_page\0\u{3}package_name\0\u{3}download_is_thirdpage\0\u{3}download_appname\0\u{3}download_developer\0\u{3}download_package_size\0\u{3}download_url\0\u{3}download_img\0\u{3}download_version\0\u{3}download_user_power\0\u{3}download_privacy_policy\0\u{3}download_package_name\0\u{3}download_item_id\0\u{3}download_appid\0\u{3}cover_url\0\u{3}play_url\0\u{3}cover_image_color\0\u{3}video_image_color\0")
 
   fileprivate class _StorageClass {
     var _imgURL: String = String()
@@ -254,7 +254,7 @@ nonisolated extension Tieba_FrsPage_HeadImgs: SwiftProtobuf.Message, SwiftProtob
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -295,7 +295,7 @@ nonisolated extension Tieba_FrsPage_HeadImgs: SwiftProtobuf.Message, SwiftProtob
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -386,7 +386,7 @@ nonisolated extension Tieba_FrsPage_HeadImgs: SwiftProtobuf.Message, SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_FrsPage_HeadImgs, rhs: Tieba_FrsPage_HeadImgs) -> Bool {
+  static public func ==(lhs: Tieba_FrsPage_HeadImgs, rhs: Tieba_FrsPage_HeadImgs) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

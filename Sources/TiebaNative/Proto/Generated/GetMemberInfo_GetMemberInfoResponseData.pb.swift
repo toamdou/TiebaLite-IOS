@@ -20,65 +20,65 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_GetMemberInfo_GetMemberInfoResponseData: @unchecked Sendable {
+nonisolated public struct Tieba_GetMemberInfo_GetMemberInfoResponseData: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var memberGroupInfo: [Tieba_MemberGroupInfo] {
+  public var memberGroupInfo: [Tieba_MemberGroupInfo] {
     get {_storage._memberGroupInfo}
     set {_uniqueStorage()._memberGroupInfo = newValue}
   }
 
-  var forumMemberInfo: Tieba_ForumMember {
+  public var forumMemberInfo: Tieba_ForumMember {
     get {_storage._forumMemberInfo ?? Tieba_ForumMember()}
     set {_uniqueStorage()._forumMemberInfo = newValue}
   }
   /// Returns true if `forumMemberInfo` has been explicitly set.
-  var hasForumMemberInfo: Bool {_storage._forumMemberInfo != nil}
+  public var hasForumMemberInfo: Bool {_storage._forumMemberInfo != nil}
   /// Clears the value of `forumMemberInfo`. Subsequent reads from it will return its default value.
-  mutating func clearForumMemberInfo() {_uniqueStorage()._forumMemberInfo = nil}
+  mutating public func clearForumMemberInfo() {_uniqueStorage()._forumMemberInfo = nil}
 
-  var memberGodInfo: Tieba_GetMemberInfo_MemberGodInfo {
+  public var memberGodInfo: Tieba_GetMemberInfo_MemberGodInfo {
     get {_storage._memberGodInfo ?? Tieba_GetMemberInfo_MemberGodInfo()}
     set {_uniqueStorage()._memberGodInfo = newValue}
   }
   /// Returns true if `memberGodInfo` has been explicitly set.
-  var hasMemberGodInfo: Bool {_storage._memberGodInfo != nil}
+  public var hasMemberGodInfo: Bool {_storage._memberGodInfo != nil}
   /// Clears the value of `memberGodInfo`. Subsequent reads from it will return its default value.
-  mutating func clearMemberGodInfo() {_uniqueStorage()._memberGodInfo = nil}
+  mutating public func clearMemberGodInfo() {_uniqueStorage()._memberGodInfo = nil}
 
-  var managerApplyInfo: Tieba_GetMemberInfo_ManagerApplyInfo {
+  public var managerApplyInfo: Tieba_GetMemberInfo_ManagerApplyInfo {
     get {_storage._managerApplyInfo ?? Tieba_GetMemberInfo_ManagerApplyInfo()}
     set {_uniqueStorage()._managerApplyInfo = newValue}
   }
   /// Returns true if `managerApplyInfo` has been explicitly set.
-  var hasManagerApplyInfo: Bool {_storage._managerApplyInfo != nil}
+  public var hasManagerApplyInfo: Bool {_storage._managerApplyInfo != nil}
   /// Clears the value of `managerApplyInfo`. Subsequent reads from it will return its default value.
-  mutating func clearManagerApplyInfo() {_uniqueStorage()._managerApplyInfo = nil}
+  mutating public func clearManagerApplyInfo() {_uniqueStorage()._managerApplyInfo = nil}
 
-  var isPrivateForum: Int32 {
+  public var isPrivateForum: Int32 {
     get {_storage._isPrivateForum}
     set {_uniqueStorage()._isPrivateForum = newValue}
   }
 
-  var isBawuapplyShow: Int32 {
+  public var isBawuapplyShow: Int32 {
     get {_storage._isBawuapplyShow}
     set {_uniqueStorage()._isBawuapplyShow = newValue}
   }
 
-  var primanagerApplyInfo: Tieba_PriManagerApplyInfo {
+  public var primanagerApplyInfo: Tieba_PriManagerApplyInfo {
     get {_storage._primanagerApplyInfo ?? Tieba_PriManagerApplyInfo()}
     set {_uniqueStorage()._primanagerApplyInfo = newValue}
   }
   /// Returns true if `primanagerApplyInfo` has been explicitly set.
-  var hasPrimanagerApplyInfo: Bool {_storage._primanagerApplyInfo != nil}
+  public var hasPrimanagerApplyInfo: Bool {_storage._primanagerApplyInfo != nil}
   /// Clears the value of `primanagerApplyInfo`. Subsequent reads from it will return its default value.
-  mutating func clearPrimanagerApplyInfo() {_uniqueStorage()._primanagerApplyInfo = nil}
+  mutating public func clearPrimanagerApplyInfo() {_uniqueStorage()._primanagerApplyInfo = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -88,8 +88,8 @@ nonisolated struct Tieba_GetMemberInfo_GetMemberInfoResponseData: @unchecked Sen
 fileprivate nonisolated let _protobuf_package = "tieba.getMemberInfo"
 
 nonisolated extension Tieba_GetMemberInfo_GetMemberInfoResponseData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetMemberInfoResponseData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}member_group_info\0\u{3}forum_member_info\0\u{3}member_god_info\0\u{3}manager_apply_info\0\u{3}is_private_forum\0\u{3}is_bawuapply_show\0\u{3}primanager_apply_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".GetMemberInfoResponseData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}member_group_info\0\u{3}forum_member_info\0\u{3}member_god_info\0\u{3}manager_apply_info\0\u{3}is_private_forum\0\u{3}is_bawuapply_show\0\u{3}primanager_apply_info\0")
 
   fileprivate class _StorageClass {
     var _memberGroupInfo: [Tieba_MemberGroupInfo] = []
@@ -126,7 +126,7 @@ nonisolated extension Tieba_GetMemberInfo_GetMemberInfoResponseData: SwiftProtob
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -147,7 +147,7 @@ nonisolated extension Tieba_GetMemberInfo_GetMemberInfoResponseData: SwiftProtob
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -178,7 +178,7 @@ nonisolated extension Tieba_GetMemberInfo_GetMemberInfoResponseData: SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GetMemberInfo_GetMemberInfoResponseData, rhs: Tieba_GetMemberInfo_GetMemberInfoResponseData) -> Bool {
+  static public func ==(lhs: Tieba_GetMemberInfo_GetMemberInfoResponseData, rhs: Tieba_GetMemberInfo_GetMemberInfoResponseData) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

@@ -20,24 +20,24 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Quote: Sendable {
+nonisolated public struct Tieba_Quote: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var postID: Int64 = 0
+  public var postID: Int64 = 0
 
-  var userName: String = String()
+  public var userName: String = String()
 
-  var userID: Int64 = 0
+  public var userID: Int64 = 0
 
-  var ip: String = String()
+  public var ip: String = String()
 
-  var content: String = String()
+  public var content: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -45,10 +45,10 @@ nonisolated struct Tieba_Quote: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Quote: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Quote"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0\u{3}user_name\0\u{3}user_id\0\u{1}ip\0\u{1}content\0")
+  static public let protoMessageName: String = _protobuf_package + ".Quote"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0\u{3}user_name\0\u{3}user_id\0\u{1}ip\0\u{1}content\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -64,7 +64,7 @@ nonisolated extension Tieba_Quote: SwiftProtobuf.Message, SwiftProtobuf._Message
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.postID != 0 {
       try visitor.visitSingularInt64Field(value: self.postID, fieldNumber: 1)
     }
@@ -83,7 +83,7 @@ nonisolated extension Tieba_Quote: SwiftProtobuf.Message, SwiftProtobuf._Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Quote, rhs: Tieba_Quote) -> Bool {
+  static public func ==(lhs: Tieba_Quote, rhs: Tieba_Quote) -> Bool {
     if lhs.postID != rhs.postID {return false}
     if lhs.userName != rhs.userName {return false}
     if lhs.userID != rhs.userID {return false}

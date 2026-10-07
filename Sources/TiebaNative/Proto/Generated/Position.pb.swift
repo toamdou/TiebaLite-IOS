@@ -20,22 +20,22 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Position: Sendable {
+nonisolated public struct Tieba_Position: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var frs: Int32 = 0
+  public var frs: Int32 = 0
 
-  var pb: Int32 = 0
+  public var pb: Int32 = 0
 
-  var home: Int32 = 0
+  public var home: Int32 = 0
 
-  var card: Int32 = 0
+  public var card: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -43,10 +43,10 @@ nonisolated struct Tieba_Position: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Position: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Position"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frs\0\u{1}pb\0\u{1}home\0\u{1}card\0")
+  static public let protoMessageName: String = _protobuf_package + ".Position"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frs\0\u{1}pb\0\u{1}home\0\u{1}card\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_Position: SwiftProtobuf.Message, SwiftProtobuf._Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.frs != 0 {
       try visitor.visitSingularInt32Field(value: self.frs, fieldNumber: 1)
     }
@@ -77,7 +77,7 @@ nonisolated extension Tieba_Position: SwiftProtobuf.Message, SwiftProtobuf._Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Position, rhs: Tieba_Position) -> Bool {
+  static public func ==(lhs: Tieba_Position, rhs: Tieba_Position) -> Bool {
     if lhs.frs != rhs.frs {return false}
     if lhs.pb != rhs.pb {return false}
     if lhs.home != rhs.home {return false}

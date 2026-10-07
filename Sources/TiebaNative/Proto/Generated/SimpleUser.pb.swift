@@ -20,38 +20,38 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_SimpleUser: Sendable {
+nonisolated public struct Tieba_SimpleUser: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var userID: Int64 = 0
+  public var userID: Int64 = 0
 
-  var userStatus: Int32 = 0
+  public var userStatus: Int32 = 0
 
-  var secureemail: String = String()
+  public var secureemail: String = String()
 
-  var securemobil: String = String()
+  public var securemobil: String = String()
 
-  var userName: String = String()
+  public var userName: String = String()
 
-  var userNickname: String = String()
+  public var userNickname: String = String()
 
-  var incompleteUser: UInt32 = 0
+  public var incompleteUser: UInt32 = 0
 
-  var portrait: String = String()
+  public var portrait: String = String()
 
-  var agreeType: Int32 = 0
+  public var agreeType: Int32 = 0
 
-  var aheadURL: String = String()
+  public var aheadURL: String = String()
 
-  var blockMsg: String = String()
+  public var blockMsg: String = String()
 
-  var showOnlyme: Int32 = 0
+  public var showOnlyme: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -59,10 +59,10 @@ nonisolated struct Tieba_SimpleUser: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_SimpleUser: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SimpleUser"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}user_status\0\u{1}secureemail\0\u{1}securemobil\0\u{3}user_name\0\u{3}user_nickname\0\u{3}incomplete_user\0\u{1}portrait\0\u{3}agree_type\0\u{3}ahead_url\0\u{3}block_msg\0\u{3}show_onlyme\0")
+  static public let protoMessageName: String = _protobuf_package + ".SimpleUser"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}user_status\0\u{1}secureemail\0\u{1}securemobil\0\u{3}user_name\0\u{3}user_nickname\0\u{3}incomplete_user\0\u{1}portrait\0\u{3}agree_type\0\u{3}ahead_url\0\u{3}block_msg\0\u{3}show_onlyme\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -85,7 +85,7 @@ nonisolated extension Tieba_SimpleUser: SwiftProtobuf.Message, SwiftProtobuf._Me
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.userID != 0 {
       try visitor.visitSingularInt64Field(value: self.userID, fieldNumber: 1)
     }
@@ -125,7 +125,7 @@ nonisolated extension Tieba_SimpleUser: SwiftProtobuf.Message, SwiftProtobuf._Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_SimpleUser, rhs: Tieba_SimpleUser) -> Bool {
+  static public func ==(lhs: Tieba_SimpleUser, rhs: Tieba_SimpleUser) -> Bool {
     if lhs.userID != rhs.userID {return false}
     if lhs.userStatus != rhs.userStatus {return false}
     if lhs.secureemail != rhs.secureemail {return false}

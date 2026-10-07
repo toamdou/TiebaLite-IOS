@@ -20,40 +20,40 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PollInfo: Sendable {
+nonisolated public struct Tieba_PollInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var type: Int32 = 0
+  public var type: Int32 = 0
 
-  var isMulti: Int32 = 0
+  public var isMulti: Int32 = 0
 
-  var totalNum: Int64 = 0
+  public var totalNum: Int64 = 0
 
-  var optionsCount: Int32 = 0
+  public var optionsCount: Int32 = 0
 
-  var isPolled: Int32 = 0
+  public var isPolled: Int32 = 0
 
-  var polledValue: String = String()
+  public var polledValue: String = String()
 
-  var tips: String = String()
+  public var tips: String = String()
 
-  var endTime: Int32 = 0
+  public var endTime: Int32 = 0
 
-  var options: [Tieba_PollOption] = []
+  public var options: [Tieba_PollOption] = []
 
-  var status: Int32 = 0
+  public var status: Int32 = 0
 
-  var totalPoll: Int64 = 0
+  public var totalPoll: Int64 = 0
 
-  var title: String = String()
+  public var title: String = String()
 
-  var lastTime: UInt32 = 0
+  public var lastTime: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -61,10 +61,10 @@ nonisolated struct Tieba_PollInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_PollInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PollInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{3}is_multi\0\u{3}total_num\0\u{3}options_count\0\u{3}is_polled\0\u{3}polled_value\0\u{1}tips\0\u{3}end_time\0\u{1}options\0\u{1}status\0\u{3}total_poll\0\u{1}title\0\u{3}last_time\0")
+  static public let protoMessageName: String = _protobuf_package + ".PollInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{3}is_multi\0\u{3}total_num\0\u{3}options_count\0\u{3}is_polled\0\u{3}polled_value\0\u{1}tips\0\u{3}end_time\0\u{1}options\0\u{1}status\0\u{3}total_poll\0\u{1}title\0\u{3}last_time\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -88,7 +88,7 @@ nonisolated extension Tieba_PollInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.type != 0 {
       try visitor.visitSingularInt32Field(value: self.type, fieldNumber: 1)
     }
@@ -131,7 +131,7 @@ nonisolated extension Tieba_PollInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PollInfo, rhs: Tieba_PollInfo) -> Bool {
+  static public func ==(lhs: Tieba_PollInfo, rhs: Tieba_PollInfo) -> Bool {
     if lhs.type != rhs.type {return false}
     if lhs.isMulti != rhs.isMulti {return false}
     if lhs.totalNum != rhs.totalNum {return false}

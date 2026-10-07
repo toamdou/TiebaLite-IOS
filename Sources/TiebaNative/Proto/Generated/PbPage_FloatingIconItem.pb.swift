@@ -20,40 +20,40 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbPage_FloatingIconItem: Sendable {
+nonisolated public struct Tieba_PbPage_FloatingIconItem: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var url: String = String()
+  public var url: String = String()
 
-  var iconURL: String = String()
+  public var iconURL: String = String()
 
-  var viewStatisticsURL: String = String()
+  public var viewStatisticsURL: String = String()
 
-  var clickStatisticsURL: String = String()
+  public var clickStatisticsURL: String = String()
 
-  var deeplink: String = String()
+  public var deeplink: String = String()
 
-  var scheme: String = String()
+  public var scheme: String = String()
 
-  var packageName: String = String()
+  public var packageName: String = String()
 
-  var foldLottie: String = String()
+  public var foldLottie: String = String()
 
-  var unfoldLottie: String = String()
+  public var unfoldLottie: String = String()
 
-  var floatType: String = String()
+  public var floatType: String = String()
 
-  var foldName: String = String()
+  public var foldName: String = String()
 
-  var unfoldName: String = String()
+  public var unfoldName: String = String()
 
-  var displayAdIcon: String = String()
+  public var displayAdIcon: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -61,10 +61,10 @@ nonisolated struct Tieba_PbPage_FloatingIconItem: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.pbPage"
 
 nonisolated extension Tieba_PbPage_FloatingIconItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".FloatingIconItem"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{3}icon_url\0\u{3}view_statistics_url\0\u{3}click_statistics_url\0\u{1}deeplink\0\u{1}scheme\0\u{3}package_name\0\u{3}fold_lottie\0\u{3}unfold_lottie\0\u{3}float_type\0\u{3}fold_name\0\u{3}unfold_name\0\u{3}display_ad_icon\0")
+  static public let protoMessageName: String = _protobuf_package + ".FloatingIconItem"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{3}icon_url\0\u{3}view_statistics_url\0\u{3}click_statistics_url\0\u{1}deeplink\0\u{1}scheme\0\u{3}package_name\0\u{3}fold_lottie\0\u{3}unfold_lottie\0\u{3}float_type\0\u{3}fold_name\0\u{3}unfold_name\0\u{3}display_ad_icon\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -88,7 +88,7 @@ nonisolated extension Tieba_PbPage_FloatingIconItem: SwiftProtobuf.Message, Swif
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.url.isEmpty {
       try visitor.visitSingularStringField(value: self.url, fieldNumber: 1)
     }
@@ -131,7 +131,7 @@ nonisolated extension Tieba_PbPage_FloatingIconItem: SwiftProtobuf.Message, Swif
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbPage_FloatingIconItem, rhs: Tieba_PbPage_FloatingIconItem) -> Bool {
+  static public func ==(lhs: Tieba_PbPage_FloatingIconItem, rhs: Tieba_PbPage_FloatingIconItem) -> Bool {
     if lhs.url != rhs.url {return false}
     if lhs.iconURL != rhs.iconURL {return false}
     if lhs.viewStatisticsURL != rhs.viewStatisticsURL {return false}

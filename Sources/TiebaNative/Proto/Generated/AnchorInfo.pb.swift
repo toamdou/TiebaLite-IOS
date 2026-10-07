@@ -20,118 +20,118 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_AnchorInfo: @unchecked Sendable {
+nonisolated public struct Tieba_AnchorInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var portrait: String {
+  public var portrait: String {
     get {_storage._portrait}
     set {_uniqueStorage()._portrait = newValue}
   }
 
-  var name: String {
+  public var name: String {
     get {_storage._name}
     set {_uniqueStorage()._name = newValue}
   }
 
-  var startTime: Int32 {
+  public var startTime: Int32 {
     get {_storage._startTime}
     set {_uniqueStorage()._startTime = newValue}
   }
 
-  var status: Int32 {
+  public var status: Int32 {
     get {_storage._status}
     set {_uniqueStorage()._status = newValue}
   }
 
-  var authorID: Int64 {
+  public var authorID: Int64 {
     get {_storage._authorID}
     set {_uniqueStorage()._authorID = newValue}
   }
 
-  var authorName: String {
+  public var authorName: String {
     get {_storage._authorName}
     set {_uniqueStorage()._authorName = newValue}
   }
 
-  var listeners: Int32 {
+  public var listeners: Int32 {
     get {_storage._listeners}
     set {_uniqueStorage()._listeners = newValue}
   }
 
-  var likers: Int32 {
+  public var likers: Int32 {
     get {_storage._likers}
     set {_uniqueStorage()._likers = newValue}
   }
 
-  var groupID: Int64 {
+  public var groupID: Int64 {
     get {_storage._groupID}
     set {_uniqueStorage()._groupID = newValue}
   }
 
-  var intro: String {
+  public var intro: String {
     get {_storage._intro}
     set {_uniqueStorage()._intro = newValue}
   }
 
-  var publisherPortrait: String {
+  public var publisherPortrait: String {
     get {_storage._publisherPortrait}
     set {_uniqueStorage()._publisherPortrait = newValue}
   }
 
-  var publisherName: String {
+  public var publisherName: String {
     get {_storage._publisherName}
     set {_uniqueStorage()._publisherName = newValue}
   }
 
-  var publisherID: Int64 {
+  public var publisherID: Int64 {
     get {_storage._publisherID}
     set {_uniqueStorage()._publisherID = newValue}
   }
 
-  var forumName: String {
+  public var forumName: String {
     get {_storage._forumName}
     set {_uniqueStorage()._forumName = newValue}
   }
 
-  var fromType: Int32 {
+  public var fromType: Int32 {
     get {_storage._fromType}
     set {_uniqueStorage()._fromType = newValue}
   }
 
-  var isVip: Int32 {
+  public var isVip: Int32 {
     get {_storage._isVip}
     set {_uniqueStorage()._isVip = newValue}
   }
 
-  var labelID: Int32 {
+  public var labelID: Int32 {
     get {_storage._labelID}
     set {_uniqueStorage()._labelID = newValue}
   }
 
-  var labelName: String {
+  public var labelName: String {
     get {_storage._labelName}
     set {_uniqueStorage()._labelName = newValue}
   }
 
-  var type: Int32 {
+  public var type: Int32 {
     get {_storage._type}
     set {_uniqueStorage()._type = newValue}
   }
 
-  var twzhiboInfo: Tieba_ZhiBoInfoTW {
+  public var twzhiboInfo: Tieba_ZhiBoInfoTW {
     get {_storage._twzhiboInfo ?? Tieba_ZhiBoInfoTW()}
     set {_uniqueStorage()._twzhiboInfo = newValue}
   }
   /// Returns true if `twzhiboInfo` has been explicitly set.
-  var hasTwzhiboInfo: Bool {_storage._twzhiboInfo != nil}
+  public var hasTwzhiboInfo: Bool {_storage._twzhiboInfo != nil}
   /// Clears the value of `twzhiboInfo`. Subsequent reads from it will return its default value.
-  mutating func clearTwzhiboInfo() {_uniqueStorage()._twzhiboInfo = nil}
+  mutating public func clearTwzhiboInfo() {_uniqueStorage()._twzhiboInfo = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -141,8 +141,8 @@ nonisolated struct Tieba_AnchorInfo: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_AnchorInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AnchorInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}portrait\0\u{1}name\0\u{3}start_time\0\u{1}status\0\u{3}author_id\0\u{3}author_name\0\u{1}listeners\0\u{1}likers\0\u{3}group_id\0\u{1}intro\0\u{1}publisherPortrait\0\u{1}publisherName\0\u{1}publisherId\0\u{1}forumName\0\u{3}from_type\0\u{3}is_vip\0\u{3}label_id\0\u{3}label_name\0\u{1}type\0\u{3}twzhibo_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".AnchorInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}portrait\0\u{1}name\0\u{3}start_time\0\u{1}status\0\u{3}author_id\0\u{3}author_name\0\u{1}listeners\0\u{1}likers\0\u{3}group_id\0\u{1}intro\0\u{1}publisherPortrait\0\u{1}publisherName\0\u{1}publisherId\0\u{1}forumName\0\u{3}from_type\0\u{3}is_vip\0\u{3}label_id\0\u{3}label_name\0\u{1}type\0\u{3}twzhibo_info\0")
 
   fileprivate class _StorageClass {
     var _portrait: String = String()
@@ -205,7 +205,7 @@ nonisolated extension Tieba_AnchorInfo: SwiftProtobuf.Message, SwiftProtobuf._Me
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -239,7 +239,7 @@ nonisolated extension Tieba_AnchorInfo: SwiftProtobuf.Message, SwiftProtobuf._Me
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -309,7 +309,7 @@ nonisolated extension Tieba_AnchorInfo: SwiftProtobuf.Message, SwiftProtobuf._Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_AnchorInfo, rhs: Tieba_AnchorInfo) -> Bool {
+  static public func ==(lhs: Tieba_AnchorInfo, rhs: Tieba_AnchorInfo) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
