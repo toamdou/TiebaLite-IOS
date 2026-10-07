@@ -112,6 +112,12 @@ jobs:
       # 拆分会在编译期挂掉且报错点在生成物里、很难定位 —— 所以在构建前先拦一次，并给出正确姿势。
       - name: Verify protoc-generated visibility
         run: |
+          # 只在"确实拆了 Proto target"的分支上校验：ios17 那条线没有这次拆分，生成物仍是
+          # protoc 默认的 internal —— 对它是无关判据，不能把那条腿判红。
+          if ! grep -q 'name = "Proto"' Sources/TiebaNative/BUILD.bazel; then
+            echo "skip: 本分支未拆 //Sources/TiebaNative:Proto，无需校验生成物可见性"
+            exit 0
+          fi
           total=$(ls Sources/TiebaNative/Proto/Generated/*.pb.swift | wc -l | tr -d ' ')
           missing=$(grep -L 'public ' Sources/TiebaNative/Proto/Generated/*.pb.swift | wc -l | tr -d ' ')
           echo "protoc 产物: $total 个，其中不含任何 public 声明的: $missing 个"
