@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite RN — 通用列表行（TiebaSimpleRows）
 //
 // 用途（2026-09-13，LegendList 拆除第 3 批）：把"非信息流卡片"的 RN 行
@@ -27,7 +26,6 @@
 //
 // 复用纪律：cell 复用前调 prepareForReuse()（取消在途图片请求、清文本），
 // 绘制内容完全由 (pageKey, index) 对应的模型决定。
-// ============================================================
 
 import UIKit
 import Nuke
@@ -435,17 +433,11 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
   /// accessibilityLabel（整行朗读；JS 下发，缺省用标题/正文兜底）。
   public let accessibilityLabel: String
 
-  // ── 卡片几何（四个变体共用；无卡片变体 margin/padding 为 0）──
 
-  // ── user / message 共用：头像 ──
 
-  // ── user ──
 
-  // ── message ──
 
-  // ── section ──
 
-  // ── summary ──
 
   // ── 绘制期派生（纯算术）──
   /// 卡片盒（相对行视图坐标）：上下 marginV 各一次 + bottomMargin 一次。
@@ -816,5 +808,3 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
     }
   }
 }
-
-// MARK: - 字典解析

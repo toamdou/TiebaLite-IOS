@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite — 骨架屏（TiebaSkeletonView）
 //
 // 迁移前 src/components/ui/Skeleton.tsx 的 UIKit 重建：thread/post/card/row
@@ -12,7 +11,6 @@
 // 占位色 = surfaceTertiary（systemGray5）。禁用 surfaceSecondary /
 // secondarySystemBackground —— 亮色下两者与页面背景同为 #F2F2F7，骨架块
 // 贴在背景上完全隐形（历史上"骨架屏消失"的根因）。
-// ============================================================
 
 import UIKit
 

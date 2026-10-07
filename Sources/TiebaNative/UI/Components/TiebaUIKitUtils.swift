@@ -445,10 +445,6 @@ private func makeSubtreeSnapshot(layer: CALayer, keepPortals: Bool = false, keep
                     subtree.layer.layerTintColor = sublayer.layerTintColor
                 }
                 if let maskLayer = subtree.layer.mask {
-//                    maskLayer.transform = sublayer.transform
-//                    maskLayer.position = sublayer.position
-//                    maskLayer.bounds = sublayer.bounds
-//                    maskLayer.anchorPoint = sublayer.anchorPoint
                     maskLayer.layerTintColor = sublayer.layerTintColor
                 }
                 view.addSubview(subtree)

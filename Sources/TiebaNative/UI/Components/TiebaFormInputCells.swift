@@ -367,7 +367,6 @@ final class TiebaFormAvatarCell: TiebaFormBaseCell {
 
     avatarView(size: avatarSize).configure(url: row.avatarURL ?? "", initial: row.initials ?? "")
 
-    // 尾部形态
     switch row.trailingStyle {
     case "button", "filledButton":
       trailingButton.isHidden = false

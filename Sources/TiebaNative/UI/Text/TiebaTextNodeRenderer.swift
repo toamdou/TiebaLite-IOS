@@ -1342,8 +1342,6 @@ public enum TiebaTextNode {
                     lineFrame.origin.x = offset.x + (bounds.size.width - lineFrame.width)
                 }
                 
-                //context.setStrokeColor(UIColor.red.cgColor)
-                //context.stroke(lineFrame.offsetBy(dx: 0.0, dy: -lineFrame.height))
                 
                 lineFrame.origin.y += -line.descent
                 

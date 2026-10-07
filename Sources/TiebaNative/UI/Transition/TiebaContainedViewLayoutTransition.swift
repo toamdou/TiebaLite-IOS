@@ -15,7 +15,6 @@
 //      :439-... / :643 / :658 / :677 / :703 / :778 / :787 / :796 / :829 / :847 / :965 / :1029 / :1091 /
 //      :1228 / :1261 / :1351 / :1355 / :1392 / :1451 / :1460 / :1537 / :1546 / :1594 / :1664 / :1936）。
 //      每个 node: 版都有等价的 view:/layer: 版（node 只是把 layer/frame 转发出去），删掉不丢语义。
-//      被删处统一留了「[移植] 删除 node: 重载」注释，方便与上游逐处对照。
 //   2. import AsyncDisplayKit / import ObjCRuntimeUtils（上游 :3-4）删除：前者只服务于 ASDisplayNode，
 //      后者是空 import。现在本文件只依赖 UIKit / QuartzCore / Foundation。
 //   3. ASIsCGRectValidForLayout / ASIsCGPositionValidForLayout（上游 :112-115）逐行翻译成文件私有函数
@@ -234,9 +233,7 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateFrame
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateFrameAsPositionAndBounds
     
     func updateFrameAdditive(layer: CALayer, frame: CGRect, force: Bool = false, completion: ((Bool) -> Void)? = nil) {
         if layer.frame.equalTo(frame) && !force {
@@ -256,7 +253,6 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateFrameAdditive
     
     func updateFrameAdditive(view: UIView, frame: CGRect, force: Bool = false, completion: ((Bool) -> Void)? = nil) {
         if view.frame.equalTo(frame) && !force {
@@ -276,9 +272,7 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateFrameAdditiveToCenter
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateBounds
     
     func updateBounds(layer: CALayer, bounds: CGRect, beginWithCurrentState: Bool = false, force: Bool = false, completion: ((Bool) -> Void)? = nil) {
         if layer.bounds.equalTo(bounds) && !force {
@@ -308,7 +302,6 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updatePosition
     
     func updatePosition(layer: CALayer, position: CGPoint, force: Bool = false, beginFromCurrentState: Bool = false, completion: ((Bool) -> Void)? = nil) {
         if layer.position.equalTo(position) && !force {
@@ -363,13 +356,9 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animatePosition
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animatePosition
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animatePositionWithKeyframes
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animateFrame
 
     func animateFrame(layer: CALayer, from frame: CGRect, to toFrame: CGRect? = nil, delay: Double = 0.0, removeOnCompletion: Bool = true, additive: Bool = false, completion: ((Bool) -> Void)? = nil) {
         switch self {
@@ -401,13 +390,9 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animateOffsetAdditive
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animateOffsetAdditive
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animateHorizontalOffsetAdditive
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animatePositionAdditive
     
     func animatePositionAdditive(layer: CALayer, offset: CGFloat, delay: Double = 0.0, removeOnCompletion: Bool = true, completion: @escaping (Bool) -> Void) {
         switch self {
@@ -418,7 +403,6 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animatePositionAdditive
     
     func animatePositionAdditive(layer: CALayer, offset: CGPoint, to toOffset: CGPoint = CGPoint(), removeOnCompletion: Bool = true, completion: ((Bool) -> Void)? = nil) {
         switch self {
@@ -462,8 +446,6 @@ public extension TiebaContainedViewLayoutTransition {
         } else {
             switch self {
             case .immediate:
-                //view.layer.removeAnimation(forKey: "position")
-                //view.layer.removeAnimation(forKey: "bounds")
                 view.frame = frame
                 if let completion = completion {
                     completion(true)
@@ -518,7 +500,6 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateAlpha
     
     func updateAlpha(layer: CALayer, alpha: CGFloat, beginWithCurrentState: Bool = false, completion: ((Bool) -> Void)? = nil) {
         if layer.opacity.isEqual(to: Float(alpha)) {
@@ -550,7 +531,6 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateBackgroundColor
     
     func updateBackgroundColor(layer: CALayer, color: UIColor, completion: ((Bool) -> Void)? = nil) {
         if let nodeColor = layer.backgroundColor, nodeColor == color.cgColor {
@@ -583,7 +563,6 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateCornerRadius
     
     func updateCornerRadius(layer: CALayer, cornerRadius: CGFloat, completion: ((Bool) -> Void)? = nil) {
         if layer.cornerRadius.isEqual(to: cornerRadius) {
@@ -642,9 +621,7 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animateTransformScale
 
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：animateTransformScale
 
     func animateTransformScale(layer: CALayer, from fromScale: CGPoint, completion: ((Bool) -> Void)? = nil) {
         switch self {
@@ -714,9 +691,7 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
 
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateTransform
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateTransform
     
     func updateTransform(layer: CALayer, transform: CATransform3D, beginWithCurrentState: Bool = false, delay: Double = 0.0, completion: ((Bool) -> Void)? = nil) {
         if CATransform3DEqualToTransform(layer.transform, transform) {
@@ -751,7 +726,6 @@ public extension TiebaContainedViewLayoutTransition {
         self.updateTransform(layer: layer, transform: transform, beginWithCurrentState: beginWithCurrentState, delay: delay, completion: completion)
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateTransformScale
     
     func updateTransformScale(layer: CALayer, scale: CGFloat, completion: ((Bool) -> Void)? = nil) {
         let t = layer.transform
@@ -779,27 +753,22 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateSublayerTransformScale
     // [移植] 该重载的 !isNodeLoaded 快捷路径写 node.subnodeTransform（即 layer.sublayerTransform）：节点未
     //        加载时其 CALayer 尚不存在；逻辑并入 layer: 版——CALayer 版始终直接写 layer.sublayerTransform，
     //        与节点加载后走 layer: 路径语义一致，故删除无语义损失。
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateSublayerTransformScaleAdditive
     // [移植] 该重载的 !isNodeLoaded 快捷路径写 node.subnodeTransform（即 layer.sublayerTransform）：节点未
     //        加载时其 CALayer 尚不存在；逻辑并入 layer: 版——CALayer 版始终直接写 layer.sublayerTransform，
     //        与节点加载后走 layer: 路径语义一致，故删除无语义损失。
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateSublayerTransformScaleAndOffset
     // [移植] 该重载的 !isNodeLoaded 快捷路径写 node.subnodeTransform（即 layer.sublayerTransform）：节点未
     //        加载时其 CALayer 尚不存在；逻辑并入 layer: 版——CALayer 版始终直接写 layer.sublayerTransform，
     //        与节点加载后走 layer: 路径语义一致，故删除无语义损失。
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateSublayerTransformScale
     // [移植] 该重载的 !isNodeLoaded 快捷路径写 node.subnodeTransform（即 layer.sublayerTransform）：节点未
     //        加载时其 CALayer 尚不存在；逻辑并入 layer: 版——CALayer 版始终直接写 layer.sublayerTransform，
     //        与节点加载后走 layer: 路径语义一致，故删除无语义损失。
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateTransformScale
     // [移植] 该重载的 !isNodeLoaded 快捷路径写 node.subnodeTransform（即 layer.sublayerTransform）：节点未
     //        加载时其 CALayer 尚不存在；逻辑并入 layer: 版——CALayer 版始终直接写 layer.sublayerTransform，
     //        与节点加载后走 layer: 路径语义一致，故删除无语义损失。
@@ -836,7 +805,6 @@ public extension TiebaContainedViewLayoutTransition {
         }
     }
     
-    // [移植] 删除 node: 重载（ASDisplayNode 版），view:/layer: 版等价：updateTransformRotation
     
     func updatePath(layer: CAShapeLayer, path: CGPath, delay: Double = 0.0, completion: ((Bool) -> Void)? = nil) {
         if layer.path == path {

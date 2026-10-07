@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite — 原生设置表单（TiebaFormListView）
 //
 // 纯 UIKit 视图，可被原生 UIViewController 直接使用。
@@ -71,7 +70,6 @@
 // 颜色键（color / iconTint / trailingColor）除 #RRGGBB 外还接受系统语义 token：
 // label / secondaryLabel / tertiaryLabel / systemRed / systemGreen / systemOrange /
 // systemBlue / systemGray（JS 侧主题色板里 textSecondary 等是 rgba，转不成 hex）。
-// ============================================================
 
 import UIKit
 
@@ -512,7 +510,6 @@ final class TiebaFormListView: UIView {
     return false
   }
 
-  /// 主色变化后重配可见行（离屏行出队时本来就会按新主色配置）。
   /// 作废行首色块位图缓存并重配可见行（外观档变化时调用；缓存键含解析后的色值）。
   private func invalidateIconCache() {
     TiebaFormRowCell.iconCache.removeAll()
