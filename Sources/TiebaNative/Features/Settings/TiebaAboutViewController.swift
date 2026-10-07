@@ -6,7 +6,7 @@
 // 这里直接挂**纯视图本体**，连那层 Expo 适配器都不需要。
 //
 // 布局与文案逐字对齐旧页面：
-//   区块 1：hero 行（打包图 expo.icon/Assets/icon-light.png + 应用名 + Version x）
+//   区块 1：hero 行（打包图 AboutIcon.png + 应用名 + Version x）
 //   区块 2「更新」：检查更新按钮 / 结果文字行（发现新版本… | 已是最新版本）/
 //                  失败文字行（检查失败：…）/ 条件出现的 Release 页面按钮
 //   区块 3「仓库与致谢」：5 个仓库按钮
@@ -175,7 +175,9 @@ final class TiebaAboutViewController: UIViewController {
             title: "贴吧Lite",
             subtitle: "Version \(TiebaReleaseAPI.currentVersion())",
             textStyle: "title",
-            imageName: "expo.icon/Assets/icon-light.png"
+            // 随包分发的松散图（原读 expo.icon 里的源图，而 .icon 文档只被 actool 编进
+            // Assets.car、源文件不进包 ⇒ 那条路径一直取不到图，hero 行是空的）。
+            imageName: "AboutIcon.png"
           )
         ]
       ),

@@ -22,9 +22,16 @@ swift_library(
 # App icon is an Xcode 26 Icon Composer document (see app_icons in //:App) and is passed as a
 # loose *.icon bundle: rules_apple rejects mixing *.icon with *.appiconset in the same target,
 # and Images.xcassets/AppIcon.appiconset is an empty placeholder, so it is excluded here.
+#
+# 2026-10-07 两处修正：
+#   1. 文档由 expo.icon 改名 AppIcon.icon —— 旧名是 RN/Expo 时代的文件名，actool 会拿它当
+#      图标名，一路写进包里的 CFBundleIconName="expo"；
+#   2. 美术从"背景烘进图片"的单张平面图拆成 **fill（背景）+ 透明底 mark 图层**（浅色/深色/
+#      单色三档特化）—— 系统合成 浅色/深色/着色/透明 四档要靠这两样，缺 fill 与图层特化时
+#      "透明"档没有可用素材。
 filegroup(
     name = "app_icon",
-    srcs = glob(["expo.icon/**"]),
+    srcs = glob(["AppIcon.icon/**"]),
 )
 
 filegroup(
@@ -35,6 +42,10 @@ filegroup(
     ) + [
         "PrivacyInfo.xcprivacy",
         "SplashScreen.storyboard",
+        # 「关于」页 hero 图：那张图按 bundle 相对路径直读（不是资源目录图片），
+        # 必须是随包分发的松散文件；原先是读 expo.icon 里的源图，而 .icon 文档只被
+        # actool 编进 Assets.car、源文件不进包 ⇒ 那条路径一直是悬空的。
+        "AboutIcon.png",
         # 运行时必需：信息流端点（frsPage/feedThreadList/userLike）走 TiebaSwiftProto
         # 描述符解码（TiebaProtoRegistry.loadBundled），删掉即 preconditionFailure。
         "//Sources/TiebaNative:Proto/proto-descriptors.json",
