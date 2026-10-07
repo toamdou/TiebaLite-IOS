@@ -1,4 +1,15 @@
-# Native module: all app UI/services plus the generated protobuf codecs.
+# Native module: protoc 生成代码（Proto）+ app UI/services（TiebaNative）。
+#
+# 2026-10-07 按真实依赖切分为两个 target（原先 1 个 swift_library / 505 个源文件 / 1 个 SwiftCompile 动作）：
+#   · //Sources/TiebaNative:Proto        267 个 .pb.swift，leaf
+#   · //Sources/TiebaNative:TiebaNative  238 个源文件 + 桶文件 Exports.swift，模块名保持不变
+# 为什么是两个而不是更多：非 Proto 的 235 个文件实测构成**一个强连通分量**
+#   （Core ↔ UI ↔ ListKit ↔ Media ↔ Features ↔ App 双向互相引用；两套独立方法——名字级静态扫描
+#    与 swiftc 逐文件探针——结论一致）。swift_library 的依赖不许成环，因此在「不搬代码、不改封装」
+#    的前提下不可能再往下切；要再拆必须先做依赖倒置/声明搬迁。
+#
+# 注意：Proto 的 target 定义在本文件而不是 Proto/BUILD.bazel——一旦 Proto/ 成为子包，
+#   本包就不能再 exports_files 它下面的 proto-descriptors.json，//TiebaLite:app_resources 会断。
 load("@rules_swift//swift:swift_library.bzl", "swift_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -6,14 +17,35 @@ package(default_visibility = ["//visibility:public"])
 # proto 描述符：随 app bundle 发布，启动时由 TiebaAppBootstrap 读入注册表。
 exports_files(["Proto/proto-descriptors.json"])
 
+# ── 生成代码（leaf module）──────────────────────────────────────────────────
+# 267 个 protoc 产物，只依赖 SwiftProtobuf，不依赖本仓任何代码（swiftc 单独编过：0 error）。
+swift_library(
+    name = "Proto",
+    srcs = glob(["Proto/Generated/**/*.swift"]),
+    features = ["swift.enable_v6"],
+    # 生成代码原先与宿主同模块、声明全是 internal（无访问修饰符）；跨 module 后统一补 public，
+    # 等价于 protoc-gen-swift 的 --swift_opt=Visibility=Public。fileprivate 的内部存储类不动。
+    module_name = "TiebaNativeProto",
+    deps = ["//Vendor/SwiftProtobuf"],
+)
+
+# ── App 代码 ────────────────────────────────────────────────────────────────
 swift_library(
     name = "TiebaNative",
-    srcs = glob(["**/*.swift"]),
+    srcs = ["Exports.swift"] + glob(
+        ["**/*.swift"],
+        exclude = [
+            "Exports.swift",
+            "Proto/**/*.swift",
+        ],
+    ),
     features = ["swift.enable_v6"],
     # -lsqlite3 mirrors the podspec's `s.libraries = 'sqlite3'` (TiebaSQLite.swift).
+    # 只有本 module 用 SQLite（Core/TiebaSQLite.swift）；Proto 是纯 protobuf，不需要。
     linkopts = ["-lsqlite3"],
     module_name = "TiebaNative",
     deps = [
+        ":Proto",
         # GIF 播放已改为原生 ImageIO（UI/Media/TiebaGIFPlayer.swift），Gifu 依赖已删除（2026-10-05）。
         "//Vendor/Hero",
         "//Vendor/JXPhotoBrowser",
