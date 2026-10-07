@@ -1,10 +1,8 @@
-// ============================================================
 // TiebaSettingsSupport —— 设置群共用的原生偏好读写 + 表单/主题辅助
 //
 // ⚠️ 落盘必须与 JS preferencesStore 的 persist 层逐字节兼容：逐键
 // kv["tiebalite_preferences:<key>"] = 该键的 JSON 字面量；坏值回落默认。
 // 读写全走 TiebaPreferenceSnapshot 的类型化 API（不在调用侧手拼字面量）。
-// ============================================================
 import UIKit
 import os
 

@@ -13,8 +13,6 @@
 //   将来若真有需要，注入方可以自行决定用私有 _UIPortalView 还是 public 替代方案（如 iOS 17 的
 //   \`UIView\` snapshot / \`UIPortalView\` 的公开等价物），本文件不需要再改。
 //
-// 找不到上游文件的条目：无（PortalView.swift / GlobalPortalView.swift 都找到了，见上面的限制说明）。
-//
 // 改动（逐条）：
 //   1. PortalSourceView → TiebaPortalSourceView（UIView 子类，上游本来就是 UIView）。
 //   2. PortalView / GlobalPortalView → 协议 TiebaPortalHosting / TiebaGlobalPortalHosting。
