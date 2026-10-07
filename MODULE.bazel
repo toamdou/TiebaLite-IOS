@@ -3,11 +3,13 @@ module(
     version = "1.0.0",
 )
 
-# Versions must stay Bazel 7.4.0-compatible: rules_apple 5 / rules_swift 4 / rules_xcodeproj 4
-# all require Bazel >= 8.
-bazel_dep(name = "apple_support", version = "2.8.2")
-bazel_dep(name = "bazel_skylib", version = "1.8.2")
-bazel_dep(name = "platforms", version = "1.0.0")
-bazel_dep(name = "rules_apple", version = "4.5.3")
-bazel_dep(name = "rules_swift", version = "3.6.1")
-bazel_dep(name = "rules_xcodeproj", version = "3.6.0")
+# 2026-10 工具链世代：Bazel 9.2.0 + rules_apple 5 / rules_swift 4 / rules_xcodeproj 4。
+# 这一代要求 Bazel >= 8（见各 module 的 bazel_compatibility），旧注释里"必须留在 7.4.0"的钉子已拔掉。
+# 版本号取自 BCR（https://bcr.bazel.build/modules/<name>/metadata.json），不是凭记忆写的：
+#   rules_apple 5.2.0 / rules_swift 4.1.2 / rules_xcodeproj 4.1.0 为各自当前最新稳定版。
+bazel_dep(name = "apple_support", version = "2.9.1")
+bazel_dep(name = "bazel_skylib", version = "1.9.2")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_apple", version = "5.2.0")
+bazel_dep(name = "rules_swift", version = "4.1.2")
+bazel_dep(name = "rules_xcodeproj", version = "4.1.0")
