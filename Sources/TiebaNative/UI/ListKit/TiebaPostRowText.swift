@@ -28,6 +28,40 @@ enum TiebaPostRowText {
     ).build
   }
 
+  /// 楼中楼预览的一行 = **名字 + 分隔冒号 + 正文**，合成同一条富文本。
+  ///
+  /// 为什么把名字并进正文、而不是左侧一个 UILabel + 右侧一个 TextNode：两个排版引擎在
+  /// 同一个 20pt 行盒里放首行基线的方式不同，名字与正文会差出一两个点（用户 2026-10-07
+  /// 报「xxxxx 和用户名没有居中对齐」）。并成一条富文本后由 TextNode 一次排版，基线天然重合。
+  ///
+  /// ⚠️ 分隔冒号**按需补**：服务端下发的楼中楼正文可能自带前导冒号（与 PbContent 的「@」
+  /// 同一类问题：@ 提及的正文里已经带了 @），名字本身也可能已经带尾冒号 —— 两边各判一次，
+  /// 否则就是用户看到的「用户名：：正文」。
+  static func subPostLine(
+    name: String,
+    content: NSAttributedString?,
+    palette: TiebaFeedRowPalette,
+    scale: Double
+  ) -> NSAttributedString {
+    let body = content ?? NSAttributedString()
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    let display = trimmed.isEmpty ? "吧友" : trimmed
+    let plain = body.string
+    let hasSeparator = display.hasSuffix("：") || display.hasSuffix(":")
+      || plain.hasPrefix("：") || plain.hasPrefix(":")
+    let head = hasSeparator ? display : display + "："
+    let line = NSMutableAttributedString(
+      string: head,
+      attributes: [
+        .font: TiebaPostRowLayout.subPostNameFont(scale),
+        .foregroundColor: palette.textSecondary,
+        .paragraphStyle: TiebaPostRowLayout.subPostNameParagraph(scale),
+      ]
+    )
+    line.append(body)
+    return line
+  }
+
   static func buildContent(
     _ content: [TiebaThreadContentSegment],
     preferences: TiebaPostPreferences,

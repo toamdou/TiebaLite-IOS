@@ -234,14 +234,17 @@ final class TiebaPostRowModel: @unchecked Sendable {
   /// 表情图到达后重建楼中楼预览（subPostTexts 是建模型时固化的占位图版本）；
   /// 尺寸不变、行高不变。
   func rebuiltSubTexts() -> [NSAttributedString?] {
-    post.subPosts.map {
-      TiebaPostRowText.buildContent(
+    let subScale = Double(preferences.fontScaleClamped)
+    return post.subPosts.map {
+      let content = TiebaPostRowText.buildContent(
         $0.content,
         preferences: preferences,
         blockFilter: blockFilter,
         palette: palette,
         isSubPost: true
       ).build.attributed
+      return TiebaPostRowText.subPostLine(
+        name: $0.displayName, content: content, palette: palette, scale: subScale)
     }
   }
 
@@ -325,7 +328,13 @@ final class TiebaPostRowModel: @unchecked Sendable {
       ).build
     }
     self.cachedText = build.attributed
-    self.cachedSubTexts = subPostBuilds.map(\.attributed)
+    // 楼中楼预览每行 = 名字 + 冒号 + 正文合成一条富文本（见 TiebaPostRowText.subPostLine：
+    // 两个排版引擎分行画名字/正文时首行基线对不齐、冒号还会重复）。
+    let subScale = Double(preferences.fontScaleClamped)
+    self.cachedSubTexts = zip(post.subPosts, subPostBuilds).map { sub, build in
+      TiebaPostRowText.subPostLine(
+        name: sub.displayName, content: build.attributed, palette: palette, scale: subScale)
+    }
     self.avatarURL = TiebaSimpleRowParser.avatarURL(post.authorPortrait)
     self.nameText = post.displayName.isEmpty ? "吧友" : post.displayName
     self.levelShortText =
