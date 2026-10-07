@@ -8,15 +8,11 @@ import UIKit
 //
 // 状态只有一份：当前 tab 那条栈的 viewControllers 就是当前导航栈，tabBar 就是底栏。
 //
-// task-12 的并发整理保留（不命中判据③）：install 那条 MainActor.assumeIsolated 已随 onReselect
-// 改成 @MainActor 闭包而去掉；popToRoot 标了 @MainActor；didShow 里那条多余的 assumeIsolated 删除。
-// 转场引擎相关的接线已按"系统接口更优"回滚成 UIView.animate。
-//
-// ⚠️ 仍未处理的既有并发标注（不是本次目标，改了会连带改 40+ 个调用方文件）：
+// ⚠️ 仍未处理的既有并发标注（改了会连带改 40+ 个调用方文件）：
 // 本类仍是 NSObject + @unchecked Sendable，pushRoute/navigate 等非隔离入口里还剩几处
 // MainActor.assumeIsolated。正确解法是整类 @MainActor，但那会让 Core/Features 里 40+ 个
-// 文件（网络回调、深链入口）的调用点一起需要 hop —— 超出本次「只改目标文件」的范围，
-// 留给 Lead 决策（见 docs/uikit-migration/22-接线-viewport.md 的「没做到」一节）。
+// 文件（网络回调、深链入口）的调用点一起需要 hop，留给 Lead 决策
+//（见 docs/uikit-migration/22-接线-viewport.md 的「没做到」一节）。
 
 /// 底栏重复点击的**原生**受理面：tab 根屏已是原生 VC 时（不再有 JS 侧
 /// TAB_RESELECT 订阅），由壳直接回调，语义与 JS 的 tabReselect 分发一致。
@@ -259,10 +255,9 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 路由入口（类型化）。深链先经 TiebaRouteTable.parse 产出同一个类型，再走这里；
   /// 调用点与深链只有这一条构造/压栈路径。
   @discardableResult
-  /// H16：原来的 mode（push/replace/root）三 case 里 replace 全仓零调用、root 的唯一调用点
-  /// （notifications 深链）到不了 pushRoute（notifications 是 tab 根屏，navigate 在 tab 分流就 return 了），
-  /// 却为不可达路径留了一处无防御下标 targetNav.viewControllers[0]（栈空即崩）。
-  /// 现在整层删除，行为零变化（所有调用点本来就走默认 push）。
+  /// H16：原 mode（push/replace/root）里 replace 全仓零调用、root 不可达（notifications 是
+  /// tab 根屏，navigate 在 tab 分流就 return），却为不可达路径留了一处无防御下标
+  /// targetNav.viewControllers[0]（栈空即崩）——整层已删，行为零变化。
   public func navigate(_ route: TiebaRoute) -> Bool {
     let entry = TiebaRouteTable.entry(named: route.name)
     if let tabIdx = entry?.tabIndex {
@@ -582,8 +577,8 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     return true
   }
 
-  /// src/utils/index.ts 的 extractThreadId 原生版（H17：入参改成 URLComponents 已经解好的结构化字段，
-  /// 不再拿 absoluteString 做未锚定子串匹配 —— 那样 query 里出现 tblite://thread/456 会盖过真实路径 /p/123）。
+  /// src/utils/index.ts 的 extractThreadId 原生版（H17：入参是 URLComponents 已解好的结构化字段，
+  /// 不再拿 absoluteString 做未锚定子串匹配——理由见 open(url:) 的 H17 注释）。
   static func extractThreadId(scheme: String, host: String, path: String, query: (String) -> String?) -> String? {
     if scheme == "com.baidu.tieba", host == "unidispatch" || path.contains("/unidispatch") {
       if let tid = query("tid") { return tid }

@@ -1,4 +1,3 @@
-// ============================================================
 // 滚动方向门（TiebaScrollDirectionGate）
 //
 // 移植自上游 submodules/Display/Source/ListView.swift:1023-1029（generalAccumulatedDeltaY）：
@@ -14,7 +13,6 @@
 // 阈值出处：TiebaMotionSpec.Scroll.directionFlipThreshold（= 14.0，上游同值）。
 // 调用方：Features/Thread/TiebaThreadViewController（浮条自动隐藏）
 //         Features/Forum/TiebaForumViewController（悬浮按钮自动隐藏）。
-// ============================================================
 
 import CoreGraphics
 

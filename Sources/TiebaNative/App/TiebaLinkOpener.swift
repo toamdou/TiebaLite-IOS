@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLinkOpener —— 链接打开（原 src/utils/linkOpener.ts 的 openLink 分支）
 //
 // 调用方：关于页的 5 个仓库按钮 / 吧规正文里的链接（openLink(url)）、
@@ -15,7 +14,6 @@
 //   - 系统浏览器 = UIApplication.open(_:options:)（现代面）；打不开时弹 Alert（标题
 //     「无法打开链接」，正文是 URL 本身）——与 JS 的 `Alert.alert('无法打开链接', url)` 同形；
 //   - 内置浏览器 present 失败时回落系统浏览器（JS 的 catch → Linking.openURL）。
-// ============================================================
 import UIKit
 
 @MainActor

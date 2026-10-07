@@ -1,4 +1,3 @@
-// ============================================================
 // 交互式返回手势准入（TiebaInteractivePopGuard）
 //
 // 移植自上游: submodules/Display/Source/InteractiveTransitionGestureRecognizer.swift:10-39
@@ -7,14 +6,13 @@
 //
 // 为什么需要：本仓有 4 处横滑容器 + 2 个 UIPageViewController（段页/图集），
 // 而从屏幕左缘起手的右滑返回与它们的横滑是同一段手势。TiebaNavigationShell 原先
-// 只判 `viewControllers.count > 1`（TiebaNavigationShell.swift:70），
+// 只判 `viewControllers.count > 1`，
 // 于是"在横滑带上右滑"会同时触发切页与返回。
 //
 // ⚠️ 本文件**不替换系统 interactivePopGestureRecognizer**：替换会丢掉 iOS 26 的
 // 转场联动（Liquid Glass 栏过渡 / rubber-band / transitionCoordinator 绑定）。
 // 只在既有的 `gestureRecognizerShouldBegin` 里补一个准入判断 —— 也就是
 // 10 号报告建议的"给系统手势加 shouldReceive"做法。
-// ============================================================
 
 import UIKit
 
@@ -25,13 +23,9 @@ protocol TiebaHorizontalGestureHost: AnyObject {}
 
 @MainActor
 enum TiebaInteractivePopGuard {
-  /// 命中点处是否应屏蔽交互式返回。
-  ///
-  /// 判据（按优先级）：
-  ///   1. 命中链上任一层实现 `TiebaHorizontalGestureHost` → 屏蔽
-  ///   2. 命中链上任一层是**横向可滚动**的 UIScrollView → 屏蔽
-  ///      （UIPageViewController 内部就是这种 scrollView，自动覆盖）
-  ///   3. 其余 → 放行
+  /// 命中点处是否应屏蔽交互式返回：命中链上任一层声明了横向手势宿主、或它是
+  /// **横向可滚动**的 UIScrollView（UIPageViewController 内部就是这种 scrollView，
+  /// 自动覆盖）⇒ 屏蔽；其余放行。
   static func shouldBlockInteractivePop(at point: CGPoint, in root: UIView) -> Bool {
     guard let hit = hitTestView(at: point, in: root) else { return false }
     var node: UIView? = hit

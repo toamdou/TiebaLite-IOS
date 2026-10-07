@@ -5,7 +5,7 @@
 // 【接线状态】已接线：UI/Components/TiebaSearchHistoryView.swift 的
 //   TiebaPillCloudView.setPills 用它包住每颗搜索历史药丸（targetViewForActivationProgress = 药丸，
 //   activated → pill.onLongPress）。
-// 落点为什么是这里而不是列表行：TiebaFeedRowView.swift:556-666 / TiebaPostRowView.swift:1626-1745
+// 落点为什么是这里而不是列表行：TiebaFeedRowView / TiebaPostRowView 的卡片长按菜单
 // 已经是系统 UIContextMenuInteraction，而 10 号报告 R3 指出二者不可同视图共存（两套长按准入互相抢），
 // 所以本容器只用在**没有**系统菜单、此前只有一个硬切 UILongPressGestureRecognizer 的搜索历史药丸上。
 //
@@ -28,10 +28,9 @@
 //        （同一语义：目标内容在目标 layer 坐标系里的矩形，缩放的「中点」由它决定）。
 //   3) 上游 .ended 分支里调用的 targetLayer.animate(from:to:keyPath:timingFunction:duration:) 是
 //      Display 模块的 CALayer 扩展。本移植改用本文件底部内联的等价物 tiebaContextAnimate(...)
-//      （名字带前缀，以免与 UI/Components/TiebaCAAnimationUtils.swift:313 的同名方法构成非法重声明）。
-//      【2026-10 迁移记录】该助手原先定义在同目录 TiebaContextMenuContainer.swift（自绘玻璃气泡）里；
-//      气泡与自研菜单模型已按"系统接口更优就别动"删除（系统 UIContextMenuInteraction 在 iOS 26 是正解），
-//      助手随之搬到这里 —— 它是本类唯一的使用者。
+//      （名字带前缀，以免与 UI/Components/TiebaCAAnimationUtils 的同名 animate 构成非法重声明）；
+//      该助手原在同目录 TiebaContextMenuContainer.swift（自绘玻璃气泡，已按"系统接口更优就别动"删除）
+//      里，随其删除搬到这里，本类是其唯一使用者。
 //   4) Swift 6 严格并发正统化（无 @preconcurrency / nonisolated(unsafe) / assumeIsolated /
 //      降 swift 版本）：UIView 在 SDK 里是 @MainActor，本类自动继承隔离域；手势闭包 [weak self]
 //      捕获与主 actor 同域。DispatchQueue.main.asyncAfter 那段按上游原样保留。
@@ -215,7 +214,7 @@ public class TiebaContextControllerSourceView: UIView {
   // MARK: - CALayer 补间（上游 CALayer.animate 的最小等价物）
   //
   // 本类 .ended 分支的补间动画用它。
-  // 为什么内联而不是复用 UI/Components/TiebaCAAnimationUtils.swift:313：那一份在另一个目录，
+  // 为什么内联而不是复用 UI/Components/TiebaCAAnimationUtils：那一份在另一个目录，
   // 而本目录要能在「系统框架 + 本目录」的封闭集合里独立编译验证（见文件头交付标准）。
   // 动画属性与上游一致：isRemovedOnCompletion = true / fillMode = .forwards / key = keyPath。
   internal extension CALayer {

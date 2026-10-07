@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaSystemUI —— 窗口 / 根视图底色（替代 expo-system-ui 的 setBackgroundColorAsync）
 //
 // 逐项对照 expo-system-ui/ios/ExpoSystemUIModule.swift（2026-09-13 核对）：
@@ -17,7 +16,6 @@
 // 线程：UIWindow/UIViewController 都是 UIKit 对象，只在主线程碰。@JS 同步
 // 成员可能从任意线程调用，所以原生
 // 入口经 onMain 收束。
-// ============================================================
 import UIKit
 
 /// 根视图底色。线程契约：**只在主线程读写**（UIWindow/UIViewController 都是

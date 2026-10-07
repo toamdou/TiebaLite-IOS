@@ -13,14 +13,6 @@
 //     把产出的意图发给回调。
 //   · 用本仓唯一的 \`TiebaSharedDisplayLinkDriver\` 做 tick 源（不新开 CADisplayLink，见该文件说明）。
 //
-// 意图（对外最少必要集）：
-//   highlight(Bool) —— 按下/取消高亮（调用方拿它做按压反馈）
-//   singleTap       —— 确认后的单击（等过双击窗口才发出）
-//   doubleTap       —— 双击
-//   longPress       —— 长按成立（可紧接着跟拖动）
-//   dragBegan/Moved/Ended —— 长按之后继续拖动（"长按拖动"），或直接拖动取消点击
-//   cancelled       —— 全部作废（系统取消/超时/移出容差）
-//
 // Swift 6：机器是 Sendable 值类型；识别器是 UIGestureRecognizer 子类（天然 @MainActor）。
 // 没有 @preconcurrency / nonisolated(unsafe) / @unchecked Sendable / assumeIsolated。
 

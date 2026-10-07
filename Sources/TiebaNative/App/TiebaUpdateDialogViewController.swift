@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaUpdateDialogViewController —— 「检查更新」结果弹窗
 //（原 src/components/settings/UpdateDialog.tsx，随关于页一起原生化）
 //
@@ -18,7 +17,6 @@
 // ⚠️ 状态是**活的**：原弹窗订阅 zustand store，"检查中点两次"时它会从
 // 「正在检查更新…」自动变成结果。这里同样订阅 TiebaUpdateService（addObserver），
 // 在弹窗存续期间刷新内容。
-// ============================================================
 import UIKit
 
 final class TiebaUpdateDialogViewController: UIViewController {
