@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaTypography —— 应用内**两级字号体系**（正文级 / 界面级）
 //
 // 【用户口径 2026-10-06】设置→个性化→阅读字号：
@@ -33,18 +32,14 @@
 //   TiebaPageStore 的页索引）一次性全部失配、自动重测。这是本仓
 //   「字号改了但行族还是旧档」那个坑的**结构性**解法：不逐个缓存去清，
 //   而是让"字体变了"直接体现为"这一行是另一行内容"。
-// ============================================================
 import Foundation
 
 nonisolated enum TiebaTypography {
 
   // MARK: - 偏好键
 
-  /// 正文字号（pt）。
   static let bodySizeKey = "bodyFontSize"
-  /// 界面字号（pt）。
   static let uiSizeKey = "uiFontSize"
-  /// 「界面字号跟随正文字号」开关。
   static let followsBodyKey = "uiFontFollowsBody"
   /// 旧键（倍率 0.8…2.0）：只用于一次性迁移，不再写入。
   static let legacyScaleKey = "fontScale"

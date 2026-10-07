@@ -4,9 +4,7 @@ import Foundation
 /// 辅助方法被 +Notifications/+AutoSign 共用，故为 internal（原 private 只在
 /// 单文件内可见，拆文件后必须放宽）。
 extension TiebaBackgroundSync {
-  // ----------------------------------------------------------------
   // JSON / 数值辅助（+Notifications/+AutoSign 共用）
-  // ----------------------------------------------------------------
 
   func decodeJSON(_ raw: String) -> Any? {
     guard let data = raw.data(using: .utf8) else { return nil }

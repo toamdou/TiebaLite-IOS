@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaPreferenceSnapshot —— 原生偏好的类型化读/写门面（唯一落盘点）
 //
 // 为什么单独一份：偏好存在统一 SQLite 的 kv 表（TiebaKvStore），落盘格式沿用
@@ -18,7 +17,6 @@
 //
 // 读不到（键不存在/解析失败）→ nil / 调用方默认值：与 JS 的
 // sanitizePreferenceValue 同语义（坏值回滚默认，不猜、不抛）。
-// ============================================================
 import Foundation
 
 enum TiebaPreferenceSnapshot {

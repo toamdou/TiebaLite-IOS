@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaSQLite —— 系统 libsqlite3 的异步查询门面（替代 expo-sqlite）
 //
 // 存储裁决：**不新增存储路径**。全 App 只有一个库文件
@@ -33,7 +32,6 @@
 // 线程：全部入口是 1.0 AsyncFunction（整段在 expo.modules.AsyncFunctionQueue
 // 上跑，不占 JS 线程），连接由一把 NSLock 串行化语句执行；SQLite 自身是
 // serialized 线程模式（FULLMUTEX）。
-// ============================================================
 import Foundation
 import SQLite3
 
@@ -104,13 +102,11 @@ private enum SQLiteColumnValue: Sendable {
   }
 }
 
-// ============================================================
 // 共享 SQLite 原语（TiebaSQLite 与 TiebaKvStore 各自手写了一份 → 收敛到这里）
 //
 // 两条连接打开的是同一个库文件（见文件头），开库参数/open 失败收尾/bind/列读取
 // /错误文案必须逐字一致，否则同一故障在两条路径上表现不同。调用方仍各自持有
 // NSLock 串行化自己连接上的语句执行。
-// ============================================================
 enum TiebaSQLiteCoreError: LocalizedError {
   case open(String)
 
@@ -293,9 +289,7 @@ final class TiebaSQLite: Sendable {
   func query(database: String, sql: String, params: [[String: Any]]) throws -> [[String: Any]] {
     let values = params.map { SQLiteBindValue.from($0["v"]) }
     let rows: [[String: SQLiteColumnValue]] = try connections.withLock { table in
-      // 取连接：命中直接用；未命中建一条并登记（登记必须发生在 Mutex 闭包内）。
-      // 这里不用「把表 inout 传给助手」的写法：inout sending 参数在闭包返回时
-      // 仍可达，会触发 region-isolation 报错（-typecheck 看不出来）。
+      // 取连接（登记须在 Mutex 闭包内；不用 inout sending 的写法，理由见 exec）。
       let connection: TiebaSQLiteConnection
       if let cached = table[database] {
         connection = cached
@@ -326,9 +320,7 @@ final class TiebaSQLite: Sendable {
   func queryFirst(database: String, sql: String, params: [[String: Any]]) throws -> [String: Any]? {
     let values = params.map { SQLiteBindValue.from($0["v"]) }
     let row: [String: SQLiteColumnValue]? = try connections.withLock { table in
-      // 取连接：命中直接用；未命中建一条并登记（登记必须发生在 Mutex 闭包内）。
-      // 这里不用「把表 inout 传给助手」的写法：inout sending 参数在闭包返回时
-      // 仍可达，会触发 region-isolation 报错（-typecheck 看不出来）。
+      // 取连接（登记须在 Mutex 闭包内；不用 inout sending 的写法，理由见 exec）。
       let connection: TiebaSQLiteConnection
       if let cached = table[database] {
         connection = cached
@@ -356,9 +348,7 @@ final class TiebaSQLite: Sendable {
 
   func begin(database: String) throws {
     try connections.withLock { table in
-      // 取连接：命中直接用；未命中建一条并登记（登记必须发生在 Mutex 闭包内）。
-      // 这里不用「把表 inout 传给助手」的写法：inout sending 参数在闭包返回时
-      // 仍可达，会触发 region-isolation 报错（-typecheck 看不出来）。
+      // 取连接（登记须在 Mutex 闭包内；不用 inout sending 的写法，理由见 exec）。
       let connection: TiebaSQLiteConnection
       if let cached = table[database] {
         connection = cached
