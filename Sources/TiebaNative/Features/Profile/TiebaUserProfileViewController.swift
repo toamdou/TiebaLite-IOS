@@ -136,7 +136,6 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
         detail = result
         isFollowing = result.isConcerned
         isOwn = result.uid == TiebaBackgroundSnapshot.shared.uid
-        // 回复 tab 只在本人主页存在：别人的主页被指到 replies 时回落贴子（旧页同判据）。
         if !isOwn, activeTab == "replies" { activeTab = "threads" }
         // 行还没测量落地时不让位：列表行由 loadList 另路发布，数据到手 ≠ 行能画，
         // 这里提前让位就是页头先画出来、正文空白。

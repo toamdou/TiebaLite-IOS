@@ -1,8 +1,6 @@
-// ============================================================
 // TiebaHapticsSettingsViewController —— 振动设置（原 src/app/settings/haptics.tsx）
 // 每场景两档（力度/波形）+ 实时触觉档位；渲染与写入两侧都做白名单清洗，
 // 保证偏好表不产生选择器不认识的档位。
-// ============================================================
 import UIKit
 
 final class TiebaHapticsSettingsViewController: TiebaFormPageController {

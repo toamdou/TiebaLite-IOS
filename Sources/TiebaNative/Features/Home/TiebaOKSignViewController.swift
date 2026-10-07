@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaOKSignViewController —— 一键签到设置（原 src/app/settings/oksign.tsx）
 // 签到复用 TiebaSignService（首页同一条 msign 通道）；自动签到走
 // TiebaBackgroundSync 的 BGTask 登记；进度观察走 addProgressObserver。
@@ -10,7 +9,6 @@
 //     UI/Drawing/TiebaSpring 的 cubic-bezier 求值（带一点回弹）。
 //   · 首次进入 → UI/Nodes/TiebaTooltipController 锚在导航栏「?」按钮上的引导气泡
 //     （看过一次记进偏好；之后仍可点「?」再看）。
-// ============================================================
 import UIKit
 
 final class TiebaOKSignViewController: UIViewController {

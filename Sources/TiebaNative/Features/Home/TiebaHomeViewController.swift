@@ -533,8 +533,6 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
         self?.loadFollowedForums(force: true)
       }
     }
-    // stateView 不再挂在本页、也不再用 isHidden 切换：它由状态列表项（TiebaHomeStateCell）承载，
-    // 列表始终可见 —— 空/错误态下也能下拉刷新（改前 showState 会把列表整个藏掉）。
     collectionView.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(collectionView)
     NSLayoutConstraint.activate([

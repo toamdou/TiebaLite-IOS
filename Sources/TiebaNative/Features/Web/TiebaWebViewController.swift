@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaWebViewController —— 内置浏览器（原 src/app/webview.tsx）
 //
 // 整屏原生：工具栏（自绘行）+ WKWebView + 加载骨架/失败页。
@@ -30,7 +29,6 @@
 //     变化写回 Foundation（原 sharedCookiesEnabled 的语义）；退出时摘观察者。
 //   · JS 对话框（alert/confirm/prompt）：UIAlertController 实现，按钮文案
 //     Ok / Cancel 与 react-native-webview 一致（通行证校验失败提示就是 alert）。
-// ============================================================
 import UIKit
 import WebKit
 
@@ -78,7 +76,6 @@ final class TiebaWebViewController: UIViewController {
   private let moreButton = TiebaToolbarIconButton(symbol: "ellipsis", slot: 22, label: "更多")
   private let loadingBar = UIView()
   private let loadingOverlay = TiebaWebLoadingOverlayView()
-  /// 加载失败页（系统状态块 + 重试）：原实现失败后只剩一片空白。
   private let errorView = TiebaStateContentView()
   private var hairlineHeightConstraint: NSLayoutConstraint?
 

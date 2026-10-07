@@ -1,9 +1,7 @@
-// ============================================================
 // TiebaImageSettingsViewController —— 图片与流量（原 src/app/settings/image.tsx）
 //
 // 分组/顺序与旧页一致：图片加载（策略/清晰度）→ 水印（样式/开关）→ 显示（暗化）
 // → 视频（自动播放 + 页脚）。触觉只有「暗化」「自动播放」两个开关有。
-// ============================================================
 import UIKit
 
 final class TiebaImageSettingsViewController: TiebaFormPageController {
