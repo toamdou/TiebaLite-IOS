@@ -19,16 +19,15 @@ swift_library(
     deps = ["//Sources/TiebaNative:TiebaNative"],
 )
 
-# App icon is an Xcode 26 Icon Composer document (see app_icons in //:App) and is passed as a
-# loose *.icon bundle: rules_apple rejects mixing *.icon with *.appiconset in the same target,
-# and Images.xcassets/AppIcon.appiconset is an empty placeholder, so it is excluded here.
+# App icon：单张 1024 平面图，走系统资源目录的 AppIcon.appiconset（见 app_icons in //:App）。
 #
-# 2026-10-07 两处修正：
-#   1. 文档由 expo.icon 改名 AppIcon.icon —— 旧名是 RN/Expo 时代的文件名，actool 会拿它当
-#      图标名，一路写进包里的 CFBundleIconName="expo"；
-#   2. 美术从"背景烘进图片"的单张平面图拆成 **fill（背景）+ 透明底 mark 图层**（浅色/深色/
-#      单色三档特化）—— 系统合成 浅色/深色/着色/透明 四档要靠这两样，缺 fill 与图层特化时
-#      "透明"档没有可用素材。
+# 2026-10-07 的经过：曾短暂换用 Xcode 26 的 Icon Composer 文档（expo.icon → AppIcon.icon，
+# 拆成 fill + 透明底 mark 图层），图标切换能力有了但 actool 要重新渲染合成，Assets.car
+# 大了约 2.5MB；而"深色/透明能否切"在模拟器上没能验证出来（系统切深色时自家 App 的图标
+# 都换了、本 App 没换）。按用户口径退回**单张平面图**这条最小、最稳的路：
+#   · 名字不再是 expo（资源目录里就叫 AppIcon，包内 CFBundleIconName = AppIcon）；
+#   · 想恢复"深色/着色"只需往同一个 appiconset 的 Contents.json 里再加
+#     icon-1024-dark.png / icon-1024-tinted.png 两项（各约 50KB），不必回到图层方案。
 filegroup(
     name = "app_icon",
     srcs = glob(["AppIcon.icon/**"]),
