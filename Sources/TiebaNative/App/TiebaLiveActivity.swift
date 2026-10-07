@@ -117,7 +117,6 @@ final class TiebaLiveActivityManager {
   private func cachedOrLiveActivity(_ activityId: String) -> TiebaLiveActivityHandle? {
     if let cached = activities[activityId] {
       // 用户在锁屏上划掉、或活动已结束：内存里的对象已失效，剪掉再走系统列表。
-      // 改前这种条目会一直留在缓存里（虽然量很小，但没有理由留着）。
       if cached.activity.activityState == .dismissed || cached.activity.activityState == .ended {
         activities.removeValue(forKey: activityId)
       } else {
@@ -164,7 +163,6 @@ final class TiebaLiveActivityManager {
     activities.removeAll()
   }
 
-  /// 枚举 → ActivityKit 策略，唯一映射点。
   private static func endPolicy(_ policy: TiebaLiveActivityDismissalPolicy) -> ActivityUIDismissalPolicy {
     switch policy {
     case .immediate: return .immediate

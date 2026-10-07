@@ -54,7 +54,7 @@ public final class TiebaRootNavigationController: UINavigationController {
     navigationBar.tintColor = .label
     interactivePopGestureRecognizer?.isEnabled = true
     interactivePopGestureRecognizer?.delegate = self
-    // 栏内按压判定（HDR 高光 + 轻触觉）：挂载点即装好，不必等 chrome 重扫。
+    // 栏内按压判定（轻触觉）：挂载点即装好，不必等 chrome 重扫。
     TiebaChrome.installChromePressHaptics(on: navigationBar)
     // 深色模式下栏底是深色液态玻璃，状态栏字色由各屏 preferredStatusBarStyle
     // 决定（Info.plist 是 UIViewControllerBasedStatusBarAppearance=true）。
@@ -475,7 +475,6 @@ public final class TiebaRouteHostViewController: UIViewController {
   }
 
   private weak var trackedContentScrollView: UIScrollView?
-  /// 主滚动视图解析缓存（见 scrollViewForSystem）。
   private weak var cachedPrimaryScrollView: UIScrollView?
   private var resolvedEpoch = -1
 

@@ -109,7 +109,7 @@ final class TiebaGlassTouchEffect {
     }
 
     // Swift 6：nonisolated deinit 不许读 @MainActor 存储属性；isolated deinit 是编译器给的正式写法
-    //（本仓先例：UI/Drawing/TiebaPortalSourceView.swift:104）。
+    //（本仓先例：UI/Drawing/TiebaPortalSourceView 的 isolated deinit）。
     isolated deinit {
         self.radialHighlightLayer.removeFromSuperlayer()
     }

@@ -378,29 +378,6 @@ enum TiebaChrome {
   // （"顶栏偏亮、与背景不协调" + 退出页面后残留一秒）、UIBlurEffect + 渐变 mask
   //（"非常拉跨、栏底一条亮边"）。
 
-  // ── 原生顶栏（2026-09-11 用户定调，2026-09-16 定案）──
-  // 用户要求："顶栏完全使用 UIKit，并遵循 iOS 26 之后的 UIKit 设计规范"。
-  //
-  // 定案一句话：**一个字节的栏级 appearance 都不写**，顶栏（含那层模糊）完全由
-  // UIKit 自动渲染。铁律与底栏同源（见 TiebaMainTabBarController.applyTheme）：
-  // 任何 bar 级 appearance 写入都会让 UIKit 退出**自动 Liquid Glass 渲染管线**，
-  // 栏就退化成旧磨砂（实心色带 / 四边硬的矩形）——那正是用户逐轮否掉的那几版。
-  //
-  // 走过的几条错路（别再回去）：
-  //   · 栏外观置透明（configureWithTransparentBackground）：栏底彻底没有材质，
-  //     只剩系统滚动边缘效果，而它只铺状态栏那一条 ⇒ 用户报"只有状态栏区域有模糊"；
-  //   · 栏自带系统材质（appearance.backgroundEffect = UIBlurEffect(...)）：那是
-  //     旧世界的磨砂，四边是硬的 ⇒ "顶栏模糊退化成最差的版本"；
-  //   · 自建 UIVisualEffectView + CAGradientLayer 渐变 mask（手写溶解带）：能做出
-  //     软边，但不是系统渲染的玻璃，观感与 Liquid Glass 不同、栏底还会留一条亮边
-  //     ⇒ "非常拉跨，根本不是 iOS 26 里 UIKit 实现模糊的接口"。
-  //
-  // 定案（2026-09-16）见下方两态 appearance：栏级 appearance 只在 standard/scrollEdge 两态
-  // 之间切换，**不自建玻璃层**。历史上这里写过「UIGlassEffect + applyNavGlassLayer」，
-  // 该函数与那条路都已被否并删除——幽灵引用一并清掉（见 docs/uikit-migration/30-review复检.md Q7-7）。
-  // 此外本文件对栏只做：装手势（双击回顶、栏内按压触觉）、底边滚动边缘效果关掉。
-  // 顶边滚动边缘效果**不写**——它渲出来的那一层被玻璃层盖住，只会白花每帧的 GPU。
-  // **不手写材质、不挂渐变 mask**（UIBlurEffect + mask 那版用户评价"非常拉跨、栏底一条亮边"）。
   /// 栏外观 = **两态**（这是最终定案，见文件头"原生顶栏"节）：
   ///   · standard / compact：`configureWithDefaultBackground()` —— 内容滚到栏下时用
   ///     系统自己的材质（iOS 26 的 Liquid Glass，材质随深浅与背景自适应，不会偏亮）；
@@ -567,7 +544,7 @@ enum TiebaChrome {
       ChromeState.typographyGeneration = TiebaTypography.generation
     }
     for navBar in chromeBars.navBars {
-      // 栏内按压判定（HDR 高光 + 轻触觉）与双击回顶手势：两者在 bar 挂载钩子里
+      // 栏内按压判定（轻触觉）与双击回顶手势：两者在 bar 挂载钩子里
       // 已装好（见 navChromeScrollHooks.didMoveToWindow），这里幂等补齐
       // （钩子安装晚于某根栏挂载时的漏网，判重零成本）。
       installNavDoubleTapToTop(on: navBar)
@@ -591,7 +568,7 @@ enum TiebaChrome {
     // Fabric 的 JS 线程会在任意时刻 flush CA transaction：若导航栏仍带 dirty
     // layout，会在 JS 线程执行 Auto Layout（UIKit 限制仅主线程）→ SIGABRT。
     // 这里在主线程强制完成布局，把脏标记消化掉。仅在真写了材质时才 flush：
-    // 空转轮询每 1.5s 强制同步布局本身就会干扰滚动/系统动画（实测卡顿源）。
+    // 每轮无条件同步布局本身就会干扰滚动/系统动画（实测卡顿源）。
     if applied {
       CATransaction.flush()
     }

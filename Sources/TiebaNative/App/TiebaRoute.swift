@@ -62,7 +62,6 @@ public enum TiebaRoute: Equatable, Hashable, Sendable {
   case editProfile
   case blockSettings
 
-  /// 路由表键（TiebaRouteTable.entries 的 name）：查标题/呈现方式/tab 序号用。
   public var name: String {
     switch self {
     case .notFound: return "+not-found"
@@ -106,8 +105,7 @@ public enum TiebaRoute: Equatable, Hashable, Sendable {
     return initialTab
   }
 
-  /// 连点去重签名：等价旧的「name + 排序后的参数」。动态段照旧走
-  /// TiebaRoutePath.segment：含 ? & / 的吧名不与别的路由串撞车。
+  /// 连点去重签名：动态段走 TiebaRoutePath.segment（含 ? & / 的吧名不与别的路由串撞车）。
   var signature: String {
     switch self {
     case .notFound(let path): return path.isEmpty ? "/+not-found" : path

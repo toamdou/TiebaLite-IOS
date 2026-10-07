@@ -7,8 +7,8 @@
 //   长按由本手势驱动 0→1 的激活进度（药丸绕内容中点缩放），走满 1 才触发删除回调。
 //
 // 与系统 UIContextMenuInteraction 的关系（不要据此推翻上面的接线）：
-//   · Sources/TiebaNative/UI/ListKit/TiebaFeedRowView.swift:556-666 与
-//     UI/ListKit/TiebaPostRowView.swift:1626-1745 已经是完整的系统 UIContextMenuInteraction
+//   · UI/ListKit/TiebaFeedRowView 与 UI/ListKit/TiebaPostRowView 的卡片长按菜单
+//     已经是完整的系统 UIContextMenuInteraction
 //     （UITargetedPreview 锚点、新旧协议名双实现、升起触觉、收起不飞回）——那里的行仍走系统菜单。
 //   · docs/uikit-migration/10-页面壳与交互层.md 的 R3：ContextGesture 与系统
 //     UIContextMenuInteraction 不可同视图共存（两套长按准入会互相抢手势）。
