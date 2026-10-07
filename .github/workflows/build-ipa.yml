@@ -94,6 +94,19 @@ jobs:
             bazel-${{ matrix.ref }}-${{ runner.os }}-
             bazel-${{ runner.os }}-
 
+      # ⚠️ 缓存要真的生效，必须让 Bazel 知道去哪读写：之前 actions/cache 只负责存/取
+      # ~/.bazel_cache/{disk,repository}，但仓库里没有任何 --disk_cache / --repository_cache
+      # 设置（.bazelrc 里那两行是"复制到 .bazelrc.user"的模板，而 .bazelrc.user 被 gitignore
+      # ⇒ runner 上根本不存在）—— 缓存步一直在存/取一个空目录。这里在构建前把 .bazelrc.user
+      # 写出来（.bazelrc 用 try-import 引入，缺了也不报错，本地开发机各自维护自己那份）。
+      - name: Enable Bazel disk/repository cache
+        run: |
+          cat > .bazelrc.user <<EOF
+          build --disk_cache=$HOME/.bazel_cache/disk
+          build --repository_cache=$HOME/.bazel_cache/repository
+          EOF
+          cat .bazelrc.user
+
       - name: Build (bazel, ad-hoc signed device IPA)
         run: |
           brew install bazelisk

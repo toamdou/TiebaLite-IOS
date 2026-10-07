@@ -28,6 +28,10 @@ ios_application(
         "//conditions:default": None,
     }),
     resources = ["//TiebaLite:app_resources"],
+    # 不把 workspace 状态/git 版本烙进产物：AppleBundle 的 stamp 默认 -1（跟随 --stamp），
+    # 显式写 0 可让 action 结果在换机器/换 commit 时照样命中缓存（本仓 Info.plist 里的版本号
+    # 是静态值，没有 stamping 依赖）。
+    stamp = 0,
     sdk_frameworks = [
         "BackgroundTasks",
         "CoreGraphics",

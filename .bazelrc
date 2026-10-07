@@ -23,6 +23,17 @@ build:release --compilation_mode=opt
 # 实测（2026-09-15，arm64 单架构）：基线 7.84MB → -dead_strip 7.53MB → 再剥离符号 6.64MB。
 build:release --linkopt=-Wl,-dead_strip
 
+# 符号剥离的两条路线（默认走 genrule 那条，已验证可行）：
+#   · 现状 //:AppStripped：链接产物已经签名之后，在 genrule 里解包 → strip -x → 重压。
+#     代价是多一次完整解包/压缩，且 file/xcrun/strip/zip 都是宿主工具（hermeticity 差），
+#     产物签名必然失效 —— 我们交付的本来就是给 SideStore 重签的未签名 IPA，所以可接受。
+#   · 首选路线：让 rules_apple/链接器自己剥（构建图内部、签名之前）。本仓 2026-09 在
+#     Bazel 7.4.0 + rules_apple 4.5.3 上开它会在 analysis 期 NPE（Java 取
+#     :xcode_config 隐式属性失败），所以当年退回 genrule。rules_apple 4.5.0 的 release
+#     notes 声称修过 "binary stripping on Bazel <9"，值得复测：复测通过就删掉
+#     //:AppStripped 并把这个 config 并进 release。
+build:release-native-strip --objc_enable_binary_stripping
+
 # 缓存路径含本机用户名，不入库：复制下面两行到 .bazelrc.user（已 gitignore）并改成自己的
 # 绝对路径即可（.bazelrc 不展开 ~）。不配也能跑，只是每次全量重编。
 #   build --disk_cache=/Users/<you>/.bazel_cache/disk

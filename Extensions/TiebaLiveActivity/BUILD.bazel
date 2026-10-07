@@ -29,6 +29,8 @@ expand_template(
 
 ios_extension(
     name = "extension",
+    # 同 //:App：显式关掉 stamping，产物与缓存都不随 workspace 状态变。
+    stamp = 0,
     bundle_id = "com.tiebalite.app.TiebaLiveActivity",
     bundle_name = "TiebaLiveActivity",
     entitlements = "TiebaLiveActivity.entitlements",
