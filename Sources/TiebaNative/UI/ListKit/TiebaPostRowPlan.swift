@@ -60,7 +60,7 @@ struct TiebaPostRowPlan {
   var audioFrame: CGRect?
   var subPostsFrame: CGRect?
   var subPostDividerFrames: [CGRect] = []
-  var subPostNameFrames: [CGRect] = []
+
   var subPostTextFrames: [CGRect] = []
   var subPostsMoreFrame: CGRect?
   var toolbarFrame: CGRect?
@@ -304,17 +304,14 @@ struct TiebaPostRowPlan {
           subPostDividerFrames.append(CGRect(x: contentX, y: subY, width: contentW, height: inputs.hairline))
           subY += TiebaPostRowLayout.subPostDividerGap
         }
-        let nameFont = TiebaPostRowLayout.subPostNameFont
-        let name = "\(sub.displayName)："
-        let nameWidth = min(TiebaSimpleText.singleLineWidth(name, font: nameFont), contentW)
-        // 名字与正文同一行盒（名字在左、正文在右，首行基线重合）。
+        // 名字与正文在**同一条富文本**里（名字 + 冒号 + 正文，见 TiebaPostRowText.subPostLine）：
+        // 一个文本框吃满整行宽，不再有"名字框 + 正文框"两套排版，首行基线不可能错开。
         let nameLine = TiebaPostRowLayout.subPostLineHeight(inputs.fontScale)
-        subPostNameFrames.append(CGRect(x: contentX, y: subY, width: nameWidth, height: nameLine))
-        let textX = contentX + nameWidth + 6
-        let textW = max(contentW - nameWidth - 6, 0)
         let attributed = inputs.subPostTexts.indices.contains(idx) ? inputs.subPostTexts[idx] : nil
-        let height = attributed.map { TiebaPostRowText.measureBody($0, width: textW, maxLines: 2, lineSpacing: subPostLineSpacing) } ?? 0
-        subPostTextFrames.append(CGRect(x: textX, y: subY, width: textW, height: height))
+        let height = attributed.map {
+          TiebaPostRowText.measureBody($0, width: contentW, maxLines: 2, lineSpacing: subPostLineSpacing)
+        } ?? 0
+        subPostTextFrames.append(CGRect(x: contentX, y: subY, width: contentW, height: height))
         subY += max(height, nameLine)
       }
       let moreText: String?

@@ -63,7 +63,11 @@ enum TiebaPostRowLayout {
   }
   /// 箭头占的宽度（10pt 字形 + 与标题的 4pt 间距）：药丸宽度要算上它。
   static let pillChevronWidth: CGFloat = 14
-  static var subPostNameFont: UIFont { TiebaSimpleText.bodyFont(size: 14, weight: .semibold) }
+  /// 楼中楼名字的字体。**必须与正文同一个 pointSize**（正文是 14×应用倍率的 systemFont）：
+  /// 名字现在并进同一条富文本，字号不一致时 20pt 行盒里首行基线又会对不上。
+  static func subPostNameFont(_ scale: Double) -> UIFont {
+    UIFont.systemFont(ofSize: 14 * scale, weight: .semibold)
+  }
   static var replyCountFont: UIFont { TiebaSimpleText.bodyFont(size: 15, weight: .semibold) }
 
   /// 楼中楼预览的行盒高度（与 buildContent(isSubPost:) 的 20×scale 同值）。

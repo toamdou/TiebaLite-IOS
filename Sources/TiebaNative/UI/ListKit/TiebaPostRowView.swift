@@ -64,9 +64,9 @@ final class TiebaPostRowView: UIView {
   private var audioView: TiebaAudioPillView?
   private let subPostsControl = UIControl()
   private let subPostsHairline = UIView()
-  private var subPostNameLabels: [UILabel] = []
-  // 楼中楼预览同样是 TextNode：两行截断（truncationType = .end，与 UILabel 的 byTruncatingTail 同口径），
-  // 行盒与左侧名字标签共用，链接色已烘进 attributed。
+  // 楼中楼预览同样是 TextNode：两行截断（truncationType = .end，与 UILabel 的 byTruncatingTail 同口径）。
+  // 名字不再单独一个 UILabel —— 它与冒号、正文合成同一条富文本（见 TiebaPostRowText.subPostLine），
+  // 否则两个排版引擎在同一行盒里的首行基线会差出一两个点。
   private var subPostTextNodes: [TiebaImmediateTextNode] = []
   private var subPostDividers: [UIView] = []
   private let subPostsMoreLabel = UILabel()
@@ -232,7 +232,6 @@ final class TiebaPostRowView: UIView {
     imageBadge.backgroundColor = UIColor.black.withAlphaComponent(0.55)
     subPostsHairline.backgroundColor = palette.separator
     for divider in subPostDividers { divider.backgroundColor = palette.separator }
-    for label in subPostNameLabels { label.textColor = palette.textSecondary }
     // 楼中楼正文颜色同样烘在 attributed 里（palette.text），与主贴正文一致。
     subPostsMoreLabel.textColor = palette.primary
     // 底色 = 主题 surfaceSecondary（原 JS replyToolbar 的 colors.surfaceSecondary，
@@ -428,11 +427,6 @@ final class TiebaPostRowView: UIView {
     addSubview(subPostsHairline)
     addSubview(subPostsControl)
     for _ in 0..<3 {
-      let name = UILabel()
-      name.numberOfLines = 1
-      name.font = TiebaPostRowLayout.subPostNameFont
-      addSubview(name)
-      subPostNameLabels.append(name)
       let text = TiebaImmediateTextNode()
       // 楼中楼预览**两行截断**：maximumNumberOfLines + truncationType(.end) —— 与 plan 里的
       // measureBody(maxLines: 2) 同一口径（TextNode 自排自量，不再有第二套 TextKit 测量）。
@@ -723,7 +717,6 @@ final class TiebaPostRowView: UIView {
     guard let frame = plan.subPostsFrame else {
       subPostsControl.frame = .zero
       subPostsHairline.isHidden = true
-      for label in subPostNameLabels { label.isHidden = true }
       for node in subPostTextNodes { node.isHidden = true }
       for divider in subPostDividers { divider.isHidden = true }
       subPostsMoreLabel.isHidden = true
@@ -733,24 +726,8 @@ final class TiebaPostRowView: UIView {
     subPostsHairline.isHidden = false
     subPostsHairline.frame = CGRect(x: contentX, y: frame.minY, width: frame.width - TiebaPostRowLayout.cardPadding * 2, height: 1 / max(traitCollection.displayScale, 1))
     subPostsControl.frame = frame
-    for (index, label) in subPostNameLabels.enumerated() {
+    for (index, text) in subPostTextNodes.enumerated() {
       let hasPost = index < model.post.subPosts.count
-      label.isHidden = !hasPost
-      if hasPost, plan.subPostNameFrames.indices.contains(index) {
-        label.frame = plan.subPostNameFrames[index]
-        // 与正文文本框共用行盒（见 subPostNameParagraph），否则首行基线对不齐。
-        label.attributedText = NSAttributedString(
-          string: "\(model.post.subPosts[index].displayName)：",
-          attributes: [
-            .font: TiebaPostRowLayout.subPostNameFont,
-            .foregroundColor: model.palette.textSecondary,
-            .paragraphStyle: TiebaPostRowLayout.subPostNameParagraph(
-              Double(model.preferences.fontScaleClamped)
-            ),
-          ]
-        )
-      }
-      let text = subPostTextNodes[index]
       text.isHidden = !hasPost
       if hasPost, plan.subPostTextFrames.indices.contains(index) {
         let frame = plan.subPostTextFrames[index]
