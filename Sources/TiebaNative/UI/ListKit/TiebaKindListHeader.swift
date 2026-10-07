@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite — 通用列表的滚动头槽位（TiebaKindListHeader）
 //
 // 页头 = 原生 UIView，挂在 section 的 top boundary supplementary item 上（与页脚
@@ -6,7 +5,6 @@
 // 列表全宽；顶部内白由滚动视图的 contentInset.top 承担，页头不含它）；spec.colors 覆盖色板默认，
 // 页头内点击经 onAction 外传（动作 = 各页头自己的类型化 enum，见
 // TiebaKindListHeaderAction），列表统一升格为 TiebaKindListEvent.headerAction。
-// ============================================================
 
 import UIKit
 import Nuke

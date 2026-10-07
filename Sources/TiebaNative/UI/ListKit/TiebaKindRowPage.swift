@@ -1,10 +1,8 @@
-// ============================================================
 // TiebaLite — 通用列表的"行种类路由"（TiebaKindRowPages）
 //
 // 页记录 = pageKey → 每行种类（simple/feed/post）+ 该行在自己度量族页里的下标；三族
 // 度量仍是唯一测量实现，本文件不复制几何。整页 LRU(8) 与度量缓存同纪律，并发状态
 // 由 lock 保护（@unchecked Sendable）；containerWidth 必须是 TiebaLayout 量化值。
-// ============================================================
 
 import UIKit
 

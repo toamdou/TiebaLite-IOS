@@ -40,10 +40,8 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
   // ── 身份与布局输入 ──
   public let pageKey: String
   public let index: Int
-  // [R4-3] 原先这里还有一个 `fingerprint: UInt64`（TiebaRowFingerprint.hash(raw:)）。它**消费方为零**：
-  // 逐行复用判据与整页差量走的都是 TiebaRowDiff.Entry 自己的指纹/Identity，缓存键用的是
-  // Entry.Identity —— 每行白算一遍含三层嵌套字典排序的整行哈希（测量队列上、每页几十次）。
-  // 已删除存储与计算；TiebaRowFingerprint 类型本身保留（Entry 侧另用）。
+  // [R4-3] 原 `fingerprint: UInt64` 字段已删除：消费方为零（复用判据与差量走 TiebaRowDiff.Entry，缓存键用 Entry.Identity）。
+  // TiebaRowFingerprint 类型本身保留（Entry 侧另用）。
   /// 帖子 id（JS 下发）：行复用时区分"同一帖重配"与"换了另一帖"——计数跳动
   /// 只在同一帖的计数变化时播（对齐 RN 的组件复用语义）。
   public let threadId: String

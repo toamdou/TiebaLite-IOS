@@ -1,4 +1,3 @@
-// ============================================================
 // 相册写入（替 expo-media-library 的保存路径）——查看器保存与 JS
 // saveImageToGallery 共用的唯一实现。
 //
@@ -17,7 +16,6 @@
 // 错误类型复用 TiebaPhotoBrowserError：它已是本仓相册写入错误的既有定义
 // （string 映射 PERMISSION_DENIED，查看器 handleSaveFailure 按它弹"权限不足"，
 // JS 侧 catch 也按这个文案分支）。新定义一套等于把同一条错误拆成两种判定。
-// ============================================================
 import Foundation
 import Photos
 import UIKit
@@ -73,12 +71,10 @@ enum TiebaPhotoLibrary {
   }
 }
 
-// ============================================================
 // 图片「保存到相册 / 分享」的**唯一入口**（H14：原先定义在 Core/Networking/TiebaFeedAPI.swift，
 // 与 UI/Media 的相册写入分居两处，看图器只能另写一套）。现在整条链路 —— 水印 → 相册 / 分享 —— 收在这里，
 // 与 TiebaPhotoLibrary 的底层写入、TiebaImageWatermark 的渲染、TiebaShareSheet 的面板同目录。
 // 调用方（6 个页面共 12 处）只认 TiebaFeedImageActions，换文件不改任何调用点。
-// ============================================================
 /// 信息流图片的「保存照片 / 分享照片」（原 JS PostImageContextMenu 的水印 + 相册 + 分享）。
 @MainActor
 enum TiebaFeedImageActions {

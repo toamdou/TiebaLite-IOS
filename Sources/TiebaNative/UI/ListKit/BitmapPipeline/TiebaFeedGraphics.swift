@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite — 异步位图管线 · 图形（复刻 ASGraphicsContext.mm 的三个要点）
 //
 // 依据：docs/uikit-migration/07-ObjC++转Swift可行性.md §3.5
@@ -14,7 +13,6 @@
 // 全按浅色解析 —— 深色模式下**后台烘出来的那几行文字是黑的**（滚回去命中缓存又是对的）。
 //
 // 本文件不依赖 TiebaNative 的其他类型（只吃 Job 值类型 + UIKit）。
-// ============================================================
 
 import UIKit
 
@@ -39,7 +37,7 @@ public struct TiebaFeedTraitSnapshot: @unchecked Sendable {
 public enum TiebaFeedGraphics {
   /// R3 闸门（报告 §6）：true = preferred()，宽色域 P3，与屏幕一致但与旧位图有色差
   ///（ASGraphicsContext.mm:51-57 用的就是 preferredFormat）；false = defaultFormat（sRGB），
-  /// 与现状 TiebaFeedRowView.swift:906 的 UIGraphicsImageRendererFormat() 逐像素一致。
+  /// 与旧实现的 UIGraphicsImageRendererFormat() 逐像素一致。
   /// 阶段 1 若要切 preferred 应单独一个 commit + 前后截图对比。
   public static let usePreferredColorSpace = false
 
@@ -151,7 +149,7 @@ public enum TiebaFeedGraphics {
   /// 有界量高（**只在没有 naturalHeight 时走**）：垂直居中只需要知道「自然高是否超过框高」——
   /// 超框（截断态）inset 恒为 0。无界 .greatestFiniteMagnitude 会把折叠态长摘要的**全文**
   /// 逐行排完（几十行 vs 实画 4 行，约 5-10 倍排版量）再整个丢弃；有界版排版在框高处停，
-  /// 结果与无界版逐像素一致。（原 TiebaFeedRowView.swift:936-940，逐字搬来。）
+  /// 结果与无界版逐像素一致。（原实现逐字搬来。）
   private static func boundedNaturalHeight(_ run: TiebaFeedBitmapJob.Run) -> CGFloat {
     run.attributed.boundingRect(
       with: CGSize(width: run.frame.width, height: run.frame.height),
