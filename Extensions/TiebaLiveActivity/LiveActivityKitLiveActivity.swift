@@ -1,12 +1,3 @@
-//
-//  LiveActivityKitLiveActivity.swift
-//  TiebaLite sign progress Live Activity
-//
-//  Custom SwiftUI template copied into the generated widget extension by
-//  plugins/withTiebaLiveActivity.js. It renders a polished lock-screen card
-//  plus Dynamic Island compact / minimal / expanded states.
-//
-
 import ActivityKit
 import CoreGraphics
 import Foundation
@@ -154,7 +145,6 @@ private struct TiebaLiveActivityLockScreenView: View {
     let progress = state.progress.map { LiveActivityKitTheme.clamp($0) }
 
     HStack(alignment: .center, spacing: 12) {
-      // 锁屏卡片左侧 = App 图标（与灵动岛紧凑态左图标一致）
       LiveActivityKitTheme.appIcon(size: 34)
         .frame(width: 38)
 
