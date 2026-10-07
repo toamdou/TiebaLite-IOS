@@ -20,128 +20,128 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_FrsPage_ForumInfo: @unchecked Sendable {
+nonisolated public struct Tieba_FrsPage_ForumInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var id: Int64 {
+  public var id: Int64 {
     get {_storage._id}
     set {_uniqueStorage()._id = newValue}
   }
 
-  var name: String {
+  public var name: String {
     get {_storage._name}
     set {_uniqueStorage()._name = newValue}
   }
 
-  var firstClass: String {
+  public var firstClass: String {
     get {_storage._firstClass}
     set {_uniqueStorage()._firstClass = newValue}
   }
 
-  var secondClass: String {
+  public var secondClass: String {
     get {_storage._secondClass}
     set {_uniqueStorage()._secondClass = newValue}
   }
 
-  var isExists: Int32 {
+  public var isExists: Int32 {
     get {_storage._isExists}
     set {_uniqueStorage()._isExists = newValue}
   }
 
-  var isLike: Int32 {
+  public var isLike: Int32 {
     get {_storage._isLike}
     set {_uniqueStorage()._isLike = newValue}
   }
 
-  var userLevel: Int32 {
+  public var userLevel: Int32 {
     get {_storage._userLevel}
     set {_uniqueStorage()._userLevel = newValue}
   }
 
-  var levelName: String {
+  public var levelName: String {
     get {_storage._levelName}
     set {_uniqueStorage()._levelName = newValue}
   }
 
-  var memberNum: Int32 {
+  public var memberNum: Int32 {
     get {_storage._memberNum}
     set {_uniqueStorage()._memberNum = newValue}
   }
 
-  var threadNum: Int32 {
+  public var threadNum: Int32 {
     get {_storage._threadNum}
     set {_uniqueStorage()._threadNum = newValue}
   }
 
-  var postNum: Int32 {
+  public var postNum: Int32 {
     get {_storage._postNum}
     set {_uniqueStorage()._postNum = newValue}
   }
 
-  var hasFrsStar_p: Int32 {
+  public var hasFrsStar_p: Int32 {
     get {_storage._hasFrsStar_p}
     set {_uniqueStorage()._hasFrsStar_p = newValue}
   }
 
-  var curScore: Int32 {
+  public var curScore: Int32 {
     get {_storage._curScore}
     set {_uniqueStorage()._curScore = newValue}
   }
 
-  var levelupScore: Int32 {
+  public var levelupScore: Int32 {
     get {_storage._levelupScore}
     set {_uniqueStorage()._levelupScore = newValue}
   }
 
-  var signInInfo: Tieba_FrsPage_SignInfo {
+  public var signInInfo: Tieba_FrsPage_SignInfo {
     get {_storage._signInInfo ?? Tieba_FrsPage_SignInfo()}
     set {_uniqueStorage()._signInInfo = newValue}
   }
   /// Returns true if `signInInfo` has been explicitly set.
-  var hasSignInInfo: Bool {_storage._signInInfo != nil}
+  public var hasSignInInfo: Bool {_storage._signInInfo != nil}
   /// Clears the value of `signInInfo`. Subsequent reads from it will return its default value.
-  mutating func clearSignInInfo() {_uniqueStorage()._signInInfo = nil}
+  mutating public func clearSignInInfo() {_uniqueStorage()._signInInfo = nil}
 
-  var managers: [Tieba_FrsPage_Manager] {
+  public var managers: [Tieba_FrsPage_Manager] {
     get {_storage._managers}
     set {_uniqueStorage()._managers = newValue}
   }
 
-  var tids: String {
+  public var tids: String {
     get {_storage._tids}
     set {_uniqueStorage()._tids = newValue}
   }
 
-  var goodClassify: [Tieba_FrsPage_Classify] {
+  public var goodClassify: [Tieba_FrsPage_Classify] {
     get {_storage._goodClassify}
     set {_uniqueStorage()._goodClassify = newValue}
   }
 
-  var avatar: String {
+  public var avatar: String {
     get {_storage._avatar}
     set {_uniqueStorage()._avatar = newValue}
   }
 
-  var slogan: String {
+  public var slogan: String {
     get {_storage._slogan}
     set {_uniqueStorage()._slogan = newValue}
   }
 
-  var fShareImg: String {
+  public var fShareImg: String {
     get {_storage._fShareImg}
     set {_uniqueStorage()._fShareImg = newValue}
   }
 
-  var forumShareLink: String {
+  public var forumShareLink: String {
     get {_storage._forumShareLink}
     set {_uniqueStorage()._forumShareLink = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -151,8 +151,8 @@ nonisolated struct Tieba_FrsPage_ForumInfo: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.frsPage"
 
 nonisolated extension Tieba_FrsPage_ForumInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ForumInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{3}first_class\0\u{3}second_class\0\u{3}is_exists\0\u{3}is_like\0\u{3}user_level\0\u{3}level_name\0\u{3}member_num\0\u{3}thread_num\0\u{3}post_num\0\u{3}has_frs_star\0\u{3}cur_score\0\u{3}levelup_score\0\u{3}sign_in_info\0\u{2}\u{2}managers\0\u{2}\u{3}tids\0\u{3}good_classify\0\u{2}\u{3}avatar\0\u{1}slogan\0\u{4}5f_share_img\0\u{3}forum_share_link\0")
+  static public let protoMessageName: String = _protobuf_package + ".ForumInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{3}first_class\0\u{3}second_class\0\u{3}is_exists\0\u{3}is_like\0\u{3}user_level\0\u{3}level_name\0\u{3}member_num\0\u{3}thread_num\0\u{3}post_num\0\u{3}has_frs_star\0\u{3}cur_score\0\u{3}levelup_score\0\u{3}sign_in_info\0\u{2}\u{2}managers\0\u{2}\u{3}tids\0\u{3}good_classify\0\u{2}\u{3}avatar\0\u{1}slogan\0\u{4}5f_share_img\0\u{3}forum_share_link\0")
 
   fileprivate class _StorageClass {
     var _id: Int64 = 0
@@ -219,7 +219,7 @@ nonisolated extension Tieba_FrsPage_ForumInfo: SwiftProtobuf.Message, SwiftProto
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -255,7 +255,7 @@ nonisolated extension Tieba_FrsPage_ForumInfo: SwiftProtobuf.Message, SwiftProto
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -331,7 +331,7 @@ nonisolated extension Tieba_FrsPage_ForumInfo: SwiftProtobuf.Message, SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_FrsPage_ForumInfo, rhs: Tieba_FrsPage_ForumInfo) -> Bool {
+  static public func ==(lhs: Tieba_FrsPage_ForumInfo, rhs: Tieba_FrsPage_ForumInfo) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

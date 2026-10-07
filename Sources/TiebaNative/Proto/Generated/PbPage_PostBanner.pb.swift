@@ -20,26 +20,26 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbPage_PostBanner: Sendable {
+nonisolated public struct Tieba_PbPage_PostBanner: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var bannerPic: String = String()
+  public var bannerPic: String = String()
 
-  var bannerName: String = String()
+  public var bannerName: String = String()
 
-  var bannerPosition: UInt32 = 0
+  public var bannerPosition: UInt32 = 0
 
-  var linkType: UInt32 = 0
+  public var linkType: UInt32 = 0
 
-  var bannerURL: String = String()
+  public var bannerURL: String = String()
 
-  var clientType: UInt32 = 0
+  public var clientType: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -47,10 +47,10 @@ nonisolated struct Tieba_PbPage_PostBanner: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.pbPage"
 
 nonisolated extension Tieba_PbPage_PostBanner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PostBanner"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}banner_pic\0\u{3}banner_name\0\u{3}banner_position\0\u{3}link_type\0\u{3}banner_url\0\u{3}client_type\0")
+  static public let protoMessageName: String = _protobuf_package + ".PostBanner"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}banner_pic\0\u{3}banner_name\0\u{3}banner_position\0\u{3}link_type\0\u{3}banner_url\0\u{3}client_type\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -67,7 +67,7 @@ nonisolated extension Tieba_PbPage_PostBanner: SwiftProtobuf.Message, SwiftProto
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.bannerPic.isEmpty {
       try visitor.visitSingularStringField(value: self.bannerPic, fieldNumber: 1)
     }
@@ -89,7 +89,7 @@ nonisolated extension Tieba_PbPage_PostBanner: SwiftProtobuf.Message, SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbPage_PostBanner, rhs: Tieba_PbPage_PostBanner) -> Bool {
+  static public func ==(lhs: Tieba_PbPage_PostBanner, rhs: Tieba_PbPage_PostBanner) -> Bool {
     if lhs.bannerPic != rhs.bannerPic {return false}
     if lhs.bannerName != rhs.bannerName {return false}
     if lhs.bannerPosition != rhs.bannerPosition {return false}

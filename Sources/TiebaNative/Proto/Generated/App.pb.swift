@@ -20,174 +20,174 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_App: @unchecked Sendable {
+nonisolated public struct Tieba_App: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var type: Int32 {
+  public var type: Int32 {
     get {_storage._type}
     set {_uniqueStorage()._type = newValue}
   }
 
-  var pos: Int32 {
+  public var pos: Int32 {
     get {_storage._pos}
     set {_uniqueStorage()._pos = newValue}
   }
 
-  var iconURL: String {
+  public var iconURL: String {
     get {_storage._iconURL}
     set {_uniqueStorage()._iconURL = newValue}
   }
 
-  var iconLink: String {
+  public var iconLink: String {
     get {_storage._iconLink}
     set {_uniqueStorage()._iconLink = newValue}
   }
 
-  var appName: String {
+  public var appName: String {
     get {_storage._appName}
     set {_uniqueStorage()._appName = newValue}
   }
 
-  var appDesc: String {
+  public var appDesc: String {
     get {_storage._appDesc}
     set {_uniqueStorage()._appDesc = newValue}
   }
 
-  var pName: String {
+  public var pName: String {
     get {_storage._pName}
     set {_uniqueStorage()._pName = newValue}
   }
 
-  var pURL: String {
+  public var pURL: String {
     get {_storage._pURL}
     set {_uniqueStorage()._pURL = newValue}
   }
 
-  var imgURL: String {
+  public var imgURL: String {
     get {_storage._imgURL}
     set {_uniqueStorage()._imgURL = newValue}
   }
 
-  var appTime: Int32 {
+  public var appTime: Int32 {
     get {_storage._appTime}
     set {_uniqueStorage()._appTime = newValue}
   }
 
-  var webURL: String {
+  public var webURL: String {
     get {_storage._webURL}
     set {_uniqueStorage()._webURL = newValue}
   }
 
-  var adID: String {
+  public var adID: String {
     get {_storage._adID}
     set {_uniqueStorage()._adID = newValue}
   }
 
-  var id: String {
+  public var id: String {
     get {_storage._id}
     set {_uniqueStorage()._id = newValue}
   }
 
-  var name: String {
+  public var name: String {
     get {_storage._name}
     set {_uniqueStorage()._name = newValue}
   }
 
-  var urlType: Int32 {
+  public var urlType: Int32 {
     get {_storage._urlType}
     set {_uniqueStorage()._urlType = newValue}
   }
 
-  var url: String {
+  public var url: String {
     get {_storage._url}
     set {_uniqueStorage()._url = newValue}
   }
 
-  var iosURL: String {
+  public var iosURL: String {
     get {_storage._iosURL}
     set {_uniqueStorage()._iosURL = newValue}
   }
 
-  var apkURL: String {
+  public var apkURL: String {
     get {_storage._apkURL}
     set {_uniqueStorage()._apkURL = newValue}
   }
 
-  var apkName: String {
+  public var apkName: String {
     get {_storage._apkName}
     set {_uniqueStorage()._apkName = newValue}
   }
 
-  var posName: String {
+  public var posName: String {
     get {_storage._posName}
     set {_uniqueStorage()._posName = newValue}
   }
 
-  var firstName: String {
+  public var firstName: String {
     get {_storage._firstName}
     set {_uniqueStorage()._firstName = newValue}
   }
 
-  var secondName: String {
+  public var secondName: String {
     get {_storage._secondName}
     set {_uniqueStorage()._secondName = newValue}
   }
 
-  var cpid: Int32 {
+  public var cpid: Int32 {
     get {_storage._cpid}
     set {_uniqueStorage()._cpid = newValue}
   }
 
-  var abtest: String {
+  public var abtest: String {
     get {_storage._abtest}
     set {_uniqueStorage()._abtest = newValue}
   }
 
-  var planID: Int32 {
+  public var planID: Int32 {
     get {_storage._planID}
     set {_uniqueStorage()._planID = newValue}
   }
 
-  var userID: String {
+  public var userID: String {
     get {_storage._userID}
     set {_uniqueStorage()._userID = newValue}
   }
 
-  var price: String {
+  public var price: String {
     get {_storage._price}
     set {_uniqueStorage()._price = newValue}
   }
 
-  var verify: String {
+  public var verify: String {
     get {_storage._verify}
     set {_uniqueStorage()._verify = newValue}
   }
 
-  var extInfo: String {
+  public var extInfo: String {
     get {_storage._extInfo}
     set {_uniqueStorage()._extInfo = newValue}
   }
 
-  var goodsInfo: [Tieba_GoodsInfo] {
+  public var goodsInfo: [Tieba_GoodsInfo] {
     get {_storage._goodsInfo}
     set {_uniqueStorage()._goodsInfo = newValue}
   }
 
-  var locCode: String {
+  public var locCode: String {
     get {_storage._locCode}
     set {_uniqueStorage()._locCode = newValue}
   }
 
-  var deepURL: String {
+  public var deepURL: String {
     get {_storage._deepURL}
     set {_uniqueStorage()._deepURL = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -197,8 +197,8 @@ nonisolated struct Tieba_App: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_App: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".App"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}pos\0\u{3}icon_url\0\u{3}icon_link\0\u{3}app_name\0\u{3}app_desc\0\u{3}p_name\0\u{3}p_url\0\u{3}img_url\0\u{3}app_time\0\u{3}web_url\0\u{3}ad_id\0\u{1}id\0\u{1}name\0\u{3}url_type\0\u{1}url\0\u{3}ios_url\0\u{3}apk_url\0\u{3}apk_name\0\u{3}pos_name\0\u{3}first_name\0\u{3}second_name\0\u{1}cpid\0\u{1}abtest\0\u{3}plan_id\0\u{3}user_id\0\u{1}price\0\u{1}verify\0\u{3}ext_info\0\u{3}goods_info\0\u{3}loc_code\0\u{3}deep_url\0")
+  static public let protoMessageName: String = _protobuf_package + ".App"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}pos\0\u{3}icon_url\0\u{3}icon_link\0\u{3}app_name\0\u{3}app_desc\0\u{3}p_name\0\u{3}p_url\0\u{3}img_url\0\u{3}app_time\0\u{3}web_url\0\u{3}ad_id\0\u{1}id\0\u{1}name\0\u{3}url_type\0\u{1}url\0\u{3}ios_url\0\u{3}apk_url\0\u{3}apk_name\0\u{3}pos_name\0\u{3}first_name\0\u{3}second_name\0\u{1}cpid\0\u{1}abtest\0\u{3}plan_id\0\u{3}user_id\0\u{1}price\0\u{1}verify\0\u{3}ext_info\0\u{3}goods_info\0\u{3}loc_code\0\u{3}deep_url\0")
 
   fileprivate class _StorageClass {
     var _type: Int32 = 0
@@ -285,7 +285,7 @@ nonisolated extension Tieba_App: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -331,7 +331,7 @@ nonisolated extension Tieba_App: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       if _storage._type != 0 {
         try visitor.visitSingularInt32Field(value: _storage._type, fieldNumber: 1)
@@ -433,7 +433,7 @@ nonisolated extension Tieba_App: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_App, rhs: Tieba_App) -> Bool {
+  static public func ==(lhs: Tieba_App, rhs: Tieba_App) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

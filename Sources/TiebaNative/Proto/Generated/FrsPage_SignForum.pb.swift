@@ -20,36 +20,36 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_FrsPage_SignForum: Sendable {
+nonisolated public struct Tieba_FrsPage_SignForum: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var isOn: Int32 = 0
+  public var isOn: Int32 = 0
 
-  var isFilter: Int32 = 0
+  public var isFilter: Int32 = 0
 
-  var forumInfo: Tieba_FrsPage_Forum {
+  public var forumInfo: Tieba_FrsPage_Forum {
     get {_forumInfo ?? Tieba_FrsPage_Forum()}
     set {_forumInfo = newValue}
   }
   /// Returns true if `forumInfo` has been explicitly set.
-  var hasForumInfo: Bool {self._forumInfo != nil}
+  public var hasForumInfo: Bool {self._forumInfo != nil}
   /// Clears the value of `forumInfo`. Subsequent reads from it will return its default value.
-  mutating func clearForumInfo() {self._forumInfo = nil}
+  mutating public func clearForumInfo() {self._forumInfo = nil}
 
-  var currentRankInfo: Tieba_FrsPage_RankInfo {
+  public var currentRankInfo: Tieba_FrsPage_RankInfo {
     get {_currentRankInfo ?? Tieba_FrsPage_RankInfo()}
     set {_currentRankInfo = newValue}
   }
   /// Returns true if `currentRankInfo` has been explicitly set.
-  var hasCurrentRankInfo: Bool {self._currentRankInfo != nil}
+  public var hasCurrentRankInfo: Bool {self._currentRankInfo != nil}
   /// Clears the value of `currentRankInfo`. Subsequent reads from it will return its default value.
-  mutating func clearCurrentRankInfo() {self._currentRankInfo = nil}
+  mutating public func clearCurrentRankInfo() {self._currentRankInfo = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _forumInfo: Tieba_FrsPage_Forum? = nil
   fileprivate var _currentRankInfo: Tieba_FrsPage_RankInfo? = nil
@@ -60,10 +60,10 @@ nonisolated struct Tieba_FrsPage_SignForum: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.frsPage"
 
 nonisolated extension Tieba_FrsPage_SignForum: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SignForum"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_on\0\u{3}is_filter\0\u{3}forum_info\0\u{3}current_rank_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".SignForum"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_on\0\u{3}is_filter\0\u{3}forum_info\0\u{3}current_rank_info\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -78,7 +78,7 @@ nonisolated extension Tieba_FrsPage_SignForum: SwiftProtobuf.Message, SwiftProto
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -98,7 +98,7 @@ nonisolated extension Tieba_FrsPage_SignForum: SwiftProtobuf.Message, SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_FrsPage_SignForum, rhs: Tieba_FrsPage_SignForum) -> Bool {
+  static public func ==(lhs: Tieba_FrsPage_SignForum, rhs: Tieba_FrsPage_SignForum) -> Bool {
     if lhs.isOn != rhs.isOn {return false}
     if lhs.isFilter != rhs.isFilter {return false}
     if lhs._forumInfo != rhs._forumInfo {return false}

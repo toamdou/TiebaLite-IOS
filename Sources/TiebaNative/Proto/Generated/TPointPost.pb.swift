@@ -20,87 +20,87 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_TPointPost: @unchecked Sendable {
+nonisolated public struct Tieba_TPointPost: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var isTuiguang: UInt32 {
+  public var isTuiguang: UInt32 {
     get {_storage._isTuiguang}
     set {_uniqueStorage()._isTuiguang = newValue}
   }
 
-  var position: String {
+  public var position: String {
     get {_storage._position}
     set {_uniqueStorage()._position = newValue}
   }
 
-  var templateID: Int64 {
+  public var templateID: Int64 {
     get {_storage._templateID}
     set {_uniqueStorage()._templateID = newValue}
   }
 
-  var templateType: Int32 {
+  public var templateType: Int32 {
     get {_storage._templateType}
     set {_uniqueStorage()._templateType = newValue}
   }
 
-  var actBtn: [Tieba_ActBtn] {
+  public var actBtn: [Tieba_ActBtn] {
     get {_storage._actBtn}
     set {_uniqueStorage()._actBtn = newValue}
   }
 
-  var tImgs: [Tieba_Timgs] {
+  public var tImgs: [Tieba_Timgs] {
     get {_storage._tImgs}
     set {_uniqueStorage()._tImgs = newValue}
   }
 
-  var detailInfo: Tieba_DetailInfo {
+  public var detailInfo: Tieba_DetailInfo {
     get {_storage._detailInfo ?? Tieba_DetailInfo()}
     set {_uniqueStorage()._detailInfo = newValue}
   }
   /// Returns true if `detailInfo` has been explicitly set.
-  var hasDetailInfo: Bool {_storage._detailInfo != nil}
+  public var hasDetailInfo: Bool {_storage._detailInfo != nil}
   /// Clears the value of `detailInfo`. Subsequent reads from it will return its default value.
-  mutating func clearDetailInfo() {_uniqueStorage()._detailInfo = nil}
+  mutating public func clearDetailInfo() {_uniqueStorage()._detailInfo = nil}
 
-  var monitorID: String {
+  public var monitorID: String {
     get {_storage._monitorID}
     set {_uniqueStorage()._monitorID = newValue}
   }
 
-  var hiddenDay: Int32 {
+  public var hiddenDay: Int32 {
     get {_storage._hiddenDay}
     set {_uniqueStorage()._hiddenDay = newValue}
   }
 
-  var tVideo: Tieba_VideoInfo {
+  public var tVideo: Tieba_VideoInfo {
     get {_storage._tVideo ?? Tieba_VideoInfo()}
     set {_uniqueStorage()._tVideo = newValue}
   }
   /// Returns true if `tVideo` has been explicitly set.
-  var hasTVideo: Bool {_storage._tVideo != nil}
+  public var hasTVideo: Bool {_storage._tVideo != nil}
   /// Clears the value of `tVideo`. Subsequent reads from it will return its default value.
-  mutating func clearTVideo() {_uniqueStorage()._tVideo = nil}
+  mutating public func clearTVideo() {_uniqueStorage()._tVideo = nil}
 
-  var tagName: String {
+  public var tagName: String {
     get {_storage._tagName}
     set {_uniqueStorage()._tagName = newValue}
   }
 
-  var tagNameURL: String {
+  public var tagNameURL: String {
     get {_storage._tagNameURL}
     set {_uniqueStorage()._tagNameURL = newValue}
   }
 
-  var tagNameWh: String {
+  public var tagNameWh: String {
     get {_storage._tagNameWh}
     set {_uniqueStorage()._tagNameWh = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -110,8 +110,8 @@ nonisolated struct Tieba_TPointPost: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_TPointPost: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".TPointPost"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_tuiguang\0\u{1}position\0\u{3}template_id\0\u{3}template_type\0\u{3}act_btn\0\u{3}t_imgs\0\u{3}detail_info\0\u{3}monitor_id\0\u{3}hidden_day\0\u{3}t_video\0\u{3}tag_name\0\u{3}tag_name_url\0\u{3}tag_name_wh\0")
+  static public let protoMessageName: String = _protobuf_package + ".TPointPost"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_tuiguang\0\u{1}position\0\u{3}template_id\0\u{3}template_type\0\u{3}act_btn\0\u{3}t_imgs\0\u{3}detail_info\0\u{3}monitor_id\0\u{3}hidden_day\0\u{3}t_video\0\u{3}tag_name\0\u{3}tag_name_url\0\u{3}tag_name_wh\0")
 
   fileprivate class _StorageClass {
     var _isTuiguang: UInt32 = 0
@@ -160,7 +160,7 @@ nonisolated extension Tieba_TPointPost: SwiftProtobuf.Message, SwiftProtobuf._Me
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -187,7 +187,7 @@ nonisolated extension Tieba_TPointPost: SwiftProtobuf.Message, SwiftProtobuf._Me
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -236,7 +236,7 @@ nonisolated extension Tieba_TPointPost: SwiftProtobuf.Message, SwiftProtobuf._Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_TPointPost, rhs: Tieba_TPointPost) -> Bool {
+  static public func ==(lhs: Tieba_TPointPost, rhs: Tieba_TPointPost) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

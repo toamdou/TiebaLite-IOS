@@ -20,38 +20,38 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_GetForumDetail_ForumDataCenter: Sendable {
+nonisolated public struct Tieba_GetForumDetail_ForumDataCenter: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var newPvCnt: Int32 = 0
+  public var newPvCnt: Int32 = 0
 
-  var newPvCntDiff: Int32 = 0
+  public var newPvCntDiff: Int32 = 0
 
-  var newThreadCnt: Int32 = 0
+  public var newThreadCnt: Int32 = 0
 
-  var newThreadCntDiff: Int32 = 0
+  public var newThreadCntDiff: Int32 = 0
 
-  var newFollowCnt: Int32 = 0
+  public var newFollowCnt: Int32 = 0
 
-  var newFollowCntDiff: Int32 = 0
+  public var newFollowCntDiff: Int32 = 0
 
-  var userDurationAvg: Int32 = 0
+  public var userDurationAvg: Int32 = 0
 
-  var userDurationAvgDiff: Double = 0
+  public var userDurationAvgDiff: Double = 0
 
-  var userSignRate: Double = 0
+  public var userSignRate: Double = 0
 
-  var userSignRateDiff: Double = 0
+  public var userSignRateDiff: Double = 0
 
-  var homepageThreadCnt: Int32 = 0
+  public var homepageThreadCnt: Int32 = 0
 
-  var homepageThreadCntDiff: Int32 = 0
+  public var homepageThreadCntDiff: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -59,10 +59,10 @@ nonisolated struct Tieba_GetForumDetail_ForumDataCenter: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.getForumDetail"
 
 nonisolated extension Tieba_GetForumDetail_ForumDataCenter: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ForumDataCenter"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}new_pv_cnt\0\u{3}new_pv_cnt_diff\0\u{3}new_thread_cnt\0\u{3}new_thread_cnt_diff\0\u{3}new_follow_cnt\0\u{3}new_follow_cnt_diff\0\u{3}user_duration_avg\0\u{3}user_duration_avg_diff\0\u{3}user_sign_rate\0\u{3}user_sign_rate_diff\0\u{3}homepage_thread_cnt\0\u{3}homepage_thread_cnt_diff\0")
+  static public let protoMessageName: String = _protobuf_package + ".ForumDataCenter"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}new_pv_cnt\0\u{3}new_pv_cnt_diff\0\u{3}new_thread_cnt\0\u{3}new_thread_cnt_diff\0\u{3}new_follow_cnt\0\u{3}new_follow_cnt_diff\0\u{3}user_duration_avg\0\u{3}user_duration_avg_diff\0\u{3}user_sign_rate\0\u{3}user_sign_rate_diff\0\u{3}homepage_thread_cnt\0\u{3}homepage_thread_cnt_diff\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -85,7 +85,7 @@ nonisolated extension Tieba_GetForumDetail_ForumDataCenter: SwiftProtobuf.Messag
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.newPvCnt != 0 {
       try visitor.visitSingularInt32Field(value: self.newPvCnt, fieldNumber: 1)
     }
@@ -125,7 +125,7 @@ nonisolated extension Tieba_GetForumDetail_ForumDataCenter: SwiftProtobuf.Messag
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GetForumDetail_ForumDataCenter, rhs: Tieba_GetForumDetail_ForumDataCenter) -> Bool {
+  static public func ==(lhs: Tieba_GetForumDetail_ForumDataCenter, rhs: Tieba_GetForumDetail_ForumDataCenter) -> Bool {
     if lhs.newPvCnt != rhs.newPvCnt {return false}
     if lhs.newPvCntDiff != rhs.newPvCntDiff {return false}
     if lhs.newThreadCnt != rhs.newThreadCnt {return false}

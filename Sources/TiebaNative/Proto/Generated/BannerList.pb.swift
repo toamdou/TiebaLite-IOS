@@ -20,40 +20,40 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_BannerList: Sendable {
+nonisolated public struct Tieba_BannerList: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var app: [Tieba_App] = []
+  public var app: [Tieba_App] = []
 
-  var feedForum: [Tieba_FeedForumInfo] = []
+  public var feedForum: [Tieba_FeedForumInfo] = []
 
-  var hotTopic: Tieba_RecomTopicInfo {
+  public var hotTopic: Tieba_RecomTopicInfo {
     get {_hotTopic ?? Tieba_RecomTopicInfo()}
     set {_hotTopic = newValue}
   }
   /// Returns true if `hotTopic` has been explicitly set.
-  var hasHotTopic: Bool {self._hotTopic != nil}
+  public var hasHotTopic: Bool {self._hotTopic != nil}
   /// Clears the value of `hotTopic`. Subsequent reads from it will return its default value.
-  mutating func clearHotTopic() {self._hotTopic = nil}
+  mutating public func clearHotTopic() {self._hotTopic = nil}
 
-  var applist: String = String()
+  public var applist: String = String()
 
-  var pbBannerAd: Tieba_App {
+  public var pbBannerAd: Tieba_App {
     get {_pbBannerAd ?? Tieba_App()}
     set {_pbBannerAd = newValue}
   }
   /// Returns true if `pbBannerAd` has been explicitly set.
-  var hasPbBannerAd: Bool {self._pbBannerAd != nil}
+  public var hasPbBannerAd: Bool {self._pbBannerAd != nil}
   /// Clears the value of `pbBannerAd`. Subsequent reads from it will return its default value.
-  mutating func clearPbBannerAd() {self._pbBannerAd = nil}
+  mutating public func clearPbBannerAd() {self._pbBannerAd = nil}
 
-  var videoRecommendAd: [Tieba_App] = []
+  public var videoRecommendAd: [Tieba_App] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _hotTopic: Tieba_RecomTopicInfo? = nil
   fileprivate var _pbBannerAd: Tieba_App? = nil
@@ -64,10 +64,10 @@ nonisolated struct Tieba_BannerList: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_BannerList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".BannerList"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}app\0\u{3}feed_forum\0\u{3}hot_topic\0\u{1}applist\0\u{3}pb_banner_ad\0\u{3}video_recommend_ad\0")
+  static public let protoMessageName: String = _protobuf_package + ".BannerList"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}app\0\u{3}feed_forum\0\u{3}hot_topic\0\u{1}applist\0\u{3}pb_banner_ad\0\u{3}video_recommend_ad\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -84,7 +84,7 @@ nonisolated extension Tieba_BannerList: SwiftProtobuf.Message, SwiftProtobuf._Me
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -110,7 +110,7 @@ nonisolated extension Tieba_BannerList: SwiftProtobuf.Message, SwiftProtobuf._Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_BannerList, rhs: Tieba_BannerList) -> Bool {
+  static public func ==(lhs: Tieba_BannerList, rhs: Tieba_BannerList) -> Bool {
     if lhs.app != rhs.app {return false}
     if lhs.feedForum != rhs.feedForum {return false}
     if lhs._hotTopic != rhs._hotTopic {return false}

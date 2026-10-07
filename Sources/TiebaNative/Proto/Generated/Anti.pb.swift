@@ -20,38 +20,38 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Anti: Sendable {
+nonisolated public struct Tieba_Anti: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var tbs: String = String()
+  public var tbs: String = String()
 
-  var ifpost: Int32 = 0
+  public var ifpost: Int32 = 0
 
-  var ifposta: Int32 = 0
+  public var ifposta: Int32 = 0
 
-  var forbidFlag: Int32 = 0
+  public var forbidFlag: Int32 = 0
 
-  var forbidInfo: String = String()
+  public var forbidInfo: String = String()
 
-  var blockStat: Int32 = 0
+  public var blockStat: Int32 = 0
 
-  var hideStat: Int32 = 0
+  public var hideStat: Int32 = 0
 
-  var vcodeStat: Int32 = 0
+  public var vcodeStat: Int32 = 0
 
-  var daysTofree: Int32 = 0
+  public var daysTofree: Int32 = 0
 
-  var hasChance_p: Int32 = 0
+  public var hasChance_p: Int32 = 0
 
-  var ifvoice: Int32 = 0
+  public var ifvoice: Int32 = 0
 
-  var delThreadText: [Tieba_DelThreadText] = []
+  public var delThreadText: [Tieba_DelThreadText] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -59,10 +59,10 @@ nonisolated struct Tieba_Anti: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Anti: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Anti"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tbs\0\u{1}ifpost\0\u{1}ifposta\0\u{3}forbid_flag\0\u{3}forbid_info\0\u{3}block_stat\0\u{3}hide_stat\0\u{3}vcode_stat\0\u{3}days_tofree\0\u{3}has_chance\0\u{1}ifvoice\0\u{4}\u{d}del_thread_text\0")
+  static public let protoMessageName: String = _protobuf_package + ".Anti"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tbs\0\u{1}ifpost\0\u{1}ifposta\0\u{3}forbid_flag\0\u{3}forbid_info\0\u{3}block_stat\0\u{3}hide_stat\0\u{3}vcode_stat\0\u{3}days_tofree\0\u{3}has_chance\0\u{1}ifvoice\0\u{4}\u{d}del_thread_text\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -85,7 +85,7 @@ nonisolated extension Tieba_Anti: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.tbs.isEmpty {
       try visitor.visitSingularStringField(value: self.tbs, fieldNumber: 1)
     }
@@ -125,7 +125,7 @@ nonisolated extension Tieba_Anti: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Anti, rhs: Tieba_Anti) -> Bool {
+  static public func ==(lhs: Tieba_Anti, rhs: Tieba_Anti) -> Bool {
     if lhs.tbs != rhs.tbs {return false}
     if lhs.ifpost != rhs.ifpost {return false}
     if lhs.ifposta != rhs.ifposta {return false}

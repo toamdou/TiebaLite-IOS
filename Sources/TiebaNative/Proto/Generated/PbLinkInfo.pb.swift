@@ -20,28 +20,28 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbLinkInfo: Sendable {
+nonisolated public struct Tieba_PbLinkInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var title: String = String()
+  public var title: String = String()
 
-  var toURL: String = String()
+  public var toURL: String = String()
 
-  var picURL: String = String()
+  public var picURL: String = String()
 
-  var linkFrom: String = String()
+  public var linkFrom: String = String()
 
-  var extTxt: String = String()
+  public var extTxt: String = String()
 
-  var sort: UInt32 = 0
+  public var sort: UInt32 = 0
 
-  var urlType: Int32 = 0
+  public var urlType: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -49,10 +49,10 @@ nonisolated struct Tieba_PbLinkInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_PbLinkInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PbLinkInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{3}to_url\0\u{3}pic_url\0\u{3}link_from\0\u{3}ext_txt\0\u{1}sort\0\u{3}url_type\0")
+  static public let protoMessageName: String = _protobuf_package + ".PbLinkInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{3}to_url\0\u{3}pic_url\0\u{3}link_from\0\u{3}ext_txt\0\u{1}sort\0\u{3}url_type\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -70,7 +70,7 @@ nonisolated extension Tieba_PbLinkInfo: SwiftProtobuf.Message, SwiftProtobuf._Me
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.title.isEmpty {
       try visitor.visitSingularStringField(value: self.title, fieldNumber: 1)
     }
@@ -95,7 +95,7 @@ nonisolated extension Tieba_PbLinkInfo: SwiftProtobuf.Message, SwiftProtobuf._Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbLinkInfo, rhs: Tieba_PbLinkInfo) -> Bool {
+  static public func ==(lhs: Tieba_PbLinkInfo, rhs: Tieba_PbLinkInfo) -> Bool {
     if lhs.title != rhs.title {return false}
     if lhs.toURL != rhs.toURL {return false}
     if lhs.picURL != rhs.picURL {return false}

@@ -20,24 +20,24 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_MultipleForum: Sendable {
+nonisolated public struct Tieba_MultipleForum: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var forumID: Int64 = 0
+  public var forumID: Int64 = 0
 
-  var forumName: String = String()
+  public var forumName: String = String()
 
-  var isBawu: Int32 = 0
+  public var isBawu: Int32 = 0
 
-  var bawuType: String = String()
+  public var bawuType: String = String()
 
-  var isDeleted: Int32 = 0
+  public var isDeleted: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -45,10 +45,10 @@ nonisolated struct Tieba_MultipleForum: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_MultipleForum: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MultipleForum"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}forum_id\0\u{3}forum_name\0\u{3}is_bawu\0\u{3}bawu_type\0\u{3}is_deleted\0")
+  static public let protoMessageName: String = _protobuf_package + ".MultipleForum"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}forum_id\0\u{3}forum_name\0\u{3}is_bawu\0\u{3}bawu_type\0\u{3}is_deleted\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -64,7 +64,7 @@ nonisolated extension Tieba_MultipleForum: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.forumID != 0 {
       try visitor.visitSingularInt64Field(value: self.forumID, fieldNumber: 1)
     }
@@ -83,7 +83,7 @@ nonisolated extension Tieba_MultipleForum: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_MultipleForum, rhs: Tieba_MultipleForum) -> Bool {
+  static public func ==(lhs: Tieba_MultipleForum, rhs: Tieba_MultipleForum) -> Bool {
     if lhs.forumID != rhs.forumID {return false}
     if lhs.forumName != rhs.forumName {return false}
     if lhs.isBawu != rhs.isBawu {return false}

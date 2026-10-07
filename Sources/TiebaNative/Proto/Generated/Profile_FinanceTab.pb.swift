@@ -20,22 +20,22 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Profile_FinanceTab: Sendable {
+nonisolated public struct Tieba_Profile_FinanceTab: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var title: String = String()
+  public var title: String = String()
 
-  var generalTabText: String = String()
+  public var generalTabText: String = String()
 
-  var generalTabURL: String = String()
+  public var generalTabURL: String = String()
 
-  var tabs: [Tieba_Profile_FinanceTabItems] = []
+  public var tabs: [Tieba_Profile_FinanceTabItems] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -43,10 +43,10 @@ nonisolated struct Tieba_Profile_FinanceTab: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.profile"
 
 nonisolated extension Tieba_Profile_FinanceTab: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".FinanceTab"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{3}general_tab_text\0\u{3}general_tab_url\0\u{1}tabs\0")
+  static public let protoMessageName: String = _protobuf_package + ".FinanceTab"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{3}general_tab_text\0\u{3}general_tab_url\0\u{1}tabs\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_Profile_FinanceTab: SwiftProtobuf.Message, SwiftProt
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.title.isEmpty {
       try visitor.visitSingularStringField(value: self.title, fieldNumber: 1)
     }
@@ -77,7 +77,7 @@ nonisolated extension Tieba_Profile_FinanceTab: SwiftProtobuf.Message, SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Profile_FinanceTab, rhs: Tieba_Profile_FinanceTab) -> Bool {
+  static public func ==(lhs: Tieba_Profile_FinanceTab, rhs: Tieba_Profile_FinanceTab) -> Bool {
     if lhs.title != rhs.title {return false}
     if lhs.generalTabText != rhs.generalTabText {return false}
     if lhs.generalTabURL != rhs.generalTabURL {return false}

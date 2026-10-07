@@ -20,81 +20,81 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbFloor_PbFloorRequestData: Sendable {
+nonisolated public struct Tieba_PbFloor_PbFloorRequestData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var kz: Int64 = 0
+  public var kz: Int64 = 0
 
-  var pid: Int64 {
+  public var pid: Int64 {
     get {_pid ?? 0}
     set {_pid = newValue}
   }
   /// Returns true if `pid` has been explicitly set.
-  var hasPid: Bool {self._pid != nil}
+  public var hasPid: Bool {self._pid != nil}
   /// Clears the value of `pid`. Subsequent reads from it will return its default value.
-  mutating func clearPid() {self._pid = nil}
+  mutating public func clearPid() {self._pid = nil}
 
-  var spid: Int64 {
+  public var spid: Int64 {
     get {_spid ?? 0}
     set {_spid = newValue}
   }
   /// Returns true if `spid` has been explicitly set.
-  var hasSpid: Bool {self._spid != nil}
+  public var hasSpid: Bool {self._spid != nil}
   /// Clears the value of `spid`. Subsequent reads from it will return its default value.
-  mutating func clearSpid() {self._spid = nil}
+  mutating public func clearSpid() {self._spid = nil}
 
-  var pn: Int32 = 0
+  public var pn: Int32 = 0
 
-  var scrW: Int32 = 0
+  public var scrW: Int32 = 0
 
-  var scrH: Int32 = 0
+  public var scrH: Int32 = 0
 
-  var scrDip: Double = 0
+  public var scrDip: Double = 0
 
-  var stType: String = String()
+  public var stType: String = String()
 
-  var common: Tieba_CommonRequest {
+  public var common: Tieba_CommonRequest {
     get {_common ?? Tieba_CommonRequest()}
     set {_common = newValue}
   }
   /// Returns true if `common` has been explicitly set.
-  var hasCommon: Bool {self._common != nil}
+  public var hasCommon: Bool {self._common != nil}
   /// Clears the value of `common`. Subsequent reads from it will return its default value.
-  mutating func clearCommon() {self._common = nil}
+  mutating public func clearCommon() {self._common = nil}
 
-  var isCommReverse: Int32 {
+  public var isCommReverse: Int32 {
     get {_isCommReverse ?? 0}
     set {_isCommReverse = newValue}
   }
   /// Returns true if `isCommReverse` has been explicitly set.
-  var hasIsCommReverse: Bool {self._isCommReverse != nil}
+  public var hasIsCommReverse: Bool {self._isCommReverse != nil}
   /// Clears the value of `isCommReverse`. Subsequent reads from it will return its default value.
-  mutating func clearIsCommReverse() {self._isCommReverse = nil}
+  mutating public func clearIsCommReverse() {self._isCommReverse = nil}
 
-  var forumID: Int64 = 0
+  public var forumID: Int64 = 0
 
-  var oriUgcNid: String = String()
+  public var oriUgcNid: String = String()
 
-  var oriUgcTid: String = String()
+  public var oriUgcTid: String = String()
 
-  var oriUgcType: Int32 {
+  public var oriUgcType: Int32 {
     get {_oriUgcType ?? 0}
     set {_oriUgcType = newValue}
   }
   /// Returns true if `oriUgcType` has been explicitly set.
-  var hasOriUgcType: Bool {self._oriUgcType != nil}
+  public var hasOriUgcType: Bool {self._oriUgcType != nil}
   /// Clears the value of `oriUgcType`. Subsequent reads from it will return its default value.
-  mutating func clearOriUgcType() {self._oriUgcType = nil}
+  mutating public func clearOriUgcType() {self._oriUgcType = nil}
 
-  var oriUgcVid: String = String()
+  public var oriUgcVid: String = String()
 
-  var topUgcPid: String = String()
+  public var topUgcPid: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _pid: Int64? = nil
   fileprivate var _spid: Int64? = nil
@@ -108,10 +108,10 @@ nonisolated struct Tieba_PbFloor_PbFloorRequestData: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.pbFloor"
 
 nonisolated extension Tieba_PbFloor_PbFloorRequestData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PbFloorRequestData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kz\0\u{1}pid\0\u{1}spid\0\u{1}pn\0\u{3}scr_w\0\u{3}scr_h\0\u{3}scr_dip\0\u{3}st_type\0\u{1}common\0\u{3}is_comm_reverse\0\u{3}forum_id\0\u{3}ori_ugc_nid\0\u{3}ori_ugc_tid\0\u{4}\u{2}ori_ugc_type\0\u{3}ori_ugc_vid\0\u{3}top_ugc_pid\0")
+  static public let protoMessageName: String = _protobuf_package + ".PbFloorRequestData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kz\0\u{1}pid\0\u{1}spid\0\u{1}pn\0\u{3}scr_w\0\u{3}scr_h\0\u{3}scr_dip\0\u{3}st_type\0\u{1}common\0\u{3}is_comm_reverse\0\u{3}forum_id\0\u{3}ori_ugc_nid\0\u{3}ori_ugc_tid\0\u{4}\u{2}ori_ugc_type\0\u{3}ori_ugc_vid\0\u{3}top_ugc_pid\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -138,7 +138,7 @@ nonisolated extension Tieba_PbFloor_PbFloorRequestData: SwiftProtobuf.Message, S
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -194,7 +194,7 @@ nonisolated extension Tieba_PbFloor_PbFloorRequestData: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbFloor_PbFloorRequestData, rhs: Tieba_PbFloor_PbFloorRequestData) -> Bool {
+  static public func ==(lhs: Tieba_PbFloor_PbFloorRequestData, rhs: Tieba_PbFloor_PbFloorRequestData) -> Bool {
     if lhs.kz != rhs.kz {return false}
     if lhs._pid != rhs._pid {return false}
     if lhs._spid != rhs._spid {return false}

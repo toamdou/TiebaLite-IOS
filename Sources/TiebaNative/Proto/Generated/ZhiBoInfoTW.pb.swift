@@ -20,144 +20,144 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_ZhiBoInfoTW: @unchecked Sendable {
+nonisolated public struct Tieba_ZhiBoInfoTW: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var threadID: UInt64 {
+  public var threadID: UInt64 {
     get {_storage._threadID}
     set {_uniqueStorage()._threadID = newValue}
   }
 
-  var livecoverSrc: String {
+  public var livecoverSrc: String {
     get {_storage._livecoverSrc}
     set {_uniqueStorage()._livecoverSrc = newValue}
   }
 
-  var livecoverSrcBsize: String {
+  public var livecoverSrcBsize: String {
     get {_storage._livecoverSrcBsize}
     set {_uniqueStorage()._livecoverSrcBsize = newValue}
   }
 
-  var postNum: UInt32 {
+  public var postNum: UInt32 {
     get {_storage._postNum}
     set {_uniqueStorage()._postNum = newValue}
   }
 
-  var replyNum: UInt32 {
+  public var replyNum: UInt32 {
     get {_storage._replyNum}
     set {_uniqueStorage()._replyNum = newValue}
   }
 
-  var zan: Tieba_Zan {
+  public var zan: Tieba_Zan {
     get {_storage._zan ?? Tieba_Zan()}
     set {_uniqueStorage()._zan = newValue}
   }
   /// Returns true if `zan` has been explicitly set.
-  var hasZan: Bool {_storage._zan != nil}
+  public var hasZan: Bool {_storage._zan != nil}
   /// Clears the value of `zan`. Subsequent reads from it will return its default value.
-  mutating func clearZan() {_uniqueStorage()._zan = nil}
+  mutating public func clearZan() {_uniqueStorage()._zan = nil}
 
-  var forumName: String {
+  public var forumName: String {
     get {_storage._forumName}
     set {_uniqueStorage()._forumName = newValue}
   }
 
-  var forumID: UInt64 {
+  public var forumID: UInt64 {
     get {_storage._forumID}
     set {_uniqueStorage()._forumID = newValue}
   }
 
-  var lastModifiedTime: UInt64 {
+  public var lastModifiedTime: UInt64 {
     get {_storage._lastModifiedTime}
     set {_uniqueStorage()._lastModifiedTime = newValue}
   }
 
-  var title: String {
+  public var title: String {
     get {_storage._title}
     set {_uniqueStorage()._title = newValue}
   }
 
-  var content: String {
+  public var content: String {
     get {_storage._content}
     set {_uniqueStorage()._content = newValue}
   }
 
-  var user: Tieba_User {
+  public var user: Tieba_User {
     get {_storage._user ?? Tieba_User()}
     set {_uniqueStorage()._user = newValue}
   }
   /// Returns true if `user` has been explicitly set.
-  var hasUser: Bool {_storage._user != nil}
+  public var hasUser: Bool {_storage._user != nil}
   /// Clears the value of `user`. Subsequent reads from it will return its default value.
-  mutating func clearUser() {_uniqueStorage()._user = nil}
+  mutating public func clearUser() {_uniqueStorage()._user = nil}
 
-  var hotTwInfo: Tieba_HotTWThreadInfo {
+  public var hotTwInfo: Tieba_HotTWThreadInfo {
     get {_storage._hotTwInfo ?? Tieba_HotTWThreadInfo()}
     set {_uniqueStorage()._hotTwInfo = newValue}
   }
   /// Returns true if `hotTwInfo` has been explicitly set.
-  var hasHotTwInfo: Bool {_storage._hotTwInfo != nil}
+  public var hasHotTwInfo: Bool {_storage._hotTwInfo != nil}
   /// Clears the value of `hotTwInfo`. Subsequent reads from it will return its default value.
-  mutating func clearHotTwInfo() {_uniqueStorage()._hotTwInfo = nil}
+  mutating public func clearHotTwInfo() {_uniqueStorage()._hotTwInfo = nil}
 
-  var labelInfo: [Tieba_LabelInfo] {
+  public var labelInfo: [Tieba_LabelInfo] {
     get {_storage._labelInfo}
     set {_uniqueStorage()._labelInfo = newValue}
   }
 
-  var livecoverSrcStatus: String {
+  public var livecoverSrcStatus: String {
     get {_storage._livecoverSrcStatus}
     set {_uniqueStorage()._livecoverSrcStatus = newValue}
   }
 
-  var noticeInfo: Tieba_NoticeInfo {
+  public var noticeInfo: Tieba_NoticeInfo {
     get {_storage._noticeInfo ?? Tieba_NoticeInfo()}
     set {_uniqueStorage()._noticeInfo = newValue}
   }
   /// Returns true if `noticeInfo` has been explicitly set.
-  var hasNoticeInfo: Bool {_storage._noticeInfo != nil}
+  public var hasNoticeInfo: Bool {_storage._noticeInfo != nil}
   /// Clears the value of `noticeInfo`. Subsequent reads from it will return its default value.
-  mutating func clearNoticeInfo() {_uniqueStorage()._noticeInfo = nil}
+  mutating public func clearNoticeInfo() {_uniqueStorage()._noticeInfo = nil}
 
-  var isHeadline: Int32 {
+  public var isHeadline: Int32 {
     get {_storage._isHeadline}
     set {_uniqueStorage()._isHeadline = newValue}
   }
 
-  var livecoverStatus: Tieba_LiveCoverStatus {
+  public var livecoverStatus: Tieba_LiveCoverStatus {
     get {_storage._livecoverStatus ?? Tieba_LiveCoverStatus()}
     set {_uniqueStorage()._livecoverStatus = newValue}
   }
   /// Returns true if `livecoverStatus` has been explicitly set.
-  var hasLivecoverStatus: Bool {_storage._livecoverStatus != nil}
+  public var hasLivecoverStatus: Bool {_storage._livecoverStatus != nil}
   /// Clears the value of `livecoverStatus`. Subsequent reads from it will return its default value.
-  mutating func clearLivecoverStatus() {_uniqueStorage()._livecoverStatus = nil}
+  mutating public func clearLivecoverStatus() {_uniqueStorage()._livecoverStatus = nil}
 
-  var freqNum: UInt32 {
+  public var freqNum: UInt32 {
     get {_storage._freqNum}
     set {_uniqueStorage()._freqNum = newValue}
   }
 
-  var copythreadRemind: UInt32 {
+  public var copythreadRemind: UInt32 {
     get {_storage._copythreadRemind}
     set {_uniqueStorage()._copythreadRemind = newValue}
   }
 
-  var isCopytwzhibo: UInt32 {
+  public var isCopytwzhibo: UInt32 {
     get {_storage._isCopytwzhibo}
     set {_uniqueStorage()._isCopytwzhibo = newValue}
   }
 
-  var fieldEx: String {
+  public var fieldEx: String {
     get {_storage._fieldEx}
     set {_uniqueStorage()._fieldEx = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -167,8 +167,8 @@ nonisolated struct Tieba_ZhiBoInfoTW: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_ZhiBoInfoTW: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ZhiBoInfoTW"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}thread_id\0\u{3}livecover_src\0\u{3}livecover_src_bsize\0\u{3}post_num\0\u{3}reply_num\0\u{1}zan\0\u{3}forum_name\0\u{3}forum_id\0\u{3}last_modified_time\0\u{1}title\0\u{1}content\0\u{1}user\0\u{3}hot_tw_info\0\u{1}labelInfo\0\u{3}livecover_src_status\0\u{3}notice_info\0\u{3}is_headline\0\u{3}livecover_status\0\u{3}freq_num\0\u{3}copythread_remind\0\u{3}is_copytwzhibo\0\u{3}field_ex\0")
+  static public let protoMessageName: String = _protobuf_package + ".ZhiBoInfoTW"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}thread_id\0\u{3}livecover_src\0\u{3}livecover_src_bsize\0\u{3}post_num\0\u{3}reply_num\0\u{1}zan\0\u{3}forum_name\0\u{3}forum_id\0\u{3}last_modified_time\0\u{1}title\0\u{1}content\0\u{1}user\0\u{3}hot_tw_info\0\u{1}labelInfo\0\u{3}livecover_src_status\0\u{3}notice_info\0\u{3}is_headline\0\u{3}livecover_status\0\u{3}freq_num\0\u{3}copythread_remind\0\u{3}is_copytwzhibo\0\u{3}field_ex\0")
 
   fileprivate class _StorageClass {
     var _threadID: UInt64 = 0
@@ -235,7 +235,7 @@ nonisolated extension Tieba_ZhiBoInfoTW: SwiftProtobuf.Message, SwiftProtobuf._M
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -271,7 +271,7 @@ nonisolated extension Tieba_ZhiBoInfoTW: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -347,7 +347,7 @@ nonisolated extension Tieba_ZhiBoInfoTW: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ZhiBoInfoTW, rhs: Tieba_ZhiBoInfoTW) -> Bool {
+  static public func ==(lhs: Tieba_ZhiBoInfoTW, rhs: Tieba_ZhiBoInfoTW) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

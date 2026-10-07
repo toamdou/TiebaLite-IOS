@@ -20,29 +20,29 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbPage_BusinessPromotInfo: Sendable {
+nonisolated public struct Tieba_PbPage_BusinessPromotInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var isPromot: Int64 = 0
+  public var isPromot: Int64 = 0
 
-  var isHeadlinepost: Int32 = 0
+  public var isHeadlinepost: Int32 = 0
 
-  var isSCard: Int32 = 0
+  public var isSCard: Int32 = 0
 
-  var sendCardInfo: Tieba_SendCardInfo {
+  public var sendCardInfo: Tieba_SendCardInfo {
     get {_sendCardInfo ?? Tieba_SendCardInfo()}
     set {_sendCardInfo = newValue}
   }
   /// Returns true if `sendCardInfo` has been explicitly set.
-  var hasSendCardInfo: Bool {self._sendCardInfo != nil}
+  public var hasSendCardInfo: Bool {self._sendCardInfo != nil}
   /// Clears the value of `sendCardInfo`. Subsequent reads from it will return its default value.
-  mutating func clearSendCardInfo() {self._sendCardInfo = nil}
+  mutating public func clearSendCardInfo() {self._sendCardInfo = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _sendCardInfo: Tieba_SendCardInfo? = nil
 }
@@ -52,10 +52,10 @@ nonisolated struct Tieba_PbPage_BusinessPromotInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.pbPage"
 
 nonisolated extension Tieba_PbPage_BusinessPromotInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".BusinessPromotInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_promot\0\u{3}is_headlinepost\0\u{3}is_s_card\0\u{3}send_card_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".BusinessPromotInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_promot\0\u{3}is_headlinepost\0\u{3}is_s_card\0\u{3}send_card_info\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -70,7 +70,7 @@ nonisolated extension Tieba_PbPage_BusinessPromotInfo: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -90,7 +90,7 @@ nonisolated extension Tieba_PbPage_BusinessPromotInfo: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbPage_BusinessPromotInfo, rhs: Tieba_PbPage_BusinessPromotInfo) -> Bool {
+  static public func ==(lhs: Tieba_PbPage_BusinessPromotInfo, rhs: Tieba_PbPage_BusinessPromotInfo) -> Bool {
     if lhs.isPromot != rhs.isPromot {return false}
     if lhs.isHeadlinepost != rhs.isHeadlinepost {return false}
     if lhs.isSCard != rhs.isSCard {return false}

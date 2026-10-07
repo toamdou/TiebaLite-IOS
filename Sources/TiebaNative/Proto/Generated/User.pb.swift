@@ -20,458 +20,458 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_User: @unchecked Sendable {
+nonisolated public struct Tieba_User: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var isLogin: Int32 {
+  public var isLogin: Int32 {
     get {_storage._isLogin}
     set {_uniqueStorage()._isLogin = newValue}
   }
 
-  var id: Int64 {
+  public var id: Int64 {
     get {_storage._id}
     set {_uniqueStorage()._id = newValue}
   }
 
-  var name: String {
+  public var name: String {
     get {_storage._name}
     set {_uniqueStorage()._name = newValue}
   }
 
-  var nameShow: String {
+  public var nameShow: String {
     get {_storage._nameShow}
     set {_uniqueStorage()._nameShow = newValue}
   }
 
-  var portrait: String {
+  public var portrait: String {
     get {_storage._portrait}
     set {_uniqueStorage()._portrait = newValue}
   }
 
-  var noUn: Int32 {
+  public var noUn: Int32 {
     get {_storage._noUn}
     set {_uniqueStorage()._noUn = newValue}
   }
 
-  var type: Int32 {
+  public var type: Int32 {
     get {_storage._type}
     set {_uniqueStorage()._type = newValue}
   }
 
-  var userhide: Int32 {
+  public var userhide: Int32 {
     get {_storage._userhide}
     set {_uniqueStorage()._userhide = newValue}
   }
 
-  var isManager: Int32 {
+  public var isManager: Int32 {
     get {_storage._isManager}
     set {_uniqueStorage()._isManager = newValue}
   }
 
-  var rank: String {
+  public var rank: String {
     get {_storage._rank}
     set {_uniqueStorage()._rank = newValue}
   }
 
-  var bimgURL: String {
+  public var bimgURL: String {
     get {_storage._bimgURL}
     set {_uniqueStorage()._bimgURL = newValue}
   }
 
-  var meizhiLevel: Int32 {
+  public var meizhiLevel: Int32 {
     get {_storage._meizhiLevel}
     set {_uniqueStorage()._meizhiLevel = newValue}
   }
 
-  var isVerify: Int32 {
+  public var isVerify: Int32 {
     get {_storage._isVerify}
     set {_uniqueStorage()._isVerify = newValue}
   }
 
-  var isInterestman: Int32 {
+  public var isInterestman: Int32 {
     get {_storage._isInterestman}
     set {_uniqueStorage()._isInterestman = newValue}
   }
 
-  var iconinfo: [Tieba_Icon] {
+  public var iconinfo: [Tieba_Icon] {
     get {_storage._iconinfo}
     set {_uniqueStorage()._iconinfo = newValue}
   }
 
-  var userType: Int32 {
+  public var userType: Int32 {
     get {_storage._userType}
     set {_uniqueStorage()._userType = newValue}
   }
 
-  var isCoreuser: Int32 {
+  public var isCoreuser: Int32 {
     get {_storage._isCoreuser}
     set {_uniqueStorage()._isCoreuser = newValue}
   }
 
-  var isHuinibuke: Int32 {
+  public var isHuinibuke: Int32 {
     get {_storage._isHuinibuke}
     set {_uniqueStorage()._isHuinibuke = newValue}
   }
 
-  var iosBimgFormat: String {
+  public var iosBimgFormat: String {
     get {_storage._iosBimgFormat}
     set {_uniqueStorage()._iosBimgFormat = newValue}
   }
 
-  var levelID: Int32 {
+  public var levelID: Int32 {
     get {_storage._levelID}
     set {_uniqueStorage()._levelID = newValue}
   }
 
-  var isLike: Int32 {
+  public var isLike: Int32 {
     get {_storage._isLike}
     set {_uniqueStorage()._isLike = newValue}
   }
 
-  var isBawu: Int32 {
+  public var isBawu: Int32 {
     get {_storage._isBawu}
     set {_uniqueStorage()._isBawu = newValue}
   }
 
-  var bawuType: String {
+  public var bawuType: String {
     get {_storage._bawuType}
     set {_uniqueStorage()._bawuType = newValue}
   }
 
-  var portraith: String {
+  public var portraith: String {
     get {_storage._portraith}
     set {_uniqueStorage()._portraith = newValue}
   }
 
-  var ip: String {
+  public var ip: String {
     get {_storage._ip}
     set {_uniqueStorage()._ip = newValue}
   }
 
-  var bduss: String {
+  public var bduss: String {
     get {_storage._bduss}
     set {_uniqueStorage()._bduss = newValue}
   }
 
-  var fansNum: Int32 {
+  public var fansNum: Int32 {
     get {_storage._fansNum}
     set {_uniqueStorage()._fansNum = newValue}
   }
 
-  var concernNum: Int32 {
+  public var concernNum: Int32 {
     get {_storage._concernNum}
     set {_uniqueStorage()._concernNum = newValue}
   }
 
-  var sex: Int32 {
+  public var sex: Int32 {
     get {_storage._sex}
     set {_uniqueStorage()._sex = newValue}
   }
 
-  var myLikeNum: Int32 {
+  public var myLikeNum: Int32 {
     get {_storage._myLikeNum}
     set {_uniqueStorage()._myLikeNum = newValue}
   }
 
-  var intro: String {
+  public var intro: String {
     get {_storage._intro}
     set {_uniqueStorage()._intro = newValue}
   }
 
-  var hasConcerned_p: Int32 {
+  public var hasConcerned_p: Int32 {
     get {_storage._hasConcerned_p}
     set {_uniqueStorage()._hasConcerned_p = newValue}
   }
 
-  var passwd: String {
+  public var passwd: String {
     get {_storage._passwd}
     set {_uniqueStorage()._passwd = newValue}
   }
 
-  var postNum: Int32 {
+  public var postNum: Int32 {
     get {_storage._postNum}
     set {_uniqueStorage()._postNum = newValue}
   }
 
-  var tbAge: String {
+  public var tbAge: String {
     get {_storage._tbAge}
     set {_uniqueStorage()._tbAge = newValue}
   }
 
-  var isMem: Int32 {
+  public var isMem: Int32 {
     get {_storage._isMem}
     set {_uniqueStorage()._isMem = newValue}
   }
 
-  var bimgEndTime: Int32 {
+  public var bimgEndTime: Int32 {
     get {_storage._bimgEndTime}
     set {_uniqueStorage()._bimgEndTime = newValue}
   }
 
-  var gender: Int32 {
+  public var gender: Int32 {
     get {_storage._gender}
     set {_uniqueStorage()._gender = newValue}
   }
 
-  var isMask: Int32 {
+  public var isMask: Int32 {
     get {_storage._isMask}
     set {_uniqueStorage()._isMask = newValue}
   }
 
-  var userPics: [Tieba_UserPics] {
+  public var userPics: [Tieba_UserPics] {
     get {_storage._userPics}
     set {_uniqueStorage()._userPics = newValue}
   }
 
-  var privSets: Tieba_PrivSets {
+  public var privSets: Tieba_PrivSets {
     get {_storage._privSets ?? Tieba_PrivSets()}
     set {_uniqueStorage()._privSets = newValue}
   }
   /// Returns true if `privSets` has been explicitly set.
-  var hasPrivSets: Bool {_storage._privSets != nil}
+  public var hasPrivSets: Bool {_storage._privSets != nil}
   /// Clears the value of `privSets`. Subsequent reads from it will return its default value.
-  mutating func clearPrivSets() {_uniqueStorage()._privSets = nil}
+  mutating public func clearPrivSets() {_uniqueStorage()._privSets = nil}
 
-  var isFriend: Int32 {
+  public var isFriend: Int32 {
     get {_storage._isFriend}
     set {_uniqueStorage()._isFriend = newValue}
   }
 
-  var likeForum: [Tieba_LikeForumInfo] {
+  public var likeForum: [Tieba_LikeForumInfo] {
     get {_storage._likeForum}
     set {_uniqueStorage()._likeForum = newValue}
   }
 
-  var giftNum: Int32 {
+  public var giftNum: Int32 {
     get {_storage._giftNum}
     set {_uniqueStorage()._giftNum = newValue}
   }
 
-  var isSelectTail: Int32 {
+  public var isSelectTail: Int32 {
     get {_storage._isSelectTail}
     set {_uniqueStorage()._isSelectTail = newValue}
   }
 
-  var isGuanfang: Int32 {
+  public var isGuanfang: Int32 {
     get {_storage._isGuanfang}
     set {_uniqueStorage()._isGuanfang = newValue}
   }
 
-  var bookmarkCount: Int32 {
+  public var bookmarkCount: Int32 {
     get {_storage._bookmarkCount}
     set {_uniqueStorage()._bookmarkCount = newValue}
   }
 
-  var bookmarkNewCount: Int32 {
+  public var bookmarkNewCount: Int32 {
     get {_storage._bookmarkNewCount}
     set {_uniqueStorage()._bookmarkNewCount = newValue}
   }
 
-  var muteUser: [Tieba_SimpleUser] {
+  public var muteUser: [Tieba_SimpleUser] {
     get {_storage._muteUser}
     set {_uniqueStorage()._muteUser = newValue}
   }
 
-  var friendNum: Int64 {
+  public var friendNum: Int64 {
     get {_storage._friendNum}
     set {_uniqueStorage()._friendNum = newValue}
   }
 
-  var fansNickname: String {
+  public var fansNickname: String {
     get {_storage._fansNickname}
     set {_uniqueStorage()._fansNickname = newValue}
   }
 
-  var bgPic: String {
+  public var bgPic: String {
     get {_storage._bgPic}
     set {_uniqueStorage()._bgPic = newValue}
   }
 
-  var godData: Tieba_GodInfo {
+  public var godData: Tieba_GodInfo {
     get {_storage._godData ?? Tieba_GodInfo()}
     set {_uniqueStorage()._godData = newValue}
   }
   /// Returns true if `godData` has been explicitly set.
-  var hasGodData: Bool {_storage._godData != nil}
+  public var hasGodData: Bool {_storage._godData != nil}
   /// Clears the value of `godData`. Subsequent reads from it will return its default value.
-  mutating func clearGodData() {_uniqueStorage()._godData = nil}
+  mutating public func clearGodData() {_uniqueStorage()._godData = nil}
 
-  var heavyUser: Int32 {
+  public var heavyUser: Int32 {
     get {_storage._heavyUser}
     set {_uniqueStorage()._heavyUser = newValue}
   }
 
-  var visitorNum: Int32 {
+  public var visitorNum: Int32 {
     get {_storage._visitorNum}
     set {_uniqueStorage()._visitorNum = newValue}
   }
 
-  var totalVisitorNum: Int32 {
+  public var totalVisitorNum: Int32 {
     get {_storage._totalVisitorNum}
     set {_uniqueStorage()._totalVisitorNum = newValue}
   }
 
-  var nicknameUpdateTime: Int32 {
+  public var nicknameUpdateTime: Int32 {
     get {_storage._nicknameUpdateTime}
     set {_uniqueStorage()._nicknameUpdateTime = newValue}
   }
 
-  var threadNum: Int32 {
+  public var threadNum: Int32 {
     get {_storage._threadNum}
     set {_uniqueStorage()._threadNum = newValue}
   }
 
-  var agreeNum: Int32 {
+  public var agreeNum: Int32 {
     get {_storage._agreeNum}
     set {_uniqueStorage()._agreeNum = newValue}
   }
 
-  var leftCallNum: Int32 {
+  public var leftCallNum: Int32 {
     get {_storage._leftCallNum}
     set {_uniqueStorage()._leftCallNum = newValue}
   }
 
-  var isInvited: Int32 {
+  public var isInvited: Int32 {
     get {_storage._isInvited}
     set {_uniqueStorage()._isInvited = newValue}
   }
 
-  var isFans: Int32 {
+  public var isFans: Int32 {
     get {_storage._isFans}
     set {_uniqueStorage()._isFans = newValue}
   }
 
-  var privThread: Int32 {
+  public var privThread: Int32 {
     get {_storage._privThread}
     set {_uniqueStorage()._privThread = newValue}
   }
 
-  var isVideobiggie: Int32 {
+  public var isVideobiggie: Int32 {
     get {_storage._isVideobiggie}
     set {_uniqueStorage()._isVideobiggie = newValue}
   }
 
-  var isShowRedpacket: Int32 {
+  public var isShowRedpacket: Int32 {
     get {_storage._isShowRedpacket}
     set {_uniqueStorage()._isShowRedpacket = newValue}
   }
 
-  var birthdayInfo: Tieba_BirthdayInfo {
+  public var birthdayInfo: Tieba_BirthdayInfo {
     get {_storage._birthdayInfo ?? Tieba_BirthdayInfo()}
     set {_uniqueStorage()._birthdayInfo = newValue}
   }
   /// Returns true if `birthdayInfo` has been explicitly set.
-  var hasBirthdayInfo: Bool {_storage._birthdayInfo != nil}
+  public var hasBirthdayInfo: Bool {_storage._birthdayInfo != nil}
   /// Clears the value of `birthdayInfo`. Subsequent reads from it will return its default value.
-  mutating func clearBirthdayInfo() {_uniqueStorage()._birthdayInfo = nil}
+  mutating public func clearBirthdayInfo() {_uniqueStorage()._birthdayInfo = nil}
 
-  var canModifyAvatar: Int32 {
+  public var canModifyAvatar: Int32 {
     get {_storage._canModifyAvatar}
     set {_uniqueStorage()._canModifyAvatar = newValue}
   }
 
-  var modifyAvatarDesc: String {
+  public var modifyAvatarDesc: String {
     get {_storage._modifyAvatarDesc}
     set {_uniqueStorage()._modifyAvatarDesc = newValue}
   }
 
-  var influence: Int32 {
+  public var influence: Int32 {
     get {_storage._influence}
     set {_uniqueStorage()._influence = newValue}
   }
 
-  var levelInfluence: String {
+  public var levelInfluence: String {
     get {_storage._levelInfluence}
     set {_uniqueStorage()._levelInfluence = newValue}
   }
 
-  var newGodData: Tieba_NewGodInfo {
+  public var newGodData: Tieba_NewGodInfo {
     get {_storage._newGodData ?? Tieba_NewGodInfo()}
     set {_uniqueStorage()._newGodData = newValue}
   }
   /// Returns true if `newGodData` has been explicitly set.
-  var hasNewGodData: Bool {_storage._newGodData != nil}
+  public var hasNewGodData: Bool {_storage._newGodData != nil}
   /// Clears the value of `newGodData`. Subsequent reads from it will return its default value.
-  mutating func clearNewGodData() {_uniqueStorage()._newGodData = nil}
+  mutating public func clearNewGodData() {_uniqueStorage()._newGodData = nil}
 
-  var bawuThrones: Tieba_BawuThrones {
+  public var bawuThrones: Tieba_BawuThrones {
     get {_storage._bawuThrones ?? Tieba_BawuThrones()}
     set {_uniqueStorage()._bawuThrones = newValue}
   }
   /// Returns true if `bawuThrones` has been explicitly set.
-  var hasBawuThrones: Bool {_storage._bawuThrones != nil}
+  public var hasBawuThrones: Bool {_storage._bawuThrones != nil}
   /// Clears the value of `bawuThrones`. Subsequent reads from it will return its default value.
-  mutating func clearBawuThrones() {_uniqueStorage()._bawuThrones = nil}
+  mutating public func clearBawuThrones() {_uniqueStorage()._bawuThrones = nil}
 
-  var bazhuGrade: Tieba_BazhuSign {
+  public var bazhuGrade: Tieba_BazhuSign {
     get {_storage._bazhuGrade ?? Tieba_BazhuSign()}
     set {_uniqueStorage()._bazhuGrade = newValue}
   }
   /// Returns true if `bazhuGrade` has been explicitly set.
-  var hasBazhuGrade: Bool {_storage._bazhuGrade != nil}
+  public var hasBazhuGrade: Bool {_storage._bazhuGrade != nil}
   /// Clears the value of `bazhuGrade`. Subsequent reads from it will return its default value.
-  mutating func clearBazhuGrade() {_uniqueStorage()._bazhuGrade = nil}
+  mutating public func clearBazhuGrade() {_uniqueStorage()._bazhuGrade = nil}
 
-  var isDefaultAvatar: Int32 {
+  public var isDefaultAvatar: Int32 {
     get {_storage._isDefaultAvatar}
     set {_uniqueStorage()._isDefaultAvatar = newValue}
   }
 
-  var favoriteNum: Int32 {
+  public var favoriteNum: Int32 {
     get {_storage._favoriteNum}
     set {_uniqueStorage()._favoriteNum = newValue}
   }
 
-  var totalAgreeNum: UInt32 {
+  public var totalAgreeNum: UInt32 {
     get {_storage._totalAgreeNum}
     set {_uniqueStorage()._totalAgreeNum = newValue}
   }
 
-  var tiebaUid: String {
+  public var tiebaUid: String {
     get {_storage._tiebaUid}
     set {_uniqueStorage()._tiebaUid = newValue}
   }
 
-  var levelName: String {
+  public var levelName: String {
     get {_storage._levelName}
     set {_uniqueStorage()._levelName = newValue}
   }
 
-  var ipAddress: String {
+  public var ipAddress: String {
     get {_storage._ipAddress}
     set {_uniqueStorage()._ipAddress = newValue}
   }
 
-  var isNicknameEditing: Int32 {
+  public var isNicknameEditing: Int32 {
     get {_storage._isNicknameEditing}
     set {_uniqueStorage()._isNicknameEditing = newValue}
   }
 
-  var editingNickname: String {
+  public var editingNickname: String {
     get {_storage._editingNickname}
     set {_uniqueStorage()._editingNickname = newValue}
   }
 
-  var displayIntro: String {
+  public var displayIntro: String {
     get {_storage._displayIntro}
     set {_uniqueStorage()._displayIntro = newValue}
   }
 
-  var newIconURL: [String] {
+  public var newIconURL: [String] {
     get {_storage._newIconURL}
     set {_uniqueStorage()._newIconURL = newValue}
   }
 
-  var dynamicURL: String {
+  public var dynamicURL: String {
     get {_storage._dynamicURL}
     set {_uniqueStorage()._dynamicURL = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -481,8 +481,8 @@ nonisolated struct Tieba_User: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_User: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".User"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_login\0\u{1}id\0\u{1}name\0\u{1}nameShow\0\u{1}portrait\0\u{3}no_un\0\u{1}type\0\u{2}\u{2}userhide\0\u{4}\u{2}is_manager\0\u{1}rank\0\u{3}bimg_url\0\u{3}meizhi_level\0\u{3}is_verify\0\u{3}is_interestman\0\u{1}iconinfo\0\u{4}\u{2}user_type\0\u{3}is_coreuser\0\u{3}is_huinibuke\0\u{3}ios_bimg_format\0\u{3}level_id\0\u{3}is_like\0\u{3}is_bawu\0\u{3}bawu_type\0\u{1}portraith\0\u{1}ip\0\u{1}BDUSS\0\u{3}fans_num\0\u{3}concern_num\0\u{1}sex\0\u{3}my_like_num\0\u{1}intro\0\u{3}has_concerned\0\u{1}passwd\0\u{3}post_num\0\u{3}tb_age\0\u{3}is_mem\0\u{3}bimg_end_time\0\u{2}\u{2}gender\0\u{3}is_mask\0\u{3}user_pics\0\u{1}privSets\0\u{3}is_friend\0\u{1}likeForum\0\u{4}\u{2}gift_num\0\u{4}\u{2}is_select_tail\0\u{3}is_guanfang\0\u{3}bookmark_count\0\u{3}bookmark_new_count\0\u{3}mute_user\0\u{3}friend_num\0\u{1}fansNickname\0\u{3}bg_pic\0\u{4}\u{4}god_data\0\u{3}heavy_user\0\u{4}\u{c}visitor_num\0\u{3}total_visitor_num\0\u{4}\u{a}nickname_update_time\0\u{3}thread_num\0\u{3}agree_num\0\u{3}left_call_num\0\u{3}is_invited\0\u{3}is_fans\0\u{3}priv_thread\0\u{3}is_videobiggie\0\u{3}is_show_redpacket\0\u{4}\u{2}birthday_info\0\u{3}can_modify_avatar\0\u{3}modify_avatar_desc\0\u{1}influence\0\u{3}level_influence\0\u{3}new_god_data\0\u{4}\u{2}bawu_thrones\0\u{4}\u{2}bazhu_grade\0\u{1}isDefaultAvatar\0\u{4}\u{3}favorite_num\0\u{4}\u{9}total_agree_num\0\u{4}\u{2}tieba_uid\0\u{4}\u{5}level_name\0\u{4}\u{2}ip_address\0\u{3}is_nickname_editing\0\u{3}editing_nickname\0\u{4}\u{9}display_intro\0\u{3}new_icon_url\0\u{3}dynamic_url\0")
+  static public let protoMessageName: String = _protobuf_package + ".User"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_login\0\u{1}id\0\u{1}name\0\u{1}nameShow\0\u{1}portrait\0\u{3}no_un\0\u{1}type\0\u{2}\u{2}userhide\0\u{4}\u{2}is_manager\0\u{1}rank\0\u{3}bimg_url\0\u{3}meizhi_level\0\u{3}is_verify\0\u{3}is_interestman\0\u{1}iconinfo\0\u{4}\u{2}user_type\0\u{3}is_coreuser\0\u{3}is_huinibuke\0\u{3}ios_bimg_format\0\u{3}level_id\0\u{3}is_like\0\u{3}is_bawu\0\u{3}bawu_type\0\u{1}portraith\0\u{1}ip\0\u{1}BDUSS\0\u{3}fans_num\0\u{3}concern_num\0\u{1}sex\0\u{3}my_like_num\0\u{1}intro\0\u{3}has_concerned\0\u{1}passwd\0\u{3}post_num\0\u{3}tb_age\0\u{3}is_mem\0\u{3}bimg_end_time\0\u{2}\u{2}gender\0\u{3}is_mask\0\u{3}user_pics\0\u{1}privSets\0\u{3}is_friend\0\u{1}likeForum\0\u{4}\u{2}gift_num\0\u{4}\u{2}is_select_tail\0\u{3}is_guanfang\0\u{3}bookmark_count\0\u{3}bookmark_new_count\0\u{3}mute_user\0\u{3}friend_num\0\u{1}fansNickname\0\u{3}bg_pic\0\u{4}\u{4}god_data\0\u{3}heavy_user\0\u{4}\u{c}visitor_num\0\u{3}total_visitor_num\0\u{4}\u{a}nickname_update_time\0\u{3}thread_num\0\u{3}agree_num\0\u{3}left_call_num\0\u{3}is_invited\0\u{3}is_fans\0\u{3}priv_thread\0\u{3}is_videobiggie\0\u{3}is_show_redpacket\0\u{4}\u{2}birthday_info\0\u{3}can_modify_avatar\0\u{3}modify_avatar_desc\0\u{1}influence\0\u{3}level_influence\0\u{3}new_god_data\0\u{4}\u{2}bawu_thrones\0\u{4}\u{2}bazhu_grade\0\u{1}isDefaultAvatar\0\u{4}\u{3}favorite_num\0\u{4}\u{9}total_agree_num\0\u{4}\u{2}tieba_uid\0\u{4}\u{5}level_name\0\u{4}\u{2}ip_address\0\u{3}is_nickname_editing\0\u{3}editing_nickname\0\u{4}\u{9}display_intro\0\u{3}new_icon_url\0\u{3}dynamic_url\0")
 
   fileprivate class _StorageClass {
     var _isLogin: Int32 = 0
@@ -673,7 +673,7 @@ nonisolated extension Tieba_User: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -771,7 +771,7 @@ nonisolated extension Tieba_User: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -1033,7 +1033,7 @@ nonisolated extension Tieba_User: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_User, rhs: Tieba_User) -> Bool {
+  static public func ==(lhs: Tieba_User, rhs: Tieba_User) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

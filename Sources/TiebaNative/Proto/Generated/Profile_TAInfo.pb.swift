@@ -20,50 +20,50 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Profile_TAInfo: Sendable {
+nonisolated public struct Tieba_Profile_TAInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var foruminfo: [String] = []
+  public var foruminfo: [String] = []
 
-  var groupinfo: [String] = []
+  public var groupinfo: [String] = []
 
-  var friendinfo: [String] = []
+  public var friendinfo: [String] = []
 
-  var distanceinfo: Tieba_Profile_CommonDistance {
+  public var distanceinfo: Tieba_Profile_CommonDistance {
     get {_distanceinfo ?? Tieba_Profile_CommonDistance()}
     set {_distanceinfo = newValue}
   }
   /// Returns true if `distanceinfo` has been explicitly set.
-  var hasDistanceinfo: Bool {self._distanceinfo != nil}
+  public var hasDistanceinfo: Bool {self._distanceinfo != nil}
   /// Clears the value of `distanceinfo`. Subsequent reads from it will return its default value.
-  mutating func clearDistanceinfo() {self._distanceinfo = nil}
+  mutating public func clearDistanceinfo() {self._distanceinfo = nil}
 
-  var groupnum: UInt32 = 0
+  public var groupnum: UInt32 = 0
 
-  var friendnum: UInt32 = 0
+  public var friendnum: UInt32 = 0
 
-  var isFriend: UInt32 = 0
+  public var isFriend: UInt32 = 0
 
-  var replyList: [Tieba_Profile_ReplyList] = []
+  public var replyList: [Tieba_Profile_ReplyList] = []
 
-  var userClientVersionIsLower: UInt32 = 0
+  public var userClientVersionIsLower: UInt32 = 0
 
-  var location: Tieba_Profile_CommonLocation {
+  public var location: Tieba_Profile_CommonLocation {
     get {_location ?? Tieba_Profile_CommonLocation()}
     set {_location = newValue}
   }
   /// Returns true if `location` has been explicitly set.
-  var hasLocation: Bool {self._location != nil}
+  public var hasLocation: Bool {self._location != nil}
   /// Clears the value of `location`. Subsequent reads from it will return its default value.
-  mutating func clearLocation() {self._location = nil}
+  mutating public func clearLocation() {self._location = nil}
 
-  var hideUserFeed: String = String()
+  public var hideUserFeed: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _distanceinfo: Tieba_Profile_CommonDistance? = nil
   fileprivate var _location: Tieba_Profile_CommonLocation? = nil
@@ -74,10 +74,10 @@ nonisolated struct Tieba_Profile_TAInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.profile"
 
 nonisolated extension Tieba_Profile_TAInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".TAInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}foruminfo\0\u{1}groupinfo\0\u{1}friendinfo\0\u{1}distanceinfo\0\u{1}groupnum\0\u{1}friendnum\0\u{3}is_friend\0\u{3}reply_list\0\u{1}userClientVersionIsLower\0\u{1}location\0\u{3}hide_user_feed\0")
+  static public let protoMessageName: String = _protobuf_package + ".TAInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}foruminfo\0\u{1}groupinfo\0\u{1}friendinfo\0\u{1}distanceinfo\0\u{1}groupnum\0\u{1}friendnum\0\u{3}is_friend\0\u{3}reply_list\0\u{1}userClientVersionIsLower\0\u{1}location\0\u{3}hide_user_feed\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -99,7 +99,7 @@ nonisolated extension Tieba_Profile_TAInfo: SwiftProtobuf.Message, SwiftProtobuf
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -140,7 +140,7 @@ nonisolated extension Tieba_Profile_TAInfo: SwiftProtobuf.Message, SwiftProtobuf
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Profile_TAInfo, rhs: Tieba_Profile_TAInfo) -> Bool {
+  static public func ==(lhs: Tieba_Profile_TAInfo, rhs: Tieba_Profile_TAInfo) -> Bool {
     if lhs.foruminfo != rhs.foruminfo {return false}
     if lhs.groupinfo != rhs.groupinfo {return false}
     if lhs.friendinfo != rhs.friendinfo {return false}

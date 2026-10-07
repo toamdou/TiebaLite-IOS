@@ -20,292 +20,292 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_CommonRequest: @unchecked Sendable {
+nonisolated public struct Tieba_CommonRequest: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var clientType: Int32 {
+  public var clientType: Int32 {
     get {_storage._clientType}
     set {_uniqueStorage()._clientType = newValue}
   }
 
-  var clientVersion: String {
+  public var clientVersion: String {
     get {_storage._clientVersion}
     set {_uniqueStorage()._clientVersion = newValue}
   }
 
-  var clientID: String {
+  public var clientID: String {
     get {_storage._clientID}
     set {_uniqueStorage()._clientID = newValue}
   }
 
-  var phoneImei: String {
+  public var phoneImei: String {
     get {_storage._phoneImei}
     set {_uniqueStorage()._phoneImei = newValue}
   }
 
-  var from: String {
+  public var from: String {
     get {_storage._from}
     set {_uniqueStorage()._from = newValue}
   }
 
-  var cuid: String {
+  public var cuid: String {
     get {_storage._cuid}
     set {_uniqueStorage()._cuid = newValue}
   }
 
-  var timestamp: Int64 {
+  public var timestamp: Int64 {
     get {_storage._timestamp}
     set {_uniqueStorage()._timestamp = newValue}
   }
 
-  var model: String {
+  public var model: String {
     get {_storage._model}
     set {_uniqueStorage()._model = newValue}
   }
 
-  var bduss: String {
+  public var bduss: String {
     get {_storage._bduss ?? String()}
     set {_uniqueStorage()._bduss = newValue}
   }
   /// Returns true if `bduss` has been explicitly set.
-  var hasBduss: Bool {_storage._bduss != nil}
+  public var hasBduss: Bool {_storage._bduss != nil}
   /// Clears the value of `bduss`. Subsequent reads from it will return its default value.
-  mutating func clearBduss() {_uniqueStorage()._bduss = nil}
+  mutating public func clearBduss() {_uniqueStorage()._bduss = nil}
 
-  var tbs: String {
+  public var tbs: String {
     get {_storage._tbs ?? String()}
     set {_uniqueStorage()._tbs = newValue}
   }
   /// Returns true if `tbs` has been explicitly set.
-  var hasTbs: Bool {_storage._tbs != nil}
+  public var hasTbs: Bool {_storage._tbs != nil}
   /// Clears the value of `tbs`. Subsequent reads from it will return its default value.
-  mutating func clearTbs() {_uniqueStorage()._tbs = nil}
+  mutating public func clearTbs() {_uniqueStorage()._tbs = nil}
 
-  var netType: Int32 {
+  public var netType: Int32 {
     get {_storage._netType}
     set {_uniqueStorage()._netType = newValue}
   }
 
-  var phoneNewimei: String {
+  public var phoneNewimei: String {
     get {_storage._phoneNewimei}
     set {_uniqueStorage()._phoneNewimei = newValue}
   }
 
-  var sign: String {
+  public var sign: String {
     get {_storage._sign ?? String()}
     set {_uniqueStorage()._sign = newValue}
   }
   /// Returns true if `sign` has been explicitly set.
-  var hasSign: Bool {_storage._sign != nil}
+  public var hasSign: Bool {_storage._sign != nil}
   /// Clears the value of `sign`. Subsequent reads from it will return its default value.
-  mutating func clearSign() {_uniqueStorage()._sign = nil}
+  mutating public func clearSign() {_uniqueStorage()._sign = nil}
 
-  var pversion: String {
+  public var pversion: String {
     get {_storage._pversion}
     set {_uniqueStorage()._pversion = newValue}
   }
 
-  var osVersion: String {
+  public var osVersion: String {
     get {_storage._osVersion}
     set {_uniqueStorage()._osVersion = newValue}
   }
 
-  var brand: String {
+  public var brand: String {
     get {_storage._brand}
     set {_uniqueStorage()._brand = newValue}
   }
 
-  var legoLibVersion: String {
+  public var legoLibVersion: String {
     get {_storage._legoLibVersion}
     set {_uniqueStorage()._legoLibVersion = newValue}
   }
 
-  var applist: String {
+  public var applist: String {
     get {_storage._applist ?? String()}
     set {_uniqueStorage()._applist = newValue}
   }
   /// Returns true if `applist` has been explicitly set.
-  var hasApplist: Bool {_storage._applist != nil}
+  public var hasApplist: Bool {_storage._applist != nil}
   /// Clears the value of `applist`. Subsequent reads from it will return its default value.
-  mutating func clearApplist() {_uniqueStorage()._applist = nil}
+  mutating public func clearApplist() {_uniqueStorage()._applist = nil}
 
-  var stoken: String {
+  public var stoken: String {
     get {_storage._stoken ?? String()}
     set {_uniqueStorage()._stoken = newValue}
   }
   /// Returns true if `stoken` has been explicitly set.
-  var hasStoken: Bool {_storage._stoken != nil}
+  public var hasStoken: Bool {_storage._stoken != nil}
   /// Clears the value of `stoken`. Subsequent reads from it will return its default value.
-  mutating func clearStoken() {_uniqueStorage()._stoken = nil}
+  mutating public func clearStoken() {_uniqueStorage()._stoken = nil}
 
-  var zID: String {
+  public var zID: String {
     get {_storage._zID ?? String()}
     set {_uniqueStorage()._zID = newValue}
   }
   /// Returns true if `zID` has been explicitly set.
-  var hasZID: Bool {_storage._zID != nil}
+  public var hasZID: Bool {_storage._zID != nil}
   /// Clears the value of `zID`. Subsequent reads from it will return its default value.
-  mutating func clearZID() {_uniqueStorage()._zID = nil}
+  mutating public func clearZID() {_uniqueStorage()._zID = nil}
 
-  var cuidGalaxy2: String {
+  public var cuidGalaxy2: String {
     get {_storage._cuidGalaxy2}
     set {_uniqueStorage()._cuidGalaxy2 = newValue}
   }
 
-  var cuidGid: String {
+  public var cuidGid: String {
     get {_storage._cuidGid ?? String()}
     set {_uniqueStorage()._cuidGid = newValue}
   }
   /// Returns true if `cuidGid` has been explicitly set.
-  var hasCuidGid: Bool {_storage._cuidGid != nil}
+  public var hasCuidGid: Bool {_storage._cuidGid != nil}
   /// Clears the value of `cuidGid`. Subsequent reads from it will return its default value.
-  mutating func clearCuidGid() {_uniqueStorage()._cuidGid = nil}
+  mutating public func clearCuidGid() {_uniqueStorage()._cuidGid = nil}
 
-  var oaid: String {
+  public var oaid: String {
     get {_storage._oaid ?? String()}
     set {_uniqueStorage()._oaid = newValue}
   }
   /// Returns true if `oaid` has been explicitly set.
-  var hasOaid: Bool {_storage._oaid != nil}
+  public var hasOaid: Bool {_storage._oaid != nil}
   /// Clears the value of `oaid`. Subsequent reads from it will return its default value.
-  mutating func clearOaid() {_uniqueStorage()._oaid = nil}
+  mutating public func clearOaid() {_uniqueStorage()._oaid = nil}
 
-  var c3Aid: String {
+  public var c3Aid: String {
     get {_storage._c3Aid}
     set {_uniqueStorage()._c3Aid = newValue}
   }
 
-  var sampleID: String {
+  public var sampleID: String {
     get {_storage._sampleID ?? String()}
     set {_uniqueStorage()._sampleID = newValue}
   }
   /// Returns true if `sampleID` has been explicitly set.
-  var hasSampleID: Bool {_storage._sampleID != nil}
+  public var hasSampleID: Bool {_storage._sampleID != nil}
   /// Clears the value of `sampleID`. Subsequent reads from it will return its default value.
-  mutating func clearSampleID() {_uniqueStorage()._sampleID = nil}
+  mutating public func clearSampleID() {_uniqueStorage()._sampleID = nil}
 
-  var scrW: Int32 {
+  public var scrW: Int32 {
     get {_storage._scrW}
     set {_uniqueStorage()._scrW = newValue}
   }
 
-  var scrH: Int32 {
+  public var scrH: Int32 {
     get {_storage._scrH}
     set {_uniqueStorage()._scrH = newValue}
   }
 
-  var scrDip: Double {
+  public var scrDip: Double {
     get {_storage._scrDip}
     set {_uniqueStorage()._scrDip = newValue}
   }
 
-  var qType: Int32 {
+  public var qType: Int32 {
     get {_storage._qType ?? 0}
     set {_uniqueStorage()._qType = newValue}
   }
   /// Returns true if `qType` has been explicitly set.
-  var hasQType: Bool {_storage._qType != nil}
+  public var hasQType: Bool {_storage._qType != nil}
   /// Clears the value of `qType`. Subsequent reads from it will return its default value.
-  mutating func clearQType() {_uniqueStorage()._qType = nil}
+  mutating public func clearQType() {_uniqueStorage()._qType = nil}
 
-  var isTeenager: Int32 {
+  public var isTeenager: Int32 {
     get {_storage._isTeenager ?? 0}
     set {_uniqueStorage()._isTeenager = newValue}
   }
   /// Returns true if `isTeenager` has been explicitly set.
-  var hasIsTeenager: Bool {_storage._isTeenager != nil}
+  public var hasIsTeenager: Bool {_storage._isTeenager != nil}
   /// Clears the value of `isTeenager`. Subsequent reads from it will return its default value.
-  mutating func clearIsTeenager() {_uniqueStorage()._isTeenager = nil}
+  mutating public func clearIsTeenager() {_uniqueStorage()._isTeenager = nil}
 
-  var sdkVer: String {
+  public var sdkVer: String {
     get {_storage._sdkVer}
     set {_uniqueStorage()._sdkVer = newValue}
   }
 
-  var frameworkVer: String {
+  public var frameworkVer: String {
     get {_storage._frameworkVer}
     set {_uniqueStorage()._frameworkVer = newValue}
   }
 
   /// 对齐权威仓库 tag 44（原 swan_game_ver 命名冲突已修正）
-  var nawsGameVer: String {
+  public var nawsGameVer: String {
     get {_storage._nawsGameVer}
     set {_uniqueStorage()._nawsGameVer = newValue}
   }
 
-  var activeTimestamp: Int64 {
+  public var activeTimestamp: Int64 {
     get {_storage._activeTimestamp}
     set {_uniqueStorage()._activeTimestamp = newValue}
   }
 
-  var firstInstallTime: Int64 {
+  public var firstInstallTime: Int64 {
     get {_storage._firstInstallTime}
     set {_uniqueStorage()._firstInstallTime = newValue}
   }
 
-  var lastUpdateTime: Int64 {
+  public var lastUpdateTime: Int64 {
     get {_storage._lastUpdateTime}
     set {_uniqueStorage()._lastUpdateTime = newValue}
   }
 
-  var eventDay: String {
+  public var eventDay: String {
     get {_storage._eventDay}
     set {_uniqueStorage()._eventDay = newValue}
   }
 
-  var androidID: String {
+  public var androidID: String {
     get {_storage._androidID}
     set {_uniqueStorage()._androidID = newValue}
   }
 
-  var cmode: Int32 {
+  public var cmode: Int32 {
     get {_storage._cmode}
     set {_uniqueStorage()._cmode = newValue}
   }
 
-  var startScheme: String {
+  public var startScheme: String {
     get {_storage._startScheme ?? String()}
     set {_uniqueStorage()._startScheme = newValue}
   }
   /// Returns true if `startScheme` has been explicitly set.
-  var hasStartScheme: Bool {_storage._startScheme != nil}
+  public var hasStartScheme: Bool {_storage._startScheme != nil}
   /// Clears the value of `startScheme`. Subsequent reads from it will return its default value.
-  mutating func clearStartScheme() {_uniqueStorage()._startScheme = nil}
+  mutating public func clearStartScheme() {_uniqueStorage()._startScheme = nil}
 
-  var startType: Int32 {
+  public var startType: Int32 {
     get {_storage._startType}
     set {_uniqueStorage()._startType = newValue}
   }
 
-  var extra: String {
+  public var extra: String {
     get {_storage._extra ?? String()}
     set {_uniqueStorage()._extra = newValue}
   }
   /// Returns true if `extra` has been explicitly set.
-  var hasExtra: Bool {_storage._extra != nil}
+  public var hasExtra: Bool {_storage._extra != nil}
   /// Clears the value of `extra`. Subsequent reads from it will return its default value.
-  mutating func clearExtra() {_uniqueStorage()._extra = nil}
+  mutating public func clearExtra() {_uniqueStorage()._extra = nil}
 
-  var userAgent: String {
+  public var userAgent: String {
     get {_storage._userAgent}
     set {_uniqueStorage()._userAgent = newValue}
   }
 
-  var personalizedRecSwitch: Int32 {
+  public var personalizedRecSwitch: Int32 {
     get {_storage._personalizedRecSwitch}
     set {_uniqueStorage()._personalizedRecSwitch = newValue}
   }
 
-  var deviceScore: String {
+  public var deviceScore: String {
     get {_storage._deviceScore}
     set {_uniqueStorage()._deviceScore = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -315,8 +315,8 @@ nonisolated struct Tieba_CommonRequest: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_CommonRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".CommonRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}_client_type\0\u{3}_client_version\0\u{3}_client_id\0\u{4}\u{2}_phone_imei\0\u{1}from\0\u{1}cuid\0\u{3}_timestamp\0\u{1}model\0\u{1}BDUSS\0\u{1}tbs\0\u{3}net_type\0\u{4}\u{2}_phone_newimei\0\u{2}\u{9}sign\0\u{1}pversion\0\u{3}_os_version\0\u{1}brand\0\u{4}\u{2}lego_lib_version\0\u{1}applist\0\u{1}stoken\0\u{3}z_id\0\u{3}cuid_galaxy2\0\u{3}cuid_gid\0\u{1}oaid\0\u{3}c3_aid\0\u{3}sample_id\0\u{3}scr_w\0\u{3}scr_h\0\u{3}scr_dip\0\u{3}q_type\0\u{3}is_teenager\0\u{3}sdk_ver\0\u{3}framework_ver\0\u{3}naws_game_ver\0\u{4}\u{5}active_timestamp\0\u{3}first_install_time\0\u{3}last_update_time\0\u{4}\u{2}event_day\0\u{3}android_id\0\u{1}cmode\0\u{3}start_scheme\0\u{3}start_type\0\u{2}\u{4}extra\0\u{3}user_agent\0\u{3}personalized_rec_switch\0\u{4}\u{7}device_score\0")
+  static public let protoMessageName: String = _protobuf_package + ".CommonRequest"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}_client_type\0\u{3}_client_version\0\u{3}_client_id\0\u{4}\u{2}_phone_imei\0\u{1}from\0\u{1}cuid\0\u{3}_timestamp\0\u{1}model\0\u{1}BDUSS\0\u{1}tbs\0\u{3}net_type\0\u{4}\u{2}_phone_newimei\0\u{2}\u{9}sign\0\u{1}pversion\0\u{3}_os_version\0\u{1}brand\0\u{4}\u{2}lego_lib_version\0\u{1}applist\0\u{1}stoken\0\u{3}z_id\0\u{3}cuid_galaxy2\0\u{3}cuid_gid\0\u{1}oaid\0\u{3}c3_aid\0\u{3}sample_id\0\u{3}scr_w\0\u{3}scr_h\0\u{3}scr_dip\0\u{3}q_type\0\u{3}is_teenager\0\u{3}sdk_ver\0\u{3}framework_ver\0\u{3}naws_game_ver\0\u{4}\u{5}active_timestamp\0\u{3}first_install_time\0\u{3}last_update_time\0\u{4}\u{2}event_day\0\u{3}android_id\0\u{1}cmode\0\u{3}start_scheme\0\u{3}start_type\0\u{2}\u{4}extra\0\u{3}user_agent\0\u{3}personalized_rec_switch\0\u{4}\u{7}device_score\0")
 
   fileprivate class _StorageClass {
     var _clientType: Int32 = 0
@@ -429,7 +429,7 @@ nonisolated extension Tieba_CommonRequest: SwiftProtobuf.Message, SwiftProtobuf.
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -488,7 +488,7 @@ nonisolated extension Tieba_CommonRequest: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -633,7 +633,7 @@ nonisolated extension Tieba_CommonRequest: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_CommonRequest, rhs: Tieba_CommonRequest) -> Bool {
+  static public func ==(lhs: Tieba_CommonRequest, rhs: Tieba_CommonRequest) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

@@ -20,49 +20,49 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_SearchSug_SearchSugResponseData: Sendable {
+nonisolated public struct Tieba_SearchSug_SearchSugResponseData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var forumLoc: Int32 = 0
+  public var forumLoc: Int32 = 0
 
-  var list: [String] = []
+  public var list: [String] = []
 
-  var forumList: [Tieba_ForumInfo] = []
+  public var forumList: [Tieba_ForumInfo] = []
 
-  var forumCard: Tieba_RecommendForumInfo {
+  public var forumCard: Tieba_RecommendForumInfo {
     get {_forumCard ?? Tieba_RecommendForumInfo()}
     set {_forumCard = newValue}
   }
   /// Returns true if `forumCard` has been explicitly set.
-  var hasForumCard: Bool {self._forumCard != nil}
+  public var hasForumCard: Bool {self._forumCard != nil}
   /// Clears the value of `forumCard`. Subsequent reads from it will return its default value.
-  mutating func clearForumCard() {self._forumCard = nil}
+  mutating public func clearForumCard() {self._forumCard = nil}
 
-  var itemCard: Tieba_Item {
+  public var itemCard: Tieba_Item {
     get {_itemCard ?? Tieba_Item()}
     set {_itemCard = newValue}
   }
   /// Returns true if `itemCard` has been explicitly set.
-  var hasItemCard: Bool {self._itemCard != nil}
+  public var hasItemCard: Bool {self._itemCard != nil}
   /// Clears the value of `itemCard`. Subsequent reads from it will return its default value.
-  mutating func clearItemCard() {self._itemCard = nil}
+  mutating public func clearItemCard() {self._itemCard = nil}
 
-  var liveCard: [Tieba_SugLiveInfo] = []
+  public var liveCard: [Tieba_SugLiveInfo] = []
 
-  var rankingCard: Tieba_SugRankingInfo {
+  public var rankingCard: Tieba_SugRankingInfo {
     get {_rankingCard ?? Tieba_SugRankingInfo()}
     set {_rankingCard = newValue}
   }
   /// Returns true if `rankingCard` has been explicitly set.
-  var hasRankingCard: Bool {self._rankingCard != nil}
+  public var hasRankingCard: Bool {self._rankingCard != nil}
   /// Clears the value of `rankingCard`. Subsequent reads from it will return its default value.
-  mutating func clearRankingCard() {self._rankingCard = nil}
+  mutating public func clearRankingCard() {self._rankingCard = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _forumCard: Tieba_RecommendForumInfo? = nil
   fileprivate var _itemCard: Tieba_Item? = nil
@@ -74,10 +74,10 @@ nonisolated struct Tieba_SearchSug_SearchSugResponseData: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.searchSug"
 
 nonisolated extension Tieba_SearchSug_SearchSugResponseData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SearchSugResponseData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}forum_loc\0\u{1}list\0\u{3}forum_list\0\u{3}forum_card\0\u{3}item_card\0\u{3}live_card\0\u{3}ranking_card\0")
+  static public let protoMessageName: String = _protobuf_package + ".SearchSugResponseData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}forum_loc\0\u{1}list\0\u{3}forum_list\0\u{3}forum_card\0\u{3}item_card\0\u{3}live_card\0\u{3}ranking_card\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -95,7 +95,7 @@ nonisolated extension Tieba_SearchSug_SearchSugResponseData: SwiftProtobuf.Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -124,7 +124,7 @@ nonisolated extension Tieba_SearchSug_SearchSugResponseData: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_SearchSug_SearchSugResponseData, rhs: Tieba_SearchSug_SearchSugResponseData) -> Bool {
+  static public func ==(lhs: Tieba_SearchSug_SearchSugResponseData, rhs: Tieba_SearchSug_SearchSugResponseData) -> Bool {
     if lhs.forumLoc != rhs.forumLoc {return false}
     if lhs.list != rhs.list {return false}
     if lhs.forumList != rhs.forumList {return false}

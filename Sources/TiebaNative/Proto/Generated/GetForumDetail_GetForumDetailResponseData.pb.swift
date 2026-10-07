@@ -20,157 +20,157 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_GetForumDetail_GetForumDetailResponseData: @unchecked Sendable {
+nonisolated public struct Tieba_GetForumDetail_GetForumDetailResponseData: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var forumInfo: Tieba_RecommendForumInfo {
+  public var forumInfo: Tieba_RecommendForumInfo {
     get {_storage._forumInfo ?? Tieba_RecommendForumInfo()}
     set {_uniqueStorage()._forumInfo = newValue}
   }
   /// Returns true if `forumInfo` has been explicitly set.
-  var hasForumInfo: Bool {_storage._forumInfo != nil}
+  public var hasForumInfo: Bool {_storage._forumInfo != nil}
   /// Clears the value of `forumInfo`. Subsequent reads from it will return its default value.
-  mutating func clearForumInfo() {_uniqueStorage()._forumInfo = nil}
+  mutating public func clearForumInfo() {_uniqueStorage()._forumInfo = nil}
 
-  var threadList: [Tieba_SimpleThreadInfo] {
+  public var threadList: [Tieba_SimpleThreadInfo] {
     get {_storage._threadList}
     set {_uniqueStorage()._threadList = newValue}
   }
 
-  var isBawuShow: Int32 {
+  public var isBawuShow: Int32 {
     get {_storage._isBawuShow}
     set {_uniqueStorage()._isBawuShow = newValue}
   }
 
-  var bzApplyInfo: Tieba_ManagerApplyInfo {
+  public var bzApplyInfo: Tieba_ManagerApplyInfo {
     get {_storage._bzApplyInfo ?? Tieba_ManagerApplyInfo()}
     set {_uniqueStorage()._bzApplyInfo = newValue}
   }
   /// Returns true if `bzApplyInfo` has been explicitly set.
-  var hasBzApplyInfo: Bool {_storage._bzApplyInfo != nil}
+  public var hasBzApplyInfo: Bool {_storage._bzApplyInfo != nil}
   /// Clears the value of `bzApplyInfo`. Subsequent reads from it will return its default value.
-  mutating func clearBzApplyInfo() {_uniqueStorage()._bzApplyInfo = nil}
+  mutating public func clearBzApplyInfo() {_uniqueStorage()._bzApplyInfo = nil}
 
-  var isComplaintShow: Int32 {
+  public var isComplaintShow: Int32 {
     get {_storage._isComplaintShow}
     set {_uniqueStorage()._isComplaintShow = newValue}
   }
 
-  var pribzApplyInfo: Tieba_PriManagerApplyInfo {
+  public var pribzApplyInfo: Tieba_PriManagerApplyInfo {
     get {_storage._pribzApplyInfo ?? Tieba_PriManagerApplyInfo()}
     set {_uniqueStorage()._pribzApplyInfo = newValue}
   }
   /// Returns true if `pribzApplyInfo` has been explicitly set.
-  var hasPribzApplyInfo: Bool {_storage._pribzApplyInfo != nil}
+  public var hasPribzApplyInfo: Bool {_storage._pribzApplyInfo != nil}
   /// Clears the value of `pribzApplyInfo`. Subsequent reads from it will return its default value.
-  mutating func clearPribzApplyInfo() {_uniqueStorage()._pribzApplyInfo = nil}
+  mutating public func clearPribzApplyInfo() {_uniqueStorage()._pribzApplyInfo = nil}
 
-  var electionTab: Tieba_GetForumDetail_ManagerElectionTab {
+  public var electionTab: Tieba_GetForumDetail_ManagerElectionTab {
     get {_storage._electionTab ?? Tieba_GetForumDetail_ManagerElectionTab()}
     set {_uniqueStorage()._electionTab = newValue}
   }
   /// Returns true if `electionTab` has been explicitly set.
-  var hasElectionTab: Bool {_storage._electionTab != nil}
+  public var hasElectionTab: Bool {_storage._electionTab != nil}
   /// Clears the value of `electionTab`. Subsequent reads from it will return its default value.
-  mutating func clearElectionTab() {_uniqueStorage()._electionTab = nil}
+  mutating public func clearElectionTab() {_uniqueStorage()._electionTab = nil}
 
-  var isForumDataShow: Int32 {
+  public var isForumDataShow: Int32 {
     get {_storage._isForumDataShow}
     set {_uniqueStorage()._isForumDataShow = newValue}
   }
 
-  var forumData: Tieba_GetForumDetail_ForumDataCenter {
+  public var forumData: Tieba_GetForumDetail_ForumDataCenter {
     get {_storage._forumData ?? Tieba_GetForumDetail_ForumDataCenter()}
     set {_uniqueStorage()._forumData = newValue}
   }
   /// Returns true if `forumData` has been explicitly set.
-  var hasForumData: Bool {_storage._forumData != nil}
+  public var hasForumData: Bool {_storage._forumData != nil}
   /// Clears the value of `forumData`. Subsequent reads from it will return its default value.
-  mutating func clearForumData() {_uniqueStorage()._forumData = nil}
+  mutating public func clearForumData() {_uniqueStorage()._forumData = nil}
 
-  var bawuActions: [Tieba_GetForumDetail_BawuAction] {
+  public var bawuActions: [Tieba_GetForumDetail_BawuAction] {
     get {_storage._bawuActions}
     set {_uniqueStorage()._bawuActions = newValue}
   }
 
-  var applyStatus: Tieba_GetForumDetail_ApplyStatus {
+  public var applyStatus: Tieba_GetForumDetail_ApplyStatus {
     get {_storage._applyStatus ?? Tieba_GetForumDetail_ApplyStatus()}
     set {_uniqueStorage()._applyStatus = newValue}
   }
   /// Returns true if `applyStatus` has been explicitly set.
-  var hasApplyStatus: Bool {_storage._applyStatus != nil}
+  public var hasApplyStatus: Bool {_storage._applyStatus != nil}
   /// Clears the value of `applyStatus`. Subsequent reads from it will return its default value.
-  mutating func clearApplyStatus() {_uniqueStorage()._applyStatus = nil}
+  mutating public func clearApplyStatus() {_uniqueStorage()._applyStatus = nil}
 
-  var bazhuUniversity: Tieba_GetForumDetail_BazhuUniversity {
+  public var bazhuUniversity: Tieba_GetForumDetail_BazhuUniversity {
     get {_storage._bazhuUniversity ?? Tieba_GetForumDetail_BazhuUniversity()}
     set {_uniqueStorage()._bazhuUniversity = newValue}
   }
   /// Returns true if `bazhuUniversity` has been explicitly set.
-  var hasBazhuUniversity: Bool {_storage._bazhuUniversity != nil}
+  public var hasBazhuUniversity: Bool {_storage._bazhuUniversity != nil}
   /// Clears the value of `bazhuUniversity`. Subsequent reads from it will return its default value.
-  mutating func clearBazhuUniversity() {_uniqueStorage()._bazhuUniversity = nil}
+  mutating public func clearBazhuUniversity() {_uniqueStorage()._bazhuUniversity = nil}
 
-  var bazhuGrade: Tieba_GetForumDetail_BazhuGrade {
+  public var bazhuGrade: Tieba_GetForumDetail_BazhuGrade {
     get {_storage._bazhuGrade ?? Tieba_GetForumDetail_BazhuGrade()}
     set {_uniqueStorage()._bazhuGrade = newValue}
   }
   /// Returns true if `bazhuGrade` has been explicitly set.
-  var hasBazhuGrade: Bool {_storage._bazhuGrade != nil}
+  public var hasBazhuGrade: Bool {_storage._bazhuGrade != nil}
   /// Clears the value of `bazhuGrade`. Subsequent reads from it will return its default value.
-  mutating func clearBazhuGrade() {_uniqueStorage()._bazhuGrade = nil}
+  mutating public func clearBazhuGrade() {_uniqueStorage()._bazhuGrade = nil}
 
-  var isForumCardEnable: Int32 {
+  public var isForumCardEnable: Int32 {
     get {_storage._isForumCardEnable}
     set {_uniqueStorage()._isForumCardEnable = newValue}
   }
 
-  var bawuThrones: Tieba_BawuThrones {
+  public var bawuThrones: Tieba_BawuThrones {
     get {_storage._bawuThrones ?? Tieba_BawuThrones()}
     set {_uniqueStorage()._bawuThrones = newValue}
   }
   /// Returns true if `bawuThrones` has been explicitly set.
-  var hasBawuThrones: Bool {_storage._bawuThrones != nil}
+  public var hasBawuThrones: Bool {_storage._bawuThrones != nil}
   /// Clears the value of `bawuThrones`. Subsequent reads from it will return its default value.
-  mutating func clearBawuThrones() {_uniqueStorage()._bawuThrones = nil}
+  mutating public func clearBawuThrones() {_uniqueStorage()._bawuThrones = nil}
 
-  var isBazhuShow: String {
+  public var isBazhuShow: String {
     get {_storage._isBazhuShow}
     set {_uniqueStorage()._isBazhuShow = newValue}
   }
 
-  var hotUserEntry: Tieba_HotUserRankEntry {
+  public var hotUserEntry: Tieba_HotUserRankEntry {
     get {_storage._hotUserEntry ?? Tieba_HotUserRankEntry()}
     set {_uniqueStorage()._hotUserEntry = newValue}
   }
   /// Returns true if `hotUserEntry` has been explicitly set.
-  var hasHotUserEntry: Bool {_storage._hotUserEntry != nil}
+  public var hasHotUserEntry: Bool {_storage._hotUserEntry != nil}
   /// Clears the value of `hotUserEntry`. Subsequent reads from it will return its default value.
-  mutating func clearHotUserEntry() {_uniqueStorage()._hotUserEntry = nil}
+  mutating public func clearHotUserEntry() {_uniqueStorage()._hotUserEntry = nil}
 
-  var smallApp: Tieba_ServiceArea {
+  public var smallApp: Tieba_ServiceArea {
     get {_storage._smallApp ?? Tieba_ServiceArea()}
     set {_uniqueStorage()._smallApp = newValue}
   }
   /// Returns true if `smallApp` has been explicitly set.
-  var hasSmallApp: Bool {_storage._smallApp != nil}
+  public var hasSmallApp: Bool {_storage._smallApp != nil}
   /// Clears the value of `smallApp`. Subsequent reads from it will return its default value.
-  mutating func clearSmallApp() {_uniqueStorage()._smallApp = nil}
+  mutating public func clearSmallApp() {_uniqueStorage()._smallApp = nil}
 
-  var forumMember: Tieba_ForumMemberInfo {
+  public var forumMember: Tieba_ForumMemberInfo {
     get {_storage._forumMember ?? Tieba_ForumMemberInfo()}
     set {_uniqueStorage()._forumMember = newValue}
   }
   /// Returns true if `forumMember` has been explicitly set.
-  var hasForumMember: Bool {_storage._forumMember != nil}
+  public var hasForumMember: Bool {_storage._forumMember != nil}
   /// Clears the value of `forumMember`. Subsequent reads from it will return its default value.
-  mutating func clearForumMember() {_uniqueStorage()._forumMember = nil}
+  mutating public func clearForumMember() {_uniqueStorage()._forumMember = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -180,8 +180,8 @@ nonisolated struct Tieba_GetForumDetail_GetForumDetailResponseData: @unchecked S
 fileprivate nonisolated let _protobuf_package = "tieba.getForumDetail"
 
 nonisolated extension Tieba_GetForumDetail_GetForumDetailResponseData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetForumDetailResponseData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}forum_info\0\u{3}thread_list\0\u{4}\u{2}is_bawu_show\0\u{3}bz_apply_info\0\u{3}is_complaint_show\0\u{3}pribz_apply_info\0\u{3}election_tab\0\u{3}is_forum_data_show\0\u{3}forum_data\0\u{3}bawu_actions\0\u{3}apply_status\0\u{3}bazhu_university\0\u{4}\u{2}bazhu_grade\0\u{3}is_forum_card_enable\0\u{3}bawu_thrones\0\u{3}is_bazhu_show\0\u{3}hot_user_entry\0\u{3}small_app\0\u{3}forum_member\0")
+  static public let protoMessageName: String = _protobuf_package + ".GetForumDetailResponseData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}forum_info\0\u{3}thread_list\0\u{4}\u{2}is_bawu_show\0\u{3}bz_apply_info\0\u{3}is_complaint_show\0\u{3}pribz_apply_info\0\u{3}election_tab\0\u{3}is_forum_data_show\0\u{3}forum_data\0\u{3}bawu_actions\0\u{3}apply_status\0\u{3}bazhu_university\0\u{4}\u{2}bazhu_grade\0\u{3}is_forum_card_enable\0\u{3}bawu_thrones\0\u{3}is_bazhu_show\0\u{3}hot_user_entry\0\u{3}small_app\0\u{3}forum_member\0")
 
   fileprivate class _StorageClass {
     var _forumInfo: Tieba_RecommendForumInfo? = nil
@@ -242,7 +242,7 @@ nonisolated extension Tieba_GetForumDetail_GetForumDetailResponseData: SwiftProt
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -275,7 +275,7 @@ nonisolated extension Tieba_GetForumDetail_GetForumDetailResponseData: SwiftProt
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -342,7 +342,7 @@ nonisolated extension Tieba_GetForumDetail_GetForumDetailResponseData: SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GetForumDetail_GetForumDetailResponseData, rhs: Tieba_GetForumDetail_GetForumDetailResponseData) -> Bool {
+  static public func ==(lhs: Tieba_GetForumDetail_GetForumDetailResponseData, rhs: Tieba_GetForumDetail_GetForumDetailResponseData) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

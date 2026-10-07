@@ -20,42 +20,42 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Page: Sendable {
+nonisolated public struct Tieba_Page: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var pageSize: Int32 = 0
+  public var pageSize: Int32 = 0
 
-  var offset: Int32 = 0
+  public var offset: Int32 = 0
 
-  var currentPage: Int32 = 0
+  public var currentPage: Int32 = 0
 
-  var totalCount: Int32 = 0
+  public var totalCount: Int32 = 0
 
-  var totalPage: Int32 = 0
+  public var totalPage: Int32 = 0
 
-  var hasMore_p: Int32 = 0
+  public var hasMore_p: Int32 = 0
 
-  var hasPrev_p: Int32 = 0
+  public var hasPrev_p: Int32 = 0
 
-  var curGoodID: Int32 = 0
+  public var curGoodID: Int32 = 0
 
-  var reqNum: Int32 = 0
+  public var reqNum: Int32 = 0
 
-  var pnum: Int32 = 0
+  public var pnum: Int32 = 0
 
-  var tnum: Int32 = 0
+  public var tnum: Int32 = 0
 
-  var totalNum: Int32 = 0
+  public var totalNum: Int32 = 0
 
-  var lzTotalFloor: Int32 = 0
+  public var lzTotalFloor: Int32 = 0
 
-  var newTotalPage: Int32 = 0
+  public var newTotalPage: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -63,10 +63,10 @@ nonisolated struct Tieba_Page: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Page: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Page"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}page_size\0\u{1}offset\0\u{3}current_page\0\u{3}total_count\0\u{3}total_page\0\u{3}has_more\0\u{3}has_prev\0\u{3}cur_good_id\0\u{3}req_num\0\u{1}pnum\0\u{1}tnum\0\u{3}total_num\0\u{3}lz_total_floor\0\u{3}new_total_page\0")
+  static public let protoMessageName: String = _protobuf_package + ".Page"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}page_size\0\u{1}offset\0\u{3}current_page\0\u{3}total_count\0\u{3}total_page\0\u{3}has_more\0\u{3}has_prev\0\u{3}cur_good_id\0\u{3}req_num\0\u{1}pnum\0\u{1}tnum\0\u{3}total_num\0\u{3}lz_total_floor\0\u{3}new_total_page\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -91,7 +91,7 @@ nonisolated extension Tieba_Page: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.pageSize != 0 {
       try visitor.visitSingularInt32Field(value: self.pageSize, fieldNumber: 1)
     }
@@ -137,7 +137,7 @@ nonisolated extension Tieba_Page: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Page, rhs: Tieba_Page) -> Bool {
+  static public func ==(lhs: Tieba_Page, rhs: Tieba_Page) -> Bool {
     if lhs.pageSize != rhs.pageSize {return false}
     if lhs.offset != rhs.offset {return false}
     if lhs.currentPage != rhs.currentPage {return false}

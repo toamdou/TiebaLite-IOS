@@ -20,22 +20,22 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_RecommendThread: Sendable {
+nonisolated public struct Tieba_RecommendThread: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var tid: UInt64 = 0
+  public var tid: UInt64 = 0
 
-  var title: String = String()
+  public var title: String = String()
 
-  var postNum: UInt64 = 0
+  public var postNum: UInt64 = 0
 
-  var termList: [String] = []
+  public var termList: [String] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -43,10 +43,10 @@ nonisolated struct Tieba_RecommendThread: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_RecommendThread: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".RecommendThread"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tid\0\u{1}title\0\u{3}post_num\0\u{3}term_list\0")
+  static public let protoMessageName: String = _protobuf_package + ".RecommendThread"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tid\0\u{1}title\0\u{3}post_num\0\u{3}term_list\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_RecommendThread: SwiftProtobuf.Message, SwiftProtobu
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.tid != 0 {
       try visitor.visitSingularUInt64Field(value: self.tid, fieldNumber: 1)
     }
@@ -77,7 +77,7 @@ nonisolated extension Tieba_RecommendThread: SwiftProtobuf.Message, SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_RecommendThread, rhs: Tieba_RecommendThread) -> Bool {
+  static public func ==(lhs: Tieba_RecommendThread, rhs: Tieba_RecommendThread) -> Bool {
     if lhs.tid != rhs.tid {return false}
     if lhs.title != rhs.title {return false}
     if lhs.postNum != rhs.postNum {return false}

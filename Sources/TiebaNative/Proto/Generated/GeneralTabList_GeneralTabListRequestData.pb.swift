@@ -20,133 +20,133 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_GeneralTabList_GeneralTabListRequestData: @unchecked Sendable {
+nonisolated public struct Tieba_GeneralTabList_GeneralTabListRequestData: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var common: Tieba_CommonRequest {
+  public var common: Tieba_CommonRequest {
     get {_storage._common ?? Tieba_CommonRequest()}
     set {_uniqueStorage()._common = newValue}
   }
   /// Returns true if `common` has been explicitly set.
-  var hasCommon: Bool {_storage._common != nil}
+  public var hasCommon: Bool {_storage._common != nil}
   /// Clears the value of `common`. Subsequent reads from it will return its default value.
-  mutating func clearCommon() {_uniqueStorage()._common = nil}
+  mutating public func clearCommon() {_uniqueStorage()._common = nil}
 
-  var tabID: Int32 {
+  public var tabID: Int32 {
     get {_storage._tabID}
     set {_uniqueStorage()._tabID = newValue}
   }
 
-  var forumID: Int64 {
+  public var forumID: Int64 {
     get {_storage._forumID}
     set {_uniqueStorage()._forumID = newValue}
   }
 
-  var pn: Int32 {
+  public var pn: Int32 {
     get {_storage._pn}
     set {_uniqueStorage()._pn = newValue}
   }
 
-  var rn: Int32 {
+  public var rn: Int32 {
     get {_storage._rn}
     set {_uniqueStorage()._rn = newValue}
   }
 
-  var scrW: Int32 {
+  public var scrW: Int32 {
     get {_storage._scrW}
     set {_uniqueStorage()._scrW = newValue}
   }
 
-  var scrH: Int32 {
+  public var scrH: Int32 {
     get {_storage._scrH}
     set {_uniqueStorage()._scrH = newValue}
   }
 
-  var scrDip: Int32 {
+  public var scrDip: Int32 {
     get {_storage._scrDip}
     set {_uniqueStorage()._scrDip = newValue}
   }
 
-  var lastThreadID: Int64 {
+  public var lastThreadID: Int64 {
     get {_storage._lastThreadID}
     set {_uniqueStorage()._lastThreadID = newValue}
   }
 
-  var isDefaultNavtab: Int32 {
+  public var isDefaultNavtab: Int32 {
     get {_storage._isDefaultNavtab}
     set {_uniqueStorage()._isDefaultNavtab = newValue}
   }
 
-  var tabName: String {
+  public var tabName: String {
     get {_storage._tabName}
     set {_uniqueStorage()._tabName = newValue}
   }
 
-  var isGeneralTab: Int32 {
+  public var isGeneralTab: Int32 {
     get {_storage._isGeneralTab}
     set {_uniqueStorage()._isGeneralTab = newValue}
   }
 
-  var sortType: Int32 {
+  public var sortType: Int32 {
     get {_storage._sortType}
     set {_uniqueStorage()._sortType = newValue}
   }
 
-  var tabType: Int32 {
+  public var tabType: Int32 {
     get {_storage._tabType}
     set {_uniqueStorage()._tabType = newValue}
   }
 
-  var adExtParams: String {
+  public var adExtParams: String {
     get {_storage._adExtParams}
     set {_uniqueStorage()._adExtParams = newValue}
   }
 
-  var adBearContext: String {
+  public var adBearContext: String {
     get {_storage._adBearContext}
     set {_uniqueStorage()._adBearContext = newValue}
   }
 
-  var hasAdBear_p: Int32 {
+  public var hasAdBear_p: Int32 {
     get {_storage._hasAdBear_p}
     set {_uniqueStorage()._hasAdBear_p = newValue}
   }
 
-  var adBearSid: String {
+  public var adBearSid: String {
     get {_storage._adBearSid}
     set {_uniqueStorage()._adBearSid = newValue}
   }
 
-  var adBearSidPrice: Double {
+  public var adBearSidPrice: Double {
     get {_storage._adBearSidPrice}
     set {_uniqueStorage()._adBearSidPrice = newValue}
   }
 
-  var requestTimes: Int32 {
+  public var requestTimes: Int32 {
     get {_storage._requestTimes}
     set {_uniqueStorage()._requestTimes = newValue}
   }
 
-  var frsCommonInfo: String {
+  public var frsCommonInfo: String {
     get {_storage._frsCommonInfo}
     set {_uniqueStorage()._frsCommonInfo = newValue}
   }
 
-  var isNewfrs: Int32 {
+  public var isNewfrs: Int32 {
     get {_storage._isNewfrs}
     set {_uniqueStorage()._isNewfrs = newValue}
   }
 
-  var isVideoDoublerow: Int32 {
+  public var isVideoDoublerow: Int32 {
     get {_storage._isVideoDoublerow}
     set {_uniqueStorage()._isVideoDoublerow = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -156,8 +156,8 @@ nonisolated struct Tieba_GeneralTabList_GeneralTabListRequestData: @unchecked Se
 fileprivate nonisolated let _protobuf_package = "tieba.GeneralTabList"
 
 nonisolated extension Tieba_GeneralTabList_GeneralTabListRequestData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GeneralTabListRequestData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}common\0\u{3}tab_id\0\u{3}forum_id\0\u{1}pn\0\u{1}rn\0\u{3}scr_w\0\u{3}scr_h\0\u{3}scr_dip\0\u{3}last_thread_id\0\u{3}is_default_navtab\0\u{3}tab_name\0\u{3}is_general_tab\0\u{3}sort_type\0\u{3}tab_type\0\u{3}ad_ext_params\0\u{3}ad_bear_context\0\u{3}has_ad_bear\0\u{3}ad_bear_sid\0\u{3}ad_bear_sid_price\0\u{3}request_times\0\u{3}frs_common_info\0\u{3}is_newfrs\0\u{3}is_video_doublerow\0")
+  static public let protoMessageName: String = _protobuf_package + ".GeneralTabListRequestData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}common\0\u{3}tab_id\0\u{3}forum_id\0\u{1}pn\0\u{1}rn\0\u{3}scr_w\0\u{3}scr_h\0\u{3}scr_dip\0\u{3}last_thread_id\0\u{3}is_default_navtab\0\u{3}tab_name\0\u{3}is_general_tab\0\u{3}sort_type\0\u{3}tab_type\0\u{3}ad_ext_params\0\u{3}ad_bear_context\0\u{3}has_ad_bear\0\u{3}ad_bear_sid\0\u{3}ad_bear_sid_price\0\u{3}request_times\0\u{3}frs_common_info\0\u{3}is_newfrs\0\u{3}is_video_doublerow\0")
 
   fileprivate class _StorageClass {
     var _common: Tieba_CommonRequest? = nil
@@ -226,7 +226,7 @@ nonisolated extension Tieba_GeneralTabList_GeneralTabListRequestData: SwiftProto
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -263,7 +263,7 @@ nonisolated extension Tieba_GeneralTabList_GeneralTabListRequestData: SwiftProto
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -342,7 +342,7 @@ nonisolated extension Tieba_GeneralTabList_GeneralTabListRequestData: SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GeneralTabList_GeneralTabListRequestData, rhs: Tieba_GeneralTabList_GeneralTabListRequestData) -> Bool {
+  static public func ==(lhs: Tieba_GeneralTabList_GeneralTabListRequestData, rhs: Tieba_GeneralTabList_GeneralTabListRequestData) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

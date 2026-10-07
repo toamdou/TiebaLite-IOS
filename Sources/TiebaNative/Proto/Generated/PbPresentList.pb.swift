@@ -20,22 +20,22 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbPresentList: Sendable {
+nonisolated public struct Tieba_PbPresentList: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var giftID: UInt32 = 0
+  public var giftID: UInt32 = 0
 
-  var giftName: String = String()
+  public var giftName: String = String()
 
-  var thumbnailURL: String = String()
+  public var thumbnailURL: String = String()
 
-  var num: UInt32 = 0
+  public var num: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -43,10 +43,10 @@ nonisolated struct Tieba_PbPresentList: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_PbPresentList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PbPresentList"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}gift_id\0\u{3}gift_name\0\u{3}thumbnail_url\0\u{1}num\0")
+  static public let protoMessageName: String = _protobuf_package + ".PbPresentList"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}gift_id\0\u{3}gift_name\0\u{3}thumbnail_url\0\u{1}num\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_PbPresentList: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.giftID != 0 {
       try visitor.visitSingularUInt32Field(value: self.giftID, fieldNumber: 1)
     }
@@ -77,7 +77,7 @@ nonisolated extension Tieba_PbPresentList: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbPresentList, rhs: Tieba_PbPresentList) -> Bool {
+  static public func ==(lhs: Tieba_PbPresentList, rhs: Tieba_PbPresentList) -> Bool {
     if lhs.giftID != rhs.giftID {return false}
     if lhs.giftName != rhs.giftName {return false}
     if lhs.thumbnailURL != rhs.thumbnailURL {return false}

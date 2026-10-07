@@ -20,30 +20,30 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_AdInfo: Sendable {
+nonisolated public struct Tieba_AdInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var showRule: Int32 = 0
+  public var showRule: Int32 = 0
 
-  var adType: Int32 = 0
+  public var adType: Int32 = 0
 
-  var adDesc: String = String()
+  public var adDesc: String = String()
 
-  var adPic: String = String()
+  public var adPic: String = String()
 
-  var adURL: String = String()
+  public var adURL: String = String()
 
-  var adName: String = String()
+  public var adName: String = String()
 
-  var portrait: String = String()
+  public var portrait: String = String()
 
-  var media: [Tieba_Media] = []
+  public var media: [Tieba_Media] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -51,10 +51,10 @@ nonisolated struct Tieba_AdInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_AdInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AdInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}show_rule\0\u{3}ad_type\0\u{3}ad_desc\0\u{3}ad_pic\0\u{3}ad_url\0\u{3}ad_name\0\u{1}portrait\0\u{1}media\0")
+  static public let protoMessageName: String = _protobuf_package + ".AdInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}show_rule\0\u{3}ad_type\0\u{3}ad_desc\0\u{3}ad_pic\0\u{3}ad_url\0\u{3}ad_name\0\u{1}portrait\0\u{1}media\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -73,7 +73,7 @@ nonisolated extension Tieba_AdInfo: SwiftProtobuf.Message, SwiftProtobuf._Messag
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.showRule != 0 {
       try visitor.visitSingularInt32Field(value: self.showRule, fieldNumber: 1)
     }
@@ -101,7 +101,7 @@ nonisolated extension Tieba_AdInfo: SwiftProtobuf.Message, SwiftProtobuf._Messag
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_AdInfo, rhs: Tieba_AdInfo) -> Bool {
+  static public func ==(lhs: Tieba_AdInfo, rhs: Tieba_AdInfo) -> Bool {
     if lhs.showRule != rhs.showRule {return false}
     if lhs.adType != rhs.adType {return false}
     if lhs.adDesc != rhs.adDesc {return false}
