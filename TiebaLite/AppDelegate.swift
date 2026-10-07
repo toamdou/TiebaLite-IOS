@@ -39,7 +39,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIWindowSceneDelegate {
 
     let window = UIWindow(windowScene: windowScene)
     self.window = window
-    // 导航壳接管根视图：原生栈 + 原生底栏 + 原生页面。
     TiebaNavigator.shared.install(in: window)
     // 纯原生启动路径（主题/启动图/偏好下发）。必须早于 makeKeyAndVisible：
     // 启动图要在首帧前就位。
