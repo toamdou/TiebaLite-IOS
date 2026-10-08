@@ -355,7 +355,7 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
       let id = value(index, "id")
       guard !id.isEmpty, expandedIds.insert(id).inserted else { return }
       TiebaSceneHaptics.fire("toggle")
-      driver.publish(fresh: false, makeRows: { [weak self] in self?.makeRows() ?? [] })
+      publishInPlace()
     case "action":
       switch actionIndex {
       case 0: openThread(index)

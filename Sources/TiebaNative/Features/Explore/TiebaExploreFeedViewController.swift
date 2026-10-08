@@ -347,8 +347,11 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     driver.publish(fresh: true, makeRows: { [weak self] in self?.makeRows() ?? [] })
   }
 
-  /// 同页原地重测（点赞态，不跳滚动位置）。
+  /// 同页原地重测（点赞态/展开长文，不跳滚动位置）。
+  /// 同步指纹：展开态也计入 rowSignature，不同步的话「展开→离开再回来」会被误判成偏好变更
+  /// 而走 fresh 发布（换页键 → 整页销毁重建，位图与图片全部重贴）。
   private func publishInPlace() {
+    lastRowSignature = rowSignature()
     driver.publish(fresh: false, makeRows: { [weak self] in self?.makeRows() ?? [] })
   }
 
