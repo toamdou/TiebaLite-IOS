@@ -228,6 +228,15 @@ final class TiebaThreadFloatingBar: UIView {
     moreButton.tintColor = palette.text
     agreeCount.text = zanNum > 0 ? TiebaForumFormat.count(zanNum) : ""
     agreeCount.textColor = hasAgree ? palette.liked : palette.textSecondary
+    // 四颗主操作键此前都没有名字：读屏只能念出无名「按钮」，点赞态又画在非交互的图标/计数上。
+    // 标题随状态走，点赞/收藏另加 .selected 与计数值，读屏才拿得到当前态。
+    copyButton.accessibilityLabel = "复制链接"
+    agreeButton.accessibilityLabel = hasAgree ? "取消点赞" : "点赞"
+    agreeButton.accessibilityTraits = hasAgree ? [.button, .selected] : .button
+    agreeButton.accessibilityValue = zanNum > 0 ? "\(zanNum)" : nil
+    collectButton.accessibilityLabel = isCollected ? "取消收藏" : "收藏"
+    collectButton.accessibilityTraits = isCollected ? [.button, .selected] : .button
+    moreButton.accessibilityLabel = "更多操作"
     setNeedsLayout()
   }
 
