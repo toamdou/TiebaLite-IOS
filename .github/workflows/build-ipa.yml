@@ -1,9 +1,9 @@
 name: Build iOS Unsigned IPA
 
-# 一次编译**两个分支**、发两种产物（Artifact + 打 tag 时发布 Release）：
-#   main  → TiebaLite-<版本>.ipa        最低 iOS 26：液态玻璃完整形态
-#   ios17 → TiebaLite-<版本>-IOS17.ipa  最低 iOS 17：同功能，材质退回该系统年代
-# 两边都是未签名（ad-hoc 签名）真机 IPA，供 SideStore / AltStore 重签侧载。
+# 一次编译出一个未签名真机 IPA（Artifact + 打 tag 时发布 Release）：
+#   TiebaLite-<版本>.ipa  最低 iOS 17；同一份二进制在 iOS 26+ 上运行时吃满液态玻璃等全部特性
+#                        （26 专属能力全走 #available 分支，17/18 上自动退回该系统年代的材质）。
+# 未签名（ad-hoc 签名）真机 IPA，供 SideStore / AltStore 重签侧载。
 # 纯 Swift + Bazel：无 Node / npm / Metro / CocoaPods，也不需要任何 Apple 账号或 secret。
 #
 # 为什么 ad-hoc 等于"无签名"口径：rules_apple 对设备构建强制要求每个 bundle 都有
@@ -46,35 +46,22 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.ref }}${{ matrix.suffix }}
+    name: Build
     # macOS 26 自带 Xcode 26.x。如需固定版本可加：
     #   - uses: maxim-lobanov/setup-xcode@v1
     #     with:
     #       xcode-version: '26.2.0'
     runs-on: macos-26
     timeout-minutes: 120
-    # 并发键放在 job 级才拿得到 matrix.ref；两条腿各自成组，不会互相取消。
+    # 并发键放在 job 级：同一 ref 的构建串行，不会互相取消。
     concurrency:
-      group: ios-build-${{ github.ref }}-${{ matrix.ref }}
+      group: ios-build-${{ github.ref }}
       cancel-in-progress: true
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # ref 是"在这个分支的树上出包"；suffix 进 IPA 文件名（IOS17 那份必须带 IOS17，
-          # 用户就是靠文件名区分下哪一个）。
-          - ref: main
-            suffix: ''
-          - ref: ios17
-            suffix: '-IOS17'
     env:
       CONFIGURATION: ${{ inputs.configuration || 'Release' }}
-      SUFFIX: ${{ matrix.suffix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ matrix.ref }}
 
       - name: Show toolchain
         run: |
@@ -82,16 +69,14 @@ jobs:
           swift --version
 
       # Bazel 磁盘/仓库缓存：命中后整包十几秒（冷编约 100 s）。
-      # key 里带 ref：两条腿并行时不会抢同一个 key（命中失败也还有 restore-keys 兜）。
       - name: Cache Bazel
         uses: actions/cache@v4
         with:
           path: |
             ~/.bazel_cache/disk
             ~/.bazel_cache/repository
-          key: bazel-${{ matrix.ref }}-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', '.bazelrc', '.bazelversion', 'BUILD.bazel', '**/BUILD.bazel') }}
+          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', '.bazelrc', '.bazelversion', 'BUILD.bazel', '**/BUILD.bazel') }}
           restore-keys: |
-            bazel-${{ matrix.ref }}-${{ runner.os }}-
             bazel-${{ runner.os }}-
 
       # ⚠️ 缓存要真的生效，必须让 Bazel 知道去哪读写：之前 actions/cache 只负责存/取
@@ -112,8 +97,7 @@ jobs:
       # 拆分会在编译期挂掉且报错点在生成物里、很难定位 —— 所以在构建前先拦一次，并给出正确姿势。
       - name: Verify protoc-generated visibility
         run: |
-          # 只在"确实拆了 Proto target"的分支上校验：ios17 那条线没有这次拆分，生成物仍是
-          # protoc 默认的 internal —— 对它是无关判据，不能把那条腿判红。
+          # 没拆 Proto target 的树上跳过：判据只对拆过的树成立。
           if ! grep -q 'name = "Proto"' Sources/TiebaNative/BUILD.bazel; then
             echo "skip: 本分支未拆 //Sources/TiebaNative:Proto，无需校验生成物可见性"
             exit 0
@@ -180,33 +164,32 @@ jobs:
 
       - name: Package IPA
         run: |
-          # 文件名：填了 tag 就用 tag 作版本号（v2.1.1 → TiebaLite-v2.1.1.ipa），
-          # 没填就退回按 commit 命名；ios17 那条腿再加 -IOS17。
+          # 文件名：填了 tag 就用 tag 作版本号（v2.1.1 → TiebaLite-v2.1.1.ipa），没填按 commit 命名。
           tag="${{ inputs.tag_name || github.ref_name }}"
           case "$tag" in
             v*) base="TiebaLite-$tag" ;;
             *)  base="TiebaLite-unsigned-$(echo "${GITHUB_SHA}" | cut -c1-7)" ;;
           esac
-          echo "IPA_NAME=${base}${SUFFIX}.ipa" >> "$GITHUB_ENV"
+          echo "IPA_NAME=${base}.ipa" >> "$GITHUB_ENV"
           mkdir -p build/Payload
           unzip -q bazel-bin/AppStripped.ipa -d build
           # 原先这里有一道 python 隐私消毒（等长替换产物内嵌的构建机绝对路径，RN/Hermes
           # 时代留下：Hermes 字节码不受编译期 -ffile-prefix-map 约束）。2026-10-07 实测
           # CI 产物与本地未消毒产物里 /Users/... 与 bazel 临时路径均为 **0 处**，Hermes 早已
           # 不存在 ⇒ 这一步（及其脚本）删除；产物自检仍在下一步做最低系统版本核对。
-          ( cd build && zip -qry "$(basename "${base}${SUFFIX}.ipa")" Payload )
-          unzip -l "build/${base}${SUFFIX}.ipa" | head -20
-          # 产物自检：APP 与扩展的最低系统版本要跟本分支一致（防止把两种 IPA 搞混）
+          ( cd build && zip -qry "$(basename "${base}.ipa")" Payload )
+          unzip -l "build/${base}.ipa" | head -20
+          # 产物自检：APP 的最低系统版本必须是 17.0（合一后只有一种 IPA）
           /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" build/Payload/*.app/Info.plist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ipa-${{ matrix.ref }}
+          name: ipa
           path: build/${{ env.IPA_NAME }}
           if-no-files-found: error
 
-  # 两条腿都出完才发 Release，且**两种 IPA 一起挂上去**（用户按文件名挑系统）。
+  # 构建产物出来后发 Release，挂上那一个 IPA。
   # 只在"手动触发且填了 tag_name"或"push 了 v* tag"时执行。
   release:
     needs: build
