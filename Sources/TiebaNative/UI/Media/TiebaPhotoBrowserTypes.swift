@@ -318,9 +318,6 @@ enum TiebaPhotoBrowserAction: String {
   case saveOriginal = "save-original"
   case viewOriginal = "view-original"
   case share
-  /// 超分辨率（2×，本机 CoreML 模型）：只换当前页**显示的内存图**（不写盘、不额外下载），
-  /// 完成后的替换走与「查看原图」同一条换页机制。
-  case superResolution = "super-resolution"
 }
 
 /// @MainActor：会话从创建到销毁都绑在 UIKit 上（present/转场/动画/delegate

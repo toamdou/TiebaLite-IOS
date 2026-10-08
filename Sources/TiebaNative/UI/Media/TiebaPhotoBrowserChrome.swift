@@ -60,8 +60,7 @@ final class TiebaPhotoBrowserActionController {
       save(url: item.originUrl ?? item.url)
     case .share:
       share(item: item)
-    case .viewOriginal, .superResolution:
-      // 两者都是**视图状态**（逐页换图），由会话先行分流；真的漏了分流也只是不换图，不是静默失败。
+    case .viewOriginal:
       break
     }
   }
@@ -69,25 +68,6 @@ final class TiebaPhotoBrowserActionController {
   /// 瞬时失败提示（图片加载失败等；2.2s 自动消失）。
   func showTransientFailure(_ text: String) {
     pill.showResult(success: false, text: text)
-  }
-
-  // MARK: 进度（超分辨率：加载模型 → 超分中 n/N → 完成；进度条复用同一个胶囊）
-
-  /// 带进度的常驻提示；progress = nil 时只显示文案（不确定进度）。
-  func showProgress(text: String, progress: Double?) {
-    pill.show(text: text, progress: progress)
-  }
-
-  func updateProgress(_ fraction: Double) {
-    pill.update(progress: fraction)
-  }
-
-  func showSuccess(_ text: String) {
-    pill.showResult(success: true, text: text)
-  }
-
-  func hideProgress() {
-    pill.hide()
   }
 
   // MARK: 保存
