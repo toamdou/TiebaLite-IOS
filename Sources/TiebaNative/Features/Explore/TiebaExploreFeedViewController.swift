@@ -354,7 +354,9 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   /// 同页原地重测（点赞态/展开长文，不跳滚动位置）。
   /// 同步指纹：展开态也计入 rowSignature，不同步的话「展开→离开再回来」会被误判成偏好变更
   /// 而走 fresh 发布（换页键 → 整页销毁重建，位图与图片全部重贴）。
-  private func publishInPlace() {
+  /// 放宽为 internal：同模块的 TiebaTopicViewController 复用这一份"原地重推"实现
+  ///（话题页与动态页的行模型同构），跨文件调用 private 编不过。
+  func publishInPlace() {
     lastRowSignature = rowSignature()
     driver.publish(fresh: false, makeRows: { [weak self] in self?.makeRows() ?? [] })
   }
