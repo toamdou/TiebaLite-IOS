@@ -22,7 +22,7 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
   /// 本页展示的全部偏好键（行 id 与键逐字同名；在屏时被别处改写要即时回推）。
   private static let preferenceKeys = [
     "homePageShowHistoryForum", "forumListSingle", "startTab", "incognitoMode",
-    "useBuiltInBrowser", "exploreAutoRefresh",
+    "useBuiltInBrowser",
     "navBarDoubleTapToTop", "tabBarMinimizeEnabled", "defaultSortType", "hideMedia",
     "showBothUsername", "showShortcutInThread", "forumFabFunction", "timestampStyle",
     "showIpLocation", "showLevelBadge", "showLevelTitle", "hideBlockedContent", "blockVideo",
@@ -51,7 +51,6 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
     setFlag("forumListSingle", default: true)
     setFlag("incognitoMode", default: false)
     setFlag("useBuiltInBrowser", default: true)
-    setFlag("exploreAutoRefresh", default: true)
     setFlag("navBarDoubleTapToTop", default: true)
     setFlag("tabBarMinimizeEnabled", default: true)
     setFlag("hideMedia", default: false)
@@ -135,7 +134,6 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
         rows: [
           toggle("incognitoMode", "无痕模式", "theatermasks.fill", default: false),
           toggle("useBuiltInBrowser", "使用内置浏览器", "safari.fill", default: true),
-          toggle("exploreAutoRefresh", "自动刷新动态", "arrow.clockwise", default: true),
           toggle("navBarDoubleTapToTop", "双击顶栏回顶", "arrow.up.circle", default: true),
           toggle(
             "tabBarMinimizeEnabled", "底栏滚动收纳", "menubar.rectangle", default: true,

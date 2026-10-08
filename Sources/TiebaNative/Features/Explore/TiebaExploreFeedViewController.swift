@@ -95,13 +95,8 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     } else {
       showState(.loading)
     }
-    // 首屏数据：正常冷启动照旧拉（SWR 快照只是先画出来）。
-    // 「从后台返回」的冷启动（进程被系统回收过，判据见 TiebaAppBootstrap）不自动拉：
-    // 否则用户看到的仍是「回前台就刷一下」——只是换成了重启这条路。
-    // ⚠️ 快照也没有（items 为空）时必须照拉：那否则是骨架屏挂死，不叫「不自动刷新」。
-    if items.isEmpty || !TiebaAppBootstrap.isReturningFromBackground {
-      reload()
-    }
+    // 首屏数据：冷启动一律照拉（SWR 快照只是先画出来，随后被真数据替换）。
+    reload()
   }
 
   override func viewDidLayoutSubviews() {
@@ -140,21 +135,13 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
 
   // MARK: - 外部驱动（tab 根屏）
 
-  /// 聚焦（tab 选中）：stale-while-revalidate，遵循 exploreAutoRefresh 偏好。
-  /// - Parameter autoRefresh: false = 本次是「从后台返回」（判据唯一在 TiebaAppBootstrap）。
-  ///   这时只走零网络的轻量分支（偏好指纹变了才重测），**不拉网络**；
-  ///   设置语义不变：前台停留后切 tab / 从二级页返回，stale + exploreAutoRefresh 照旧刷。
-  func handleFocus(autoRefresh: Bool = true) {
+  /// 聚焦（tab 选中 / 从二级页返回 / 回前台）：**一律不拉网络**。
+  /// 用户口径：列表不因聚焦自动刷新、更不该让人丢阅读位置；新数据只由显式动作拉
+  /// （下拉刷新、底栏重选、错误页重试）。这里只做零网络的本地回推。
+  func handleFocus() {
     guard segment != .concern || isLoggedIn else { return }
-    let stale = Date().timeIntervalSince(lastLoadedAt) > 300
-    if autoRefresh, stale,
-      TiebaPreferenceSnapshot.bool("exploreAutoRefresh", default: true) || items.isEmpty
-    {
-      reload()
-    } else {
-      // 偏好（字号/隐藏媒体/时间格式）可能已变：行指纹变了才整页重测。
-      republishIfPreferencesChanged()
-    }
+    // 偏好（字号/隐藏媒体/时间格式/屏蔽词）可能已变：行指纹变了才整页重测。
+    republishIfPreferencesChanged()
     if list.isHidden, !items.isEmpty { showList() }
   }
 

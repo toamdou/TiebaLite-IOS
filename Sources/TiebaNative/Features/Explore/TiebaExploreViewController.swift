@@ -35,12 +35,9 @@ final class TiebaExploreViewController: UIViewController, TiebaTabReselectable, 
 
   override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated)
-    // 聚焦自动刷新：只刷当前可见段（不可见段 handleFocus 会白发一次请求）；
-    // 热榜只在重选时拉，与旧页一致。
-    // 「从后台返回」那一拍统一不自动刷（用户口径，判据唯一在 TiebaAppBootstrap）：
-    // 下拉刷新 / 底栏重选 / 前台停留后切回来都照旧走原语义。
-    (segments[activeIndex] as? TiebaExploreFeedViewController)?
-      .handleFocus(autoRefresh: !TiebaAppBootstrap.isReturningFromBackground)
+    // 只让当前可见段做零网络的本地回推（不可见段会白发一次）；
+    // 热榜只在重选时拉，与旧页一致。聚焦一律不拉网络。
+    (segments[activeIndex] as? TiebaExploreFeedViewController)?.handleFocus()
   }
 
   /// 底栏重复点击（tab 根屏）：只有当前可见段响应。

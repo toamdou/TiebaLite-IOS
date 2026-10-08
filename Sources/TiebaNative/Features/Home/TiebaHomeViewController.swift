@@ -187,11 +187,8 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     updateLayoutMetrics()
     applyLoginState()
     // 跨天（昨天挂后台、今天回来）：强制重拉，别让昨天的勾号活到今天。
-    // 「从后台返回」那一拍同样不自动刷（用户口径，判据唯一在 TiebaAppBootstrap）：
-    // 这一次强拉会顺延到窗口之后本页的下一次正常出现（切 tab / 从二级页返回），
-    // 即「跨天」不再由「回前台」这一下触发 —— 与动态页同一条纪律。
     let dayChanged = TiebaFollowedForums.today() != loadedDay
-    loadFollowedForums(force: dayChanged && !TiebaAppBootstrap.isReturningFromBackground)
+    loadFollowedForums(force: dayChanged)
     loadRecentForums()
     applySignButton()
   }
