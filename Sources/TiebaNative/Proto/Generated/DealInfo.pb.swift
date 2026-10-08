@@ -20,42 +20,42 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_DealInfo: Sendable {
+nonisolated public struct Tieba_DealInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var title: String = String()
+  public var title: String = String()
 
-  var des: String = String()
+  public var des: String = String()
 
-  var stock: UInt64 = 0
+  public var stock: UInt64 = 0
 
-  var sales: UInt64 = 0
+  public var sales: UInt64 = 0
 
-  var expireTime: UInt32 = 0
+  public var expireTime: UInt32 = 0
 
-  var unitPrice: UInt64 = 0
+  public var unitPrice: UInt64 = 0
 
-  var productID: UInt64 = 0
+  public var productID: UInt64 = 0
 
-  var sellerAddress: String = String()
+  public var sellerAddress: String = String()
 
-  var recommendations: Int64 = 0
+  public var recommendations: Int64 = 0
 
-  var hasRecommend_p: Bool = false
+  public var hasRecommend_p: Bool = false
 
-  var status: Int32 = 0
+  public var status: Int32 = 0
 
-  var media: [Tieba_DealMedia] = []
+  public var media: [Tieba_DealMedia] = []
 
-  var authInfo: [Tieba_DealAuthInfo] = []
+  public var authInfo: [Tieba_DealAuthInfo] = []
 
-  var shipFee: UInt64 = 0
+  public var shipFee: UInt64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -63,10 +63,10 @@ nonisolated struct Tieba_DealInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_DealInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DealInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{1}des\0\u{1}stock\0\u{1}sales\0\u{3}expire_time\0\u{3}unit_price\0\u{3}product_id\0\u{3}seller_address\0\u{1}recommendations\0\u{3}has_recommend\0\u{1}status\0\u{1}media\0\u{3}auth_info\0\u{3}ship_fee\0")
+  static public let protoMessageName: String = _protobuf_package + ".DealInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{1}des\0\u{1}stock\0\u{1}sales\0\u{3}expire_time\0\u{3}unit_price\0\u{3}product_id\0\u{3}seller_address\0\u{1}recommendations\0\u{3}has_recommend\0\u{1}status\0\u{1}media\0\u{3}auth_info\0\u{3}ship_fee\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -91,7 +91,7 @@ nonisolated extension Tieba_DealInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.title.isEmpty {
       try visitor.visitSingularStringField(value: self.title, fieldNumber: 1)
     }
@@ -137,7 +137,7 @@ nonisolated extension Tieba_DealInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_DealInfo, rhs: Tieba_DealInfo) -> Bool {
+  static public func ==(lhs: Tieba_DealInfo, rhs: Tieba_DealInfo) -> Bool {
     if lhs.title != rhs.title {return false}
     if lhs.des != rhs.des {return false}
     if lhs.stock != rhs.stock {return false}

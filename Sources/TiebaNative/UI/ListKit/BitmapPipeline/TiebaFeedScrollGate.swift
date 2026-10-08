@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite — 异步位图管线 · 滚动闸门（甩动期降并发）
 //
 // 依据：docs/uikit-migration/07-ObjC++转Swift可行性.md §3.6
@@ -23,7 +22,6 @@
 //   ③ 主 runloop 模式：RunLoop.main.currentMode == .tracking
 //      —— 与 ASDK 逐字同款的兜底（非主线程不读）。
 // 三条都不成立 = 静止 ⇒ limit 放开（静止期走同步兜底，不进后台）。
-// ============================================================
 
 import UIKit
 
@@ -45,7 +43,7 @@ public final class TiebaFeedScrollGate: Sendable {
   // MARK: - 驱动（主线程调用）
 
   /// 显式驱动（推荐接线点：UICollectionView 的 scrollViewDidScroll + willBeginDragging/
-  /// didEndDragging，TiebaKindListView.swift:1487-1495 已经在算这个 moving）。
+  /// didEndDragging，TiebaKindListView 的滚动回调已经在算这个 moving）。
   public func update(isDragging: Bool, isDecelerating: Bool) {
     state.withLock {
       $0.dragging = isDragging

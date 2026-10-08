@@ -20,148 +20,148 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbContent: @unchecked Sendable {
+nonisolated public struct Tieba_PbContent: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var type: Int32 {
+  public var type: Int32 {
     get {_storage._type}
     set {_uniqueStorage()._type = newValue}
   }
 
-  var text: String {
+  public var text: String {
     get {_storage._text}
     set {_uniqueStorage()._text = newValue}
   }
 
-  var link: String {
+  public var link: String {
     get {_storage._link}
     set {_uniqueStorage()._link = newValue}
   }
 
-  var src: String {
+  public var src: String {
     get {_storage._src}
     set {_uniqueStorage()._src = newValue}
   }
 
-  var bsize: String {
+  public var bsize: String {
     get {_storage._bsize}
     set {_uniqueStorage()._bsize = newValue}
   }
 
-  var bigSrc: String {
+  public var bigSrc: String {
     get {_storage._bigSrc}
     set {_uniqueStorage()._bigSrc = newValue}
   }
 
-  var bigSize: String {
+  public var bigSize: String {
     get {_storage._bigSize}
     set {_uniqueStorage()._bigSize = newValue}
   }
 
-  var cdnSrc: String {
+  public var cdnSrc: String {
     get {_storage._cdnSrc}
     set {_uniqueStorage()._cdnSrc = newValue}
   }
 
-  var bigCdnSrc: String {
+  public var bigCdnSrc: String {
     get {_storage._bigCdnSrc}
     set {_uniqueStorage()._bigCdnSrc = newValue}
   }
 
-  var imgType: String {
+  public var imgType: String {
     get {_storage._imgType}
     set {_uniqueStorage()._imgType = newValue}
   }
 
-  var c: String {
+  public var c: String {
     get {_storage._c}
     set {_uniqueStorage()._c = newValue}
   }
 
-  var voiceMd5: String {
+  public var voiceMd5: String {
     get {_storage._voiceMd5}
     set {_uniqueStorage()._voiceMd5 = newValue}
   }
 
-  var duringTime: UInt32 {
+  public var duringTime: UInt32 {
     get {_storage._duringTime}
     set {_uniqueStorage()._duringTime = newValue}
   }
 
-  var uid: Int64 {
+  public var uid: Int64 {
     get {_storage._uid}
     set {_uniqueStorage()._uid = newValue}
   }
 
-  var dynamic: String {
+  public var dynamic: String {
     get {_storage._dynamic}
     set {_uniqueStorage()._dynamic = newValue}
   }
 
-  var `static`: String {
+  public var `static`: String {
     get {_storage._static}
     set {_uniqueStorage()._static = newValue}
   }
 
-  var width: UInt32 {
+  public var width: UInt32 {
     get {_storage._width}
     set {_uniqueStorage()._width = newValue}
   }
 
-  var height: UInt32 {
+  public var height: UInt32 {
     get {_storage._height}
     set {_uniqueStorage()._height = newValue}
   }
 
-  var originSrc: String {
+  public var originSrc: String {
     get {_storage._originSrc}
     set {_uniqueStorage()._originSrc = newValue}
   }
 
-  var originSize: UInt32 {
+  public var originSize: UInt32 {
     get {_storage._originSize}
     set {_uniqueStorage()._originSize = newValue}
   }
 
-  var mediaSubtitle: String {
+  public var mediaSubtitle: String {
     get {_storage._mediaSubtitle}
     set {_uniqueStorage()._mediaSubtitle = newValue}
   }
 
-  var urlType: Int32 {
+  public var urlType: Int32 {
     get {_storage._urlType}
     set {_uniqueStorage()._urlType = newValue}
   }
 
-  var memeInfo: Tieba_MemeInfo {
+  public var memeInfo: Tieba_MemeInfo {
     get {_storage._memeInfo ?? Tieba_MemeInfo()}
     set {_uniqueStorage()._memeInfo = newValue}
   }
   /// Returns true if `memeInfo` has been explicitly set.
-  var hasMemeInfo: Bool {_storage._memeInfo != nil}
+  public var hasMemeInfo: Bool {_storage._memeInfo != nil}
   /// Clears the value of `memeInfo`. Subsequent reads from it will return its default value.
-  mutating func clearMemeInfo() {_uniqueStorage()._memeInfo = nil}
+  mutating public func clearMemeInfo() {_uniqueStorage()._memeInfo = nil}
 
-  var isLongPic: UInt32 {
+  public var isLongPic: UInt32 {
     get {_storage._isLongPic}
     set {_uniqueStorage()._isLongPic = newValue}
   }
 
-  var showOriginalBtn: UInt32 {
+  public var showOriginalBtn: UInt32 {
     get {_storage._showOriginalBtn}
     set {_uniqueStorage()._showOriginalBtn = newValue}
   }
 
-  var cdnSrcActive: String {
+  public var cdnSrcActive: String {
     get {_storage._cdnSrcActive}
     set {_uniqueStorage()._cdnSrcActive = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -171,8 +171,8 @@ nonisolated struct Tieba_PbContent: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_PbContent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PbContent"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}text\0\u{1}link\0\u{1}src\0\u{1}bsize\0\u{1}bigSrc\0\u{1}bigSize\0\u{1}cdnSrc\0\u{1}bigCdnSrc\0\u{1}imgType\0\u{1}c\0\u{1}voiceMD5\0\u{1}duringTime\0\u{2}\u{2}uid\0\u{1}dynamic\0\u{3}_static\0\u{1}width\0\u{1}height\0\u{2}\u{6}originSrc\0\u{2}\u{2}originSize\0\u{2}\u{4}mediaSubtitle\0\u{1}urlType\0\u{1}memeInfo\0\u{1}isLongPic\0\u{1}showOriginalBtn\0\u{1}cdnSrcActive\0")
+  static public let protoMessageName: String = _protobuf_package + ".PbContent"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}text\0\u{1}link\0\u{1}src\0\u{1}bsize\0\u{1}bigSrc\0\u{1}bigSize\0\u{1}cdnSrc\0\u{1}bigCdnSrc\0\u{1}imgType\0\u{1}c\0\u{1}voiceMD5\0\u{1}duringTime\0\u{2}\u{2}uid\0\u{1}dynamic\0\u{3}_static\0\u{1}width\0\u{1}height\0\u{2}\u{6}originSrc\0\u{2}\u{2}originSize\0\u{2}\u{4}mediaSubtitle\0\u{1}urlType\0\u{1}memeInfo\0\u{1}isLongPic\0\u{1}showOriginalBtn\0\u{1}cdnSrcActive\0")
 
   fileprivate class _StorageClass {
     var _type: Int32 = 0
@@ -247,7 +247,7 @@ nonisolated extension Tieba_PbContent: SwiftProtobuf.Message, SwiftProtobuf._Mes
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -287,7 +287,7 @@ nonisolated extension Tieba_PbContent: SwiftProtobuf.Message, SwiftProtobuf._Mes
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -375,7 +375,7 @@ nonisolated extension Tieba_PbContent: SwiftProtobuf.Message, SwiftProtobuf._Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbContent, rhs: Tieba_PbContent) -> Bool {
+  static public func ==(lhs: Tieba_PbContent, rhs: Tieba_PbContent) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

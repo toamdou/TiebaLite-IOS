@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite — 行页发布驱动（TiebaRowPageDriver）
 //
 // 通用列表页共用的「造行 → 后台整页测量 → 回主线程换页」流程：publish 在主线程
@@ -11,7 +10,6 @@
 // 并随页把**内容身份**（TiebaRowDiff.Entry.identity）交给列表（setPage(pageKey:identities:)）：
 // 列表的 TiebaKindItem 以内容身份为标识，diffable 据此自己算增量，
 // 因此同页重推不再需要"可见行全量重配"。
-// ============================================================
 
 import Foundation
 
@@ -39,24 +37,8 @@ public final class TiebaRowPageDriver {
   /// 行与指纹同存同换（同一个数组，天然不会不同步）。
   private var lastRows: [TiebaRowDiff.Entry] = []
 
-  /// 上次发布算出的行差量（删除 / 插入 / 更新三元组，定义见 TiebaRowDiff.Change）。
-  /// 基准是上一次**已生效**的发布（lastRows 只在回主换页时落盘）。
-  ///
-  /// **只算不接**：本步的产出是"算得出差量"，不是"已经用上差量"。将来接的时候
-  /// （不要在本文件里改 TiebaKindListView，那是另一个改动面）：
-  ///   1. 行标识现在是 pageKey#index（位置身份）。差量要生效，列表侧得支持"不换页键就地
-  ///      增删改"；纯追加（removals / updates 为空）与既有"保页键 + 尾部 insert"同路，
-  ///      可以先只接这一条，风险最低；
-  ///   2. 有删 / 有改时页键必须换（今天的行为），差量只能用来做动画 / 避免闪白，
-  ///      不能省掉整页重建；
-  ///   3. 下标语义：removals 是**旧页**下标（倒序删）；insertions / updates 的下标是
-  ///      "删完 + 应用了前面若干插入"之后的当前页下标；previousIndex 是这行内容在旧页的位置。
-  // [收敛] 原 `lastRowDiff: TiebaRowDiff.Change?` 已删除（2026-10-05）。
-  // 它每次 publish 都要在主线程算一遍整页差量，却**始终没有消费方**；
-  // 而它的用途（按内容做增量更新）现在由"行内容身份 + diffable"承担 ——
-  // 列表侧 TiebaKindItem.identity 让 diffable 自己算出增删，不需要命令式差量。
-  // `TiebaRowDiff.make` / `tailAppend` 作为**库 API** 保留（有 selfCheck 覆盖），
-  // 将来若要做插入/删除动画（需要 previousIndex）可直接调用。
+  // [收敛] 原 `lastRowDiff: TiebaRowDiff.Change?` 已删除（2026-10-05）：每次 publish 在主线程白算整页差量却无消费方；
+  // 增量更新现由「行内容身份 + diffable」承担（TiebaKindItem.identity）。`TiebaRowDiff.make` / `tailAppend` 作库 API 保留（有 selfCheck 覆盖，插入/删除动画需要 previousIndex 时可直接调用）。
 
   /// 当前页键（fresh 发布时 = "\(keyPrefix)-\(pageSeq)"；未发布 = ""）。
   public private(set) var pageKey = ""
@@ -131,10 +113,7 @@ public final class TiebaRowPageDriver {
       pageSeq += 1
       pageKey = "\(keyPrefix)-\(pageSeq)"
     }
-    // [收敛] 这里原本每 publish 都算一次整页差量（tailAppend / MergeLists）并存入
-    // lastRowDiff，但**无消费方**，纯属主线程浪费 —— 已删除。
-    // 差量的作用（按内容做增量更新）由 TiebaRowDiff.Entry.identity 承担：
-    // 身份随行传给列表，diffable 据此自己算增删改。
+    // [收敛] 这里的整页差量计算已删除（无消费方）：增量更新由 TiebaRowDiff.Entry.identity 承担，见上方 lastRowDiff 说明。
     guard !pageKey.isEmpty else { return }
     lastMakeRows = makeRows
     guard lastWidth > 0 else {

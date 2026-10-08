@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaUpdateService —— 「检查更新」的原生实现（原 src/services/update/releaseService.ts
 // + src/stores/updateStore.ts 的页面侧子集）
 //
@@ -26,7 +25,6 @@
 // 线程：TiebaReleaseAPI 全是 nonisolated（网络与解析在协作线程池）；
 // TiebaUpdateService 是 @MainActor 的页面状态容器（原 zustand updateStore 的
 // 页面侧状态：status / release / hasUpdate / currentVersion / error）。
-// ============================================================
 import Foundation
 
 /// 跨桥/网络错误的统一载体：errorDescription 即界面展示文案（与 JS 侧

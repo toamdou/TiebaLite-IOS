@@ -1,8 +1,7 @@
-// ============================================================
 // TiebaLite RN — 信息流行视图（TiebaFeedRowView）
 //
 // 设计（2026-09-12，与 TiebaRowMetrics 配套）：
-//   - Fabric/Yoga 不查自定义视图的 intrinsicContentSize（TiebaRichTextView.swift:66-68），
+//   - Fabric/Yoga 不查自定义视图的 intrinsicContentSize，
 //     行高由 JS 从 TiebaRowMetrics 同步查得后显式下发；本视图只在给定 frame 内绘制。
 //   - 模型从 TiebaRowMetrics.shared.feedRow(pageKey:index:) 拉取（与测量同一实例，
 //     含预算好的 NSAttributedString），apply 只接收 pageKey/index 两个原始 prop ——
@@ -41,7 +40,6 @@
 //   由 `mediaHit(atRowPoint:)` 提供（只读几何；列表侧点击分发用它）。
 //   点是否落在菜单钮上由 `ownsInteraction(atRowPoint:)` 判定（cell 的整卡点击
 //   手势据此过滤，避免"点菜单同时进帖"）。
-// ============================================================
 
 import UIKit
 import Nuke

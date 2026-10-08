@@ -20,36 +20,36 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_RecomTopicList: Sendable {
+nonisolated public struct Tieba_RecomTopicList: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var topicID: UInt64 = 0
+  public var topicID: UInt64 = 0
 
-  var topicName: String = String()
+  public var topicName: String = String()
 
-  var type: UInt32 = 0
+  public var type: UInt32 = 0
 
-  var discussNum: UInt64 = 0
+  public var discussNum: UInt64 = 0
 
-  var tag: UInt32 = 0
+  public var tag: UInt32 = 0
 
-  var topicDesc: String = String()
+  public var topicDesc: String = String()
 
-  var topicPic: String = String()
+  public var topicPic: String = String()
 
-  var updateTime: Int64 = 0
+  public var updateTime: Int64 = 0
 
-  var author: String = String()
+  public var author: String = String()
 
-  var media: [Tieba_Media] = []
+  public var media: [Tieba_Media] = []
 
-  var isVideoTopic: Int32 = 0
+  public var isVideoTopic: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -57,10 +57,10 @@ nonisolated struct Tieba_RecomTopicList: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_RecomTopicList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".RecomTopicList"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}topic_name\0\u{1}type\0\u{3}discuss_num\0\u{1}tag\0\u{3}topic_desc\0\u{3}topic_pic\0\u{3}update_time\0\u{1}author\0\u{1}media\0\u{3}is_video_topic\0")
+  static public let protoMessageName: String = _protobuf_package + ".RecomTopicList"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}topic_name\0\u{1}type\0\u{3}discuss_num\0\u{1}tag\0\u{3}topic_desc\0\u{3}topic_pic\0\u{3}update_time\0\u{1}author\0\u{1}media\0\u{3}is_video_topic\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -82,7 +82,7 @@ nonisolated extension Tieba_RecomTopicList: SwiftProtobuf.Message, SwiftProtobuf
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.topicID != 0 {
       try visitor.visitSingularUInt64Field(value: self.topicID, fieldNumber: 1)
     }
@@ -119,7 +119,7 @@ nonisolated extension Tieba_RecomTopicList: SwiftProtobuf.Message, SwiftProtobuf
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_RecomTopicList, rhs: Tieba_RecomTopicList) -> Bool {
+  static public func ==(lhs: Tieba_RecomTopicList, rhs: Tieba_RecomTopicList) -> Bool {
     if lhs.topicID != rhs.topicID {return false}
     if lhs.topicName != rhs.topicName {return false}
     if lhs.type != rhs.type {return false}

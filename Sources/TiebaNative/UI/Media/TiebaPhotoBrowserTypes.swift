@@ -5,6 +5,9 @@ import JXPhotoBrowser
 import Nuke
 import UIKit
 
+/// item 的值类型投影；调用方（列表/帖子页/吧页/资料页）从行模型直构，
+/// url 非法的条目由调用方丢弃（不再有字典编组与解析回值）。
+/// public + Sendable：present（公开入口）的入参，跨主队列派发只带值。
 public struct TiebaPhotoItem: Sendable {
   let url: URL
   let thumbUrl: URL?
@@ -78,7 +81,7 @@ public struct TiebaPhotoItem: Sendable {
       ? origin
       : (image.src.isEmpty ? origin : image.src)
     guard let url = TiebaPhotoItem.normalizedURL(raw) else { return nil }
-    let thumbRaw = TiebaPostRowText.displayURL(image, preferences: preferences)?
+    let thumbRaw = preferences.displayURL(for: image)?
       .absoluteString ?? raw
     self.init(
       url: url,
@@ -107,8 +110,7 @@ public struct TiebaPhotoItem: Sendable {
 
   /// 贴吧图源 http:// 一律升级 https（与 TiebaNuke.secureURL 同约定）。
   static func normalizedURL(_ raw: String) -> URL? {
-    let upgraded = raw.hasPrefix("http://") ? "https://" + raw.dropFirst("http://".count) : raw
-    return URL(string: upgraded)
+    TiebaImageURL.normalized(raw)
   }
 }
 

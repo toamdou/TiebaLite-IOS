@@ -20,77 +20,77 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_ForumRuleDetail_ForumRuleDetailResponseData: @unchecked Sendable {
+nonisolated public struct Tieba_ForumRuleDetail_ForumRuleDetailResponseData: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var forum: Tieba_ForumInfo {
+  public var forum: Tieba_ForumInfo {
     get {_storage._forum ?? Tieba_ForumInfo()}
     set {_uniqueStorage()._forum = newValue}
   }
   /// Returns true if `forum` has been explicitly set.
-  var hasForum: Bool {_storage._forum != nil}
+  public var hasForum: Bool {_storage._forum != nil}
   /// Clears the value of `forum`. Subsequent reads from it will return its default value.
-  mutating func clearForum() {_uniqueStorage()._forum = nil}
+  mutating public func clearForum() {_uniqueStorage()._forum = nil}
 
-  var title: String {
+  public var title: String {
     get {_storage._title}
     set {_uniqueStorage()._title = newValue}
   }
 
-  var preface: String {
+  public var preface: String {
     get {_storage._preface}
     set {_uniqueStorage()._preface = newValue}
   }
 
-  var rules: [Tieba_ForumRule] {
+  public var rules: [Tieba_ForumRule] {
     get {_storage._rules}
     set {_uniqueStorage()._rules = newValue}
   }
 
-  var auditStatus: Int32 {
+  public var auditStatus: Int32 {
     get {_storage._auditStatus}
     set {_uniqueStorage()._auditStatus = newValue}
   }
 
-  var auditOpinion: String {
+  public var auditOpinion: String {
     get {_storage._auditOpinion}
     set {_uniqueStorage()._auditOpinion = newValue}
   }
 
-  var isManager: Int32 {
+  public var isManager: Int32 {
     get {_storage._isManager}
     set {_uniqueStorage()._isManager = newValue}
   }
 
-  var forumRuleID: Int64 {
+  public var forumRuleID: Int64 {
     get {_storage._forumRuleID}
     set {_uniqueStorage()._forumRuleID = newValue}
   }
 
-  var publishTime: String {
+  public var publishTime: String {
     get {_storage._publishTime}
     set {_uniqueStorage()._publishTime = newValue}
   }
 
-  var bazhu: Tieba_BawuRoleInfoPub {
+  public var bazhu: Tieba_BawuRoleInfoPub {
     get {_storage._bazhu ?? Tieba_BawuRoleInfoPub()}
     set {_uniqueStorage()._bazhu = newValue}
   }
   /// Returns true if `bazhu` has been explicitly set.
-  var hasBazhu: Bool {_storage._bazhu != nil}
+  public var hasBazhu: Bool {_storage._bazhu != nil}
   /// Clears the value of `bazhu`. Subsequent reads from it will return its default value.
-  mutating func clearBazhu() {_uniqueStorage()._bazhu = nil}
+  mutating public func clearBazhu() {_uniqueStorage()._bazhu = nil}
 
-  var curTime: String {
+  public var curTime: String {
     get {_storage._curTime}
     set {_uniqueStorage()._curTime = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -100,8 +100,8 @@ nonisolated struct Tieba_ForumRuleDetail_ForumRuleDetailResponseData: @unchecked
 fileprivate nonisolated let _protobuf_package = "tieba.forumRuleDetail"
 
 nonisolated extension Tieba_ForumRuleDetail_ForumRuleDetailResponseData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ForumRuleDetailResponseData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}forum\0\u{1}title\0\u{1}preface\0\u{1}rules\0\u{3}audit_status\0\u{3}audit_opinion\0\u{3}is_manager\0\u{3}forum_rule_id\0\u{3}publish_time\0\u{1}bazhu\0\u{3}cur_time\0")
+  static public let protoMessageName: String = _protobuf_package + ".ForumRuleDetailResponseData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}forum\0\u{1}title\0\u{1}preface\0\u{1}rules\0\u{3}audit_status\0\u{3}audit_opinion\0\u{3}is_manager\0\u{3}forum_rule_id\0\u{3}publish_time\0\u{1}bazhu\0\u{3}cur_time\0")
 
   fileprivate class _StorageClass {
     var _forum: Tieba_ForumInfo? = nil
@@ -146,7 +146,7 @@ nonisolated extension Tieba_ForumRuleDetail_ForumRuleDetailResponseData: SwiftPr
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -171,7 +171,7 @@ nonisolated extension Tieba_ForumRuleDetail_ForumRuleDetailResponseData: SwiftPr
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -214,7 +214,7 @@ nonisolated extension Tieba_ForumRuleDetail_ForumRuleDetailResponseData: SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ForumRuleDetail_ForumRuleDetailResponseData, rhs: Tieba_ForumRuleDetail_ForumRuleDetailResponseData) -> Bool {
+  static public func ==(lhs: Tieba_ForumRuleDetail_ForumRuleDetailResponseData, rhs: Tieba_ForumRuleDetail_ForumRuleDetailResponseData) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

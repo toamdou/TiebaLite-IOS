@@ -36,8 +36,6 @@ extension TiebaChrome {
     scheduleChromeTick()
   }
 
-  // MARK: - Chrome 按压触觉（返回钮 / 导航栏右钮）
-
   /// 栏上的按压判定手势（幂等：同一栏只挂一个；栏重建会带来新栏，需重挂）。
   /// 导航栏的 chrome 按钮（返回箭头、headerRight 原生钮）是 UIControl，命中的
   /// 往往是按钮内部的子视图（chevron imageView），所以判定从 hitTest 结果向上

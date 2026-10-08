@@ -20,16 +20,16 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_UserDynamic: Sendable {
+nonisolated public struct Tieba_UserDynamic: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var concernedUserList: [Tieba_User] = []
+  public var concernedUserList: [Tieba_User] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -37,10 +37,10 @@ nonisolated struct Tieba_UserDynamic: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_UserDynamic: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UserDynamic"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}concerned_user_list\0")
+  static public let protoMessageName: String = _protobuf_package + ".UserDynamic"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}concerned_user_list\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -52,14 +52,14 @@ nonisolated extension Tieba_UserDynamic: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.concernedUserList.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.concernedUserList, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_UserDynamic, rhs: Tieba_UserDynamic) -> Bool {
+  static public func ==(lhs: Tieba_UserDynamic, rhs: Tieba_UserDynamic) -> Bool {
     if lhs.concernedUserList != rhs.concernedUserList {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

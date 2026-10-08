@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaMotionSpec —— 全仓「手感参数」总表（弹簧 / 滑动 / 手势阈值）
 //
 // 📚 与 TiebaAnimationDuration 的分工（两份合起来才是完整的手感手册）：
@@ -38,7 +37,6 @@
 //     · 弹簧阻尼 180 大面板 / 图集转场（GalleryControllerNode.swift:462）—— 图集转场在 Vendor 的
 //       UIView.animate 动画体里，改 CASpringAnimation 要重写 vendor 动画体。
 //   · 自研惯性：decelerationRate 0.998、初速 ×15、|v| < 0.1 停表（ListView.swift:941-967）。
-// ============================================================
 
 import Foundation
 import UIKit

@@ -19,9 +19,17 @@ swift_library(
     deps = ["//Sources/TiebaNative:TiebaNative"],
 )
 
-# 图标按部署底线二选一（rules_apple/actool.bzl 的硬规矩）：≥26 用 Icon Composer 的
+# 图标按部署底线二选一（rules_apple/actool.bzl 的硬规矩）：≥26 可以用 Icon Composer 的
 # *.icon 包，<26 必须用 *.appiconset（.icon 在低底线**不产出任何图标条目**，
-# CFBundleIconName 会悬空）。两者不许混用，底线 17 这条分支走 AppIcon.appiconset。
+# CFBundleIconName 会悬空）。底线 17 这条分支只能走 AppIcon.appiconset。
+#
+# 2026-10-07 的经过（从 main 带过来）：曾换用 Icon Composer 文档（expo.icon → AppIcon.icon，
+# 拆成 fill + 透明底 mark 图层），图标切换能力有了但 actool 要重新渲染合成，Assets.car
+# 大了约 2.5MB；而"深色/透明能否切"在模拟器上没能验证出来（系统切深色时自家 App 的图标
+# 都换了、本 App 没换）。按用户口径退回**单张平面图**这条最小、最稳的路：
+#   · 名字就叫 AppIcon（资源目录名即包内 CFBundleIconName）；
+#   · 想恢复"深色/着色"只需往同一个 appiconset 的 Contents.json 里再加
+#     icon-1024-dark.png / icon-1024-tinted.png 两项（各约 50KB），不必回到图层方案。
 filegroup(
     name = "app_icon",
     srcs = glob(["Images.xcassets/AppIcon.appiconset/**"]),
@@ -35,6 +43,10 @@ filegroup(
     ) + [
         "PrivacyInfo.xcprivacy",
         "SplashScreen.storyboard",
+        # 「关于」页 hero 图：那张图按 bundle 相对路径直读（不是资源目录图片），
+        # 必须是随包分发的松散文件；原先是读 expo.icon 里的源图，而 .icon 文档只被
+        # actool 编进 Assets.car、源文件不进包 ⇒ 那条路径一直是悬空的。
+        "AboutIcon.png",
         # 运行时必需：信息流端点（frsPage/feedThreadList/userLike）走 TiebaSwiftProto
         # 描述符解码（TiebaProtoRegistry.loadBundled），删掉即 preconditionFailure。
         "//Sources/TiebaNative:Proto/proto-descriptors.json",

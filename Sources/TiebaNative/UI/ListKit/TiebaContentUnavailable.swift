@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite — 空/错状态与页内小件的共享实现
 //
 // 收敛本域此前逐字近似的多份实现：错误态 UIContentUnavailableConfiguration
@@ -6,7 +5,6 @@
 // 列表色板染色 7 份、统计列 3 份、头像+标题+按钮行 2 份。
 //
 // 调用方只给数据与回调；状态视图的按钮 id 恒为 "retry"（各页原约定未变）。
-// ============================================================
 
 import UIKit
 
@@ -171,7 +169,7 @@ enum TiebaChromePalette {
   /// 列表色板 = 默认语义色 + 导航壳主色（primary/chip/onChip 三键，与底栏强调色一致）。
   static func listPalette() -> TiebaSimpleRowPalette {
     var palette = TiebaSimpleRowPalette.default
-    let tint = TiebaNavigator.shared.chromeTheme.tint
+    let tint = TiebaChromeTheme.current.tint
     palette.base.primary = tint
     return palette
   }

@@ -459,5 +459,4 @@ final class TiebaKindFooterView: UICollectionReusableView {
   }
 }
 
-// MARK: - 列表 view body（纯 UIView）
 

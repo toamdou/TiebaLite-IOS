@@ -19,7 +19,7 @@ final class TiebaHotListViewController: UIViewController, TiebaTabReselectable {
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .clear
-    stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    stateView.isDark = TiebaChromeTheme.current.dark
     stateView.onButtonPress = { [weak self] _ in self?.reload() }
     stateView.isHidden = true
     // 热榜骨架：通用列表行（原 HotListContent.tsx variant="row" count={8}）
@@ -41,7 +41,7 @@ final class TiebaHotListViewController: UIViewController, TiebaTabReselectable {
       forSupplementaryViewOfKind: UICollectionView.elementKindSectionFooter,
       withReuseIdentifier: TiebaHotFooterView.reuseIdentifier
     )
-    refreshControl.tintColor = TiebaNavigator.shared.chromeTheme.tint
+    refreshControl.tintColor = TiebaChromeTheme.current.tint
     refreshControl.addTarget(self, action: #selector(handleRefreshControl), for: .valueChanged)
     collectionView.refreshControl = refreshControl
     for subview in [collectionView, stateView, pill] as [UIView] {
@@ -367,7 +367,7 @@ extension TiebaHotListViewController: UICollectionViewDataSource, UICollectionVi
         topics: topics,
         tabs: tabs,
         activeTab: activeTab,
-        tint: TiebaNavigator.shared.chromeTheme.tint,
+        tint: TiebaChromeTheme.current.tint,
         isReloading: isReloading,
         onTopic: { [weak self] topic in self?.openTopic(topic) },
         onTab: { [weak self] code in self?.selectTab(code) }

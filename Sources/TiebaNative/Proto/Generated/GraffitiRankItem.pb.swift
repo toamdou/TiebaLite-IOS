@@ -20,30 +20,30 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_GraffitiRankItem: Sendable {
+nonisolated public struct Tieba_GraffitiRankItem: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var gid: Int64 = 0
+  public var gid: Int64 = 0
 
-  var url: String = String()
+  public var url: String = String()
 
-  var voteCount: Int64 = 0
+  public var voteCount: Int64 = 0
 
-  var isVote: Int32 = 0
+  public var isVote: Int32 = 0
 
-  var uid: Int64 = 0
+  public var uid: Int64 = 0
 
-  var picID: String = String()
+  public var picID: String = String()
 
-  var gType: Int32 = 0
+  public var gType: Int32 = 0
 
-  var thumbURL: String = String()
+  public var thumbURL: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -51,10 +51,10 @@ nonisolated struct Tieba_GraffitiRankItem: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_GraffitiRankItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GraffitiRankItem"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}gid\0\u{1}url\0\u{3}vote_count\0\u{3}is_vote\0\u{1}uid\0\u{3}pic_id\0\u{3}g_type\0\u{3}thumb_url\0")
+  static public let protoMessageName: String = _protobuf_package + ".GraffitiRankItem"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}gid\0\u{1}url\0\u{3}vote_count\0\u{3}is_vote\0\u{1}uid\0\u{3}pic_id\0\u{3}g_type\0\u{3}thumb_url\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -73,7 +73,7 @@ nonisolated extension Tieba_GraffitiRankItem: SwiftProtobuf.Message, SwiftProtob
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.gid != 0 {
       try visitor.visitSingularInt64Field(value: self.gid, fieldNumber: 1)
     }
@@ -101,7 +101,7 @@ nonisolated extension Tieba_GraffitiRankItem: SwiftProtobuf.Message, SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GraffitiRankItem, rhs: Tieba_GraffitiRankItem) -> Bool {
+  static public func ==(lhs: Tieba_GraffitiRankItem, rhs: Tieba_GraffitiRankItem) -> Bool {
     if lhs.gid != rhs.gid {return false}
     if lhs.url != rhs.url {return false}
     if lhs.voteCount != rhs.voteCount {return false}

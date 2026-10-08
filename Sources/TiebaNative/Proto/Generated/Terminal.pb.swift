@@ -20,20 +20,20 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Terminal: Sendable {
+nonisolated public struct Tieba_Terminal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var pc: Int32 = 0
+  public var pc: Int32 = 0
 
-  var wap: Int32 = 0
+  public var wap: Int32 = 0
 
-  var client: Int32 = 0
+  public var client: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -41,10 +41,10 @@ nonisolated struct Tieba_Terminal: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Terminal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Terminal"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pc\0\u{1}wap\0\u{1}client\0")
+  static public let protoMessageName: String = _protobuf_package + ".Terminal"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pc\0\u{1}wap\0\u{1}client\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -58,7 +58,7 @@ nonisolated extension Tieba_Terminal: SwiftProtobuf.Message, SwiftProtobuf._Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.pc != 0 {
       try visitor.visitSingularInt32Field(value: self.pc, fieldNumber: 1)
     }
@@ -71,7 +71,7 @@ nonisolated extension Tieba_Terminal: SwiftProtobuf.Message, SwiftProtobuf._Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Terminal, rhs: Tieba_Terminal) -> Bool {
+  static public func ==(lhs: Tieba_Terminal, rhs: Tieba_Terminal) -> Bool {
     if lhs.pc != rhs.pc {return false}
     if lhs.wap != rhs.wap {return false}
     if lhs.client != rhs.client {return false}

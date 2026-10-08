@@ -20,34 +20,34 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbPage_RecommendBook: Sendable {
+nonisolated public struct Tieba_PbPage_RecommendBook: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var recommendText: String = String()
+  public var recommendText: String = String()
 
-  var suggestText: String = String()
+  public var suggestText: String = String()
 
-  var suggestURL: String = String()
+  public var suggestURL: String = String()
 
-  var bookID: String = String()
+  public var bookID: String = String()
 
-  var bookType: UInt32 = 0
+  public var bookType: UInt32 = 0
 
-  var bookCover: String = String()
+  public var bookCover: String = String()
 
-  var bookTitle: String = String()
+  public var bookTitle: String = String()
 
-  var bookTips: [String] = []
+  public var bookTips: [String] = []
 
-  var bottonText: String = String()
+  public var bottonText: String = String()
 
-  var subscriptIcon: String = String()
+  public var subscriptIcon: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -55,10 +55,10 @@ nonisolated struct Tieba_PbPage_RecommendBook: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.pbPage"
 
 nonisolated extension Tieba_PbPage_RecommendBook: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".RecommendBook"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recommend_text\0\u{3}suggest_text\0\u{3}suggest_url\0\u{3}book_id\0\u{3}book_type\0\u{3}book_cover\0\u{3}book_title\0\u{3}book_tips\0\u{3}botton_text\0\u{3}subscript_icon\0")
+  static public let protoMessageName: String = _protobuf_package + ".RecommendBook"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recommend_text\0\u{3}suggest_text\0\u{3}suggest_url\0\u{3}book_id\0\u{3}book_type\0\u{3}book_cover\0\u{3}book_title\0\u{3}book_tips\0\u{3}botton_text\0\u{3}subscript_icon\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -79,7 +79,7 @@ nonisolated extension Tieba_PbPage_RecommendBook: SwiftProtobuf.Message, SwiftPr
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.recommendText.isEmpty {
       try visitor.visitSingularStringField(value: self.recommendText, fieldNumber: 1)
     }
@@ -113,7 +113,7 @@ nonisolated extension Tieba_PbPage_RecommendBook: SwiftProtobuf.Message, SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbPage_RecommendBook, rhs: Tieba_PbPage_RecommendBook) -> Bool {
+  static public func ==(lhs: Tieba_PbPage_RecommendBook, rhs: Tieba_PbPage_RecommendBook) -> Bool {
     if lhs.recommendText != rhs.recommendText {return false}
     if lhs.suggestText != rhs.suggestText {return false}
     if lhs.suggestURL != rhs.suggestURL {return false}

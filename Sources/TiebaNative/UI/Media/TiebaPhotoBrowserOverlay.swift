@@ -5,6 +5,8 @@ import JXPhotoBrowser
 import Nuke
 import UIKit
 
+/// 转场源视图的替身：只做 Zoom 转场的几何/图像载体（恒隐藏）。矩形来自
+/// 原生列表被点图片视图的窗口 frame；真缩略图在 Modal 底下保持可见。
 final class TiebaPhotoSourceThumbnailView: UIImageView {}
 
 // MARK: - 顶栏 chrome overlay（关闭 + 页码/标题 + 保存/分享）

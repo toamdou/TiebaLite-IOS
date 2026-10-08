@@ -5,7 +5,6 @@ import UIKit
 import Nuke
 import NukeExtensions
 
-// MARK: - 配色
 
 // 语义色板在 TiebaRowMetrics.swift 的 TiebaFeedRowPalette：默认值与本节旧
 // 静态常量逐一相同，JS 经 TiebaListView 的 themeColors prop 下发实际主题
@@ -935,5 +934,4 @@ final class TiebaFeedRowTextCanvas: UIView {
   }
 }
 
-// MARK: - 行视图
 

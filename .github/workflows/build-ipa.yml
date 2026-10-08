@@ -94,6 +94,39 @@ jobs:
             bazel-${{ matrix.ref }}-${{ runner.os }}-
             bazel-${{ runner.os }}-
 
+      # ⚠️ 缓存要真的生效，必须让 Bazel 知道去哪读写：之前 actions/cache 只负责存/取
+      # ~/.bazel_cache/{disk,repository}，但仓库里没有任何 --disk_cache / --repository_cache
+      # 设置（.bazelrc 里那两行是"复制到 .bazelrc.user"的模板，而 .bazelrc.user 被 gitignore
+      # ⇒ runner 上根本不存在）—— 缓存步一直在存/取一个空目录。这里在构建前把 .bazelrc.user
+      # 写出来（.bazelrc 用 try-import 引入，缺了也不报错，本地开发机各自维护自己那份）。
+      - name: Enable Bazel disk/repository cache
+        run: |
+          cat > .bazelrc.user <<EOF
+          build --disk_cache=$HOME/.bazel_cache/disk
+          build --repository_cache=$HOME/.bazel_cache/repository
+          EOF
+          cat .bazelrc.user
+
+      # 拆分卡口：//Sources/TiebaNative:Proto 这个 target 依赖那 267 个 protoc 产物是 public
+      # （protoc-gen-swift 默认生成 internal，跨 module 不可见）。若有人用默认可见性重新生成，
+      # 拆分会在编译期挂掉且报错点在生成物里、很难定位 —— 所以在构建前先拦一次，并给出正确姿势。
+      - name: Verify protoc-generated visibility
+        run: |
+          # 只在"确实拆了 Proto target"的分支上校验：ios17 那条线没有这次拆分，生成物仍是
+          # protoc 默认的 internal —— 对它是无关判据，不能把那条腿判红。
+          if ! grep -q 'name = "Proto"' Sources/TiebaNative/BUILD.bazel; then
+            echo "skip: 本分支未拆 //Sources/TiebaNative:Proto，无需校验生成物可见性"
+            exit 0
+          fi
+          total=$(ls Sources/TiebaNative/Proto/Generated/*.pb.swift | wc -l | tr -d ' ')
+          missing=$(grep -L 'public ' Sources/TiebaNative/Proto/Generated/*.pb.swift | wc -l | tr -d ' ')
+          echo "protoc 产物: $total 个，其中不含任何 public 声明的: $missing 个"
+          if [ "$missing" != "0" ]; then
+            echo "::error::有 $missing 个 protoc 产物不含 public 声明。拆分（//Sources/TiebaNative:Proto）依赖它们跨 module 可见，请用 protoc-gen-swift --swift_opt=Visibility=Public 重新生成后再提交。"
+            grep -L 'public ' Sources/TiebaNative/Proto/Generated/*.pb.swift | head -5
+            exit 1
+          fi
+
       - name: Build (bazel, ad-hoc signed device IPA)
         run: |
           brew install bazelisk

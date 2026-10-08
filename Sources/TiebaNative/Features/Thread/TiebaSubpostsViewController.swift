@@ -201,7 +201,7 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     // 去底色/圆角，只靠行距分隔）。两边都画白卡时就分不出主回复与楼中楼（用户反馈）。
     let flatPalette: TiebaFeedRowPalette = {
       var flat = palette
-      flat.card = TiebaNavigator.shared.chromeTheme.background
+      flat.card = TiebaChromeTheme.current.background
       flat.borderCard = .clear
       return flat
     }()
@@ -427,7 +427,7 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     )
     item.accessibilityLabel = "打开原帖"
     item.primaryAction = UIAction { [weak self] _ in self?.openThread() }
-    item.tintColor = TiebaNavigator.shared.chromeTheme.navTint
+    item.tintColor = TiebaChromeTheme.current.navTint
     return [item]
   }
 }

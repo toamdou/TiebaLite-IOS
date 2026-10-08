@@ -52,7 +52,7 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    view.backgroundColor = TiebaChromeTheme.current.background
     setupSearchBar()
     setupToolButtons()
     historyView.onSelect = { [weak self] text in self?.commit(text) }
@@ -63,7 +63,7 @@ final class TiebaForumSearchViewController: UIViewController, TiebaNativeScreen 
       historyExpanded.toggle()
       refreshHistory()
     }
-    stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    stateView.isDark = TiebaChromeTheme.current.dark
     stateView.onButtonPress = { [weak self] _ in self?.runSearch(reset: true) }
     // 吧内搜索骨架：thread 卡片（原 forum/[name]/search.tsx count={6} variant="thread"）
     stateView.skeletonVariant = .thread

@@ -20,24 +20,24 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Baijiahao: Sendable {
+nonisolated public struct Tieba_Baijiahao: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var oriUgcNid: String = String()
+  public var oriUgcNid: String = String()
 
-  var oriUgcTid: String = String()
+  public var oriUgcTid: String = String()
 
-  var oriUgcType: Int32 = 0
+  public var oriUgcType: Int32 = 0
 
-  var oriUgcVid: String = String()
+  public var oriUgcVid: String = String()
 
-  var forwardURL: String = String()
+  public var forwardURL: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -45,10 +45,10 @@ nonisolated struct Tieba_Baijiahao: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Baijiahao: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Baijiahao"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ori_ugc_nid\0\u{3}ori_ugc_tid\0\u{3}ori_ugc_type\0\u{3}ori_ugc_vid\0\u{3}forward_url\0")
+  static public let protoMessageName: String = _protobuf_package + ".Baijiahao"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ori_ugc_nid\0\u{3}ori_ugc_tid\0\u{3}ori_ugc_type\0\u{3}ori_ugc_vid\0\u{3}forward_url\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -64,7 +64,7 @@ nonisolated extension Tieba_Baijiahao: SwiftProtobuf.Message, SwiftProtobuf._Mes
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.oriUgcNid.isEmpty {
       try visitor.visitSingularStringField(value: self.oriUgcNid, fieldNumber: 1)
     }
@@ -83,7 +83,7 @@ nonisolated extension Tieba_Baijiahao: SwiftProtobuf.Message, SwiftProtobuf._Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Baijiahao, rhs: Tieba_Baijiahao) -> Bool {
+  static public func ==(lhs: Tieba_Baijiahao, rhs: Tieba_Baijiahao) -> Bool {
     if lhs.oriUgcNid != rhs.oriUgcNid {return false}
     if lhs.oriUgcTid != rhs.oriUgcTid {return false}
     if lhs.oriUgcType != rhs.oriUgcType {return false}

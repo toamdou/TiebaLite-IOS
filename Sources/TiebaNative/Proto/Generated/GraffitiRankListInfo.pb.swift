@@ -20,30 +20,30 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_GraffitiRankListInfo: Sendable {
+nonisolated public struct Tieba_GraffitiRankListInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var hasMore_p: Int32 = 0
+  public var hasMore_p: Int32 = 0
 
-  var total: Int32 = 0
+  public var total: Int32 = 0
 
-  var list: [Tieba_GraffitiRankItem] = []
+  public var list: [Tieba_GraffitiRankItem] = []
 
-  var showListCount: Int32 = 0
+  public var showListCount: Int32 = 0
 
-  var quickListCount: Int32 = 0
+  public var quickListCount: Int32 = 0
 
-  var hasState_p: Int32 = 0
+  public var hasState_p: Int32 = 0
 
-  var tid: Int64 = 0
+  public var tid: Int64 = 0
 
-  var consentList: [Tieba_User] = []
+  public var consentList: [Tieba_User] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -51,10 +51,10 @@ nonisolated struct Tieba_GraffitiRankListInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_GraffitiRankListInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GraffitiRankListInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}has_more\0\u{1}total\0\u{1}list\0\u{3}show_list_count\0\u{3}quick_list_count\0\u{3}has_state\0\u{1}tid\0\u{3}consent_list\0")
+  static public let protoMessageName: String = _protobuf_package + ".GraffitiRankListInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}has_more\0\u{1}total\0\u{1}list\0\u{3}show_list_count\0\u{3}quick_list_count\0\u{3}has_state\0\u{1}tid\0\u{3}consent_list\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -73,7 +73,7 @@ nonisolated extension Tieba_GraffitiRankListInfo: SwiftProtobuf.Message, SwiftPr
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.hasMore_p != 0 {
       try visitor.visitSingularInt32Field(value: self.hasMore_p, fieldNumber: 1)
     }
@@ -101,7 +101,7 @@ nonisolated extension Tieba_GraffitiRankListInfo: SwiftProtobuf.Message, SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GraffitiRankListInfo, rhs: Tieba_GraffitiRankListInfo) -> Bool {
+  static public func ==(lhs: Tieba_GraffitiRankListInfo, rhs: Tieba_GraffitiRankListInfo) -> Bool {
     if lhs.hasMore_p != rhs.hasMore_p {return false}
     if lhs.total != rhs.total {return false}
     if lhs.list != rhs.list {return false}

@@ -20,49 +20,49 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_FrsPage_ActivityHead: Sendable {
+nonisolated public struct Tieba_FrsPage_ActivityHead: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var activityType: Int32 = 0
+  public var activityType: Int32 = 0
 
-  var activityTitle: String = String()
+  public var activityTitle: String = String()
 
-  var headImgs: [Tieba_FrsPage_HeadImgs] = []
+  public var headImgs: [Tieba_FrsPage_HeadImgs] = []
 
-  var topSize: Tieba_FrsPage_Size {
+  public var topSize: Tieba_FrsPage_Size {
     get {_topSize ?? Tieba_FrsPage_Size()}
     set {_topSize = newValue}
   }
   /// Returns true if `topSize` has been explicitly set.
-  var hasTopSize: Bool {self._topSize != nil}
+  public var hasTopSize: Bool {self._topSize != nil}
   /// Clears the value of `topSize`. Subsequent reads from it will return its default value.
-  mutating func clearTopSize() {self._topSize = nil}
+  mutating public func clearTopSize() {self._topSize = nil}
 
-  var objID: String = String()
+  public var objID: String = String()
 
-  var pullDownURL: String = String()
+  public var pullDownURL: String = String()
 
-  var pullDownInterval: Int32 = 0
+  public var pullDownInterval: Int32 = 0
 
-  var pullDownPicIos: String = String()
+  public var pullDownPicIos: String = String()
 
-  var pullDownPicAndroid: String = String()
+  public var pullDownPicAndroid: String = String()
 
-  var pullDownExposureURL: String = String()
+  public var pullDownExposureURL: String = String()
 
-  var pullDownClickURL: String = String()
+  public var pullDownClickURL: String = String()
 
-  var isAd: Bool = false
+  public var isAd: Bool = false
 
-  var pullDownSchema: String = String()
+  public var pullDownSchema: String = String()
 
-  var pullDownPackageName: String = String()
+  public var pullDownPackageName: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _topSize: Tieba_FrsPage_Size? = nil
 }
@@ -72,10 +72,10 @@ nonisolated struct Tieba_FrsPage_ActivityHead: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.frsPage"
 
 nonisolated extension Tieba_FrsPage_ActivityHead: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ActivityHead"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}activity_type\0\u{3}activity_title\0\u{3}head_imgs\0\u{3}top_size\0\u{3}obj_id\0\u{4}\u{2}pull_down_url\0\u{3}pull_down_interval\0\u{3}pull_down_pic_ios\0\u{3}pull_down_pic_android\0\u{3}pull_down_exposure_url\0\u{3}pull_down_click_url\0\u{3}is_ad\0\u{3}pull_down_schema\0\u{3}pull_down_package_name\0")
+  static public let protoMessageName: String = _protobuf_package + ".ActivityHead"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}activity_type\0\u{3}activity_title\0\u{3}head_imgs\0\u{3}top_size\0\u{3}obj_id\0\u{4}\u{2}pull_down_url\0\u{3}pull_down_interval\0\u{3}pull_down_pic_ios\0\u{3}pull_down_pic_android\0\u{3}pull_down_exposure_url\0\u{3}pull_down_click_url\0\u{3}is_ad\0\u{3}pull_down_schema\0\u{3}pull_down_package_name\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -100,7 +100,7 @@ nonisolated extension Tieba_FrsPage_ActivityHead: SwiftProtobuf.Message, SwiftPr
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -150,7 +150,7 @@ nonisolated extension Tieba_FrsPage_ActivityHead: SwiftProtobuf.Message, SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_FrsPage_ActivityHead, rhs: Tieba_FrsPage_ActivityHead) -> Bool {
+  static public func ==(lhs: Tieba_FrsPage_ActivityHead, rhs: Tieba_FrsPage_ActivityHead) -> Bool {
     if lhs.activityType != rhs.activityType {return false}
     if lhs.activityTitle != rhs.activityTitle {return false}
     if lhs.headImgs != rhs.headImgs {return false}

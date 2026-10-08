@@ -49,7 +49,7 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
     applyPalette()
     list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     list.isHidden = true
-    stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    stateView.isDark = TiebaChromeTheme.current.dark
     stateView.onButtonPress = { [weak self] _ in self?.reload() }
     // 与吧页/ExploreFeed 同口径：骨架顶部留 8pt，不再贴着导航栏画。
     stateView.skeletonInsets = UIEdgeInsets(top: 8, left: 0, bottom: 24, right: 0)
@@ -126,7 +126,7 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
 
   private func applyPalette() {
     var palette = TiebaSimpleRowPalette.default
-    let tint = TiebaNavigator.shared.chromeTheme.tint
+    let tint = TiebaChromeTheme.current.tint
     palette.base.primary = tint
     list.palette = palette
   }

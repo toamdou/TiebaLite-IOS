@@ -20,34 +20,34 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_ManagerElection: Sendable {
+nonisolated public struct Tieba_ManagerElection: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var canVote: UInt32 = 0
+  public var canVote: UInt32 = 0
 
-  var voteNum: UInt32 = 0
+  public var voteNum: UInt32 = 0
 
-  var beginVoteTime: UInt32 = 0
+  public var beginVoteTime: UInt32 = 0
 
-  var voteCondition: [String] = []
+  public var voteCondition: [String] = []
 
-  var tailText: String = String()
+  public var tailText: String = String()
 
-  var isShowDistribute: UInt32 = 0
+  public var isShowDistribute: UInt32 = 0
 
-  var remainderTime: UInt32 = 0
+  public var remainderTime: UInt32 = 0
 
-  var status: UInt32 = 0
+  public var status: UInt32 = 0
 
-  var voteConditionTitle: [String] = []
+  public var voteConditionTitle: [String] = []
 
-  var voteConditionPic: [String] = []
+  public var voteConditionPic: [String] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -55,10 +55,10 @@ nonisolated struct Tieba_ManagerElection: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_ManagerElection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ManagerElection"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}can_vote\0\u{3}vote_num\0\u{3}begin_vote_time\0\u{4}\u{2}vote_condition\0\u{3}tail_text\0\u{3}is_show_distribute\0\u{3}remainder_time\0\u{1}status\0\u{3}vote_condition_title\0\u{3}vote_condition_pic\0")
+  static public let protoMessageName: String = _protobuf_package + ".ManagerElection"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}can_vote\0\u{3}vote_num\0\u{3}begin_vote_time\0\u{4}\u{2}vote_condition\0\u{3}tail_text\0\u{3}is_show_distribute\0\u{3}remainder_time\0\u{1}status\0\u{3}vote_condition_title\0\u{3}vote_condition_pic\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -79,7 +79,7 @@ nonisolated extension Tieba_ManagerElection: SwiftProtobuf.Message, SwiftProtobu
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.canVote != 0 {
       try visitor.visitSingularUInt32Field(value: self.canVote, fieldNumber: 1)
     }
@@ -113,7 +113,7 @@ nonisolated extension Tieba_ManagerElection: SwiftProtobuf.Message, SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ManagerElection, rhs: Tieba_ManagerElection) -> Bool {
+  static public func ==(lhs: Tieba_ManagerElection, rhs: Tieba_ManagerElection) -> Bool {
     if lhs.canVote != rhs.canVote {return false}
     if lhs.voteNum != rhs.voteNum {return false}
     if lhs.beginVoteTime != rhs.beginVoteTime {return false}

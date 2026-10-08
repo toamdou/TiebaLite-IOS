@@ -20,22 +20,22 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Profile_ReplyList: Sendable {
+nonisolated public struct Tieba_Profile_ReplyList: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var userID: Int64 = 0
+  public var userID: Int64 = 0
 
-  var friendID: Int64 = 0
+  public var friendID: Int64 = 0
 
-  var message: String = String()
+  public var message: String = String()
 
-  var time: UInt32 = 0
+  public var time: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -43,10 +43,10 @@ nonisolated struct Tieba_Profile_ReplyList: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.profile"
 
 nonisolated extension Tieba_Profile_ReplyList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ReplyList"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}friend_id\0\u{1}message\0\u{1}time\0")
+  static public let protoMessageName: String = _protobuf_package + ".ReplyList"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}friend_id\0\u{1}message\0\u{1}time\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_Profile_ReplyList: SwiftProtobuf.Message, SwiftProto
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.userID != 0 {
       try visitor.visitSingularInt64Field(value: self.userID, fieldNumber: 1)
     }
@@ -77,7 +77,7 @@ nonisolated extension Tieba_Profile_ReplyList: SwiftProtobuf.Message, SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Profile_ReplyList, rhs: Tieba_Profile_ReplyList) -> Bool {
+  static public func ==(lhs: Tieba_Profile_ReplyList, rhs: Tieba_Profile_ReplyList) -> Bool {
     if lhs.userID != rhs.userID {return false}
     if lhs.friendID != rhs.friendID {return false}
     if lhs.message != rhs.message {return false}

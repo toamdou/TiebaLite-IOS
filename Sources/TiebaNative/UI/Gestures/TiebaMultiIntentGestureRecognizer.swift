@@ -13,14 +13,6 @@
 //     把产出的意图发给回调。
 //   · 用本仓唯一的 \`TiebaSharedDisplayLinkDriver\` 做 tick 源（不新开 CADisplayLink，见该文件说明）。
 //
-// 意图（对外最少必要集）：
-//   highlight(Bool) —— 按下/取消高亮（调用方拿它做按压反馈）
-//   singleTap       —— 确认后的单击（等过双击窗口才发出）
-//   doubleTap       —— 双击
-//   longPress       —— 长按成立（可紧接着跟拖动）
-//   dragBegan/Moved/Ended —— 长按之后继续拖动（"长按拖动"），或直接拖动取消点击
-//   cancelled       —— 全部作废（系统取消/超时/移出容差）
-//
 // Swift 6：机器是 Sendable 值类型；识别器是 UIGestureRecognizer 子类（天然 @MainActor）。
 // 没有 @preconcurrency / nonisolated(unsafe) / @unchecked Sendable / assumeIsolated。
 
@@ -204,7 +196,7 @@ struct TiebaMultiIntentGestureMachine {
 // MARK: - 识别器（薄壳）
 
 @MainActor
-final class TiebaMultiIntentGestureRecognizer: UIGestureRecognizer {
+final class TiebaMultiIntentGestureRecognizer: UIGestureRecognizer, UIGestureRecognizerDelegate {
     /// 意图回调（**一定是主线程**：识别器本身就是主 actor）。
     var onIntent: ((TiebaGestureIntent) -> Void)?
 
@@ -230,6 +222,34 @@ final class TiebaMultiIntentGestureRecognizer: UIGestureRecognizer {
         self.cancelsTouchesInView = false
         self.delaysTouchesBegan = false
         self.delaysTouchesEnded = false
+        // must-not-compete 的第三只脚（前两只见下面的 canPrevent / canBePrevented）：
+        // delegate 是 weak，自持不成环。
+        self.delegate = self
+    }
+
+    // MARK: 竞技场（与 TiebaGlassTouchEffect 同一口径）
+
+    /// 本件在 touchesBegan 就把自己置为 .began（见那里的注释：状态只是让 UIKit 知道
+    /// 手势还活着，判定全在 machine 里）。默认竞技场规则是"先识别者取消其他"，于是
+    /// 宿主滚动视图的 pan 会被本件判负 —— 本件唯一的落点是查看器 cell（挂在缩放
+    /// scrollView 上、外面还套着翻页 collectionView），症状就是**大图左右翻页整片
+    /// 失效**（顺带下拉关闭、双指缩放一起哑掉）。
+    /// 声明"既不能取消别人、也不被别人取消"：本件 cancelsTouchesInView = false，
+    /// 不吞触摸；滚动/缩放照常识别，滚动位移超过 cancelTolerance 时 machine 自己
+    /// 作废点击意图，不会在滑动途中误切 chrome。
+    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool {
+        false
+    }
+
+    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool {
+        false
+    }
+
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
     }
 
     override func reset() {

@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite — 系统状态块（TiebaStateContentView）
 //
 // 纯 UIKit 视图，可被原生 UIViewController 直接使用
@@ -24,7 +23,6 @@
 //   [按钮列] ← spacing 16（错误页 ContentUnavailableView 与按钮的 VStack 间距）
 // 按钮 fullWidth（原 `frame({ maxWidth: 9999 })`）时铺满容器宽度；否则按内容宽度
 // 居中（消息页未登录空态的原形态）。
-// ============================================================
 
 import UIKit
 

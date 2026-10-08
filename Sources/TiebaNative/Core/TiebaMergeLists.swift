@@ -3,7 +3,6 @@
 // 移植自上游 submodules/MergeLists/Sources/MergeLists.swift。
 // 本仓改名：mergeListsStableWithUpdates → tiebaMergeListsStableWithUpdates —— 公开符号加本仓前缀，避免污染模块全局命名空间。
 // （mergeListsStableWithUpdatesReversed 已在本轮零调用方清理中删除：全仓 0 调用方。）
-// 本仓位置：早期住在 早期 vendor 目录（该目录已解散），现在直接放在 Core/ 下。
 // 本仓改动：仅把泛型约束 T: Identifiable 改为 T: TiebaMergeIdentifiable（同上改名）。
 
 @inlinable
@@ -76,7 +75,6 @@ public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], a
         }
     }
     
-    //print("remove:\n\(removeIndices)")
     
     for index in removeIndices.reversed() {
         currentList.remove(at: index)
@@ -87,14 +85,6 @@ public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], a
         }
     }
     
-    /*print("\n current after removes:\n")
-    m = 0
-    for right in currentList {
-        print("\(m): \(right.stableId)")
-        m += 1
-    }
-    
-    print("update:\n\(updatedIndices.map({ "\($0.0), \($0.1.stableId) (was \($0.2)))" }))")*/
     
     i = 0
     j = 0
@@ -102,17 +92,14 @@ public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], a
     while true {
         let left: T?
         
-        //print("i=\(i), j=\(j), k=\(k)")
         
         if k < updatedIndices.count && updatedIndices[k].0 < i {
-            //print("updated[k=\(k)]=\(updatedIndices[k].0)<i=\(i), k++")
             k += 1
         }
         
         if k < updatedIndices.count {
             if updatedIndices[k].0 == i {
                 left = updatedIndices[k].1
-                //print("override left = \(updatedIndices[k].1.stableId)")
             } else {
                 left = i < currentList.count ? currentList[i] : nil
             }
@@ -124,14 +111,9 @@ public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], a
         
         if let left = left, let right = right {
             if left == right {
-                //print("\(left.stableId)==\(right.stableId)")
-                //print("i++, j++")
                 i += 1
                 j += 1
             } else if left > right {
-                //print("\(left.stableId)>\(right.stableId)")
-                //print("insert \(right.stableId) at \(i)")
-                //print("i++, j++")
                 let previousIndex = previousIndices[right.stableId]
                 insertItems.append((i, right, previousIndex))
                 currentList.insert(right, at: i)
@@ -144,19 +126,11 @@ public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], a
                 i += 1
                 j += 1
             } else {
-                //print("\(left.stableId)<\(right.stableId)")
-                //print("i++")
                 i += 1
             }
         } else if let _ = left {
-            //print("\(left!.stableId)>nil")
-            //print("i++")
             i += 1
         } else if let right = right {
-            //print("nil<\(right.stableId)")
-            //print("insert \(right.stableId) at \(i)")
-            //print("i++")
-            //print("j++")
             let previousIndex = previousIndices[right.stableId]
             insertItems.append((i, right, previousIndex))
             currentList.insert(right, at: i)
@@ -187,7 +161,6 @@ public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], a
     return (removeIndices, insertItems, updatedIndices)
 }
 
-//@inlinable
 public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], isLess: (T, T) -> Bool, isEqual: (T, T) -> Bool, getId: (T) -> AnyHashable, allUpdated: Bool = false) -> ([Int], [(Int, T, Int?)], [(Int, T, Int)]) {
     var removeIndices: [Int] = []
     var insertItems: [(Int, T, Int?)] = []
@@ -294,7 +267,6 @@ public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], i
         }
     }
     
-    //print("remove:\n\(removeIndices)")
     
     for index in removeIndices.reversed() {
         currentList.remove(at: index)
@@ -305,14 +277,6 @@ public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], i
         }
     }
     
-    /*print("\n current after removes:\n")
-     m = 0
-     for right in currentList {
-     print("\(m): \(right.stableId)")
-     m += 1
-     }
-     
-     print("update:\n\(updatedIndices.map({ "\($0.0), \($0.1.stableId) (was \($0.2)))" }))")*/
     
     i = 0
     j = 0
@@ -320,17 +284,14 @@ public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], i
     while true {
         let left: T?
         
-        //print("i=\(i), j=\(j), k=\(k)")
         
         if k < updatedIndices.count && updatedIndices[k].0 < i {
-            //print("updated[k=\(k)]=\(updatedIndices[k].0)<i=\(i), k++")
             k += 1
         }
         
         if k < updatedIndices.count {
             if updatedIndices[k].0 == i {
                 left = updatedIndices[k].1
-                //print("override left = \(updatedIndices[k].1.stableId)")
             } else {
                 left = i < currentList.count ? currentList[i] : nil
             }
@@ -342,14 +303,9 @@ public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], i
         
         if let left = left, let right = right {
             if isEqual(left, right) {
-                //print("\(left.stableId)==\(right.stableId)")
-                //print("i++, j++")
                 i += 1
                 j += 1
             } else if !isLess(left, right) {
-                //print("\(left.stableId)>\(right.stableId)")
-                //print("insert \(right.stableId) at \(i)")
-                //print("i++, j++")
                 let previousIndex = previousIndices[getId(right)]
                 insertItems.append((i, right, previousIndex))
                 currentList.insert(right, at: i)
@@ -362,19 +318,11 @@ public func tiebaMergeListsStableWithUpdates<T>(leftList: [T], rightList: [T], i
                 i += 1
                 j += 1
             } else {
-                //print("\(left.stableId)<\(right.stableId)")
-                //print("i++")
                 i += 1
             }
         } else if let _ = left {
-            //print("\(left!.stableId)>nil")
-            //print("i++")
             i += 1
         } else if let right = right {
-            //print("nil<\(right.stableId)")
-            //print("insert \(right.stableId) at \(i)")
-            //print("i++")
-            //print("j++")
             let previousIndex = previousIndices[getId(right)]
             insertItems.append((i, right, previousIndex))
             currentList.insert(right, at: i)

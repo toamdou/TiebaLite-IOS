@@ -20,143 +20,143 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_AlaUserInfo: @unchecked Sendable {
+nonisolated public struct Tieba_AlaUserInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var alaID: UInt64 {
+  public var alaID: UInt64 {
     get {_storage._alaID}
     set {_uniqueStorage()._alaID = newValue}
   }
 
-  var userName: String {
+  public var userName: String {
     get {_storage._userName}
     set {_uniqueStorage()._userName = newValue}
   }
 
-  var portrait: String {
+  public var portrait: String {
     get {_storage._portrait}
     set {_uniqueStorage()._portrait = newValue}
   }
 
-  var description_p: String {
+  public var description_p: String {
     get {_storage._description_p}
     set {_uniqueStorage()._description_p = newValue}
   }
 
-  var sex: String {
+  public var sex: String {
     get {_storage._sex}
     set {_uniqueStorage()._sex = newValue}
   }
 
-  var enterLive: UInt64 {
+  public var enterLive: UInt64 {
     get {_storage._enterLive}
     set {_uniqueStorage()._enterLive = newValue}
   }
 
-  var anchorLive: UInt64 {
+  public var anchorLive: UInt64 {
     get {_storage._anchorLive}
     set {_uniqueStorage()._anchorLive = newValue}
   }
 
-  var liveStatus: UInt32 {
+  public var liveStatus: UInt32 {
     get {_storage._liveStatus}
     set {_uniqueStorage()._liveStatus = newValue}
   }
 
-  var liveID: UInt64 {
+  public var liveID: UInt64 {
     get {_storage._liveID}
     set {_uniqueStorage()._liveID = newValue}
   }
 
-  var location: String {
+  public var location: String {
     get {_storage._location}
     set {_uniqueStorage()._location = newValue}
   }
 
-  var lng: Double {
+  public var lng: Double {
     get {_storage._lng}
     set {_uniqueStorage()._lng = newValue}
   }
 
-  var lat: Double {
+  public var lat: Double {
     get {_storage._lat}
     set {_uniqueStorage()._lat = newValue}
   }
 
-  var updateTime: UInt32 {
+  public var updateTime: UInt32 {
     get {_storage._updateTime}
     set {_uniqueStorage()._updateTime = newValue}
   }
 
-  var charmCount: UInt64 {
+  public var charmCount: UInt64 {
     get {_storage._charmCount}
     set {_uniqueStorage()._charmCount = newValue}
   }
 
-  var levelExp: UInt64 {
+  public var levelExp: UInt64 {
     get {_storage._levelExp}
     set {_uniqueStorage()._levelExp = newValue}
   }
 
-  var isOfficial: UInt32 {
+  public var isOfficial: UInt32 {
     get {_storage._isOfficial}
     set {_uniqueStorage()._isOfficial = newValue}
   }
 
-  var verifyStatus: String {
+  public var verifyStatus: String {
     get {_storage._verifyStatus}
     set {_uniqueStorage()._verifyStatus = newValue}
   }
 
-  var levelID: UInt32 {
+  public var levelID: UInt32 {
     get {_storage._levelID}
     set {_uniqueStorage()._levelID = newValue}
   }
 
-  var greatAnchorIcon: String {
+  public var greatAnchorIcon: String {
     get {_storage._greatAnchorIcon}
     set {_uniqueStorage()._greatAnchorIcon = newValue}
   }
 
-  var greatAnchorDescGrade: String {
+  public var greatAnchorDescGrade: String {
     get {_storage._greatAnchorDescGrade}
     set {_uniqueStorage()._greatAnchorDescGrade = newValue}
   }
 
-  var greatAnchorDescRole: String {
+  public var greatAnchorDescRole: String {
     get {_storage._greatAnchorDescRole}
     set {_uniqueStorage()._greatAnchorDescRole = newValue}
   }
 
-  var levelName: String {
+  public var levelName: String {
     get {_storage._levelName}
     set {_uniqueStorage()._levelName = newValue}
   }
 
-  var userID: UInt64 {
+  public var userID: UInt64 {
     get {_storage._userID}
     set {_uniqueStorage()._userID = newValue}
   }
 
-  var anchorFans: Int32 {
+  public var anchorFans: Int32 {
     get {_storage._anchorFans}
     set {_uniqueStorage()._anchorFans = newValue}
   }
 
-  var yyExt: Tieba_YyExt {
+  public var yyExt: Tieba_YyExt {
     get {_storage._yyExt ?? Tieba_YyExt()}
     set {_uniqueStorage()._yyExt = newValue}
   }
   /// Returns true if `yyExt` has been explicitly set.
-  var hasYyExt: Bool {_storage._yyExt != nil}
+  public var hasYyExt: Bool {_storage._yyExt != nil}
   /// Clears the value of `yyExt`. Subsequent reads from it will return its default value.
-  mutating func clearYyExt() {_uniqueStorage()._yyExt = nil}
+  mutating public func clearYyExt() {_uniqueStorage()._yyExt = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -166,8 +166,8 @@ nonisolated struct Tieba_AlaUserInfo: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_AlaUserInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AlaUserInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ala_id\0\u{3}user_name\0\u{1}portrait\0\u{1}description\0\u{1}sex\0\u{3}enter_live\0\u{3}anchor_live\0\u{3}live_status\0\u{3}live_id\0\u{1}location\0\u{1}lng\0\u{1}lat\0\u{3}update_time\0\u{3}charm_count\0\u{3}level_exp\0\u{3}is_official\0\u{3}verify_status\0\u{3}level_id\0\u{3}great_anchor_icon\0\u{3}great_anchor_desc_grade\0\u{3}great_anchor_desc_role\0\u{3}level_name\0\u{3}user_id\0\u{3}anchor_fans\0\u{3}yy_ext\0")
+  static public let protoMessageName: String = _protobuf_package + ".AlaUserInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ala_id\0\u{3}user_name\0\u{1}portrait\0\u{1}description\0\u{1}sex\0\u{3}enter_live\0\u{3}anchor_live\0\u{3}live_status\0\u{3}live_id\0\u{1}location\0\u{1}lng\0\u{1}lat\0\u{3}update_time\0\u{3}charm_count\0\u{3}level_exp\0\u{3}is_official\0\u{3}verify_status\0\u{3}level_id\0\u{3}great_anchor_icon\0\u{3}great_anchor_desc_grade\0\u{3}great_anchor_desc_role\0\u{3}level_name\0\u{3}user_id\0\u{3}anchor_fans\0\u{3}yy_ext\0")
 
   fileprivate class _StorageClass {
     var _alaID: UInt64 = 0
@@ -240,7 +240,7 @@ nonisolated extension Tieba_AlaUserInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -279,7 +279,7 @@ nonisolated extension Tieba_AlaUserInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -364,7 +364,7 @@ nonisolated extension Tieba_AlaUserInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_AlaUserInfo, rhs: Tieba_AlaUserInfo) -> Bool {
+  static public func ==(lhs: Tieba_AlaUserInfo, rhs: Tieba_AlaUserInfo) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

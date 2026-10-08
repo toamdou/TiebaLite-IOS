@@ -59,7 +59,7 @@ private final class NavDoubleTapGesture: UITapGestureRecognizer {
       TiebaPreferenceSnapshot.bool("navBarDoubleTapToTop", default: true)
     else { return }
     TiebaSceneHaptics.fire("press")
-    TiebaNavigator.shared.scrollCurrentToTop()
+    TiebaAppHooks.scrollCurrentToTop()
   }
 }
 

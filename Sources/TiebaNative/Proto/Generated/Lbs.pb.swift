@@ -20,24 +20,24 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Lbs: Sendable {
+nonisolated public struct Tieba_Lbs: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var lat: String = String()
+  public var lat: String = String()
 
-  var lng: String = String()
+  public var lng: String = String()
 
-  var name: String = String()
+  public var name: String = String()
 
-  var sn: String = String()
+  public var sn: String = String()
 
-  var distance: String = String()
+  public var distance: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -45,10 +45,10 @@ nonisolated struct Tieba_Lbs: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Lbs: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Lbs"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}lat\0\u{1}lng\0\u{1}name\0\u{1}sn\0\u{1}distance\0")
+  static public let protoMessageName: String = _protobuf_package + ".Lbs"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}lat\0\u{1}lng\0\u{1}name\0\u{1}sn\0\u{1}distance\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -64,7 +64,7 @@ nonisolated extension Tieba_Lbs: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.lat.isEmpty {
       try visitor.visitSingularStringField(value: self.lat, fieldNumber: 1)
     }
@@ -83,7 +83,7 @@ nonisolated extension Tieba_Lbs: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Lbs, rhs: Tieba_Lbs) -> Bool {
+  static public func ==(lhs: Tieba_Lbs, rhs: Tieba_Lbs) -> Bool {
     if lhs.lat != rhs.lat {return false}
     if lhs.lng != rhs.lng {return false}
     if lhs.name != rhs.name {return false}

@@ -20,167 +20,167 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_UserLike_UserLikeRequestData: Sendable {
+nonisolated public struct Tieba_UserLike_UserLikeRequestData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var common: Tieba_CommonRequest {
+  public var common: Tieba_CommonRequest {
     get {_common ?? Tieba_CommonRequest()}
     set {_common = newValue}
   }
   /// Returns true if `common` has been explicitly set.
-  var hasCommon: Bool {self._common != nil}
+  public var hasCommon: Bool {self._common != nil}
   /// Clears the value of `common`. Subsequent reads from it will return its default value.
-  mutating func clearCommon() {self._common = nil}
+  mutating public func clearCommon() {self._common = nil}
 
-  var pageTag: String = String()
+  public var pageTag: String = String()
 
-  var lastRequestUnix: UInt64 = 0
+  public var lastRequestUnix: UInt64 = 0
 
-  var followType: Int32 = 0
+  public var followType: Int32 = 0
 
-  var loadType: Int32 = 0
+  public var loadType: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _common: Tieba_CommonRequest? = nil
 }
 
-nonisolated struct Tieba_UserLike_UserLikeRequest: Sendable {
+nonisolated public struct Tieba_UserLike_UserLikeRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var data: Tieba_UserLike_UserLikeRequestData {
+  public var data: Tieba_UserLike_UserLikeRequestData {
     get {_data ?? Tieba_UserLike_UserLikeRequestData()}
     set {_data = newValue}
   }
   /// Returns true if `data` has been explicitly set.
-  var hasData: Bool {self._data != nil}
+  public var hasData: Bool {self._data != nil}
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
-  mutating func clearData() {self._data = nil}
+  mutating public func clearData() {self._data = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _data: Tieba_UserLike_UserLikeRequestData? = nil
 }
 
-nonisolated struct Tieba_UserLike_UserLikeResponseData: Sendable {
+nonisolated public struct Tieba_UserLike_UserLikeResponseData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var threadInfo: [Tieba_UserLike_ConcernData] = []
+  public var threadInfo: [Tieba_UserLike_ConcernData] = []
 
-  var pageTag: String = String()
+  public var pageTag: String = String()
 
-  var hasMore_p: Int32 = 0
+  public var hasMore_p: Int32 = 0
 
-  var requestUnix: UInt64 = 0
+  public var requestUnix: UInt64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-nonisolated struct Tieba_UserLike_UserLikeResponse: Sendable {
+nonisolated public struct Tieba_UserLike_UserLikeResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var error: Tieba_Error {
+  public var error: Tieba_Error {
     get {_error ?? Tieba_Error()}
     set {_error = newValue}
   }
   /// Returns true if `error` has been explicitly set.
-  var hasError: Bool {self._error != nil}
+  public var hasError: Bool {self._error != nil}
   /// Clears the value of `error`. Subsequent reads from it will return its default value.
-  mutating func clearError() {self._error = nil}
+  mutating public func clearError() {self._error = nil}
 
-  var data: Tieba_UserLike_UserLikeResponseData {
+  public var data: Tieba_UserLike_UserLikeResponseData {
     get {_data ?? Tieba_UserLike_UserLikeResponseData()}
     set {_data = newValue}
   }
   /// Returns true if `data` has been explicitly set.
-  var hasData: Bool {self._data != nil}
+  public var hasData: Bool {self._data != nil}
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
-  mutating func clearData() {self._data = nil}
+  mutating public func clearData() {self._data = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _error: Tieba_Error? = nil
   fileprivate var _data: Tieba_UserLike_UserLikeResponseData? = nil
 }
 
-nonisolated struct Tieba_UserLike_ConcernData: Sendable {
+nonisolated public struct Tieba_UserLike_ConcernData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var threadList: Tieba_ThreadInfo {
+  public var threadList: Tieba_ThreadInfo {
     get {_threadList ?? Tieba_ThreadInfo()}
     set {_threadList = newValue}
   }
   /// Returns true if `threadList` has been explicitly set.
-  var hasThreadList: Bool {self._threadList != nil}
+  public var hasThreadList: Bool {self._threadList != nil}
   /// Clears the value of `threadList`. Subsequent reads from it will return its default value.
-  mutating func clearThreadList() {self._threadList = nil}
+  mutating public func clearThreadList() {self._threadList = nil}
 
-  var postData: Tieba_UserLike_PostData {
+  public var postData: Tieba_UserLike_PostData {
     get {_postData ?? Tieba_UserLike_PostData()}
     set {_postData = newValue}
   }
   /// Returns true if `postData` has been explicitly set.
-  var hasPostData: Bool {self._postData != nil}
+  public var hasPostData: Bool {self._postData != nil}
   /// Clears the value of `postData`. Subsequent reads from it will return its default value.
-  mutating func clearPostData() {self._postData = nil}
+  mutating public func clearPostData() {self._postData = nil}
 
-  var recommendType: Int32 = 0
+  public var recommendType: Int32 = 0
 
-  var source: Int32 = 0
+  public var source: Int32 = 0
 
-  var recommendUserList: [Tieba_User] = []
+  public var recommendUserList: [Tieba_User] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _threadList: Tieba_ThreadInfo? = nil
   fileprivate var _postData: Tieba_UserLike_PostData? = nil
 }
 
-nonisolated struct Tieba_UserLike_PostData: Sendable {
+nonisolated public struct Tieba_UserLike_PostData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var id: UInt64 = 0
+  public var id: UInt64 = 0
 
-  var content: [Tieba_PbContent] = []
+  public var content: [Tieba_PbContent] = []
 
-  var postTitle: String = String()
+  public var postTitle: String = String()
 
-  var author: Tieba_User {
+  public var author: Tieba_User {
     get {_author ?? Tieba_User()}
     set {_author = newValue}
   }
   /// Returns true if `author` has been explicitly set.
-  var hasAuthor: Bool {self._author != nil}
+  public var hasAuthor: Bool {self._author != nil}
   /// Clears the value of `author`. Subsequent reads from it will return its default value.
-  mutating func clearAuthor() {self._author = nil}
+  mutating public func clearAuthor() {self._author = nil}
 
-  var time: UInt64 = 0
+  public var time: UInt64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _author: Tieba_User? = nil
 }
@@ -190,10 +190,10 @@ nonisolated struct Tieba_UserLike_PostData: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.userLike"
 
 nonisolated extension Tieba_UserLike_UserLikeRequestData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UserLikeRequestData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}common\0\u{1}pageTag\0\u{1}lastRequestUnix\0\u{1}followType\0\u{1}loadType\0")
+  static public let protoMessageName: String = _protobuf_package + ".UserLikeRequestData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}common\0\u{1}pageTag\0\u{1}lastRequestUnix\0\u{1}followType\0\u{1}loadType\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -209,7 +209,7 @@ nonisolated extension Tieba_UserLike_UserLikeRequestData: SwiftProtobuf.Message,
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -232,7 +232,7 @@ nonisolated extension Tieba_UserLike_UserLikeRequestData: SwiftProtobuf.Message,
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_UserLike_UserLikeRequestData, rhs: Tieba_UserLike_UserLikeRequestData) -> Bool {
+  static public func ==(lhs: Tieba_UserLike_UserLikeRequestData, rhs: Tieba_UserLike_UserLikeRequestData) -> Bool {
     if lhs._common != rhs._common {return false}
     if lhs.pageTag != rhs.pageTag {return false}
     if lhs.lastRequestUnix != rhs.lastRequestUnix {return false}
@@ -244,10 +244,10 @@ nonisolated extension Tieba_UserLike_UserLikeRequestData: SwiftProtobuf.Message,
 }
 
 nonisolated extension Tieba_UserLike_UserLikeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UserLikeRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}data\0")
+  static public let protoMessageName: String = _protobuf_package + ".UserLikeRequest"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}data\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -259,7 +259,7 @@ nonisolated extension Tieba_UserLike_UserLikeRequest: SwiftProtobuf.Message, Swi
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -270,7 +270,7 @@ nonisolated extension Tieba_UserLike_UserLikeRequest: SwiftProtobuf.Message, Swi
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_UserLike_UserLikeRequest, rhs: Tieba_UserLike_UserLikeRequest) -> Bool {
+  static public func ==(lhs: Tieba_UserLike_UserLikeRequest, rhs: Tieba_UserLike_UserLikeRequest) -> Bool {
     if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -278,10 +278,10 @@ nonisolated extension Tieba_UserLike_UserLikeRequest: SwiftProtobuf.Message, Swi
 }
 
 nonisolated extension Tieba_UserLike_UserLikeResponseData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UserLikeResponseData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}threadInfo\0\u{1}pageTag\0\u{2}\u{2}hasMore\0\u{2}\u{6}requestUnix\0")
+  static public let protoMessageName: String = _protobuf_package + ".UserLikeResponseData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}threadInfo\0\u{1}pageTag\0\u{2}\u{2}hasMore\0\u{2}\u{6}requestUnix\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -296,7 +296,7 @@ nonisolated extension Tieba_UserLike_UserLikeResponseData: SwiftProtobuf.Message
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.threadInfo.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.threadInfo, fieldNumber: 1)
     }
@@ -312,7 +312,7 @@ nonisolated extension Tieba_UserLike_UserLikeResponseData: SwiftProtobuf.Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_UserLike_UserLikeResponseData, rhs: Tieba_UserLike_UserLikeResponseData) -> Bool {
+  static public func ==(lhs: Tieba_UserLike_UserLikeResponseData, rhs: Tieba_UserLike_UserLikeResponseData) -> Bool {
     if lhs.threadInfo != rhs.threadInfo {return false}
     if lhs.pageTag != rhs.pageTag {return false}
     if lhs.hasMore_p != rhs.hasMore_p {return false}
@@ -323,10 +323,10 @@ nonisolated extension Tieba_UserLike_UserLikeResponseData: SwiftProtobuf.Message
 }
 
 nonisolated extension Tieba_UserLike_UserLikeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UserLikeResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}data\0")
+  static public let protoMessageName: String = _protobuf_package + ".UserLikeResponse"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}data\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -339,7 +339,7 @@ nonisolated extension Tieba_UserLike_UserLikeResponse: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -353,7 +353,7 @@ nonisolated extension Tieba_UserLike_UserLikeResponse: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_UserLike_UserLikeResponse, rhs: Tieba_UserLike_UserLikeResponse) -> Bool {
+  static public func ==(lhs: Tieba_UserLike_UserLikeResponse, rhs: Tieba_UserLike_UserLikeResponse) -> Bool {
     if lhs._error != rhs._error {return false}
     if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -362,10 +362,10 @@ nonisolated extension Tieba_UserLike_UserLikeResponse: SwiftProtobuf.Message, Sw
 }
 
 nonisolated extension Tieba_UserLike_ConcernData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ConcernData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}threadList\0\u{1}postData\0\u{1}recommendType\0\u{1}source\0\u{1}recommendUserList\0")
+  static public let protoMessageName: String = _protobuf_package + ".ConcernData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}threadList\0\u{1}postData\0\u{1}recommendType\0\u{1}source\0\u{1}recommendUserList\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -381,7 +381,7 @@ nonisolated extension Tieba_UserLike_ConcernData: SwiftProtobuf.Message, SwiftPr
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -404,7 +404,7 @@ nonisolated extension Tieba_UserLike_ConcernData: SwiftProtobuf.Message, SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_UserLike_ConcernData, rhs: Tieba_UserLike_ConcernData) -> Bool {
+  static public func ==(lhs: Tieba_UserLike_ConcernData, rhs: Tieba_UserLike_ConcernData) -> Bool {
     if lhs._threadList != rhs._threadList {return false}
     if lhs._postData != rhs._postData {return false}
     if lhs.recommendType != rhs.recommendType {return false}
@@ -416,10 +416,10 @@ nonisolated extension Tieba_UserLike_ConcernData: SwiftProtobuf.Message, SwiftPr
 }
 
 nonisolated extension Tieba_UserLike_PostData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PostData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}content\0\u{1}postTitle\0\u{1}author\0\u{1}time\0")
+  static public let protoMessageName: String = _protobuf_package + ".PostData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}content\0\u{1}postTitle\0\u{1}author\0\u{1}time\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -435,7 +435,7 @@ nonisolated extension Tieba_UserLike_PostData: SwiftProtobuf.Message, SwiftProto
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -458,7 +458,7 @@ nonisolated extension Tieba_UserLike_PostData: SwiftProtobuf.Message, SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_UserLike_PostData, rhs: Tieba_UserLike_PostData) -> Bool {
+  static public func ==(lhs: Tieba_UserLike_PostData, rhs: Tieba_UserLike_PostData) -> Bool {
     if lhs.id != rhs.id {return false}
     if lhs.content != rhs.content {return false}
     if lhs.postTitle != rhs.postTitle {return false}

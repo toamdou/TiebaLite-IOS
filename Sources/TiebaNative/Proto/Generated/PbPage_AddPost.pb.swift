@@ -20,28 +20,28 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbPage_AddPost: Sendable {
+nonisolated public struct Tieba_PbPage_AddPost: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var createTime: Int32 = 0
+  public var createTime: Int32 = 0
 
-  var postID: String = String()
+  public var postID: String = String()
 
-  var alreadyCount: Int32 = 0
+  public var alreadyCount: Int32 = 0
 
-  var totalCount: Int32 = 0
+  public var totalCount: Int32 = 0
 
-  var lastAdditionContent: String = String()
+  public var lastAdditionContent: String = String()
 
-  var lastAdditionTime: Int32 = 0
+  public var lastAdditionTime: Int32 = 0
 
-  var warnMsg: String = String()
+  public var warnMsg: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -49,10 +49,10 @@ nonisolated struct Tieba_PbPage_AddPost: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.pbPage"
 
 nonisolated extension Tieba_PbPage_AddPost: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AddPost"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}create_time\0\u{3}post_id\0\u{3}already_count\0\u{3}total_count\0\u{3}last_addition_content\0\u{3}last_addition_time\0\u{3}warn_msg\0")
+  static public let protoMessageName: String = _protobuf_package + ".AddPost"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}create_time\0\u{3}post_id\0\u{3}already_count\0\u{3}total_count\0\u{3}last_addition_content\0\u{3}last_addition_time\0\u{3}warn_msg\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -70,7 +70,7 @@ nonisolated extension Tieba_PbPage_AddPost: SwiftProtobuf.Message, SwiftProtobuf
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.createTime != 0 {
       try visitor.visitSingularInt32Field(value: self.createTime, fieldNumber: 1)
     }
@@ -95,7 +95,7 @@ nonisolated extension Tieba_PbPage_AddPost: SwiftProtobuf.Message, SwiftProtobuf
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbPage_AddPost, rhs: Tieba_PbPage_AddPost) -> Bool {
+  static public func ==(lhs: Tieba_PbPage_AddPost, rhs: Tieba_PbPage_AddPost) -> Bool {
     if lhs.createTime != rhs.createTime {return false}
     if lhs.postID != rhs.postID {return false}
     if lhs.alreadyCount != rhs.alreadyCount {return false}

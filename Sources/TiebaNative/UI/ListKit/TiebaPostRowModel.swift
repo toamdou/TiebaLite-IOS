@@ -6,114 +6,7 @@
 import UIKit
 import Nuke
 
-struct TiebaPostPreferences: Sendable {
-  var showIpLocation = true
-  var showLevelBadge = true
-  /// 等级徽标后面接头衔名（如「Lv.5 F2.8」；头衔随作者字段下发）。
-  var showLevelTitle = false
-  var showBothUsername = false
-  var fontScale: CGFloat = 1
-  var hideMedia = false
-  var blockVideo = false
-  var imageDarkenWhenNight = false
-  var imageLoadType = "smart_origin"
-  var dataSaverMode = "high"
-  var isNight = false
-  var timestampStyle = "relative"
-  var videoAutoplay = false
-  /// 1px hairline：trait 的 displayScale 只在 UIKit 上下文非 0（测量在后台队列），
-  /// 所以由主线程的 load() 取好、随偏好一起传入（UIScreen.main 自 iOS 26 废弃）。
-  var hairline: CGFloat = 1.0 / 3.0
-
-  @MainActor
-  static func load() -> TiebaPostPreferences {
-    var prefs = TiebaPostPreferences()
-    prefs.showIpLocation = TiebaPreferenceSnapshot.bool("showIpLocation", default: true)
-    prefs.showLevelBadge = TiebaPreferenceSnapshot.bool("showLevelBadge", default: true)
-    prefs.showLevelTitle = TiebaPreferenceSnapshot.bool("showLevelTitle", default: false)
-    prefs.showBothUsername = TiebaPreferenceSnapshot.bool("showBothUsername", default: false)
-    // 正文级字号倍率（设置→个性化→阅读字号→正文字号；旧键 fontScale 由 TiebaTypography 迁移）
-    prefs.fontScale = TiebaTypography.bodyScale()
-    prefs.hideMedia = TiebaPreferenceSnapshot.bool("hideMedia", default: false)
-    prefs.blockVideo = TiebaPreferenceSnapshot.bool("blockVideo", default: false)
-    prefs.imageDarkenWhenNight = TiebaPreferenceSnapshot.bool("imageDarkenWhenNight", default: false)
-    prefs.imageLoadType = TiebaPreferenceSnapshot.string("imageLoadType") ?? "smart_origin"
-    prefs.dataSaverMode = TiebaPreferenceSnapshot.string("dataSaverMode") ?? "high"
-    prefs.timestampStyle = TiebaPreferenceSnapshot.string("timestampStyle") ?? "relative"
-    prefs.videoAutoplay = TiebaPreferenceSnapshot.bool("videoAutoplay", default: false)
-    prefs.hairline = 1 / max(UITraitCollection.current.displayScale, 1)
-    prefs.isNight = TiebaNavigator.shared.chromeTheme.dark
-    return prefs
-  }
-
-  /// 钳制域必须**覆盖整个偏好范围**（12…24pt ⇒ 0.706…1.412）：原来写死 0.8…2.0
-  /// 会把 12～13.6pt 一档全部压成 0.8（用户在小字号端拖滑杆"没反应"）。
-  var fontScaleClamped: CGFloat { min(max(fontScale, 0.7), 1.45) }
-}
-
 // MARK: - 屏蔽过滤（BlockManager.shouldBlockContent / shouldBlockUser 的原生等价）
-
-struct TiebaPostBlockFilter: Sendable {
-  /// NSRegularExpression 未标 Sendable 但线程安全（Apple 文档）；跨线程只读。
-  struct Word: @unchecked Sendable {
-    var keyword = ""
-    var regex: NSRegularExpression?
-    var whitelist = false
-  }
-
-  /// **正则**词（字面量词不进这张表，见下面两条交替正则）。
-  var words: [Word] = []
-  /// 字面量词按白/黑名单各合成一条交替正则（TiebaBlockStore.compiledLiteralAlternation）。
-  /// [算法审查 40] 本类型的最热调用点是 TiebaPostRowText:68 —— **每个正文段**都过一遍屏蔽表，
-  /// 整页测量里是 O(行 × 段 × 词 × 长度)；合成一条后与词数无关（实测 20 词 11.5ms → 0.41ms/64 行）。
-  var whitelistLiterals: NSRegularExpression?
-  var blacklistLiterals: NSRegularExpression?
-  var users: [(uid: String, name: String)] = []
-
-  /// 词表为空（正则词与字面量都没有）⇒ 调用方可早退，省掉一次正则扫描。
-  /// [算法审查 40 §4.E] Explore 页与消息页收敛到本类型后，用它替代原来各自的 `words.isEmpty`。
-  var isEmpty: Bool { words.isEmpty && whitelistLiterals == nil && blacklistLiterals == nil }
-
-  static func load() -> TiebaPostBlockFilter {
-    let stored: [TiebaBlockedWord] = TiebaBlockStore.words().filter { !$0.keyword.isEmpty }
-    var filter = TiebaPostBlockFilter()
-    // 只有正则词留在逐条表里：编译走 BlockStore 的记忆化（整页测量每行都调 load，正则只编一次）。
-    filter.words = stored.compactMap { word in
-      guard word.isRegex == true else { return nil }
-      return Word(
-        keyword: word.keyword,
-        regex: TiebaBlockStore.compiledRegex(pattern: word.keyword),
-        whitelist: word.isWhitelist
-      )
-    }
-    filter.whitelistLiterals = TiebaBlockStore.compiledLiteralAlternation(
-      stored.filter { $0.isRegex != true && $0.isWhitelist }.map(\.keyword)
-    )
-    filter.blacklistLiterals = TiebaBlockStore.compiledLiteralAlternation(
-      stored.filter { $0.isRegex != true && !$0.isWhitelist }.map(\.keyword)
-    )
-    filter.users = TiebaBlockStore.users().map { ($0.uid, $0.username ?? "") }
-    return filter
-  }
-
-  func isContentBlocked(_ text: String) -> Bool {
-    guard !text.isEmpty else { return false }
-    let range = NSRange(text.startIndex..., in: text)
-    func regexHit(_ word: Word) -> Bool {
-      word.regex?.firstMatch(in: text, range: range) != nil
-    }
-    // 语义与改前逐行等价：任一白名单词命中 → 放行；否则任一黑名单词命中 → 屏蔽。
-    // 字面量走一条交替正则，正则词仍逐条测（顺序无关，判据只看"有没有命中"）。
-    if whitelistLiterals?.firstMatch(in: text, range: range) != nil { return false }
-    for word in words where word.whitelist && regexHit(word) { return false }
-    if blacklistLiterals?.firstMatch(in: text, range: range) != nil { return true }
-    return words.contains { !$0.whitelist && regexHit($0) }
-  }
-
-  func isUserBlocked(uid: String, name: String) -> Bool {
-    users.contains { $0.uid == uid || (!name.isEmpty && $0.name == name) }
-  }
-}
 
 struct TiebaPostMediaPlaceholder: Sendable {
   var icon: String
@@ -234,14 +127,17 @@ final class TiebaPostRowModel: @unchecked Sendable {
   /// 表情图到达后重建楼中楼预览（subPostTexts 是建模型时固化的占位图版本）；
   /// 尺寸不变、行高不变。
   func rebuiltSubTexts() -> [NSAttributedString?] {
-    post.subPosts.map {
-      TiebaPostRowText.buildContent(
+    let subScale = Double(preferences.fontScaleClamped)
+    return post.subPosts.map {
+      let content = TiebaPostRowText.buildContent(
         $0.content,
         preferences: preferences,
         blockFilter: blockFilter,
         palette: palette,
         isSubPost: true
       ).build.attributed
+      return TiebaPostRowText.subPostLine(
+        name: $0.displayName, content: content, palette: palette, scale: subScale)
     }
   }
 
@@ -265,7 +161,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
       heroThreadId: heroThreadId
     )
   }
-
 
   init(
     pageKey: String,
@@ -325,7 +220,13 @@ final class TiebaPostRowModel: @unchecked Sendable {
       ).build
     }
     self.cachedText = build.attributed
-    self.cachedSubTexts = subPostBuilds.map(\.attributed)
+    // 楼中楼预览每行 = 名字 + 冒号 + 正文合成一条富文本（见 TiebaPostRowText.subPostLine：
+    // 两个排版引擎分行画名字/正文时首行基线对不齐、冒号还会重复）。
+    let subScale = Double(preferences.fontScaleClamped)
+    self.cachedSubTexts = zip(post.subPosts, subPostBuilds).map { sub, build in
+      TiebaPostRowText.subPostLine(
+        name: sub.displayName, content: build.attributed, palette: palette, scale: subScale)
+    }
     self.avatarURL = TiebaSimpleRowParser.avatarURL(post.authorPortrait)
     self.nameText = post.displayName.isEmpty ? "吧友" : post.displayName
     self.levelShortText =
@@ -403,22 +304,6 @@ final class TiebaPostRowModel: @unchecked Sendable {
   }
 
   let likeText: String
-}
-
-/// 帖子页回复排序。取值直接是 `pb/page` 的 `r`：服务端在响应里就列出这三档
-///（pb_sort_info = 热门(2)/正序(0)/倒序(1)，实测 2026-09-21）。
-public enum TiebaThreadSort: Int, CaseIterable, Sendable {
-  case hot = 2
-  case asc = 0
-  case desc = 1
-
-  var title: String {
-    switch self {
-    case .hot: return "热门"
-    case .asc: return "正序"
-    case .desc: return "倒序"
-    }
-  }
 }
 
 /// 主贴行底部的回复工具栏（原 ThreadHeader 的 Reply Toolbar）。

@@ -20,18 +20,18 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_FrsPage_VideoImageColor: Sendable {
+nonisolated public struct Tieba_FrsPage_VideoImageColor: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var time: UInt32 = 0
+  public var time: UInt32 = 0
 
-  var color: String = String()
+  public var color: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -39,10 +39,10 @@ nonisolated struct Tieba_FrsPage_VideoImageColor: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.frsPage"
 
 nonisolated extension Tieba_FrsPage_VideoImageColor: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".VideoImageColor"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}time\0\u{1}color\0")
+  static public let protoMessageName: String = _protobuf_package + ".VideoImageColor"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}time\0\u{1}color\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -55,7 +55,7 @@ nonisolated extension Tieba_FrsPage_VideoImageColor: SwiftProtobuf.Message, Swif
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.time != 0 {
       try visitor.visitSingularUInt32Field(value: self.time, fieldNumber: 1)
     }
@@ -65,7 +65,7 @@ nonisolated extension Tieba_FrsPage_VideoImageColor: SwiftProtobuf.Message, Swif
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_FrsPage_VideoImageColor, rhs: Tieba_FrsPage_VideoImageColor) -> Bool {
+  static public func ==(lhs: Tieba_FrsPage_VideoImageColor, rhs: Tieba_FrsPage_VideoImageColor) -> Bool {
     if lhs.time != rhs.time {return false}
     if lhs.color != rhs.color {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

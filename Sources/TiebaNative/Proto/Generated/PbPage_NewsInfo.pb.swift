@@ -20,28 +20,28 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbPage_NewsInfo: Sendable {
+nonisolated public struct Tieba_PbPage_NewsInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var newsLink: String = String()
+  public var newsLink: String = String()
 
-  var summary: String = String()
+  public var summary: String = String()
 
-  var position: UInt32 = 0
+  public var position: UInt32 = 0
 
-  var newsType: UInt32 = 0
+  public var newsType: UInt32 = 0
 
-  var newsIcon: String = String()
+  public var newsIcon: String = String()
 
-  var subtitle: String = String()
+  public var subtitle: String = String()
 
-  var buttonText: String = String()
+  public var buttonText: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -49,10 +49,10 @@ nonisolated struct Tieba_PbPage_NewsInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.pbPage"
 
 nonisolated extension Tieba_PbPage_NewsInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".NewsInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}news_link\0\u{1}summary\0\u{1}position\0\u{3}news_type\0\u{3}news_icon\0\u{1}subtitle\0\u{3}button_text\0")
+  static public let protoMessageName: String = _protobuf_package + ".NewsInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}news_link\0\u{1}summary\0\u{1}position\0\u{3}news_type\0\u{3}news_icon\0\u{1}subtitle\0\u{3}button_text\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -70,7 +70,7 @@ nonisolated extension Tieba_PbPage_NewsInfo: SwiftProtobuf.Message, SwiftProtobu
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.newsLink.isEmpty {
       try visitor.visitSingularStringField(value: self.newsLink, fieldNumber: 1)
     }
@@ -95,7 +95,7 @@ nonisolated extension Tieba_PbPage_NewsInfo: SwiftProtobuf.Message, SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbPage_NewsInfo, rhs: Tieba_PbPage_NewsInfo) -> Bool {
+  static public func ==(lhs: Tieba_PbPage_NewsInfo, rhs: Tieba_PbPage_NewsInfo) -> Bool {
     if lhs.newsLink != rhs.newsLink {return false}
     if lhs.summary != rhs.summary {return false}
     if lhs.position != rhs.position {return false}

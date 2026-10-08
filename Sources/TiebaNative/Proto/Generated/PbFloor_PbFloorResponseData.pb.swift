@@ -20,83 +20,83 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbFloor_PbFloorResponseData: @unchecked Sendable {
+nonisolated public struct Tieba_PbFloor_PbFloorResponseData: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var page: Tieba_Page {
+  public var page: Tieba_Page {
     get {_storage._page ?? Tieba_Page()}
     set {_uniqueStorage()._page = newValue}
   }
   /// Returns true if `page` has been explicitly set.
-  var hasPage: Bool {_storage._page != nil}
+  public var hasPage: Bool {_storage._page != nil}
   /// Clears the value of `page`. Subsequent reads from it will return its default value.
-  mutating func clearPage() {_uniqueStorage()._page = nil}
+  mutating public func clearPage() {_uniqueStorage()._page = nil}
 
-  var anti: Tieba_Anti {
+  public var anti: Tieba_Anti {
     get {_storage._anti ?? Tieba_Anti()}
     set {_uniqueStorage()._anti = newValue}
   }
   /// Returns true if `anti` has been explicitly set.
-  var hasAnti: Bool {_storage._anti != nil}
+  public var hasAnti: Bool {_storage._anti != nil}
   /// Clears the value of `anti`. Subsequent reads from it will return its default value.
-  mutating func clearAnti() {_uniqueStorage()._anti = nil}
+  mutating public func clearAnti() {_uniqueStorage()._anti = nil}
 
-  var post: Tieba_Post {
+  public var post: Tieba_Post {
     get {_storage._post ?? Tieba_Post()}
     set {_uniqueStorage()._post = newValue}
   }
   /// Returns true if `post` has been explicitly set.
-  var hasPost: Bool {_storage._post != nil}
+  public var hasPost: Bool {_storage._post != nil}
   /// Clears the value of `post`. Subsequent reads from it will return its default value.
-  mutating func clearPost() {_uniqueStorage()._post = nil}
+  mutating public func clearPost() {_uniqueStorage()._post = nil}
 
-  var subpostList: [Tieba_SubPostList] {
+  public var subpostList: [Tieba_SubPostList] {
     get {_storage._subpostList}
     set {_uniqueStorage()._subpostList = newValue}
   }
 
-  var thread: Tieba_ThreadInfo {
+  public var thread: Tieba_ThreadInfo {
     get {_storage._thread ?? Tieba_ThreadInfo()}
     set {_uniqueStorage()._thread = newValue}
   }
   /// Returns true if `thread` has been explicitly set.
-  var hasThread: Bool {_storage._thread != nil}
+  public var hasThread: Bool {_storage._thread != nil}
   /// Clears the value of `thread`. Subsequent reads from it will return its default value.
-  mutating func clearThread() {_uniqueStorage()._thread = nil}
+  mutating public func clearThread() {_uniqueStorage()._thread = nil}
 
-  var forum: Tieba_SimpleForum {
+  public var forum: Tieba_SimpleForum {
     get {_storage._forum ?? Tieba_SimpleForum()}
     set {_uniqueStorage()._forum = newValue}
   }
   /// Returns true if `forum` has been explicitly set.
-  var hasForum: Bool {_storage._forum != nil}
+  public var hasForum: Bool {_storage._forum != nil}
   /// Clears the value of `forum`. Subsequent reads from it will return its default value.
-  mutating func clearForum() {_uniqueStorage()._forum = nil}
+  mutating public func clearForum() {_uniqueStorage()._forum = nil}
 
-  var serverTime: Int32 {
+  public var serverTime: Int32 {
     get {_storage._serverTime}
     set {_uniqueStorage()._serverTime = newValue}
   }
 
-  var displayForum: Tieba_SimpleForum {
+  public var displayForum: Tieba_SimpleForum {
     get {_storage._displayForum ?? Tieba_SimpleForum()}
     set {_uniqueStorage()._displayForum = newValue}
   }
   /// Returns true if `displayForum` has been explicitly set.
-  var hasDisplayForum: Bool {_storage._displayForum != nil}
+  public var hasDisplayForum: Bool {_storage._displayForum != nil}
   /// Clears the value of `displayForum`. Subsequent reads from it will return its default value.
-  mutating func clearDisplayForum() {_uniqueStorage()._displayForum = nil}
+  mutating public func clearDisplayForum() {_uniqueStorage()._displayForum = nil}
 
-  var isBlackWhite: Int32 {
+  public var isBlackWhite: Int32 {
     get {_storage._isBlackWhite}
     set {_uniqueStorage()._isBlackWhite = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -106,8 +106,8 @@ nonisolated struct Tieba_PbFloor_PbFloorResponseData: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.pbFloor"
 
 nonisolated extension Tieba_PbFloor_PbFloorResponseData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PbFloorResponseData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}page\0\u{1}anti\0\u{1}post\0\u{3}subpost_list\0\u{1}thread\0\u{1}forum\0\u{3}server_time\0\u{3}display_forum\0\u{3}is_black_white\0")
+  static public let protoMessageName: String = _protobuf_package + ".PbFloorResponseData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}page\0\u{1}anti\0\u{1}post\0\u{3}subpost_list\0\u{1}thread\0\u{1}forum\0\u{3}server_time\0\u{3}display_forum\0\u{3}is_black_white\0")
 
   fileprivate class _StorageClass {
     var _page: Tieba_Page? = nil
@@ -148,7 +148,7 @@ nonisolated extension Tieba_PbFloor_PbFloorResponseData: SwiftProtobuf.Message, 
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -171,7 +171,7 @@ nonisolated extension Tieba_PbFloor_PbFloorResponseData: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -208,7 +208,7 @@ nonisolated extension Tieba_PbFloor_PbFloorResponseData: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbFloor_PbFloorResponseData, rhs: Tieba_PbFloor_PbFloorResponseData) -> Bool {
+  static public func ==(lhs: Tieba_PbFloor_PbFloorResponseData, rhs: Tieba_PbFloor_PbFloorResponseData) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

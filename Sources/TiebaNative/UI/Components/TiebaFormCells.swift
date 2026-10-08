@@ -439,7 +439,7 @@ final class TiebaFormHeroCell: UITableViewCell {
   func apply(_ row: TiebaFormRow) {
     heroImage.isHidden = row.imageName == nil
     if let name = row.imageName {
-      // 打包图（Bundle 相对路径，如 "expo.icon/Assets/icon-light.png"）：与 RN
+      // 打包图（Bundle 相对路径，如 "AboutIcon.png"）：与 RN
       // 侧 require('@/assets/images/icon.png') 是同一张图（同 md5），走 Bundle
       // 直读，不进 Metro/网络（开发档也必须能显示，见 about.tsx 的缺口注释）。
       if let cached = Self.imageCache[name] {

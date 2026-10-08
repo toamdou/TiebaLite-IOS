@@ -252,9 +252,7 @@ private let isIpad: Bool = {
                         itemDuration = secondsPerFrame
                         request.lastDuration += duration
                         if request.lastDuration >= secondsPerFrame * 0.95 {
-                            //print("item \(link) accepting cycle: \(request.lastDuration - duration) + \(duration) = \(request.lastDuration) >= \(secondsPerFrame)")
                         } else {
-                            //print("item \(link) skipping cycle: \(request.lastDuration - duration) + \(duration) < \(secondsPerFrame)")
                             continue loop
                         }
                     case .max:

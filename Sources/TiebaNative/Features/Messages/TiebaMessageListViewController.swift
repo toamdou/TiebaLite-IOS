@@ -38,7 +38,7 @@ final class TiebaMessageListViewController: UIViewController {
     list.isHidden = true
     list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     stateView.isHidden = true
-    stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    stateView.isDark = TiebaChromeTheme.current.dark
     // 首屏骨架：通用列表行（原 MessageTabList.tsx variant="row" count={8}）
     stateView.skeletonVariant = .row
     stateView.skeletonInsets = UIEdgeInsets(top: 8, left: 16, bottom: 24, right: 16)

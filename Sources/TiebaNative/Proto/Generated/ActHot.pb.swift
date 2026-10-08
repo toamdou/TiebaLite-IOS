@@ -20,26 +20,26 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_ActHot: Sendable {
+nonisolated public struct Tieba_ActHot: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var bsize: String = String()
+  public var bsize: String = String()
 
-  var imgSrc: String = String()
+  public var imgSrc: String = String()
 
-  var link: String = String()
+  public var link: String = String()
 
-  var authorName: String = String()
+  public var authorName: String = String()
 
-  var imgDes: String = String()
+  public var imgDes: String = String()
 
-  var imgType: Int32 = 0
+  public var imgType: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -47,10 +47,10 @@ nonisolated struct Tieba_ActHot: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_ActHot: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ActHot"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bsize\0\u{3}img_src\0\u{1}link\0\u{3}author_name\0\u{3}img_des\0\u{3}img_type\0")
+  static public let protoMessageName: String = _protobuf_package + ".ActHot"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bsize\0\u{3}img_src\0\u{1}link\0\u{3}author_name\0\u{3}img_des\0\u{3}img_type\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -67,7 +67,7 @@ nonisolated extension Tieba_ActHot: SwiftProtobuf.Message, SwiftProtobuf._Messag
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.bsize.isEmpty {
       try visitor.visitSingularStringField(value: self.bsize, fieldNumber: 1)
     }
@@ -89,7 +89,7 @@ nonisolated extension Tieba_ActHot: SwiftProtobuf.Message, SwiftProtobuf._Messag
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ActHot, rhs: Tieba_ActHot) -> Bool {
+  static public func ==(lhs: Tieba_ActHot, rhs: Tieba_ActHot) -> Bool {
     if lhs.bsize != rhs.bsize {return false}
     if lhs.imgSrc != rhs.imgSrc {return false}
     if lhs.link != rhs.link {return false}

@@ -1,4 +1,3 @@
-// ============================================================
 // 统一 HTTP 通道（JSON / form / multipart / HTML / proto）
 //
 // 2026-09-13 合并：原 TiebaHttpClient 与 TiebaNativeClient 是两套 URLSession 栈
@@ -14,7 +13,6 @@
 // tasks 字典 + NSLock 的取消登记表已删除（取消先于注册的竞态随之消失）。
 //
 // 响应体编码：明文 UTF-8（非法字节用替换字符兜底），不是 base64。
-// ============================================================
 import Foundation
 
 /// raw 通道的错误（multipart 构造 / host 门禁）。strict 入口的状态码错误是

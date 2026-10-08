@@ -20,22 +20,22 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_SignatureData: Sendable {
+nonisolated public struct Tieba_SignatureData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var signatureID: Int32 = 0
+  public var signatureID: Int32 = 0
 
-  var fontKeyName: String = String()
+  public var fontKeyName: String = String()
 
-  var fontColor: String = String()
+  public var fontColor: String = String()
 
-  var content: [Tieba_SignatureContent] = []
+  public var content: [Tieba_SignatureContent] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -43,10 +43,10 @@ nonisolated struct Tieba_SignatureData: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_SignatureData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SignatureData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}signature_id\0\u{1}fontKeyName\0\u{1}fontColor\0\u{1}content\0")
+  static public let protoMessageName: String = _protobuf_package + ".SignatureData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}signature_id\0\u{1}fontKeyName\0\u{1}fontColor\0\u{1}content\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_SignatureData: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.signatureID != 0 {
       try visitor.visitSingularInt32Field(value: self.signatureID, fieldNumber: 1)
     }
@@ -77,7 +77,7 @@ nonisolated extension Tieba_SignatureData: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_SignatureData, rhs: Tieba_SignatureData) -> Bool {
+  static public func ==(lhs: Tieba_SignatureData, rhs: Tieba_SignatureData) -> Bool {
     if lhs.signatureID != rhs.signatureID {return false}
     if lhs.fontKeyName != rhs.fontKeyName {return false}
     if lhs.fontColor != rhs.fontColor {return false}

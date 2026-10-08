@@ -1,25 +1,12 @@
-// ============================================================
 // TiebaLite — 通用列表的"行种类路由"（TiebaKindRowPages）
 //
 // 页记录 = pageKey → 每行种类（simple/feed/post）+ 该行在自己度量族页里的下标；三族
 // 度量仍是唯一测量实现，本文件不复制几何。整页 LRU(8) 与度量缓存同纪律，并发状态
 // 由 lock 保护（@unchecked Sendable）；containerWidth 必须是 TiebaLayout 量化值。
-// ============================================================
 
 import UIKit
 
 // MARK: - 行种类
-
-/// 行种类（JS 行字典的顶层键 `kind`；缺省 = `.simple`，与既有契约兼容）。
-public nonisolated enum TiebaKindRowKind: String, Sendable {
-  /// TiebaSimpleRows 的四个变体（user / message / section / summary）。
-  case simple
-  /// 信息流卡片行（ThreadInfo 形状；TiebaRowMetrics + TiebaFeedRowView）。
-  case feed
-  /// 帖子行（帖子页主贴/回复；TiebaPostRowMetrics + TiebaPostRowView，
-  /// 只由原生页面（thread/[id]）经 publish(pageKey:kinds:) 使用）。
-  case post
-}
 
 // MARK: - 页记录
 

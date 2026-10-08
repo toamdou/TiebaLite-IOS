@@ -20,20 +20,20 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Voice: Sendable {
+nonisolated public struct Tieba_Voice: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var type: Int32 = 0
+  public var type: Int32 = 0
 
-  var duringTime: Int32 = 0
+  public var duringTime: Int32 = 0
 
-  var voiceMd5: String = String()
+  public var voiceMd5: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -41,10 +41,10 @@ nonisolated struct Tieba_Voice: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Voice: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Voice"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{3}during_time\0\u{3}voice_md5\0")
+  static public let protoMessageName: String = _protobuf_package + ".Voice"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{3}during_time\0\u{3}voice_md5\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -58,7 +58,7 @@ nonisolated extension Tieba_Voice: SwiftProtobuf.Message, SwiftProtobuf._Message
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.type != 0 {
       try visitor.visitSingularInt32Field(value: self.type, fieldNumber: 1)
     }
@@ -71,7 +71,7 @@ nonisolated extension Tieba_Voice: SwiftProtobuf.Message, SwiftProtobuf._Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Voice, rhs: Tieba_Voice) -> Bool {
+  static public func ==(lhs: Tieba_Voice, rhs: Tieba_Voice) -> Bool {
     if lhs.type != rhs.type {return false}
     if lhs.duringTime != rhs.duringTime {return false}
     if lhs.voiceMd5 != rhs.voiceMd5 {return false}

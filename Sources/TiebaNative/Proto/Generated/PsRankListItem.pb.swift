@@ -20,29 +20,29 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PsRankListItem: Sendable {
+nonisolated public struct Tieba_PsRankListItem: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var gameID: Int64 = 0
+  public var gameID: Int64 = 0
 
-  var userID: Int64 = 0
+  public var userID: Int64 = 0
 
-  var score: Int64 = 0
+  public var score: Int64 = 0
 
-  var user: Tieba_User {
+  public var user: Tieba_User {
     get {_user ?? Tieba_User()}
     set {_user = newValue}
   }
   /// Returns true if `user` has been explicitly set.
-  var hasUser: Bool {self._user != nil}
+  public var hasUser: Bool {self._user != nil}
   /// Clears the value of `user`. Subsequent reads from it will return its default value.
-  mutating func clearUser() {self._user = nil}
+  mutating public func clearUser() {self._user = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _user: Tieba_User? = nil
 }
@@ -52,10 +52,10 @@ nonisolated struct Tieba_PsRankListItem: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_PsRankListItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PsRankListItem"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}game_id\0\u{3}user_id\0\u{1}score\0\u{1}user\0")
+  static public let protoMessageName: String = _protobuf_package + ".PsRankListItem"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}game_id\0\u{3}user_id\0\u{1}score\0\u{1}user\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -70,7 +70,7 @@ nonisolated extension Tieba_PsRankListItem: SwiftProtobuf.Message, SwiftProtobuf
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -90,7 +90,7 @@ nonisolated extension Tieba_PsRankListItem: SwiftProtobuf.Message, SwiftProtobuf
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PsRankListItem, rhs: Tieba_PsRankListItem) -> Bool {
+  static public func ==(lhs: Tieba_PsRankListItem, rhs: Tieba_PsRankListItem) -> Bool {
     if lhs.gameID != rhs.gameID {return false}
     if lhs.userID != rhs.userID {return false}
     if lhs.score != rhs.score {return false}

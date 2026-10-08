@@ -53,6 +53,8 @@ final class TiebaHomeForumCell: UICollectionViewCell {
   var signFlightSourceView: UIView { avatar }
 
   private let card = UIView()
+  /// 行底通栏发际线（扁平档用；单列时才是"行与行的分隔"，双列由网格间距分隔）。
+  private let rowHairline = UIView()
   private let avatar = TiebaForumAvatarView(size: 38)
   private let nameLabel = UILabel()
   private let metaLabel = UILabel()
@@ -64,7 +66,8 @@ final class TiebaHomeForumCell: UICollectionViewCell {
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    card.layer.cornerRadius = 20
+    // 卡面几何/底色由外观档给（扁平档 = 无圆角、底色 = 页面底色，见 TiebaListAppearance）。
+    card.layer.cornerRadius = TiebaListAppearance.surfaceRadius(20)
     card.layer.cornerCurve = .continuous
     card.translatesAutoresizingMaskIntoConstraints = false
     contentView.addSubview(card)
@@ -111,14 +114,34 @@ final class TiebaHomeForumCell: UICollectionViewCell {
       chipStack.bottomAnchor.constraint(equalTo: chip.bottomAnchor, constant: -4),
     ])
     card.addInteraction(UIContextMenuInteraction(delegate: self))
+    rowHairline.isHidden = true
+    // 裸 UIView 默认吃触摸：发际线叠在 card 之上，不关掉会吞掉行底 1px 带上的长按。
+    rowHairline.isUserInteractionEnabled = false
+    contentView.addSubview(rowHairline)
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    let thickness = 1 / max(traitCollection.displayScale, 1)
+    rowHairline.frame = CGRect(
+      x: 0,
+      y: bounds.height - thickness,
+      width: bounds.width,
+      height: thickness
+    )
   }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-  func configure(forum: TiebaForumInfo) {
-    card.backgroundColor = .secondarySystemGroupedBackground
-    let tint = TiebaNavigator.shared.chromeTheme.tint
+  /// - Parameter showsHairline: 扁平档 + 单列时才画行底发际线（双列由 4pt 网格间距
+  ///   分隔，画半宽线反而像断线）。
+  func configure(forum: TiebaForumInfo, showsHairline: Bool) {
+    card.backgroundColor = TiebaListAppearance.rowSurface(card: .secondarySystemGroupedBackground)
+    card.layer.cornerRadius = TiebaListAppearance.surfaceRadius(20)
+    rowHairline.backgroundColor = .separator
+    rowHairline.isHidden = !showsHairline
+    let tint = TiebaChromeTheme.current.tint
     avatar.configure(
       url: TiebaSimpleRowParser.avatarURL(forum.avatar)?.absoluteString ?? "",
       initial: forum.displayName.isEmpty ? "吧" : String(forum.displayName.prefix(1))

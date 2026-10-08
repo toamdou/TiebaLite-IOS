@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite — 信息流行模型 / 高度缓存（TiebaRowMetrics）
 //
 // 唯一形态：原生列表容器（TiebaKindRowPages / TiebaRowPageDriver）在后台线程调
@@ -31,12 +30,11 @@
 //   视图只把这套几何画出来并做命中测试；其中"逐行属性矩形"（每行的下划线/删除线/
 //   嵌入项等属性的行内 rect）是它比接收方多出来的那一样东西。
 //   接收方现状（19 号报告 §2.3 的核对口径）：测量产物是三个标量
-//（height / exactHeight / truncated，本文件 :1577-1620），行内片段的矩形没有留下来 ⇒
+//（height / exactHeight / truncated，见 TiebaRowParser.measure），行内片段的矩形没有留下来 ⇒
 //   行内命中只能整块近似（如 showMoreFrame 的外扩 6pt）。将来真要做行内可点
 //（@ 跳用户页 / 话题跳吧页）或自绘富文本，把"逐行属性矩形"加进这份测量结果即可——测量
 //   本来就在后台整页跑、结果按页缓存，是放这份几何的正确位置；渲染仍走 UITextView
 //（选择 UI / 无障碍 / iOS 26 系统文本服务都在它身上，换成自绘是净功能回退，见 19 号报告 §2.4）。
-// ============================================================
 
 import UIKit
 
@@ -231,10 +229,8 @@ public nonisolated final class TiebaRowMetrics: @unchecked Sendable {
     return keys
   }
 
-  // [精简] 原 private static func measureRows（按页内快照做逐行复用）与 private func
-  // publish（把 Page(rows:raws:) 挂到 (pageKey,width) 键上）已删除：
-  //   · 复用判据改成内容键命中（见 measureAndIndex），不再需要页内原始行字典快照；
-  //   · 发布拆成两件独立的事——内容进 TiebaRowStore（内容键）、位置索引进 TiebaPageStore。
+  // [精简] 原 measureRows（按页内快照逐行复用）与 publish（Page(rows:raws:) 挂 (pageKey,width) 键上）已删除：
+  // 复用判据改成内容键命中（见 measureAndIndex），发布拆成 TiebaRowStore（内容键）+ TiebaPageStore（位置索引）。
 }
 
 // MARK: - 行级共享工具（TextKit 测量 / 字典取值，全仓唯一实现）

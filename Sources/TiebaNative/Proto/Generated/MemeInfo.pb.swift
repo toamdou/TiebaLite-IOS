@@ -20,28 +20,28 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_MemeInfo: Sendable {
+nonisolated public struct Tieba_MemeInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var pckID: UInt32 = 0
+  public var pckID: UInt32 = 0
 
-  var picID: UInt64 = 0
+  public var picID: UInt64 = 0
 
-  var picURL: String = String()
+  public var picURL: String = String()
 
-  var thumbnail: String = String()
+  public var thumbnail: String = String()
 
-  var width: UInt32 = 0
+  public var width: UInt32 = 0
 
-  var height: UInt32 = 0
+  public var height: UInt32 = 0
 
-  var detailLink: String = String()
+  public var detailLink: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -49,10 +49,10 @@ nonisolated struct Tieba_MemeInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_MemeInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MemeInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pckId\0\u{1}picId\0\u{1}picUrl\0\u{1}thumbnail\0\u{1}width\0\u{1}height\0\u{1}detailLink\0")
+  static public let protoMessageName: String = _protobuf_package + ".MemeInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pckId\0\u{1}picId\0\u{1}picUrl\0\u{1}thumbnail\0\u{1}width\0\u{1}height\0\u{1}detailLink\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -70,7 +70,7 @@ nonisolated extension Tieba_MemeInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.pckID != 0 {
       try visitor.visitSingularUInt32Field(value: self.pckID, fieldNumber: 1)
     }
@@ -95,7 +95,7 @@ nonisolated extension Tieba_MemeInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_MemeInfo, rhs: Tieba_MemeInfo) -> Bool {
+  static public func ==(lhs: Tieba_MemeInfo, rhs: Tieba_MemeInfo) -> Bool {
     if lhs.pckID != rhs.pckID {return false}
     if lhs.picID != rhs.picID {return false}
     if lhs.picURL != rhs.picURL {return false}

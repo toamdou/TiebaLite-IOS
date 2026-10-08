@@ -20,124 +20,124 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_RecommendForumInfo: @unchecked Sendable {
+nonisolated public struct Tieba_RecommendForumInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var avatar: String {
+  public var avatar: String {
     get {_storage._avatar}
     set {_uniqueStorage()._avatar = newValue}
   }
 
-  var forumID: UInt64 {
+  public var forumID: UInt64 {
     get {_storage._forumID}
     set {_uniqueStorage()._forumID = newValue}
   }
 
-  var forumName: String {
+  public var forumName: String {
     get {_storage._forumName}
     set {_uniqueStorage()._forumName = newValue}
   }
 
-  var isLike: UInt32 {
+  public var isLike: UInt32 {
     get {_storage._isLike}
     set {_uniqueStorage()._isLike = newValue}
   }
 
-  var memberCount: UInt32 {
+  public var memberCount: UInt32 {
     get {_storage._memberCount}
     set {_uniqueStorage()._memberCount = newValue}
   }
 
-  var threadCount: UInt32 {
+  public var threadCount: UInt32 {
     get {_storage._threadCount}
     set {_uniqueStorage()._threadCount = newValue}
   }
 
-  var slogan: String {
+  public var slogan: String {
     get {_storage._slogan}
     set {_uniqueStorage()._slogan = newValue}
   }
 
-  var content: [Tieba_PbContent] {
+  public var content: [Tieba_PbContent] {
     get {_storage._content}
     set {_uniqueStorage()._content = newValue}
   }
 
-  var forumType: UInt32 {
+  public var forumType: UInt32 {
     get {_storage._forumType}
     set {_uniqueStorage()._forumType = newValue}
   }
 
-  var authen: String {
+  public var authen: String {
     get {_storage._authen}
     set {_uniqueStorage()._authen = newValue}
   }
 
-  var recomReason: String {
+  public var recomReason: String {
     get {_storage._recomReason}
     set {_uniqueStorage()._recomReason = newValue}
   }
 
-  var isBrandForum: UInt32 {
+  public var isBrandForum: UInt32 {
     get {_storage._isBrandForum}
     set {_uniqueStorage()._isBrandForum = newValue}
   }
 
-  var hotText: String {
+  public var hotText: String {
     get {_storage._hotText}
     set {_uniqueStorage()._hotText = newValue}
   }
 
-  var abtestTag: String {
+  public var abtestTag: String {
     get {_storage._abtestTag}
     set {_uniqueStorage()._abtestTag = newValue}
   }
 
-  var source: String {
+  public var source: String {
     get {_storage._source}
     set {_uniqueStorage()._source = newValue}
   }
 
-  var extra: String {
+  public var extra: String {
     get {_storage._extra}
     set {_uniqueStorage()._extra = newValue}
   }
 
-  var isPrivateForum: UInt32 {
+  public var isPrivateForum: UInt32 {
     get {_storage._isPrivateForum}
     set {_uniqueStorage()._isPrivateForum = newValue}
   }
 
-  var lv1Name: String {
+  public var lv1Name: String {
     get {_storage._lv1Name}
     set {_uniqueStorage()._lv1Name = newValue}
   }
 
-  var lv2Name: String {
+  public var lv2Name: String {
     get {_storage._lv2Name}
     set {_uniqueStorage()._lv2Name = newValue}
   }
 
-  var avatarOrigin: String {
+  public var avatarOrigin: String {
     get {_storage._avatarOrigin}
     set {_uniqueStorage()._avatarOrigin = newValue}
   }
 
-  var hotThreadID: UInt64 {
+  public var hotThreadID: UInt64 {
     get {_storage._hotThreadID}
     set {_uniqueStorage()._hotThreadID = newValue}
   }
 
-  var isRecommendForum: Int32 {
+  public var isRecommendForum: Int32 {
     get {_storage._isRecommendForum}
     set {_uniqueStorage()._isRecommendForum = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -147,8 +147,8 @@ nonisolated struct Tieba_RecommendForumInfo: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_RecommendForumInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".RecommendForumInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}avatar\0\u{3}forum_id\0\u{3}forum_name\0\u{3}is_like\0\u{3}member_count\0\u{3}thread_count\0\u{1}slogan\0\u{1}content\0\u{3}forum_type\0\u{1}authen\0\u{3}recom_reason\0\u{3}is_brand_forum\0\u{3}hot_text\0\u{3}abtest_tag\0\u{1}source\0\u{1}extra\0\u{3}is_private_forum\0\u{3}lv1_name\0\u{3}lv2_name\0\u{3}avatar_origin\0\u{4}\u{2}hot_thread_id\0\u{3}is_recommend_forum\0")
+  static public let protoMessageName: String = _protobuf_package + ".RecommendForumInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}avatar\0\u{3}forum_id\0\u{3}forum_name\0\u{3}is_like\0\u{3}member_count\0\u{3}thread_count\0\u{1}slogan\0\u{1}content\0\u{3}forum_type\0\u{1}authen\0\u{3}recom_reason\0\u{3}is_brand_forum\0\u{3}hot_text\0\u{3}abtest_tag\0\u{1}source\0\u{1}extra\0\u{3}is_private_forum\0\u{3}lv1_name\0\u{3}lv2_name\0\u{3}avatar_origin\0\u{4}\u{2}hot_thread_id\0\u{3}is_recommend_forum\0")
 
   fileprivate class _StorageClass {
     var _avatar: String = String()
@@ -215,7 +215,7 @@ nonisolated extension Tieba_RecommendForumInfo: SwiftProtobuf.Message, SwiftProt
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -251,7 +251,7 @@ nonisolated extension Tieba_RecommendForumInfo: SwiftProtobuf.Message, SwiftProt
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       if !_storage._avatar.isEmpty {
         try visitor.visitSingularStringField(value: _storage._avatar, fieldNumber: 1)
@@ -323,7 +323,7 @@ nonisolated extension Tieba_RecommendForumInfo: SwiftProtobuf.Message, SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_RecommendForumInfo, rhs: Tieba_RecommendForumInfo) -> Bool {
+  static public func ==(lhs: Tieba_RecommendForumInfo, rhs: Tieba_RecommendForumInfo) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

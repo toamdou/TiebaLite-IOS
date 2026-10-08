@@ -1,4 +1,3 @@
-// ============================================================
 // 几何失效事务队（TiebaGeometryInvalidationQueue）
 //
 // 把散落在列表视图各处的 layout 失效收成一条队：同一次 runloop 内的 N 次请求只落成
@@ -18,7 +17,6 @@
 // 3. 没有 observer 的生命周期问题：CFRunLoopAddObserver 会让 runloop 强持有
 //    observer，队列先释放时必须 Invalidate（deinit 里做还要跨隔离），而主队列 block
 //    用 [weak self] 天然安全。
-// ============================================================
 
 import Foundation
 

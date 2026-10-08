@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaTypography —— 应用内**两级字号体系**（正文级 / 界面级）
 //
 // 【用户口径 2026-10-06】设置→个性化→阅读字号：
@@ -33,18 +32,14 @@
 //   TiebaPageStore 的页索引）一次性全部失配、自动重测。这是本仓
 //   「字号改了但行族还是旧档」那个坑的**结构性**解法：不逐个缓存去清，
 //   而是让"字体变了"直接体现为"这一行是另一行内容"。
-// ============================================================
 import Foundation
 
 nonisolated enum TiebaTypography {
 
   // MARK: - 偏好键
 
-  /// 正文字号（pt）。
   static let bodySizeKey = "bodyFontSize"
-  /// 界面字号（pt）。
   static let uiSizeKey = "uiFontSize"
-  /// 「界面字号跟随正文字号」开关。
   static let followsBodyKey = "uiFontFollowsBody"
   /// 旧键（倍率 0.8…2.0）：只用于一次性迁移，不再写入。
   static let legacyScaleKey = "fontScale"
@@ -162,14 +157,16 @@ nonisolated enum TiebaTypography {
   /// 调用点：测试目标，或调试期手动 _ = TiebaTypography.selfCheck()（本仓既有约定，
   /// 见 TiebaRowFingerprint.selfCheck / TiebaRowDiff.selfCheck）。返回 nil = 全过。
   ///
-  /// 覆盖三件事：
+  /// 覆盖两件事（第三件在 UI 层，见下）：
   ///   ① 倍率换算：17pt ⇒ 1.0；12pt ⇒ 12/17；24pt ⇒ 24/17；越界钳回范围；
   ///      量化到 0.1pt（不产生 17.030000000000001 这种脏值）；
-  ///   ② 旧键迁移：fontScale 1.0 ⇒ 17pt、1.3 ⇒ 22.1pt、0.5/3.0 ⇒ 钳到 12/24；
-  ///   ③ **"字号变了"必须同时改字与行盒**（本仓最容易出 bug 的地方）：
-  ///      拿真实测量链上的 TiebaFeedRowLayout.Fonts/LineHeights + TiebaSimpleText
-  ///      比 12pt 与 24pt 两档 —— 字体 pointSize、行高、单行测量宽都必须严格变大。
-  ///      只改字不改行高，多行正文就会互相压；只改行高不改字，文本会被裁。
+  ///   ② 旧键迁移：fontScale 1.0 ⇒ 17pt、1.3 ⇒ 22.1pt、0.5/3.0 ⇒ 钳到 12/24。
+  ///
+  /// ③「字号变了必须同时改字与行盒」拿的是**真实测量链**（TiebaFeedRowLayout /
+  ///   TiebaSimpleText / TiebaPostRowLayout），而那些是行布局、属 UI/ListKit ——
+  ///   Core 不许反向引用它们（依赖倒置）。这一段因此挂在 UI 层：
+  ///   TiebaTypography.selfCheckRowChain()（UI/ListKit/TiebaTypographyRowCheck.swift）。
+  ///   两半一起跑：_ = TiebaTypography.selfCheck() ?? TiebaTypography.selfCheckRowChain()
   static func selfCheck() -> String? {
     var failures: [String] = []
     func expect(_ ok: Bool, _ label: String) {
@@ -194,26 +191,6 @@ nonisolated enum TiebaTypography {
     expect(abs(size(forLegacyScale: 1.3) - 22.1) < 1e-9, "旧倍率 1.3 没迁到 22.1pt")
     expect(size(forLegacyScale: 0.5) == sizeRange.lowerBound, "旧倍率过小没钳")
     expect(size(forLegacyScale: 3) == sizeRange.upperBound, "旧倍率过大没钳")
-
-    // ③ 字体 + 行盒同步（走真实测量链，不是复算一遍公式）
-    let smallScale = CGFloat(sizeRange.lowerBound / referenceSize)
-    let largeScale = CGFloat(sizeRange.upperBound / referenceSize)
-    let small = TiebaFeedRowLayout.geometry(containerWidth: 390, fontScale: smallScale)
-    let large = TiebaFeedRowLayout.geometry(containerWidth: 390, fontScale: largeScale)
-    expect(large.fonts.abstract.pointSize > small.fonts.abstract.pointSize + 1, "正文字体没随字号变大")
-    expect(large.lineHeights.abstract > small.lineHeights.abstract + 1, "正文行盒没随字号变大")
-    expect(large.fonts.title.pointSize > small.fonts.title.pointSize + 1, "标题字体没随字号变大")
-    expect(large.lineHeights.title > small.lineHeights.title + 1, "标题行盒没随字号变大")
-    let smallWidth = TiebaSimpleText.singleLineWidth("字号示例文字", font: small.fonts.abstract)
-    let largeWidth = TiebaSimpleText.singleLineWidth("字号示例文字", font: large.fonts.abstract)
-    expect(largeWidth > smallWidth + 1, "单行测量宽没随字号变大（字号没传到测量链）")
-    // 帖子详情（正文级另一条链）：标题行盒基准 22pt × 当前正文倍率。
-    expect(
-      TiebaPostRowLayout.titleLineHeight >= ceil(22 * Double(smallScale)) - 1,
-      "帖子卡标题行盒没随正文级字号缩放")
-    expect(
-      TiebaSimpleText.bodyFont(size: 15, weight: .regular).pointSize > 0,
-      "bodyFont 不可用")
 
     return failures.isEmpty ? nil : failures.joined(separator: " / ")
   }

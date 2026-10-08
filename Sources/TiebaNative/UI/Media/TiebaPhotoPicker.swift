@@ -1,4 +1,3 @@
-// ============================================================
 // 头像选择（替 edit-profile.tsx 的自建相册网格 + expo-media-library 读取路径）。
 //
 // 为什么是 PHPickerViewController（而不是"原生网格 + PHPhotoLibrary 全量读"）：
@@ -21,7 +20,6 @@
 // 线程：present 必须在主线程（宿主调用经
 // onMain 收束）；结果经 completion 回主线程（续体 resume 线程无关，统一走
 // 主线程便于推理）。
-// ============================================================
 import PhotosUI
 import UIKit
 

@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite — 行内容指纹（TiebaRowFingerprint）
 //
 // 现状：行的身份 = **位置**（TiebaKindItem 的 pageKey + index）。内容变了身份不变 →
@@ -8,7 +7,6 @@
 // 见 docs/uikit-migration/00-总览与结论.md §4.2「设计 1」。
 //
 // 本文件是那块地基：把一行的**内容**压成一个 64 位整数，作为与位置无关的"值身份"。
-// 本步只**加字段**（TiebaFeedRowModel.fingerprint），不改任何现有渲染/缓存行为。
 //
 // ── 三条硬约束（动任何一条都要 version += 1）──
 //   1. **跨进程稳定**：冷启动后再算必须逐位相同（跨启动命中缓存的前提）。所以字符串
@@ -28,11 +26,10 @@
 //
 // ── 并发 ──
 //   纯函数、无共享状态（只有 let 常量表），故 nonisolated 且可从后台测量队列调用。
-// ============================================================
 
 import Foundation
 // [收敛] 原 import 上游 Support 模块 —— MergeLists/PersistentStringHash 已移入本模块，
-// 现直接放在 Sources/TiebaNative/Core/ 下（早期的 早期 vendor 目录 目录已解散），不再需要跨模块 import。
+// 现直接放在 Sources/TiebaNative/Core/ 下，不再需要跨模块 import。
 
 /// 行字典 → 内容指纹（64 位、跨进程稳定、与位置无关）。字段清单与理由见文件头与本文件内注释。
 public nonisolated enum TiebaRowFingerprint {
@@ -409,7 +406,7 @@ public nonisolated enum TiebaRowFingerprint {
   //                                需另把时间文案宽度纳入键。
   //   其余所有键                  ：JS 侧调试 / 瞬时字段一律不参与
 
-  // MARK: - 自检（可选；**不挂在启动路径上**，本步只加字段、不改行为）
+  // MARK: - 自检（可选；**不挂在启动路径上**）
 
   /// 自检样本：覆盖上面**每一个**字段 + 三种嵌套结构 + 数值/布尔/数组类型。
   /// internal（非 private）：供测试目标与跨进程回归脚本取同一份输入。

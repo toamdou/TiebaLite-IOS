@@ -1,10 +1,8 @@
-// ============================================================
 // TiebaHabitSettingsViewController —— 使用习惯（原 src/app/settings/habit.tsx）
 //
 // 全部行直接经 TiebaPreferences 读写；每个开关/选择器先 fire('toggle') 再落库
 //（与旧页一致）。枚举选择器的当前值必须过白名单（脏值不得直通消费侧）；布尔行
 // id 与偏好键逐字同名。
-// ============================================================
 import UIKit
 
 final class TiebaHabitSettingsViewController: TiebaFormPageController {

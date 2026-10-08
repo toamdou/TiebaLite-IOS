@@ -194,9 +194,8 @@ public enum TiebaRouteTable {
     return typedRoute(named: hit.entry.name, params: merged)
   }
 
-  /// 路由名 + 字符串参数 → 类型化路由：**唯一**的字符串→领域值转换点。
-  /// 旧实现是「VC 各自从 params 里 Int(raw)/== "1" 解」，读取点分散且各解各的；
-  /// 这里一次解完，缺省值与原 `?? ""` / `== "1"` 逐条等价。
+  /// 路由名 + 字符串参数 → 类型化路由：**唯一**的字符串→领域值转换点（缺省值与原
+  /// VC 各自 `Int(raw)` / `== "1"` 的读法逐条等价）。
   private static func typedRoute(named name: String, params: [String: String]) -> TiebaRoute? {
     switch name {
     case "+not-found":
