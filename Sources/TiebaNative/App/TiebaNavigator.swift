@@ -43,11 +43,11 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// tab 控制器（底栏/玻璃 dock 一并盖住）。iPad 仍用每 tab 独立栈（侧边栏交互）。
   private var shellNav: UINavigationController?
   private var tabBar: TiebaMainTabBarController?
-  /// 四个 tab 的 UITab（**顺序 = 路由表声明顺序**，与屏幕上的排列无关）。索引一律走
-  /// 这里：侧边栏编辑会改视觉顺序，而 tabIndex / 角标 / 重按回调必须恒定。
-  /// 主题不再存在这里：TiebaChromeTheme 已下沉到 Core（Core/TiebaChromeTheme.swift），
-  /// 读者一律走 TiebaChromeTheme.current。
-  private var tabItems: [UITab] = []
+  // 主题不存在这里：TiebaChromeTheme 已下沉到 Core（Core/TiebaChromeTheme.swift），
+  // 读者一律走 TiebaChromeTheme.current。
+  // 这里也**不存** UITab 数组：UITab 是 iOS 18 起的类型，做存储属性会让整个类在 17 上
+  // 不可用。索引一律读壳层的 selectedRouteIndex（18 按 UITab.identifier、17 按
+  // tabBarItem.accessibilityIdentifier），见下面的 currentTabIndex。
 
 
   /// 当前选中的 tab。读 UIKit 的 selectedTab：用户点底栏/侧边栏与程序化切 tab
