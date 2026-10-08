@@ -1106,6 +1106,16 @@ public final class TiebaKindListContentView: UIView {
 
   // MARK: 事件
 
+  /// 列表→详情已知数据快照（原 TweetCard 的 setThreadSnapshot）：帖子页首帧就能画出已加载过
+  /// 的标题/作者/摘要/首图，不必等首包。顺手把列表里已解好的首图位图带上——占位卡按卡片宽
+  /// 取图（与列表文本列宽不同，Nuke 缓存键也不同），不带就要先显示一片灰再跳图。
+  private func writeThreadSnapshot(row: TiebaFeedRowModel, at indexPath: IndexPath) {
+    var snapshot = TiebaThreadSnapshot(row: row)
+    snapshot.thumbnailImage =
+      (collectionView.cellForItem(at: indexPath) as? TiebaKindListFeedCell)?.loadedThumbnailImage
+    TiebaThreadSnapshots.set(snapshot)
+  }
+
   private func handleTap(at indexPath: IndexPath, point: CGPoint) {
     guard !pageKey.isEmpty else { return }
     let index = indexPath.item
@@ -1116,16 +1126,11 @@ public final class TiebaKindListContentView: UIView {
         onListEvent?(.rowTap(index: index, region: "card", actionIndex: nil))
         return
       }
-      // 列表→详情已知数据快照（原 TweetCard 的 setThreadSnapshot）：帖子页首帧
-      // 就能画出已加载过的标题/作者/摘要/首图，不必等首包。点任何一块都写，
-      // 一次性消费 + 同 id 才命中，写多无害。
-      var snapshot = TiebaThreadSnapshot(row: row)
-      // 顺手把列表里已经解好的首图位图带上：占位卡按卡片宽取图（与列表文本列宽不同，
-      // Nuke 缓存键也不同），不带它的话进帖会先显示一片灰再跳图。
-      snapshot.thumbnailImage =
-        (collectionView.cellForItem(at: indexPath) as? TiebaKindListFeedCell)?.loadedThumbnailImage
-      TiebaThreadSnapshots.set(snapshot)
       let hit = TiebaFeedRowInteraction.tapRegion(for: point, row: row)
+      // 快照只在**这一次点击会进帖**时写：图/头像等分支不 push 帖子页，而快照没有失效点，
+      // 写进去之后从通知/历史/搜索打开同帖会被 peek 命中——源卡已回收就配对失败走慢兜底，
+      // 卡还活着则图片从屏下的旧卡位置飞入。
+      if hit.region == "card" { writeThreadSnapshot(row: row, at: indexPath) }
       if hit.region == "media", !row.media.isEmpty {
         if let cell = collectionView.cellForItem(at: indexPath) as? TiebaKindListFeedCell,
            let media = cell.mediaHit(at: point),
@@ -1136,6 +1141,8 @@ public final class TiebaKindListContentView: UIView {
         // 处理（进帖）。**不能报 region=media**：各页那一支是给视频 poster 用的
         // 「有图就 return」，报 media 会变成点了没反应（用户报的空白区行为反过来
         // 也说明这里必须落到卡）。
+        // 媒体区空白 → 这一下同样进帖，快照按同一判据补写。
+        writeThreadSnapshot(row: row, at: indexPath)
         onListEvent?(.rowTap(index: index, region: "card", actionIndex: nil))
         return
       }
