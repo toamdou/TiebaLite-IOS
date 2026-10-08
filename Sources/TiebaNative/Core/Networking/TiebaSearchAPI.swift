@@ -217,6 +217,10 @@ enum TiebaSearchAPI {
       "title": TiebaSimpleRowParser.string(item["title"]) ?? "",
       "forumName": forumName,
       "forumAvatar": forumAvatar,
+      // 屏蔽作者要用 uid：搜索结果的行内菜单里有「屏蔽」项，而 blockAuthor 读的正是 row["authorId"]
+      // （Features/Search/TiebaSearchViewController.swift 的 guard !uid.isEmpty）。这里不补这个键，
+      // 菜单项就是可见可点但永无效果的静默死动作。别名顺序照本文件既有习惯（先 id 再 uid/user_id）。
+      "authorId": TiebaSimpleRowParser.string(user["id"] ?? user["uid"] ?? user["user_id"] ?? user["userId"]) ?? "",
       "authorName": TiebaSimpleRowParser.string(user["user_name"] ?? user["userName"]) ?? "",
       "authorNameShow": TiebaSimpleRowParser.string(user["show_nickname"] ?? user["showNickname"]) ?? "",
       "authorPortrait": TiebaSimpleRowParser.string(user["portrait"]) ?? "",
