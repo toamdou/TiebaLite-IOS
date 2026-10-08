@@ -440,7 +440,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
         var models: [TiebaPostRowModel] = []
         var kept: [TiebaThreadPost] = []
         for (index, post) in source.enumerated() {
-          let isMain = mainId.map { $0 == post.id } ?? (index == 0)
+          // 主贴缺失（深链落中间页/切排序）时第 0 行不能顶替成主贴：它会被渲染成主贴卡
+          //（放大头像、注入标题、挂主帖工具栏）并躲过下面的 hideBlocked 过滤 —— 与 apply() 同口径。
+          let isMain = mainId.map { $0 == post.id } ?? false
           if hideBlocked, !isMain {
             if blockFilter.isUserBlocked(uid: post.authorId, name: post.authorName) { continue }
             if blockFilter.isContentBlocked(post.plainText) { continue }
