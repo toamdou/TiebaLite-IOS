@@ -7,13 +7,16 @@ import UIKit
 import Nuke
 
 enum TiebaPostRowLayout {
-  /// 左右边距（用户 2026-09-19："帖子卡片与屏幕两边的距离太大" ⇒ 16 收紧到 10）。
-  /// 这个值同时是已知主贴占位卡的边距（TiebaThreadKnownPostView 引它），两边必须同值，
-  /// 否则首包落地换卡时会横向跳一次。
-  static let cardMarginH: CGFloat = 10
-  static let cardMarginV: CGFloat = 4
-  static let cardPadding: CGFloat = 16
-  static let cardRadius: CGFloat = 16
+  /// 卡面几何**由外观档给**（TiebaListAppearance）：卡片档 = 左右 10 / 上下 4 / 圆角 16，
+  /// 扁平档 = 全 0（通栏、行间只靠发际线）。
+  ///
+  /// 卡片档的 10 来自用户 2026-09-19"帖子卡片与屏幕两边的距离太大"（16 收紧到 10）。
+  /// 这个值同时是已知主贴占位卡的边距（TiebaThreadKnownPostView 引它），两边**同源**
+  /// 才不会在首包落地换卡时横向跳一次 —— 所以这里不再各写各的常量，只做转发。
+  static var cardMarginH: CGFloat { TiebaListAppearance.cardMarginH }
+  static var cardMarginV: CGFloat { TiebaListAppearance.cardMarginV }
+  static let cardPadding: CGFloat = TiebaListAppearance.cardPadding
+  static var cardRadius: CGFloat { TiebaListAppearance.cardRadius }
   static let avatarSide: CGFloat = 36
   static let avatarSideMain: CGFloat = 40
   static let avatarGap: CGFloat = 10
@@ -30,7 +33,12 @@ enum TiebaPostRowLayout {
   static let maxImages = 9
   static let audioHeight: CGFloat = 52
   static let subPostTop: CGFloat = 10
+  /// 框内行距的一半（两行之间共 2×gap，与旧版"分隔线上下各一份"同值）。
   static let subPostDividerGap: CGFloat = 8
+  /// 楼中楼预览框：内容列到框边的距离，以及框的圆角。框把预览整段收进一个浅底
+  /// 圆角矩形（取代旧版"逐条上方一条分隔线 + 块顶一条 hairline"）。
+  static let subPostBoxPadding: CGFloat = 10
+  static let subPostBoxRadius: CGFloat = 8
   /// 主贴回复工具栏（ThreadHeader.replyToolbar：paddingVertical 12×2 + 药丸 30）。
   static let toolbarHeight: CGFloat = 54
 
@@ -63,7 +71,11 @@ enum TiebaPostRowLayout {
   }
   /// 箭头占的宽度（10pt 字形 + 与标题的 4pt 间距）：药丸宽度要算上它。
   static let pillChevronWidth: CGFloat = 14
-  static var subPostNameFont: UIFont { TiebaSimpleText.bodyFont(size: 14, weight: .semibold) }
+  /// 楼中楼名字的字体。**必须与正文同一个 pointSize**（正文是 14×应用倍率的 systemFont）：
+  /// 名字现在并进同一条富文本，字号不一致时 20pt 行盒里首行基线又会对不上。
+  static func subPostNameFont(_ scale: Double) -> UIFont {
+    UIFont.systemFont(ofSize: 14 * scale, weight: .semibold)
+  }
   static var replyCountFont: UIFont { TiebaSimpleText.bodyFont(size: 15, weight: .semibold) }
 
   /// 楼中楼预览的行盒高度（与 buildContent(isSubPost:) 的 20×scale 同值）。
@@ -148,4 +160,3 @@ enum TiebaPostRowLayout {
   }
 }
 
-// MARK: - 时间文案（共享工具：相对/绝对两种风格一套实现）

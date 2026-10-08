@@ -20,205 +20,205 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_ForumInfo: @unchecked Sendable {
+nonisolated public struct Tieba_ForumInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var id: Int64 {
+  public var id: Int64 {
     get {_storage._id}
     set {_uniqueStorage()._id = newValue}
   }
 
-  var name: String {
+  public var name: String {
     get {_storage._name}
     set {_uniqueStorage()._name = newValue}
   }
 
-  var firstClass: String {
+  public var firstClass: String {
     get {_storage._firstClass}
     set {_uniqueStorage()._firstClass = newValue}
   }
 
-  var secondClass: String {
+  public var secondClass: String {
     get {_storage._secondClass}
     set {_uniqueStorage()._secondClass = newValue}
   }
 
-  var isExists: Int32 {
+  public var isExists: Int32 {
     get {_storage._isExists}
     set {_uniqueStorage()._isExists = newValue}
   }
 
-  var isLike: Int32 {
+  public var isLike: Int32 {
     get {_storage._isLike}
     set {_uniqueStorage()._isLike = newValue}
   }
 
-  var userLevel: Int32 {
+  public var userLevel: Int32 {
     get {_storage._userLevel}
     set {_uniqueStorage()._userLevel = newValue}
   }
 
-  var levelName: String {
+  public var levelName: String {
     get {_storage._levelName}
     set {_uniqueStorage()._levelName = newValue}
   }
 
-  var memberNum: Int32 {
+  public var memberNum: Int32 {
     get {_storage._memberNum}
     set {_uniqueStorage()._memberNum = newValue}
   }
 
-  var threadNum: Int32 {
+  public var threadNum: Int32 {
     get {_storage._threadNum}
     set {_uniqueStorage()._threadNum = newValue}
   }
 
-  var postNum: Int32 {
+  public var postNum: Int32 {
     get {_storage._postNum}
     set {_uniqueStorage()._postNum = newValue}
   }
 
-  var hasFrsStar_p: Int32 {
+  public var hasFrsStar_p: Int32 {
     get {_storage._hasFrsStar_p}
     set {_uniqueStorage()._hasFrsStar_p = newValue}
   }
 
-  var curScore: Int32 {
+  public var curScore: Int32 {
     get {_storage._curScore}
     set {_uniqueStorage()._curScore = newValue}
   }
 
-  var levelupScore: Int32 {
+  public var levelupScore: Int32 {
     get {_storage._levelupScore}
     set {_uniqueStorage()._levelupScore = newValue}
   }
 
-  var signInInfo: Tieba_ForumSignInfo {
+  public var signInInfo: Tieba_ForumSignInfo {
     get {_storage._signInInfo ?? Tieba_ForumSignInfo()}
     set {_uniqueStorage()._signInInfo = newValue}
   }
   /// Returns true if `signInInfo` has been explicitly set.
-  var hasSignInInfo: Bool {_storage._signInInfo != nil}
+  public var hasSignInInfo: Bool {_storage._signInInfo != nil}
   /// Clears the value of `signInInfo`. Subsequent reads from it will return its default value.
-  mutating func clearSignInInfo() {_uniqueStorage()._signInInfo = nil}
+  mutating public func clearSignInInfo() {_uniqueStorage()._signInInfo = nil}
 
-  var avatar: String {
+  public var avatar: String {
     get {_storage._avatar}
     set {_uniqueStorage()._avatar = newValue}
   }
 
-  var slogan: String {
+  public var slogan: String {
     get {_storage._slogan}
     set {_uniqueStorage()._slogan = newValue}
   }
 
-  var goodClassify: [Tieba_ForumClassify] {
+  public var goodClassify: [Tieba_ForumClassify] {
     get {_storage._goodClassify}
     set {_uniqueStorage()._goodClassify = newValue}
   }
 
-  var fShareImg: String {
+  public var fShareImg: String {
     get {_storage._fShareImg}
     set {_uniqueStorage()._fShareImg = newValue}
   }
 
-  var forumShareLink: String {
+  public var forumShareLink: String {
     get {_storage._forumShareLink}
     set {_uniqueStorage()._forumShareLink = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-nonisolated struct Tieba_ForumSignInfo: Sendable {
+nonisolated public struct Tieba_ForumSignInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var userInfo: Tieba_ForumSignUser {
+  public var userInfo: Tieba_ForumSignUser {
     get {_userInfo ?? Tieba_ForumSignUser()}
     set {_userInfo = newValue}
   }
   /// Returns true if `userInfo` has been explicitly set.
-  var hasUserInfo: Bool {self._userInfo != nil}
+  public var hasUserInfo: Bool {self._userInfo != nil}
   /// Clears the value of `userInfo`. Subsequent reads from it will return its default value.
-  mutating func clearUserInfo() {self._userInfo = nil}
+  mutating public func clearUserInfo() {self._userInfo = nil}
 
-  var forumInfo: Tieba_ForumSignForum {
+  public var forumInfo: Tieba_ForumSignForum {
     get {_forumInfo ?? Tieba_ForumSignForum()}
     set {_forumInfo = newValue}
   }
   /// Returns true if `forumInfo` has been explicitly set.
-  var hasForumInfo: Bool {self._forumInfo != nil}
+  public var hasForumInfo: Bool {self._forumInfo != nil}
   /// Clears the value of `forumInfo`. Subsequent reads from it will return its default value.
-  mutating func clearForumInfo() {self._forumInfo = nil}
+  mutating public func clearForumInfo() {self._forumInfo = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _userInfo: Tieba_ForumSignUser? = nil
   fileprivate var _forumInfo: Tieba_ForumSignForum? = nil
 }
 
-nonisolated struct Tieba_ForumSignUser: Sendable {
+nonisolated public struct Tieba_ForumSignUser: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var isSignIn: Int32 = 0
+  public var isSignIn: Int32 = 0
 
-  var contSignNum: Int32 = 0
+  public var contSignNum: Int32 = 0
 
-  var userSignRank: Int32 = 0
+  public var userSignRank: Int32 = 0
 
-  var signBonusPoint: Int32 = 0
+  public var signBonusPoint: Int32 = 0
 
-  var signTime: String = String()
+  public var signTime: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-nonisolated struct Tieba_ForumSignForum: Sendable {
+nonisolated public struct Tieba_ForumSignForum: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var signRank: Int32 = 0
+  public var signRank: Int32 = 0
 
-  var memberCount: Int32 = 0
+  public var memberCount: Int32 = 0
 
-  var signCount: String = String()
+  public var signCount: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-nonisolated struct Tieba_ForumClassify: Sendable {
+nonisolated public struct Tieba_ForumClassify: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var name: String = String()
+  public var name: String = String()
 
-  var id: Int64 = 0
+  public var id: Int64 = 0
 
-  var classID: Int32 = 0
+  public var classID: Int32 = 0
 
-  var className: String = String()
+  public var className: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -226,8 +226,8 @@ nonisolated struct Tieba_ForumClassify: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_ForumInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ForumInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{3}first_class\0\u{3}second_class\0\u{3}is_exists\0\u{3}is_like\0\u{3}user_level\0\u{3}level_name\0\u{3}member_num\0\u{3}thread_num\0\u{3}post_num\0\u{3}has_frs_star\0\u{3}cur_score\0\u{3}levelup_score\0\u{3}sign_in_info\0\u{4}\u{6}good_classify\0\u{2}\u{3}avatar\0\u{1}slogan\0\u{4}5f_share_img\0\u{3}forum_share_link\0")
+  static public let protoMessageName: String = _protobuf_package + ".ForumInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}name\0\u{3}first_class\0\u{3}second_class\0\u{3}is_exists\0\u{3}is_like\0\u{3}user_level\0\u{3}level_name\0\u{3}member_num\0\u{3}thread_num\0\u{3}post_num\0\u{3}has_frs_star\0\u{3}cur_score\0\u{3}levelup_score\0\u{3}sign_in_info\0\u{4}\u{6}good_classify\0\u{2}\u{3}avatar\0\u{1}slogan\0\u{4}5f_share_img\0\u{3}forum_share_link\0")
 
   fileprivate class _StorageClass {
     var _id: Int64 = 0
@@ -290,7 +290,7 @@ nonisolated extension Tieba_ForumInfo: SwiftProtobuf.Message, SwiftProtobuf._Mes
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -324,7 +324,7 @@ nonisolated extension Tieba_ForumInfo: SwiftProtobuf.Message, SwiftProtobuf._Mes
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -394,7 +394,7 @@ nonisolated extension Tieba_ForumInfo: SwiftProtobuf.Message, SwiftProtobuf._Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ForumInfo, rhs: Tieba_ForumInfo) -> Bool {
+  static public func ==(lhs: Tieba_ForumInfo, rhs: Tieba_ForumInfo) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -429,10 +429,10 @@ nonisolated extension Tieba_ForumInfo: SwiftProtobuf.Message, SwiftProtobuf._Mes
 }
 
 nonisolated extension Tieba_ForumSignInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ForumSignInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_info\0\u{3}forum_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".ForumSignInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_info\0\u{3}forum_info\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -445,7 +445,7 @@ nonisolated extension Tieba_ForumSignInfo: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -459,7 +459,7 @@ nonisolated extension Tieba_ForumSignInfo: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ForumSignInfo, rhs: Tieba_ForumSignInfo) -> Bool {
+  static public func ==(lhs: Tieba_ForumSignInfo, rhs: Tieba_ForumSignInfo) -> Bool {
     if lhs._userInfo != rhs._userInfo {return false}
     if lhs._forumInfo != rhs._forumInfo {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -468,10 +468,10 @@ nonisolated extension Tieba_ForumSignInfo: SwiftProtobuf.Message, SwiftProtobuf.
 }
 
 nonisolated extension Tieba_ForumSignUser: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ForumSignUser"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_sign_in\0\u{3}cont_sign_num\0\u{3}user_sign_rank\0\u{3}sign_bonus_point\0\u{3}sign_time\0")
+  static public let protoMessageName: String = _protobuf_package + ".ForumSignUser"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_sign_in\0\u{3}cont_sign_num\0\u{3}user_sign_rank\0\u{3}sign_bonus_point\0\u{3}sign_time\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -487,7 +487,7 @@ nonisolated extension Tieba_ForumSignUser: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.isSignIn != 0 {
       try visitor.visitSingularInt32Field(value: self.isSignIn, fieldNumber: 1)
     }
@@ -506,7 +506,7 @@ nonisolated extension Tieba_ForumSignUser: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ForumSignUser, rhs: Tieba_ForumSignUser) -> Bool {
+  static public func ==(lhs: Tieba_ForumSignUser, rhs: Tieba_ForumSignUser) -> Bool {
     if lhs.isSignIn != rhs.isSignIn {return false}
     if lhs.contSignNum != rhs.contSignNum {return false}
     if lhs.userSignRank != rhs.userSignRank {return false}
@@ -518,10 +518,10 @@ nonisolated extension Tieba_ForumSignUser: SwiftProtobuf.Message, SwiftProtobuf.
 }
 
 nonisolated extension Tieba_ForumSignForum: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ForumSignForum"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sign_rank\0\u{3}member_count\0\u{3}sign_count\0")
+  static public let protoMessageName: String = _protobuf_package + ".ForumSignForum"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sign_rank\0\u{3}member_count\0\u{3}sign_count\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -535,7 +535,7 @@ nonisolated extension Tieba_ForumSignForum: SwiftProtobuf.Message, SwiftProtobuf
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.signRank != 0 {
       try visitor.visitSingularInt32Field(value: self.signRank, fieldNumber: 1)
     }
@@ -548,7 +548,7 @@ nonisolated extension Tieba_ForumSignForum: SwiftProtobuf.Message, SwiftProtobuf
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ForumSignForum, rhs: Tieba_ForumSignForum) -> Bool {
+  static public func ==(lhs: Tieba_ForumSignForum, rhs: Tieba_ForumSignForum) -> Bool {
     if lhs.signRank != rhs.signRank {return false}
     if lhs.memberCount != rhs.memberCount {return false}
     if lhs.signCount != rhs.signCount {return false}
@@ -558,10 +558,10 @@ nonisolated extension Tieba_ForumSignForum: SwiftProtobuf.Message, SwiftProtobuf
 }
 
 nonisolated extension Tieba_ForumClassify: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ForumClassify"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}id\0\u{3}class_id\0\u{3}class_name\0")
+  static public let protoMessageName: String = _protobuf_package + ".ForumClassify"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}id\0\u{3}class_id\0\u{3}class_name\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -576,7 +576,7 @@ nonisolated extension Tieba_ForumClassify: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.name.isEmpty {
       try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
     }
@@ -592,7 +592,7 @@ nonisolated extension Tieba_ForumClassify: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ForumClassify, rhs: Tieba_ForumClassify) -> Bool {
+  static public func ==(lhs: Tieba_ForumClassify, rhs: Tieba_ForumClassify) -> Bool {
     if lhs.name != rhs.name {return false}
     if lhs.id != rhs.id {return false}
     if lhs.classID != rhs.classID {return false}

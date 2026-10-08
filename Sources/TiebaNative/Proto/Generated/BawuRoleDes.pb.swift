@@ -20,18 +20,18 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_BawuRoleDes: Sendable {
+nonisolated public struct Tieba_BawuRoleDes: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var roleName: String = String()
+  public var roleName: String = String()
 
-  var roleInfo: [Tieba_BawuRoleInfoPub] = []
+  public var roleInfo: [Tieba_BawuRoleInfoPub] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -39,10 +39,10 @@ nonisolated struct Tieba_BawuRoleDes: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_BawuRoleDes: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".BawuRoleDes"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}role_name\0\u{3}role_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".BawuRoleDes"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}role_name\0\u{3}role_info\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -55,7 +55,7 @@ nonisolated extension Tieba_BawuRoleDes: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.roleName.isEmpty {
       try visitor.visitSingularStringField(value: self.roleName, fieldNumber: 1)
     }
@@ -65,7 +65,7 @@ nonisolated extension Tieba_BawuRoleDes: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_BawuRoleDes, rhs: Tieba_BawuRoleDes) -> Bool {
+  static public func ==(lhs: Tieba_BawuRoleDes, rhs: Tieba_BawuRoleDes) -> Bool {
     if lhs.roleName != rhs.roleName {return false}
     if lhs.roleInfo != rhs.roleInfo {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

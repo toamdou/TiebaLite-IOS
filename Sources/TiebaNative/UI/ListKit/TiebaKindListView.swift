@@ -1,10 +1,6 @@
-// ============================================================
 // TiebaLite — 通用行列表（TiebaKindListView）
 //
-// 纯 UIView：UICollectionView + TiebaRowListLayout（拉取式，帧由测量缓存逐个给出）+
-// DiffableDataSource（CellRegistration 分派 simple/feed/post）；事件经 onListEvent 外传。
 // 行宽契约 = TiebaLayout.quantize(列表宽 - 2×horizontalInset)，行种类路由见 TiebaKindRowPages。
-// ============================================================
 
 import os
 import UIKit
@@ -549,9 +545,8 @@ public final class TiebaKindListContentView: UIView {
       // unowned 直接 SIGTRAP（"Attempted to read an unowned reference…"），weak 只是这一行
       // 不产出 cell，下一次布局趟自然会补上 —— 用户看到的是 0 影响，不是闪退。
       guard let self else { return nil }
-      // [精简] 原「页记录被整页 LRU 挤掉 → 先请宿主重推」的探测点已删除：页记录由本
-      // 列表自持（currentPage），能不能画只取决于本页记录里有没有这一行，与共享存储的
-      // 时效无关。真正的度量缺失由各 cell 注册里的模型查询兜底（那才是内容真不在）。
+      // [精简] 原「页记录被整页 LRU 挤掉 → 请宿主重推」的探测点已删除：页记录由本列表自持（currentPage），
+      // 能不能画只取决于本页记录里有没有这一行；真正的度量缺失由各 cell 注册里的模型查询兜底。
       // 行种类分派：页记录说这一行是哪一族（缺省/未知 = simple，与旧页兼容）。
       switch self.kind(at: item.index, pageKey: item.pageKey) {
       case .feed:
@@ -630,7 +625,6 @@ public final class TiebaKindListContentView: UIView {
   private lazy var feedCellRegistration =
     UICollectionView.CellRegistration<TiebaKindListFeedCell, TiebaKindItem> {
       [weak self] cell, indexPath, item in
-      // 同 dataSource cellProvider：注册闭包由 UIKit 侧持有，宿主析构后仍可能被调一次。
       guard let self else { return }
       cell.onTap = { [weak self] point in
         self?.handleTap(at: indexPath, point: point)
@@ -666,7 +660,6 @@ public final class TiebaKindListContentView: UIView {
   private lazy var postCellRegistration =
     UICollectionView.CellRegistration<TiebaKindListPostCell, TiebaKindItem> {
       [weak self] cell, indexPath, item in
-      // 同 dataSource cellProvider：注册闭包由 UIKit 侧持有，宿主析构后仍可能被调一次。
       guard let self else { return }
       cell.onPostEvent = { [weak self] event in
         self?.onPostEvent?(indexPath.item, event)
@@ -781,9 +774,8 @@ public final class TiebaKindListContentView: UIView {
     }
     let count = pageRowCount
     guard count != itemCount else { return }
-    // [精简] 原「行数变 0 且快照非空 → notifyPageDataMissing()（页记录被整页 LRU 挤掉）」
-    // 分支已删除：页记录由本列表自持，该状态不可达（发布晚到时 itemCount 也是 0，直接走
-    // 下面的 setPage 重取）。行数确实变了（重推换了数据）仍照旧重建快照 —— 不清空。
+    // [精简] 原「行数变 0 且快照非空 → notifyPageDataMissing()」分支已删除：页记录自持后该状态不可达
+    //（发布晚到时 itemCount 也是 0，直接走下面的 setPage 重取）。行数确实变了（重推换了数据）仍照旧重建快照 —— 不清空。
     // [采用] 复用缓存的当前页身份（不能省略 —— 省略即退回位置身份，见 currentIdentities 注释）。
     setPage(pageKey: pageKey, identities: currentIdentities)
   }
@@ -1695,7 +1687,7 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
           let frame = single || !row.plan.imageItemFrames.indices.contains(index)
             ? imagesFrame
             : row.plan.imageItemFrames[index]
-          guard let url = TiebaPostRowText.displayURL(image, preferences: row.preferences) else {
+          guard let url = row.preferences.displayURL(for: image) else {
             continue
           }
           appendDisplay(url, size: frame.size, radius: TiebaPostRowLayout.imageRadius)

@@ -1,5 +1,4 @@
-// ============================================================
-// TiebaLite — 异步位图管线 · 位图 LRU（从 TiebaFeedRowView.swift:749-903 原样搬出）
+// TiebaLite — 异步位图管线 · 位图 LRU（从 TiebaFeedRowView 原样搬出）
 //
 // 搬出来的唯一目的是让「缓存」和「画布」解耦：
 //   - 后台烘制结果要能进缓存（异步路径），而画布只负责 attach（layer.contents 的单一所有者）；
@@ -11,7 +10,6 @@
 // 命中/未命中计数供验收判据 2（往回滚一屏命中率 100%）。
 //
 // 本文件不依赖 TiebaNative 的其他类型（模型只以 AnyObject 弱引用参与身份判定）。
-// ============================================================
 
 import UIKit
 
@@ -36,11 +34,11 @@ public final class TiebaFeedBitmapStore {
     var lastUsed: UInt64
   }
 
-  /// 位图预算（原 TiebaFeedRowView.swift:764，值不动）。典型卡片（370×220pt @3x）
+  /// 位图预算（原实现的值，不动）。典型卡片（370×220pt @3x）
   /// 约 2.9MB/张，24MB ≈ 8 张 ≈ 一屏多一点，覆盖「往回滚一屏」的命中需求。
   /// 调大能覆盖滚更远，代价是常驻内存线性增长（报告 §5 的 M3 实验①就是改这个数）。
   public var byteBudget = 24 * 1024 * 1024
-  /// 单张位图上限（原 :767）：展开后的长文卡可以到一千多 pt 高（十几 MB），
+  /// 单张位图上限（原实现）：展开后的长文卡可以到一千多 pt 高（十几 MB），
   /// 存它会把预算挤空、还把别的卡挤掉。这类卡仍然一次画好，只是不进缓存。
   public var maxEntryBytes = 8 * 1024 * 1024
 
@@ -127,7 +125,7 @@ public final class TiebaFeedBitmapStore {
 
   /// 预热一张行位图：**只进 Store，不 attach**（谁拥有 layer.contents 始终是画布）。
   ///
-  /// 应在 UICollectionView 的 prefetchItemsAt（TiebaKindListView.swift:1587）旁边并行调用。
+  /// 应在 UICollectionView 的 prefetchItemsAt（TiebaKindListView.prefetchItemsAt）旁边并行调用。
   /// job.epoch 必须是 0（纯预取、不发生取消，报告 §5.5）。
   public func prewarm(_ job: TiebaFeedBitmapJob, traits: UITraitCollection, model: AnyObject) {
     guard job.epoch == 0, !isCached(job.key), totalBytes < byteBudget else { return }

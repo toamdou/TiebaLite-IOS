@@ -20,39 +20,39 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_DisplayWindowInfo: Sendable {
+nonisolated public struct Tieba_DisplayWindowInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var productID: Int64 = 0
+  public var productID: Int64 = 0
 
-  var title: String = String()
+  public var title: String = String()
 
-  var intro: String = String()
+  public var intro: String = String()
 
-  var img: Tieba_DealMedia {
+  public var img: Tieba_DealMedia {
     get {_img ?? Tieba_DealMedia()}
     set {_img = newValue}
   }
   /// Returns true if `img` has been explicitly set.
-  var hasImg: Bool {self._img != nil}
+  public var hasImg: Bool {self._img != nil}
   /// Clears the value of `img`. Subsequent reads from it will return its default value.
-  mutating func clearImg() {self._img = nil}
+  mutating public func clearImg() {self._img = nil}
 
-  var unitPrice: UInt64 = 0
+  public var unitPrice: UInt64 = 0
 
-  var stock: UInt64 = 0
+  public var stock: UInt64 = 0
 
-  var shipFee: UInt64 = 0
+  public var shipFee: UInt64 = 0
 
-  var isDisplay: Int32 = 0
+  public var isDisplay: Int32 = 0
 
-  var sales: UInt64 = 0
+  public var sales: UInt64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _img: Tieba_DealMedia? = nil
 }
@@ -62,10 +62,10 @@ nonisolated struct Tieba_DisplayWindowInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_DisplayWindowInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DisplayWindowInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}product_id\0\u{1}title\0\u{1}intro\0\u{1}img\0\u{3}unit_price\0\u{1}stock\0\u{3}ship_fee\0\u{3}is_display\0\u{1}sales\0")
+  static public let protoMessageName: String = _protobuf_package + ".DisplayWindowInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}product_id\0\u{1}title\0\u{1}intro\0\u{1}img\0\u{3}unit_price\0\u{1}stock\0\u{3}ship_fee\0\u{3}is_display\0\u{1}sales\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -85,7 +85,7 @@ nonisolated extension Tieba_DisplayWindowInfo: SwiftProtobuf.Message, SwiftProto
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -120,7 +120,7 @@ nonisolated extension Tieba_DisplayWindowInfo: SwiftProtobuf.Message, SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_DisplayWindowInfo, rhs: Tieba_DisplayWindowInfo) -> Bool {
+  static public func ==(lhs: Tieba_DisplayWindowInfo, rhs: Tieba_DisplayWindowInfo) -> Bool {
     if lhs.productID != rhs.productID {return false}
     if lhs.title != rhs.title {return false}
     if lhs.intro != rhs.intro {return false}

@@ -20,22 +20,22 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_BusinessAccountInfo: Sendable {
+nonisolated public struct Tieba_BusinessAccountInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var isBusinessAccount: Int32 = 0
+  public var isBusinessAccount: Int32 = 0
 
-  var isForumBusinessAccount: Int32 = 0
+  public var isForumBusinessAccount: Int32 = 0
 
-  var businessName: String = String()
+  public var businessName: String = String()
 
-  var identifiExplain: String = String()
+  public var identifiExplain: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -43,10 +43,10 @@ nonisolated struct Tieba_BusinessAccountInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_BusinessAccountInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".BusinessAccountInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_business_account\0\u{3}is_forum_business_account\0\u{3}business_name\0\u{3}identifi_explain\0")
+  static public let protoMessageName: String = _protobuf_package + ".BusinessAccountInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_business_account\0\u{3}is_forum_business_account\0\u{3}business_name\0\u{3}identifi_explain\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_BusinessAccountInfo: SwiftProtobuf.Message, SwiftPro
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.isBusinessAccount != 0 {
       try visitor.visitSingularInt32Field(value: self.isBusinessAccount, fieldNumber: 1)
     }
@@ -77,7 +77,7 @@ nonisolated extension Tieba_BusinessAccountInfo: SwiftProtobuf.Message, SwiftPro
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_BusinessAccountInfo, rhs: Tieba_BusinessAccountInfo) -> Bool {
+  static public func ==(lhs: Tieba_BusinessAccountInfo, rhs: Tieba_BusinessAccountInfo) -> Bool {
     if lhs.isBusinessAccount != rhs.isBusinessAccount {return false}
     if lhs.isForumBusinessAccount != rhs.isForumBusinessAccount {return false}
     if lhs.businessName != rhs.businessName {return false}

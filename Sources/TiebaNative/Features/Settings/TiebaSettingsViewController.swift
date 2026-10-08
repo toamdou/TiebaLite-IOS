@@ -1,6 +1,4 @@
-// ============================================================
 // TiebaSettingsViewController —— 设置首页（原 src/app/settings/index.tsx）
-// ============================================================
 import UIKit
 
 final class TiebaSettingsViewController: TiebaFormPageController {
@@ -16,7 +14,6 @@ final class TiebaSettingsViewController: TiebaFormPageController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    // 在屏时被别处改写就地回推开关（行 id 与键不同名，见 handleToggle）。
     prefToken = TiebaPreferenceChange.observe(keys: Self.preferenceKeys) { [weak self] in
       self?.refreshDisplayedToggles()
     }

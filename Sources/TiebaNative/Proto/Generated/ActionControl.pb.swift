@@ -20,22 +20,22 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_ActionControl: Sendable {
+nonisolated public struct Tieba_ActionControl: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var url: String = String()
+  public var url: String = String()
 
-  var name: String = String()
+  public var name: String = String()
 
-  var textColor: String = String()
+  public var textColor: String = String()
 
-  var textColorPressed: String = String()
+  public var textColorPressed: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -43,10 +43,10 @@ nonisolated struct Tieba_ActionControl: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_ActionControl: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ActionControl"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}name\0\u{3}text_color\0\u{3}text_color_pressed\0")
+  static public let protoMessageName: String = _protobuf_package + ".ActionControl"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}name\0\u{3}text_color\0\u{3}text_color_pressed\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_ActionControl: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.url.isEmpty {
       try visitor.visitSingularStringField(value: self.url, fieldNumber: 1)
     }
@@ -77,7 +77,7 @@ nonisolated extension Tieba_ActionControl: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ActionControl, rhs: Tieba_ActionControl) -> Bool {
+  static public func ==(lhs: Tieba_ActionControl, rhs: Tieba_ActionControl) -> Bool {
     if lhs.url != rhs.url {return false}
     if lhs.name != rhs.name {return false}
     if lhs.textColor != rhs.textColor {return false}

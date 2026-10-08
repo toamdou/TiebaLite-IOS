@@ -20,306 +20,306 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_TopicList_TopicListRequestData: Sendable {
+nonisolated public struct Tieba_TopicList_TopicListRequestData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var common: Tieba_CommonRequest {
+  public var common: Tieba_CommonRequest {
     get {_common ?? Tieba_CommonRequest()}
     set {_common = newValue}
   }
   /// Returns true if `common` has been explicitly set.
-  var hasCommon: Bool {self._common != nil}
+  public var hasCommon: Bool {self._common != nil}
   /// Clears the value of `common`. Subsequent reads from it will return its default value.
-  mutating func clearCommon() {self._common = nil}
+  mutating public func clearCommon() {self._common = nil}
 
-  var callFrom: String = String()
+  public var callFrom: String = String()
 
-  var listType: String = String()
+  public var listType: String = String()
 
-  var needTabList: String = String()
+  public var needTabList: String = String()
 
-  var fid: Int64 = 0
+  public var fid: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _common: Tieba_CommonRequest? = nil
 }
 
-nonisolated struct Tieba_TopicList_TopicListRequest: Sendable {
+nonisolated public struct Tieba_TopicList_TopicListRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var data: Tieba_TopicList_TopicListRequestData {
+  public var data: Tieba_TopicList_TopicListRequestData {
     get {_data ?? Tieba_TopicList_TopicListRequestData()}
     set {_data = newValue}
   }
   /// Returns true if `data` has been explicitly set.
-  var hasData: Bool {self._data != nil}
+  public var hasData: Bool {self._data != nil}
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
-  mutating func clearData() {self._data = nil}
+  mutating public func clearData() {self._data = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _data: Tieba_TopicList_TopicListRequestData? = nil
 }
 
-nonisolated struct Tieba_TopicList_TopicListModule: Sendable {
+nonisolated public struct Tieba_TopicList_TopicListModule: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var moduleTitle: String = String()
+  public var moduleTitle: String = String()
 
-  var topicList: [Tieba_TopicList_TopicList] = []
+  public var topicList: [Tieba_TopicList_TopicList] = []
 
-  var tips: String = String()
+  public var tips: String = String()
 
-  var ruleJumpURL: String = String()
+  public var ruleJumpURL: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-nonisolated struct Tieba_TopicList_MediaTopic: Sendable {
+nonisolated public struct Tieba_TopicList_MediaTopic: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var topicID: UInt64 = 0
+  public var topicID: UInt64 = 0
 
-  var topicName: String = String()
+  public var topicName: String = String()
 
-  var videoInfo: Tieba_VideoInfo {
+  public var videoInfo: Tieba_VideoInfo {
     get {_videoInfo ?? Tieba_VideoInfo()}
     set {_videoInfo = newValue}
   }
   /// Returns true if `videoInfo` has been explicitly set.
-  var hasVideoInfo: Bool {self._videoInfo != nil}
+  public var hasVideoInfo: Bool {self._videoInfo != nil}
   /// Clears the value of `videoInfo`. Subsequent reads from it will return its default value.
-  mutating func clearVideoInfo() {self._videoInfo = nil}
+  mutating public func clearVideoInfo() {self._videoInfo = nil}
 
-  var picURL: String = String()
+  public var picURL: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _videoInfo: Tieba_VideoInfo? = nil
 }
 
-nonisolated struct Tieba_TopicList_TabList: Sendable {
+nonisolated public struct Tieba_TopicList_TabList: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var tabName: String = String()
+  public var tabName: String = String()
 
-  var tabType: String = String()
+  public var tabType: String = String()
 
-  var sharePic: String = String()
+  public var sharePic: String = String()
 
-  var shareTitle: String = String()
+  public var shareTitle: String = String()
 
-  var shareDesc: String = String()
+  public var shareDesc: String = String()
 
-  var shareURL: String = String()
+  public var shareURL: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-nonisolated struct Tieba_TopicList_TopicList: @unchecked Sendable {
+nonisolated public struct Tieba_TopicList_TopicList: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var topicID: UInt64 {
+  public var topicID: UInt64 {
     get {_storage._topicID}
     set {_uniqueStorage()._topicID = newValue}
   }
 
-  var topicName: String {
+  public var topicName: String {
     get {_storage._topicName}
     set {_uniqueStorage()._topicName = newValue}
   }
 
-  var discussNum: UInt64 {
+  public var discussNum: UInt64 {
     get {_storage._discussNum}
     set {_uniqueStorage()._discussNum = newValue}
   }
 
-  var tag: Int32 {
+  public var tag: Int32 {
     get {_storage._tag}
     set {_uniqueStorage()._tag = newValue}
   }
 
-  var topicDesc: String {
+  public var topicDesc: String {
     get {_storage._topicDesc}
     set {_uniqueStorage()._topicDesc = newValue}
   }
 
-  var topicPic: String {
+  public var topicPic: String {
     get {_storage._topicPic}
     set {_uniqueStorage()._topicPic = newValue}
   }
 
-  var updateTime: Int64 {
+  public var updateTime: Int64 {
     get {_storage._updateTime}
     set {_uniqueStorage()._updateTime = newValue}
   }
 
-  var topicUserName: String {
+  public var topicUserName: String {
     get {_storage._topicUserName}
     set {_uniqueStorage()._topicUserName = newValue}
   }
 
-  var media: [Tieba_Media] {
+  public var media: [Tieba_Media] {
     get {_storage._media}
     set {_uniqueStorage()._media = newValue}
   }
 
-  var topicTid: Int64 {
+  public var topicTid: Int64 {
     get {_storage._topicTid}
     set {_uniqueStorage()._topicTid = newValue}
   }
 
-  var topicH5URL: String {
+  public var topicH5URL: String {
     get {_storage._topicH5URL}
     set {_uniqueStorage()._topicH5URL = newValue}
   }
 
-  var videoInfo: Tieba_VideoInfo {
+  public var videoInfo: Tieba_VideoInfo {
     get {_storage._videoInfo ?? Tieba_VideoInfo()}
     set {_uniqueStorage()._videoInfo = newValue}
   }
   /// Returns true if `videoInfo` has been explicitly set.
-  var hasVideoInfo: Bool {_storage._videoInfo != nil}
+  public var hasVideoInfo: Bool {_storage._videoInfo != nil}
   /// Clears the value of `videoInfo`. Subsequent reads from it will return its default value.
-  mutating func clearVideoInfo() {_uniqueStorage()._videoInfo = nil}
+  mutating public func clearVideoInfo() {_uniqueStorage()._videoInfo = nil}
 
-  var topicThreadTypes: Int32 {
+  public var topicThreadTypes: Int32 {
     get {_storage._topicThreadTypes}
     set {_uniqueStorage()._topicThreadTypes = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-nonisolated struct Tieba_TopicList_NewTopicList: Sendable {
+nonisolated public struct Tieba_TopicList_NewTopicList: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var topicID: Int64 = 0
+  public var topicID: Int64 = 0
 
-  var topicName: String = String()
+  public var topicName: String = String()
 
-  var topicDesc: String = String()
+  public var topicDesc: String = String()
 
-  var discussNum: Int64 = 0
+  public var discussNum: Int64 = 0
 
-  var topicImage: String = String()
+  public var topicImage: String = String()
 
-  var topicTag: Int32 = 0
+  public var topicTag: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-nonisolated struct Tieba_TopicList_TopicListResponseData: @unchecked Sendable {
+nonisolated public struct Tieba_TopicList_TopicListResponseData: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var topicBang: Tieba_TopicList_TopicListModule {
+  public var topicBang: Tieba_TopicList_TopicListModule {
     get {_storage._topicBang ?? Tieba_TopicList_TopicListModule()}
     set {_uniqueStorage()._topicBang = newValue}
   }
   /// Returns true if `topicBang` has been explicitly set.
-  var hasTopicBang: Bool {_storage._topicBang != nil}
+  public var hasTopicBang: Bool {_storage._topicBang != nil}
   /// Clears the value of `topicBang`. Subsequent reads from it will return its default value.
-  mutating func clearTopicBang() {_uniqueStorage()._topicBang = nil}
+  mutating public func clearTopicBang() {_uniqueStorage()._topicBang = nil}
 
-  var topicManual: Tieba_TopicList_TopicListModule {
+  public var topicManual: Tieba_TopicList_TopicListModule {
     get {_storage._topicManual ?? Tieba_TopicList_TopicListModule()}
     set {_uniqueStorage()._topicManual = newValue}
   }
   /// Returns true if `topicManual` has been explicitly set.
-  var hasTopicManual: Bool {_storage._topicManual != nil}
+  public var hasTopicManual: Bool {_storage._topicManual != nil}
   /// Clears the value of `topicManual`. Subsequent reads from it will return its default value.
-  mutating func clearTopicManual() {_uniqueStorage()._topicManual = nil}
+  mutating public func clearTopicManual() {_uniqueStorage()._topicManual = nil}
 
-  var mediaTopic: Tieba_TopicList_MediaTopic {
+  public var mediaTopic: Tieba_TopicList_MediaTopic {
     get {_storage._mediaTopic ?? Tieba_TopicList_MediaTopic()}
     set {_uniqueStorage()._mediaTopic = newValue}
   }
   /// Returns true if `mediaTopic` has been explicitly set.
-  var hasMediaTopic: Bool {_storage._mediaTopic != nil}
+  public var hasMediaTopic: Bool {_storage._mediaTopic != nil}
   /// Clears the value of `mediaTopic`. Subsequent reads from it will return its default value.
-  mutating func clearMediaTopic() {_uniqueStorage()._mediaTopic = nil}
+  mutating public func clearMediaTopic() {_uniqueStorage()._mediaTopic = nil}
 
-  var tabList: [Tieba_TopicList_TabList] {
+  public var tabList: [Tieba_TopicList_TabList] {
     get {_storage._tabList}
     set {_uniqueStorage()._tabList = newValue}
   }
 
-  var frsTabTopic: [Tieba_TopicList_TopicList] {
+  public var frsTabTopic: [Tieba_TopicList_TopicList] {
     get {_storage._frsTabTopic}
     set {_uniqueStorage()._frsTabTopic = newValue}
   }
 
-  var topicList: [Tieba_TopicList_NewTopicList] {
+  public var topicList: [Tieba_TopicList_NewTopicList] {
     get {_storage._topicList}
     set {_uniqueStorage()._topicList = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-nonisolated struct Tieba_TopicList_TopicListResponse: Sendable {
+nonisolated public struct Tieba_TopicList_TopicListResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var error: Tieba_Error {
+  public var error: Tieba_Error {
     get {_error ?? Tieba_Error()}
     set {_error = newValue}
   }
   /// Returns true if `error` has been explicitly set.
-  var hasError: Bool {self._error != nil}
+  public var hasError: Bool {self._error != nil}
   /// Clears the value of `error`. Subsequent reads from it will return its default value.
-  mutating func clearError() {self._error = nil}
+  mutating public func clearError() {self._error = nil}
 
-  var data: Tieba_TopicList_TopicListResponseData {
+  public var data: Tieba_TopicList_TopicListResponseData {
     get {_data ?? Tieba_TopicList_TopicListResponseData()}
     set {_data = newValue}
   }
   /// Returns true if `data` has been explicitly set.
-  var hasData: Bool {self._data != nil}
+  public var hasData: Bool {self._data != nil}
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
-  mutating func clearData() {self._data = nil}
+  mutating public func clearData() {self._data = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _error: Tieba_Error? = nil
   fileprivate var _data: Tieba_TopicList_TopicListResponseData? = nil
@@ -330,10 +330,10 @@ nonisolated struct Tieba_TopicList_TopicListResponse: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.topicList"
 
 nonisolated extension Tieba_TopicList_TopicListRequestData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".TopicListRequestData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}common\0\u{3}call_from\0\u{3}list_type\0\u{3}need_tab_list\0\u{1}fid\0")
+  static public let protoMessageName: String = _protobuf_package + ".TopicListRequestData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}common\0\u{3}call_from\0\u{3}list_type\0\u{3}need_tab_list\0\u{1}fid\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -349,7 +349,7 @@ nonisolated extension Tieba_TopicList_TopicListRequestData: SwiftProtobuf.Messag
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -372,7 +372,7 @@ nonisolated extension Tieba_TopicList_TopicListRequestData: SwiftProtobuf.Messag
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_TopicList_TopicListRequestData, rhs: Tieba_TopicList_TopicListRequestData) -> Bool {
+  static public func ==(lhs: Tieba_TopicList_TopicListRequestData, rhs: Tieba_TopicList_TopicListRequestData) -> Bool {
     if lhs._common != rhs._common {return false}
     if lhs.callFrom != rhs.callFrom {return false}
     if lhs.listType != rhs.listType {return false}
@@ -384,10 +384,10 @@ nonisolated extension Tieba_TopicList_TopicListRequestData: SwiftProtobuf.Messag
 }
 
 nonisolated extension Tieba_TopicList_TopicListRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".TopicListRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}data\0")
+  static public let protoMessageName: String = _protobuf_package + ".TopicListRequest"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}data\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -399,7 +399,7 @@ nonisolated extension Tieba_TopicList_TopicListRequest: SwiftProtobuf.Message, S
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -410,7 +410,7 @@ nonisolated extension Tieba_TopicList_TopicListRequest: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_TopicList_TopicListRequest, rhs: Tieba_TopicList_TopicListRequest) -> Bool {
+  static public func ==(lhs: Tieba_TopicList_TopicListRequest, rhs: Tieba_TopicList_TopicListRequest) -> Bool {
     if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -418,10 +418,10 @@ nonisolated extension Tieba_TopicList_TopicListRequest: SwiftProtobuf.Message, S
 }
 
 nonisolated extension Tieba_TopicList_TopicListModule: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".TopicListModule"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}module_title\0\u{3}topic_list\0\u{1}tips\0\u{3}rule_jump_url\0")
+  static public let protoMessageName: String = _protobuf_package + ".TopicListModule"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}module_title\0\u{3}topic_list\0\u{1}tips\0\u{3}rule_jump_url\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -436,7 +436,7 @@ nonisolated extension Tieba_TopicList_TopicListModule: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.moduleTitle.isEmpty {
       try visitor.visitSingularStringField(value: self.moduleTitle, fieldNumber: 1)
     }
@@ -452,7 +452,7 @@ nonisolated extension Tieba_TopicList_TopicListModule: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_TopicList_TopicListModule, rhs: Tieba_TopicList_TopicListModule) -> Bool {
+  static public func ==(lhs: Tieba_TopicList_TopicListModule, rhs: Tieba_TopicList_TopicListModule) -> Bool {
     if lhs.moduleTitle != rhs.moduleTitle {return false}
     if lhs.topicList != rhs.topicList {return false}
     if lhs.tips != rhs.tips {return false}
@@ -463,10 +463,10 @@ nonisolated extension Tieba_TopicList_TopicListModule: SwiftProtobuf.Message, Sw
 }
 
 nonisolated extension Tieba_TopicList_MediaTopic: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MediaTopic"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}topic_name\0\u{3}video_info\0\u{3}pic_url\0")
+  static public let protoMessageName: String = _protobuf_package + ".MediaTopic"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}topic_name\0\u{3}video_info\0\u{3}pic_url\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -481,7 +481,7 @@ nonisolated extension Tieba_TopicList_MediaTopic: SwiftProtobuf.Message, SwiftPr
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -501,7 +501,7 @@ nonisolated extension Tieba_TopicList_MediaTopic: SwiftProtobuf.Message, SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_TopicList_MediaTopic, rhs: Tieba_TopicList_MediaTopic) -> Bool {
+  static public func ==(lhs: Tieba_TopicList_MediaTopic, rhs: Tieba_TopicList_MediaTopic) -> Bool {
     if lhs.topicID != rhs.topicID {return false}
     if lhs.topicName != rhs.topicName {return false}
     if lhs._videoInfo != rhs._videoInfo {return false}
@@ -512,10 +512,10 @@ nonisolated extension Tieba_TopicList_MediaTopic: SwiftProtobuf.Message, SwiftPr
 }
 
 nonisolated extension Tieba_TopicList_TabList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".TabList"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}tab_name\0\u{3}tab_type\0\u{3}share_pic\0\u{3}share_title\0\u{3}share_desc\0\u{3}share_url\0")
+  static public let protoMessageName: String = _protobuf_package + ".TabList"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}tab_name\0\u{3}tab_type\0\u{3}share_pic\0\u{3}share_title\0\u{3}share_desc\0\u{3}share_url\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -532,7 +532,7 @@ nonisolated extension Tieba_TopicList_TabList: SwiftProtobuf.Message, SwiftProto
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.tabName.isEmpty {
       try visitor.visitSingularStringField(value: self.tabName, fieldNumber: 1)
     }
@@ -554,7 +554,7 @@ nonisolated extension Tieba_TopicList_TabList: SwiftProtobuf.Message, SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_TopicList_TabList, rhs: Tieba_TopicList_TabList) -> Bool {
+  static public func ==(lhs: Tieba_TopicList_TabList, rhs: Tieba_TopicList_TabList) -> Bool {
     if lhs.tabName != rhs.tabName {return false}
     if lhs.tabType != rhs.tabType {return false}
     if lhs.sharePic != rhs.sharePic {return false}
@@ -567,8 +567,8 @@ nonisolated extension Tieba_TopicList_TabList: SwiftProtobuf.Message, SwiftProto
 }
 
 nonisolated extension Tieba_TopicList_TopicList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".TopicList"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}topic_name\0\u{3}discuss_num\0\u{1}tag\0\u{3}topic_desc\0\u{3}topic_pic\0\u{3}update_time\0\u{3}topic_user_name\0\u{1}media\0\u{3}topic_tid\0\u{3}topic_h5_url\0\u{3}video_info\0\u{3}topic_thread_types\0")
+  static public let protoMessageName: String = _protobuf_package + ".TopicList"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}topic_name\0\u{3}discuss_num\0\u{1}tag\0\u{3}topic_desc\0\u{3}topic_pic\0\u{3}update_time\0\u{3}topic_user_name\0\u{1}media\0\u{3}topic_tid\0\u{3}topic_h5_url\0\u{3}video_info\0\u{3}topic_thread_types\0")
 
   fileprivate class _StorageClass {
     var _topicID: UInt64 = 0
@@ -617,7 +617,7 @@ nonisolated extension Tieba_TopicList_TopicList: SwiftProtobuf.Message, SwiftPro
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -644,7 +644,7 @@ nonisolated extension Tieba_TopicList_TopicList: SwiftProtobuf.Message, SwiftPro
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -693,7 +693,7 @@ nonisolated extension Tieba_TopicList_TopicList: SwiftProtobuf.Message, SwiftPro
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_TopicList_TopicList, rhs: Tieba_TopicList_TopicList) -> Bool {
+  static public func ==(lhs: Tieba_TopicList_TopicList, rhs: Tieba_TopicList_TopicList) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -721,10 +721,10 @@ nonisolated extension Tieba_TopicList_TopicList: SwiftProtobuf.Message, SwiftPro
 }
 
 nonisolated extension Tieba_TopicList_NewTopicList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".NewTopicList"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}topic_name\0\u{3}topic_desc\0\u{3}discuss_num\0\u{3}topic_image\0\u{3}topic_tag\0")
+  static public let protoMessageName: String = _protobuf_package + ".NewTopicList"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}topic_name\0\u{3}topic_desc\0\u{3}discuss_num\0\u{3}topic_image\0\u{3}topic_tag\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -741,7 +741,7 @@ nonisolated extension Tieba_TopicList_NewTopicList: SwiftProtobuf.Message, Swift
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.topicID != 0 {
       try visitor.visitSingularInt64Field(value: self.topicID, fieldNumber: 1)
     }
@@ -763,7 +763,7 @@ nonisolated extension Tieba_TopicList_NewTopicList: SwiftProtobuf.Message, Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_TopicList_NewTopicList, rhs: Tieba_TopicList_NewTopicList) -> Bool {
+  static public func ==(lhs: Tieba_TopicList_NewTopicList, rhs: Tieba_TopicList_NewTopicList) -> Bool {
     if lhs.topicID != rhs.topicID {return false}
     if lhs.topicName != rhs.topicName {return false}
     if lhs.topicDesc != rhs.topicDesc {return false}
@@ -776,8 +776,8 @@ nonisolated extension Tieba_TopicList_NewTopicList: SwiftProtobuf.Message, Swift
 }
 
 nonisolated extension Tieba_TopicList_TopicListResponseData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".TopicListResponseData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_bang\0\u{3}topic_manual\0\u{3}media_topic\0\u{4}\u{3}tab_list\0\u{3}frs_tab_topic\0\u{3}topic_list\0")
+  static public let protoMessageName: String = _protobuf_package + ".TopicListResponseData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_bang\0\u{3}topic_manual\0\u{3}media_topic\0\u{4}\u{3}tab_list\0\u{3}frs_tab_topic\0\u{3}topic_list\0")
 
   fileprivate class _StorageClass {
     var _topicBang: Tieba_TopicList_TopicListModule? = nil
@@ -812,7 +812,7 @@ nonisolated extension Tieba_TopicList_TopicListResponseData: SwiftProtobuf.Messa
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -832,7 +832,7 @@ nonisolated extension Tieba_TopicList_TopicListResponseData: SwiftProtobuf.Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -860,7 +860,7 @@ nonisolated extension Tieba_TopicList_TopicListResponseData: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_TopicList_TopicListResponseData, rhs: Tieba_TopicList_TopicListResponseData) -> Bool {
+  static public func ==(lhs: Tieba_TopicList_TopicListResponseData, rhs: Tieba_TopicList_TopicListResponseData) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -881,10 +881,10 @@ nonisolated extension Tieba_TopicList_TopicListResponseData: SwiftProtobuf.Messa
 }
 
 nonisolated extension Tieba_TopicList_TopicListResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".TopicListResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}data\0")
+  static public let protoMessageName: String = _protobuf_package + ".TopicListResponse"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}data\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -897,7 +897,7 @@ nonisolated extension Tieba_TopicList_TopicListResponse: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -911,7 +911,7 @@ nonisolated extension Tieba_TopicList_TopicListResponse: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_TopicList_TopicListResponse, rhs: Tieba_TopicList_TopicListResponse) -> Bool {
+  static public func ==(lhs: Tieba_TopicList_TopicListResponse, rhs: Tieba_TopicList_TopicListResponse) -> Bool {
     if lhs._error != rhs._error {return false}
     if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

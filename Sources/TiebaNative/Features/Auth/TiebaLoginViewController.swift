@@ -107,7 +107,7 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     webView.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(webView)
     overlay.translatesAutoresizingMaskIntoConstraints = false
-    overlay.isDark = TiebaNavigator.shared.chromeTheme.dark
+    overlay.isDark = TiebaChromeTheme.current.dark
     overlay.onButtonPress = { [weak self] id in
       if id == "retry" { self?.handleRetry() } else if id == "close" { self?.handleClose() }
     }
@@ -193,7 +193,7 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     default:
       break
     }
-    let tint = TiebaNavigator.shared.chromeTheme.tint
+    let tint = TiebaChromeTheme.current.tint
     overlay.spinnerColor = tint
     overlay.showsSpinner = false
     overlay.imageName = nil

@@ -20,31 +20,31 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_AdCloseInfo: Sendable {
+nonisolated public struct Tieba_AdCloseInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var supportClose: Int32 = 0
+  public var supportClose: Int32 = 0
 
-  var title: String = String()
+  public var title: String = String()
 
-  var reasons: [String] = []
+  public var reasons: [String] = []
 
-  var confirmTitle: String = String()
+  public var confirmTitle: String = String()
 
-  var actionControl: Tieba_ActionControl {
+  public var actionControl: Tieba_ActionControl {
     get {_actionControl ?? Tieba_ActionControl()}
     set {_actionControl = newValue}
   }
   /// Returns true if `actionControl` has been explicitly set.
-  var hasActionControl: Bool {self._actionControl != nil}
+  public var hasActionControl: Bool {self._actionControl != nil}
   /// Clears the value of `actionControl`. Subsequent reads from it will return its default value.
-  mutating func clearActionControl() {self._actionControl = nil}
+  mutating public func clearActionControl() {self._actionControl = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _actionControl: Tieba_ActionControl? = nil
 }
@@ -54,10 +54,10 @@ nonisolated struct Tieba_AdCloseInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_AdCloseInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AdCloseInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}support_close\0\u{1}title\0\u{1}reasons\0\u{3}confirm_title\0\u{3}action_control\0")
+  static public let protoMessageName: String = _protobuf_package + ".AdCloseInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}support_close\0\u{1}title\0\u{1}reasons\0\u{3}confirm_title\0\u{3}action_control\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -73,7 +73,7 @@ nonisolated extension Tieba_AdCloseInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -96,7 +96,7 @@ nonisolated extension Tieba_AdCloseInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_AdCloseInfo, rhs: Tieba_AdCloseInfo) -> Bool {
+  static public func ==(lhs: Tieba_AdCloseInfo, rhs: Tieba_AdCloseInfo) -> Bool {
     if lhs.supportClose != rhs.supportClose {return false}
     if lhs.title != rhs.title {return false}
     if lhs.reasons != rhs.reasons {return false}

@@ -20,269 +20,269 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_AlaLiveInfo: @unchecked Sendable {
+nonisolated public struct Tieba_AlaLiveInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var liveID: UInt64 {
+  public var liveID: UInt64 {
     get {_storage._liveID}
     set {_uniqueStorage()._liveID = newValue}
   }
 
-  var cover: String {
+  public var cover: String {
     get {_storage._cover}
     set {_uniqueStorage()._cover = newValue}
   }
 
-  var sessionID: String {
+  public var sessionID: String {
     get {_storage._sessionID}
     set {_uniqueStorage()._sessionID = newValue}
   }
 
-  var rtmpURL: String {
+  public var rtmpURL: String {
     get {_storage._rtmpURL}
     set {_uniqueStorage()._rtmpURL = newValue}
   }
 
-  var hlsURL: String {
+  public var hlsURL: String {
     get {_storage._hlsURL}
     set {_uniqueStorage()._hlsURL = newValue}
   }
 
-  var groupID: UInt64 {
+  public var groupID: UInt64 {
     get {_storage._groupID}
     set {_uniqueStorage()._groupID = newValue}
   }
 
-  var mediaURL: String {
+  public var mediaURL: String {
     get {_storage._mediaURL}
     set {_uniqueStorage()._mediaURL = newValue}
   }
 
-  var mediaPic: String {
+  public var mediaPic: String {
     get {_storage._mediaPic}
     set {_uniqueStorage()._mediaPic = newValue}
   }
 
-  var mediaID: String {
+  public var mediaID: String {
     get {_storage._mediaID}
     set {_uniqueStorage()._mediaID = newValue}
   }
 
-  var mediaSubtitle: String {
+  public var mediaSubtitle: String {
     get {_storage._mediaSubtitle}
     set {_uniqueStorage()._mediaSubtitle = newValue}
   }
 
-  var description_p: String {
+  public var description_p: String {
     get {_storage._description_p}
     set {_uniqueStorage()._description_p = newValue}
   }
 
-  var userInfo: Tieba_AlaUserInfo {
+  public var userInfo: Tieba_AlaUserInfo {
     get {_storage._userInfo ?? Tieba_AlaUserInfo()}
     set {_uniqueStorage()._userInfo = newValue}
   }
   /// Returns true if `userInfo` has been explicitly set.
-  var hasUserInfo: Bool {_storage._userInfo != nil}
+  public var hasUserInfo: Bool {_storage._userInfo != nil}
   /// Clears the value of `userInfo`. Subsequent reads from it will return its default value.
-  mutating func clearUserInfo() {_uniqueStorage()._userInfo = nil}
+  mutating public func clearUserInfo() {_uniqueStorage()._userInfo = nil}
 
-  var duration: UInt32 {
+  public var duration: UInt32 {
     get {_storage._duration}
     set {_uniqueStorage()._duration = newValue}
   }
 
-  var audienceCount: UInt32 {
+  public var audienceCount: UInt32 {
     get {_storage._audienceCount}
     set {_uniqueStorage()._audienceCount = newValue}
   }
 
-  var liveType: UInt32 {
+  public var liveType: UInt32 {
     get {_storage._liveType}
     set {_uniqueStorage()._liveType = newValue}
   }
 
-  var screenDirection: UInt32 {
+  public var screenDirection: UInt32 {
     get {_storage._screenDirection}
     set {_uniqueStorage()._screenDirection = newValue}
   }
 
-  var labelName: String {
+  public var labelName: String {
     get {_storage._labelName}
     set {_uniqueStorage()._labelName = newValue}
   }
 
-  var liveStatus: Int32 {
+  public var liveStatus: Int32 {
     get {_storage._liveStatus}
     set {_uniqueStorage()._liveStatus = newValue}
   }
 
-  var shareInfo: Tieba_AlaShareInfo {
+  public var shareInfo: Tieba_AlaShareInfo {
     get {_storage._shareInfo ?? Tieba_AlaShareInfo()}
     set {_uniqueStorage()._shareInfo = newValue}
   }
   /// Returns true if `shareInfo` has been explicitly set.
-  var hasShareInfo: Bool {_storage._shareInfo != nil}
+  public var hasShareInfo: Bool {_storage._shareInfo != nil}
   /// Clears the value of `shareInfo`. Subsequent reads from it will return its default value.
-  mutating func clearShareInfo() {_uniqueStorage()._shareInfo = nil}
+  mutating public func clearShareInfo() {_uniqueStorage()._shareInfo = nil}
 
-  var distance: UInt64 {
+  public var distance: UInt64 {
     get {_storage._distance}
     set {_uniqueStorage()._distance = newValue}
   }
 
-  var thirdAppID: String {
+  public var thirdAppID: String {
     get {_storage._thirdAppID}
     set {_uniqueStorage()._thirdAppID = newValue}
   }
 
-  var threadID: UInt64 {
+  public var threadID: UInt64 {
     get {_storage._threadID}
     set {_uniqueStorage()._threadID = newValue}
   }
 
-  var stageDislikeInfo: [Tieba_AlaStageDislikeInfo] {
+  public var stageDislikeInfo: [Tieba_AlaStageDislikeInfo] {
     get {_storage._stageDislikeInfo}
     set {_uniqueStorage()._stageDislikeInfo = newValue}
   }
 
-  var label: Tieba_AlaCoverLabel {
+  public var label: Tieba_AlaCoverLabel {
     get {_storage._label ?? Tieba_AlaCoverLabel()}
     set {_uniqueStorage()._label = newValue}
   }
   /// Returns true if `label` has been explicitly set.
-  var hasLabel: Bool {_storage._label != nil}
+  public var hasLabel: Bool {_storage._label != nil}
   /// Clears the value of `label`. Subsequent reads from it will return its default value.
-  mutating func clearLabel() {_uniqueStorage()._label = nil}
+  mutating public func clearLabel() {_uniqueStorage()._label = nil}
 
-  var challengeInfo: Tieba_AlaChallengeInfo {
+  public var challengeInfo: Tieba_AlaChallengeInfo {
     get {_storage._challengeInfo ?? Tieba_AlaChallengeInfo()}
     set {_uniqueStorage()._challengeInfo = newValue}
   }
   /// Returns true if `challengeInfo` has been explicitly set.
-  var hasChallengeInfo: Bool {_storage._challengeInfo != nil}
+  public var hasChallengeInfo: Bool {_storage._challengeInfo != nil}
   /// Clears the value of `challengeInfo`. Subsequent reads from it will return its default value.
-  mutating func clearChallengeInfo() {_uniqueStorage()._challengeInfo = nil}
+  mutating public func clearChallengeInfo() {_uniqueStorage()._challengeInfo = nil}
 
-  var frsTopliveType: Int32 {
+  public var frsTopliveType: Int32 {
     get {_storage._frsTopliveType}
     set {_uniqueStorage()._frsTopliveType = newValue}
   }
 
-  var frsToplivePic: String {
+  public var frsToplivePic: String {
     get {_storage._frsToplivePic}
     set {_uniqueStorage()._frsToplivePic = newValue}
   }
 
-  var frsTopliveForce: Int32 {
+  public var frsTopliveForce: Int32 {
     get {_storage._frsTopliveForce}
     set {_uniqueStorage()._frsTopliveForce = newValue}
   }
 
-  var liveFrom: Int32 {
+  public var liveFrom: Int32 {
     get {_storage._liveFrom}
     set {_uniqueStorage()._liveFrom = newValue}
   }
 
-  var thirdRoomID: String {
+  public var thirdRoomID: String {
     get {_storage._thirdRoomID}
     set {_uniqueStorage()._thirdRoomID = newValue}
   }
 
-  var routerType: String {
+  public var routerType: String {
     get {_storage._routerType}
     set {_uniqueStorage()._routerType = newValue}
   }
 
-  var thirdLiveType: String {
+  public var thirdLiveType: String {
     get {_storage._thirdLiveType}
     set {_uniqueStorage()._thirdLiveType = newValue}
   }
 
-  var firstHeadline: String {
+  public var firstHeadline: String {
     get {_storage._firstHeadline}
     set {_uniqueStorage()._firstHeadline = newValue}
   }
 
-  var secondHeadline: String {
+  public var secondHeadline: String {
     get {_storage._secondHeadline}
     set {_uniqueStorage()._secondHeadline = newValue}
   }
 
-  var pbDisplayType: UInt32 {
+  public var pbDisplayType: UInt32 {
     get {_storage._pbDisplayType}
     set {_uniqueStorage()._pbDisplayType = newValue}
   }
 
-  var recomReason: String {
+  public var recomReason: String {
     get {_storage._recomReason}
     set {_uniqueStorage()._recomReason = newValue}
   }
 
-  var openRecomReason: UInt32 {
+  public var openRecomReason: UInt32 {
     get {_storage._openRecomReason}
     set {_uniqueStorage()._openRecomReason = newValue}
   }
 
-  var openRecomLocation: UInt32 {
+  public var openRecomLocation: UInt32 {
     get {_storage._openRecomLocation}
     set {_uniqueStorage()._openRecomLocation = newValue}
   }
 
-  var openRecomFans: UInt32 {
+  public var openRecomFans: UInt32 {
     get {_storage._openRecomFans}
     set {_uniqueStorage()._openRecomFans = newValue}
   }
 
-  var openRecomDuration: UInt32 {
+  public var openRecomDuration: UInt32 {
     get {_storage._openRecomDuration}
     set {_uniqueStorage()._openRecomDuration = newValue}
   }
 
-  var dislikeInfo: [Tieba_DislikeInfo] {
+  public var dislikeInfo: [Tieba_DislikeInfo] {
     get {_storage._dislikeInfo}
     set {_uniqueStorage()._dislikeInfo = newValue}
   }
 
-  var roomID: UInt64 {
+  public var roomID: UInt64 {
     get {_storage._roomID}
     set {_uniqueStorage()._roomID = newValue}
   }
 
-  var roomStatus: Int32 {
+  public var roomStatus: Int32 {
     get {_storage._roomStatus}
     set {_uniqueStorage()._roomStatus = newValue}
   }
 
-  var roomName: String {
+  public var roomName: String {
     get {_storage._roomName}
     set {_uniqueStorage()._roomName = newValue}
   }
 
-  var forumUserLiveMsg: String {
+  public var forumUserLiveMsg: String {
     get {_storage._forumUserLiveMsg}
     set {_uniqueStorage()._forumUserLiveMsg = newValue}
   }
 
-  var coverWide: String {
+  public var coverWide: String {
     get {_storage._coverWide}
     set {_uniqueStorage()._coverWide = newValue}
   }
 
-  var yyExt: Tieba_YyExt {
+  public var yyExt: Tieba_YyExt {
     get {_storage._yyExt ?? Tieba_YyExt()}
     set {_uniqueStorage()._yyExt = newValue}
   }
   /// Returns true if `yyExt` has been explicitly set.
-  var hasYyExt: Bool {_storage._yyExt != nil}
+  public var hasYyExt: Bool {_storage._yyExt != nil}
   /// Clears the value of `yyExt`. Subsequent reads from it will return its default value.
-  mutating func clearYyExt() {_uniqueStorage()._yyExt = nil}
+  mutating public func clearYyExt() {_uniqueStorage()._yyExt = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -292,8 +292,8 @@ nonisolated struct Tieba_AlaLiveInfo: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_AlaLiveInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AlaLiveInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}live_id\0\u{1}cover\0\u{3}session_id\0\u{3}rtmp_url\0\u{3}hls_url\0\u{3}group_id\0\u{3}media_url\0\u{3}media_pic\0\u{3}media_id\0\u{3}media_subtitle\0\u{1}description\0\u{3}user_info\0\u{1}duration\0\u{3}audience_count\0\u{3}live_type\0\u{3}screen_direction\0\u{3}label_name\0\u{3}live_status\0\u{3}share_info\0\u{1}distance\0\u{3}third_app_id\0\u{3}thread_id\0\u{3}stage_dislike_info\0\u{1}label\0\u{3}challenge_info\0\u{3}frs_toplive_type\0\u{3}frs_toplive_pic\0\u{3}frs_toplive_force\0\u{3}live_from\0\u{4}\u{2}third_room_id\0\u{3}router_type\0\u{3}third_live_type\0\u{3}first_headline\0\u{3}second_headline\0\u{3}pb_display_type\0\u{3}recom_reason\0\u{3}open_recom_reason\0\u{3}open_recom_location\0\u{3}open_recom_fans\0\u{3}open_recom_duration\0\u{4}\u{2}dislike_info\0\u{3}room_id\0\u{3}room_status\0\u{3}room_name\0\u{3}forum_user_live_msg\0\u{3}cover_wide\0\u{3}yy_ext\0")
+  static public let protoMessageName: String = _protobuf_package + ".AlaLiveInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}live_id\0\u{1}cover\0\u{3}session_id\0\u{3}rtmp_url\0\u{3}hls_url\0\u{3}group_id\0\u{3}media_url\0\u{3}media_pic\0\u{3}media_id\0\u{3}media_subtitle\0\u{1}description\0\u{3}user_info\0\u{1}duration\0\u{3}audience_count\0\u{3}live_type\0\u{3}screen_direction\0\u{3}label_name\0\u{3}live_status\0\u{3}share_info\0\u{1}distance\0\u{3}third_app_id\0\u{3}thread_id\0\u{3}stage_dislike_info\0\u{1}label\0\u{3}challenge_info\0\u{3}frs_toplive_type\0\u{3}frs_toplive_pic\0\u{3}frs_toplive_force\0\u{3}live_from\0\u{4}\u{2}third_room_id\0\u{3}router_type\0\u{3}third_live_type\0\u{3}first_headline\0\u{3}second_headline\0\u{3}pb_display_type\0\u{3}recom_reason\0\u{3}open_recom_reason\0\u{3}open_recom_location\0\u{3}open_recom_fans\0\u{3}open_recom_duration\0\u{4}\u{2}dislike_info\0\u{3}room_id\0\u{3}room_status\0\u{3}room_name\0\u{3}forum_user_live_msg\0\u{3}cover_wide\0\u{3}yy_ext\0")
 
   fileprivate class _StorageClass {
     var _liveID: UInt64 = 0
@@ -410,7 +410,7 @@ nonisolated extension Tieba_AlaLiveInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -471,7 +471,7 @@ nonisolated extension Tieba_AlaLiveInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -622,7 +622,7 @@ nonisolated extension Tieba_AlaLiveInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_AlaLiveInfo, rhs: Tieba_AlaLiveInfo) -> Bool {
+  static public func ==(lhs: Tieba_AlaLiveInfo, rhs: Tieba_AlaLiveInfo) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

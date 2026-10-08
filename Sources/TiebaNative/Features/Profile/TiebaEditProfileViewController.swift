@@ -92,7 +92,7 @@ final class TiebaEditProfileViewController: UIViewController {
     if loading {
       return [TiebaFormSection(rows: [TiebaFormRow(id: "loading", kind: .spinner, title: "")])]
     }
-    let tint = TiebaNavigator.shared.chromeTheme.tint
+    let tint = TiebaChromeTheme.current.tint
     let avatarURL = TiebaSimpleRowParser.avatarURL(portrait)?.absoluteString ?? ""
     // 失败态（上传中不显示）：行内按钮变「重试上传」+ 系统红，失败原因写在本组 footer，
     // 再追加一行「换一张图」—— 一个错误给出两个就地出路，用户不必重进编辑页。

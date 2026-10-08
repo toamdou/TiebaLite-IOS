@@ -20,24 +20,24 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_ShortUserInfo: Sendable {
+nonisolated public struct Tieba_ShortUserInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var userID: Int64 = 0
+  public var userID: Int64 = 0
 
-  var portrait: String = String()
+  public var portrait: String = String()
 
-  var userName: String = String()
+  public var userName: String = String()
 
-  var gender: Int32 = 0
+  public var gender: Int32 = 0
 
-  var intro: String = String()
+  public var intro: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -45,10 +45,10 @@ nonisolated struct Tieba_ShortUserInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_ShortUserInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ShortUserInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{1}portrait\0\u{3}user_name\0\u{1}gender\0\u{1}intro\0")
+  static public let protoMessageName: String = _protobuf_package + ".ShortUserInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{1}portrait\0\u{3}user_name\0\u{1}gender\0\u{1}intro\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -64,7 +64,7 @@ nonisolated extension Tieba_ShortUserInfo: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.userID != 0 {
       try visitor.visitSingularInt64Field(value: self.userID, fieldNumber: 1)
     }
@@ -83,7 +83,7 @@ nonisolated extension Tieba_ShortUserInfo: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ShortUserInfo, rhs: Tieba_ShortUserInfo) -> Bool {
+  static public func ==(lhs: Tieba_ShortUserInfo, rhs: Tieba_ShortUserInfo) -> Bool {
     if lhs.userID != rhs.userID {return false}
     if lhs.portrait != rhs.portrait {return false}
     if lhs.userName != rhs.userName {return false}

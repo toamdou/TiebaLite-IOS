@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaSceneHaptics —— 场景触觉的**原生页面入口**
 //
 // 触觉场景表在 TiebaHaptics.swift（sceneTable，11 个场景整表下沉）。
@@ -14,7 +13,6 @@
 //     偏好写入经 TiebaPreferenceChange 广播，订阅回调里重读，fire 只查内存表。
 //   - 总开关（hapticFeedback）的真相源在 TiebaHaptics 引擎层，fireScene 内部
 //     已判（TiebaHaptics.isEnabled），本文件不复制第二道闸。
-// ============================================================
 import Foundation
 
 enum TiebaSceneHaptics {

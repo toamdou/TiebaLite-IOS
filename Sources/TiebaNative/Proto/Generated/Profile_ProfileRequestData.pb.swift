@@ -20,121 +20,121 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Profile_ProfileRequestData: @unchecked Sendable {
+nonisolated public struct Tieba_Profile_ProfileRequestData: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var uid: Int64 {
+  public var uid: Int64 {
     get {_storage._uid ?? 0}
     set {_uniqueStorage()._uid = newValue}
   }
   /// Returns true if `uid` has been explicitly set.
-  var hasUid: Bool {_storage._uid != nil}
+  public var hasUid: Bool {_storage._uid != nil}
   /// Clears the value of `uid`. Subsequent reads from it will return its default value.
-  mutating func clearUid() {_uniqueStorage()._uid = nil}
+  mutating public func clearUid() {_uniqueStorage()._uid = nil}
 
-  var needPostCount: UInt32 {
+  public var needPostCount: UInt32 {
     get {_storage._needPostCount}
     set {_uniqueStorage()._needPostCount = newValue}
   }
 
-  var friendUid: Int64 {
+  public var friendUid: Int64 {
     get {_storage._friendUid ?? 0}
     set {_uniqueStorage()._friendUid = newValue}
   }
   /// Returns true if `friendUid` has been explicitly set.
-  var hasFriendUid: Bool {_storage._friendUid != nil}
+  public var hasFriendUid: Bool {_storage._friendUid != nil}
   /// Clears the value of `friendUid`. Subsequent reads from it will return its default value.
-  mutating func clearFriendUid() {_uniqueStorage()._friendUid = nil}
+  mutating public func clearFriendUid() {_uniqueStorage()._friendUid = nil}
 
-  var isGuest: UInt32 {
+  public var isGuest: UInt32 {
     get {_storage._isGuest}
     set {_uniqueStorage()._isGuest = newValue}
   }
 
-  var stType: String {
+  public var stType: String {
     get {_storage._stType}
     set {_uniqueStorage()._stType = newValue}
   }
 
-  var pn: UInt32 {
+  public var pn: UInt32 {
     get {_storage._pn}
     set {_uniqueStorage()._pn = newValue}
   }
 
-  var rn: UInt32 {
+  public var rn: UInt32 {
     get {_storage._rn}
     set {_uniqueStorage()._rn = newValue}
   }
 
-  var hasPlist_p: UInt32 {
+  public var hasPlist_p: UInt32 {
     get {_storage._hasPlist_p}
     set {_uniqueStorage()._hasPlist_p = newValue}
   }
 
-  var common: Tieba_CommonRequest {
+  public var common: Tieba_CommonRequest {
     get {_storage._common ?? Tieba_CommonRequest()}
     set {_uniqueStorage()._common = newValue}
   }
   /// Returns true if `common` has been explicitly set.
-  var hasCommon: Bool {_storage._common != nil}
+  public var hasCommon: Bool {_storage._common != nil}
   /// Clears the value of `common`. Subsequent reads from it will return its default value.
-  mutating func clearCommon() {_uniqueStorage()._common = nil}
+  mutating public func clearCommon() {_uniqueStorage()._common = nil}
 
-  var scrW: UInt32 {
+  public var scrW: UInt32 {
     get {_storage._scrW}
     set {_uniqueStorage()._scrW = newValue}
   }
 
-  var scrH: UInt32 {
+  public var scrH: UInt32 {
     get {_storage._scrH}
     set {_uniqueStorage()._scrH = newValue}
   }
 
-  var qType: UInt32 {
+  public var qType: UInt32 {
     get {_storage._qType}
     set {_uniqueStorage()._qType = newValue}
   }
 
-  var scrDip: Double {
+  public var scrDip: Double {
     get {_storage._scrDip}
     set {_uniqueStorage()._scrDip = newValue}
   }
 
-  var isFromUsercenter: Int32 {
+  public var isFromUsercenter: Int32 {
     get {_storage._isFromUsercenter}
     set {_uniqueStorage()._isFromUsercenter = newValue}
   }
 
-  var page: Int32 {
+  public var page: Int32 {
     get {_storage._page}
     set {_uniqueStorage()._page = newValue}
   }
 
-  var friendUidPortrait: String {
+  public var friendUidPortrait: String {
     get {_storage._friendUidPortrait}
     set {_uniqueStorage()._friendUidPortrait = newValue}
   }
 
-  var historyForumIds: String {
+  public var historyForumIds: String {
     get {_storage._historyForumIds}
     set {_uniqueStorage()._historyForumIds = newValue}
   }
 
-  var historyForumNames: String {
+  public var historyForumNames: String {
     get {_storage._historyForumNames}
     set {_uniqueStorage()._historyForumNames = newValue}
   }
 
-  var needUsergrowthTask: Int32 {
+  public var needUsergrowthTask: Int32 {
     get {_storage._needUsergrowthTask}
     set {_uniqueStorage()._needUsergrowthTask = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -144,8 +144,8 @@ nonisolated struct Tieba_Profile_ProfileRequestData: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.profile"
 
 nonisolated extension Tieba_Profile_ProfileRequestData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ProfileRequestData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{3}need_post_count\0\u{3}friend_uid\0\u{3}is_guest\0\u{3}st_type\0\u{1}pn\0\u{1}rn\0\u{3}has_plist\0\u{1}common\0\u{3}scr_w\0\u{3}scr_h\0\u{3}q_type\0\u{3}scr_dip\0\u{3}is_from_usercenter\0\u{1}page\0\u{3}friend_uid_portrait\0\u{3}history_forum_ids\0\u{3}history_forum_names\0\u{3}need_usergrowth_task\0")
+  static public let protoMessageName: String = _protobuf_package + ".ProfileRequestData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{3}need_post_count\0\u{3}friend_uid\0\u{3}is_guest\0\u{3}st_type\0\u{1}pn\0\u{1}rn\0\u{3}has_plist\0\u{1}common\0\u{3}scr_w\0\u{3}scr_h\0\u{3}q_type\0\u{3}scr_dip\0\u{3}is_from_usercenter\0\u{1}page\0\u{3}friend_uid_portrait\0\u{3}history_forum_ids\0\u{3}history_forum_names\0\u{3}need_usergrowth_task\0")
 
   fileprivate class _StorageClass {
     var _uid: Int64? = nil
@@ -206,7 +206,7 @@ nonisolated extension Tieba_Profile_ProfileRequestData: SwiftProtobuf.Message, S
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -239,7 +239,7 @@ nonisolated extension Tieba_Profile_ProfileRequestData: SwiftProtobuf.Message, S
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -306,7 +306,7 @@ nonisolated extension Tieba_Profile_ProfileRequestData: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Profile_ProfileRequestData, rhs: Tieba_Profile_ProfileRequestData) -> Bool {
+  static public func ==(lhs: Tieba_Profile_ProfileRequestData, rhs: Tieba_Profile_ProfileRequestData) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

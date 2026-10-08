@@ -20,25 +20,25 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_SugLiveInfo: Sendable {
+nonisolated public struct Tieba_SugLiveInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var word: String = String()
+  public var word: String = String()
 
-  var alaInfo: Tieba_AlaLiveInfo {
+  public var alaInfo: Tieba_AlaLiveInfo {
     get {_alaInfo ?? Tieba_AlaLiveInfo()}
     set {_alaInfo = newValue}
   }
   /// Returns true if `alaInfo` has been explicitly set.
-  var hasAlaInfo: Bool {self._alaInfo != nil}
+  public var hasAlaInfo: Bool {self._alaInfo != nil}
   /// Clears the value of `alaInfo`. Subsequent reads from it will return its default value.
-  mutating func clearAlaInfo() {self._alaInfo = nil}
+  mutating public func clearAlaInfo() {self._alaInfo = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _alaInfo: Tieba_AlaLiveInfo? = nil
 }
@@ -48,10 +48,10 @@ nonisolated struct Tieba_SugLiveInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_SugLiveInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SugLiveInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}word\0\u{3}ala_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".SugLiveInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}word\0\u{3}ala_info\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -64,7 +64,7 @@ nonisolated extension Tieba_SugLiveInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -78,7 +78,7 @@ nonisolated extension Tieba_SugLiveInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_SugLiveInfo, rhs: Tieba_SugLiveInfo) -> Bool {
+  static public func ==(lhs: Tieba_SugLiveInfo, rhs: Tieba_SugLiveInfo) -> Bool {
     if lhs.word != rhs.word {return false}
     if lhs._alaInfo != rhs._alaInfo {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

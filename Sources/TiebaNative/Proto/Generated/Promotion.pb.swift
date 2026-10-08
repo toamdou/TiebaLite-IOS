@@ -20,26 +20,26 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Promotion: Sendable {
+nonisolated public struct Tieba_Promotion: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var title: String = String()
+  public var title: String = String()
 
-  var subTitle: String = String()
+  public var subTitle: String = String()
 
-  var image: String = String()
+  public var image: String = String()
 
-  var link: String = String()
+  public var link: String = String()
 
-  var linkText: String = String()
+  public var linkText: String = String()
 
-  var appearTime: Int64 = 0
+  public var appearTime: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -47,10 +47,10 @@ nonisolated struct Tieba_Promotion: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Promotion: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Promotion"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{3}sub_title\0\u{1}image\0\u{1}link\0\u{3}link_text\0\u{3}appear_time\0")
+  static public let protoMessageName: String = _protobuf_package + ".Promotion"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{3}sub_title\0\u{1}image\0\u{1}link\0\u{3}link_text\0\u{3}appear_time\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -67,7 +67,7 @@ nonisolated extension Tieba_Promotion: SwiftProtobuf.Message, SwiftProtobuf._Mes
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.title.isEmpty {
       try visitor.visitSingularStringField(value: self.title, fieldNumber: 1)
     }
@@ -89,7 +89,7 @@ nonisolated extension Tieba_Promotion: SwiftProtobuf.Message, SwiftProtobuf._Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Promotion, rhs: Tieba_Promotion) -> Bool {
+  static public func ==(lhs: Tieba_Promotion, rhs: Tieba_Promotion) -> Bool {
     if lhs.title != rhs.title {return false}
     if lhs.subTitle != rhs.subTitle {return false}
     if lhs.image != rhs.image {return false}

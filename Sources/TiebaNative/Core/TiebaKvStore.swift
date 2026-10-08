@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaKvStore —— 同步键值存储（替代 react-native-mmkv，顺带拔掉 nitro-modules）
 //
 // 2026-09-12：react-native-mmkv v4 是 App 内最后一个 nitro-modules 消费者
@@ -58,7 +57,6 @@
 // 标记是控制字符，业务值不会以它开头，因此不动 schema、不加列；
 // 小值与压不动的值字节完全不变，旧数据与旧 MMKV 导入照读。
 // ⚠️ 单向兼容：新版写的压缩值，降级回旧版本会读成乱码（22-接线报告已注明）。
-// ============================================================
 import Foundation
 import SQLite3
 import Dispatch
@@ -609,7 +607,6 @@ final class TiebaKvStore: @unchecked Sendable {
   }
 }
 
-// ============================================================
 // MMKV 落盘格式的只读解析（MMKVCore 2.4.0）
 //
 // 依据（删包前从 ios/Pods/MMKVCore/Core 逐行核对，非猜测）：
@@ -623,7 +620,6 @@ final class TiebaKvStore: @unchecked Sendable {
 //     varint(容器字节数) 后跟若干「varint(keyLen) keyBytes varint(valueLen)
 //     valueBytes」，valueLen == 0 是墓碑（删除）；循环读到数据区结束；
 //   - MMKV::checkFileCRCValid：CRC32(zlib, 初始 0) 覆盖数据区。
-// ============================================================
 private enum LegacyMmkvFile {
   /// 主文件数据区偏移（MMKV.h 的 Fixed32Size / MMKVPredef.h pbFixed32Size）。
   static let dataOffset = 4

@@ -20,58 +20,58 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_ServiceArea: @unchecked Sendable {
+nonisolated public struct Tieba_ServiceArea: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var servicename: String {
+  public var servicename: String {
     get {_storage._servicename}
     set {_uniqueStorage()._servicename = newValue}
   }
 
-  var picurl: String {
+  public var picurl: String {
     get {_storage._picurl}
     set {_uniqueStorage()._picurl = newValue}
   }
 
-  var serviceurl: String {
+  public var serviceurl: String {
     get {_storage._serviceurl}
     set {_uniqueStorage()._serviceurl = newValue}
   }
 
-  var version: String {
+  public var version: String {
     get {_storage._version}
     set {_uniqueStorage()._version = newValue}
   }
 
-  var serviceType: String {
+  public var serviceType: String {
     get {_storage._serviceType}
     set {_uniqueStorage()._serviceType = newValue}
   }
 
-  var areaSmartApp: Tieba_SmartApp {
+  public var areaSmartApp: Tieba_SmartApp {
     get {_storage._areaSmartApp ?? Tieba_SmartApp()}
     set {_uniqueStorage()._areaSmartApp = newValue}
   }
   /// Returns true if `areaSmartApp` has been explicitly set.
-  var hasAreaSmartApp: Bool {_storage._areaSmartApp != nil}
+  public var hasAreaSmartApp: Bool {_storage._areaSmartApp != nil}
   /// Clears the value of `areaSmartApp`. Subsequent reads from it will return its default value.
-  mutating func clearAreaSmartApp() {_uniqueStorage()._areaSmartApp = nil}
+  mutating public func clearAreaSmartApp() {_uniqueStorage()._areaSmartApp = nil}
 
-  var schema: String {
+  public var schema: String {
     get {_storage._schema}
     set {_uniqueStorage()._schema = newValue}
   }
 
-  var thirdStatisticsURL: [String] {
+  public var thirdStatisticsURL: [String] {
     get {_storage._thirdStatisticsURL}
     set {_uniqueStorage()._thirdStatisticsURL = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -81,8 +81,8 @@ nonisolated struct Tieba_ServiceArea: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_ServiceArea: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ServiceArea"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}servicename\0\u{1}picurl\0\u{1}serviceurl\0\u{1}version\0\u{3}service_type\0\u{3}area_smart_app\0\u{1}schema\0\u{3}third_statistics_url\0")
+  static public let protoMessageName: String = _protobuf_package + ".ServiceArea"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}servicename\0\u{1}picurl\0\u{1}serviceurl\0\u{1}version\0\u{3}service_type\0\u{3}area_smart_app\0\u{1}schema\0\u{3}third_statistics_url\0")
 
   fileprivate class _StorageClass {
     var _servicename: String = String()
@@ -121,7 +121,7 @@ nonisolated extension Tieba_ServiceArea: SwiftProtobuf.Message, SwiftProtobuf._M
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -143,7 +143,7 @@ nonisolated extension Tieba_ServiceArea: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -177,7 +177,7 @@ nonisolated extension Tieba_ServiceArea: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_ServiceArea, rhs: Tieba_ServiceArea) -> Bool {
+  static public func ==(lhs: Tieba_ServiceArea, rhs: Tieba_ServiceArea) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

@@ -20,35 +20,35 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_VoiceRoom: Sendable {
+nonisolated public struct Tieba_VoiceRoom: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var roomID: Int64 = 0
+  public var roomID: Int64 = 0
 
-  var author: Tieba_User {
+  public var author: Tieba_User {
     get {_author ?? Tieba_User()}
     set {_author = newValue}
   }
   /// Returns true if `author` has been explicitly set.
-  var hasAuthor: Bool {self._author != nil}
+  public var hasAuthor: Bool {self._author != nil}
   /// Clears the value of `author`. Subsequent reads from it will return its default value.
-  mutating func clearAuthor() {self._author = nil}
+  mutating public func clearAuthor() {self._author = nil}
 
-  var talker: [Tieba_User] = []
+  public var talker: [Tieba_User] = []
 
-  var joinedNum: Int64 = 0
+  public var joinedNum: Int64 = 0
 
-  var talkerNum: Int64 = 0
+  public var talkerNum: Int64 = 0
 
-  var status: UInt32 = 0
+  public var status: UInt32 = 0
 
-  var roomName: String = String()
+  public var roomName: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _author: Tieba_User? = nil
 }
@@ -58,10 +58,10 @@ nonisolated struct Tieba_VoiceRoom: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_VoiceRoom: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".VoiceRoom"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}room_id\0\u{2}\u{2}author\0\u{1}talker\0\u{3}joined_num\0\u{3}talker_num\0\u{1}status\0\u{3}room_name\0")
+  static public let protoMessageName: String = _protobuf_package + ".VoiceRoom"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}room_id\0\u{2}\u{2}author\0\u{1}talker\0\u{3}joined_num\0\u{3}talker_num\0\u{1}status\0\u{3}room_name\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -79,7 +79,7 @@ nonisolated extension Tieba_VoiceRoom: SwiftProtobuf.Message, SwiftProtobuf._Mes
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -108,7 +108,7 @@ nonisolated extension Tieba_VoiceRoom: SwiftProtobuf.Message, SwiftProtobuf._Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_VoiceRoom, rhs: Tieba_VoiceRoom) -> Bool {
+  static public func ==(lhs: Tieba_VoiceRoom, rhs: Tieba_VoiceRoom) -> Bool {
     if lhs.roomID != rhs.roomID {return false}
     if lhs._author != rhs._author {return false}
     if lhs.talker != rhs.talker {return false}

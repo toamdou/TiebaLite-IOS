@@ -113,7 +113,7 @@ enum TiebaInAppBrowser {
       presenter.present(safari, animated: true) {
         // 宿主正在转场/被别的 present 抢占时 UIKit 会丢弃本次展示（completion
         // 仍会调用且无关闭回调）→ session 永不复位、之后打开恒 "locked"。
-        // 先校验 present 链（TiebaPhotoBrowser.swift:457 同款兜底）。
+        // 先校验 present 链（同 TiebaPhotoBrowserSession 的 present 兜底）。
         active.finishIfPresentationDropped(safari)
         // presented 之后才挂自适应代理：presentationController 在呈现前拿不到
         //（旧包在 present 前设置，实际收不到"下滑关闭"回调——本实现补上，

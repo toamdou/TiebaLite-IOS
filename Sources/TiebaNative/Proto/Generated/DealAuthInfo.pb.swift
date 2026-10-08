@@ -20,20 +20,20 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_DealAuthInfo: Sendable {
+nonisolated public struct Tieba_DealAuthInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var itemName: String = String()
+  public var itemName: String = String()
 
-  var itemContent: String = String()
+  public var itemContent: String = String()
 
-  var itemURL: String = String()
+  public var itemURL: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -41,10 +41,10 @@ nonisolated struct Tieba_DealAuthInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_DealAuthInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DealAuthInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}item_name\0\u{3}item_content\0\u{3}item_url\0")
+  static public let protoMessageName: String = _protobuf_package + ".DealAuthInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}item_name\0\u{3}item_content\0\u{3}item_url\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -58,7 +58,7 @@ nonisolated extension Tieba_DealAuthInfo: SwiftProtobuf.Message, SwiftProtobuf._
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.itemName.isEmpty {
       try visitor.visitSingularStringField(value: self.itemName, fieldNumber: 1)
     }
@@ -71,7 +71,7 @@ nonisolated extension Tieba_DealAuthInfo: SwiftProtobuf.Message, SwiftProtobuf._
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_DealAuthInfo, rhs: Tieba_DealAuthInfo) -> Bool {
+  static public func ==(lhs: Tieba_DealAuthInfo, rhs: Tieba_DealAuthInfo) -> Bool {
     if lhs.itemName != rhs.itemName {return false}
     if lhs.itemContent != rhs.itemContent {return false}
     if lhs.itemURL != rhs.itemURL {return false}

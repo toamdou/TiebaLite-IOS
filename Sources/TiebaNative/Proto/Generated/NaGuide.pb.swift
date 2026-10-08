@@ -20,18 +20,18 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_NaGuide: Sendable {
+nonisolated public struct Tieba_NaGuide: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var dwnlURL: String = String()
+  public var dwnlURL: String = String()
 
-  var recInfo: [Tieba_RecGuide] = []
+  public var recInfo: [Tieba_RecGuide] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -39,10 +39,10 @@ nonisolated struct Tieba_NaGuide: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_NaGuide: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".NaGuide"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}dwnl_url\0\u{3}rec_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".NaGuide"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}dwnl_url\0\u{3}rec_info\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -55,7 +55,7 @@ nonisolated extension Tieba_NaGuide: SwiftProtobuf.Message, SwiftProtobuf._Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.dwnlURL.isEmpty {
       try visitor.visitSingularStringField(value: self.dwnlURL, fieldNumber: 1)
     }
@@ -65,7 +65,7 @@ nonisolated extension Tieba_NaGuide: SwiftProtobuf.Message, SwiftProtobuf._Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_NaGuide, rhs: Tieba_NaGuide) -> Bool {
+  static public func ==(lhs: Tieba_NaGuide, rhs: Tieba_NaGuide) -> Bool {
     if lhs.dwnlURL != rhs.dwnlURL {return false}
     if lhs.recInfo != rhs.recInfo {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

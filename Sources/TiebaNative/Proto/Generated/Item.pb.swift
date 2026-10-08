@@ -20,93 +20,93 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Item: @unchecked Sendable {
+nonisolated public struct Tieba_Item: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var itemID: Int64 {
+  public var itemID: Int64 {
     get {_storage._itemID}
     set {_uniqueStorage()._itemID = newValue}
   }
 
-  var itemName: String {
+  public var itemName: String {
     get {_storage._itemName}
     set {_uniqueStorage()._itemName = newValue}
   }
 
-  var iconSize: Double {
+  public var iconSize: Double {
     get {_storage._iconSize}
     set {_uniqueStorage()._iconSize = newValue}
   }
 
-  var iconURL: String {
+  public var iconURL: String {
     get {_storage._iconURL}
     set {_uniqueStorage()._iconURL = newValue}
   }
 
-  var tags: [String] {
+  public var tags: [String] {
     get {_storage._tags}
     set {_uniqueStorage()._tags = newValue}
   }
 
-  var score: Double {
+  public var score: Double {
     get {_storage._score}
     set {_uniqueStorage()._score = newValue}
   }
 
-  var star: Int32 {
+  public var star: Int32 {
     get {_storage._star}
     set {_uniqueStorage()._star = newValue}
   }
 
-  var buttonName: String {
+  public var buttonName: String {
     get {_storage._buttonName}
     set {_uniqueStorage()._buttonName = newValue}
   }
 
-  var buttonLink: String {
+  public var buttonLink: String {
     get {_storage._buttonLink}
     set {_uniqueStorage()._buttonLink = newValue}
   }
 
-  var itemAppid: String {
+  public var itemAppid: String {
     get {_storage._itemAppid}
     set {_uniqueStorage()._itemAppid = newValue}
   }
 
-  var categoryID: Int32 {
+  public var categoryID: Int32 {
     get {_storage._categoryID}
     set {_uniqueStorage()._categoryID = newValue}
   }
 
-  var buttonLinkType: Int32 {
+  public var buttonLinkType: Int32 {
     get {_storage._buttonLinkType}
     set {_uniqueStorage()._buttonLinkType = newValue}
   }
 
-  var apkName: String {
+  public var apkName: String {
     get {_storage._apkName}
     set {_uniqueStorage()._apkName = newValue}
   }
 
-  var forumName: String {
+  public var forumName: String {
     get {_storage._forumName}
     set {_uniqueStorage()._forumName = newValue}
   }
 
-  var apkDetail: Tieba_ApkDetail {
+  public var apkDetail: Tieba_ApkDetail {
     get {_storage._apkDetail ?? Tieba_ApkDetail()}
     set {_uniqueStorage()._apkDetail = newValue}
   }
   /// Returns true if `apkDetail` has been explicitly set.
-  var hasApkDetail: Bool {_storage._apkDetail != nil}
+  public var hasApkDetail: Bool {_storage._apkDetail != nil}
   /// Clears the value of `apkDetail`. Subsequent reads from it will return its default value.
-  mutating func clearApkDetail() {_uniqueStorage()._apkDetail = nil}
+  mutating public func clearApkDetail() {_uniqueStorage()._apkDetail = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -116,8 +116,8 @@ nonisolated struct Tieba_Item: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Item: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Item"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}item_id\0\u{3}item_name\0\u{3}icon_size\0\u{3}icon_url\0\u{1}tags\0\u{1}score\0\u{1}star\0\u{3}button_name\0\u{3}button_link\0\u{3}item_appid\0\u{3}category_id\0\u{3}button_link_type\0\u{3}apk_name\0\u{3}forum_name\0\u{3}apk_detail\0")
+  static public let protoMessageName: String = _protobuf_package + ".Item"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}item_id\0\u{3}item_name\0\u{3}icon_size\0\u{3}icon_url\0\u{1}tags\0\u{1}score\0\u{1}star\0\u{3}button_name\0\u{3}button_link\0\u{3}item_appid\0\u{3}category_id\0\u{3}button_link_type\0\u{3}apk_name\0\u{3}forum_name\0\u{3}apk_detail\0")
 
   fileprivate class _StorageClass {
     var _itemID: Int64 = 0
@@ -170,7 +170,7 @@ nonisolated extension Tieba_Item: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -199,7 +199,7 @@ nonisolated extension Tieba_Item: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -254,7 +254,7 @@ nonisolated extension Tieba_Item: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Item, rhs: Tieba_Item) -> Bool {
+  static public func ==(lhs: Tieba_Item, rhs: Tieba_Item) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

@@ -383,6 +383,15 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     if let host = parent as? TiebaRouteHostViewController { host.syncNativeScreenChrome() }
   }
 
+  /// 外观档（卡片 ↔ 扁平）切档：行几何全变，上一轮模型即便内容没变也不能复用
+  ///（复用判据只比内容指纹与宽度，看不见几何）。清掉备忘 ⇒ 下一趟整页按新几何重测。
+  override func discardReuseMemoForAppearance() {
+    lastPublishedModels = []
+    lastPublishedFingerprints = [:]
+    lastPublishedWidth = 0
+    lastPublishedToolbar = ""
+  }
+
   /// 行模型构建 + 两族度量（与 topic 页同流程：后台测量 → 发布页记录 → setPage）。
   override func publish(fresh: Bool) {
     if fresh {

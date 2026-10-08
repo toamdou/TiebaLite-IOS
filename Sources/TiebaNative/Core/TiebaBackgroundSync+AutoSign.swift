@@ -88,9 +88,7 @@ extension TiebaBackgroundSync {
     if !forumId.isEmpty { ids.insert(forumId) }
   }
 
-  // ----------------------------------------------------------------
   // Auto-sign coordination state (day-scoped, uid-namespaced)
-  // ----------------------------------------------------------------
 
   // getLastAutoSignSummary / clearAutoSignSummary 已于 2026-08-25 删除：
   // 全仓零引用（JS 侧从未接桥，前台签到走自己的协调状态），保留

@@ -20,26 +20,26 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Profile_UserAgreeInfo: Sendable {
+nonisolated public struct Tieba_Profile_UserAgreeInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var totalAgreeNum: Int64 = 0
+  public var totalAgreeNum: Int64 = 0
 
-  var normalAgreeNum: Int64 = 0
+  public var normalAgreeNum: Int64 = 0
 
-  var userAgreeNum: Int64 = 0
+  public var userAgreeNum: Int64 = 0
 
-  var videoAgreeNum: Int64 = 0
+  public var videoAgreeNum: Int64 = 0
 
-  var alaAgreeNum: Int64 = 0
+  public var alaAgreeNum: Int64 = 0
 
-  var hasUserAgree_p: Int32 = 0
+  public var hasUserAgree_p: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -47,10 +47,10 @@ nonisolated struct Tieba_Profile_UserAgreeInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.profile"
 
 nonisolated extension Tieba_Profile_UserAgreeInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UserAgreeInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}total_agree_num\0\u{3}normal_agree_num\0\u{3}user_agree_num\0\u{3}video_agree_num\0\u{3}ala_agree_num\0\u{3}has_user_agree\0")
+  static public let protoMessageName: String = _protobuf_package + ".UserAgreeInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}total_agree_num\0\u{3}normal_agree_num\0\u{3}user_agree_num\0\u{3}video_agree_num\0\u{3}ala_agree_num\0\u{3}has_user_agree\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -67,7 +67,7 @@ nonisolated extension Tieba_Profile_UserAgreeInfo: SwiftProtobuf.Message, SwiftP
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.totalAgreeNum != 0 {
       try visitor.visitSingularInt64Field(value: self.totalAgreeNum, fieldNumber: 1)
     }
@@ -89,7 +89,7 @@ nonisolated extension Tieba_Profile_UserAgreeInfo: SwiftProtobuf.Message, SwiftP
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Profile_UserAgreeInfo, rhs: Tieba_Profile_UserAgreeInfo) -> Bool {
+  static public func ==(lhs: Tieba_Profile_UserAgreeInfo, rhs: Tieba_Profile_UserAgreeInfo) -> Bool {
     if lhs.totalAgreeNum != rhs.totalAgreeNum {return false}
     if lhs.normalAgreeNum != rhs.normalAgreeNum {return false}
     if lhs.userAgreeNum != rhs.userAgreeNum {return false}

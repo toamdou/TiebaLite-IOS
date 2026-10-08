@@ -28,6 +28,60 @@ enum TiebaPostRowText {
     ).build
   }
 
+  /// 楼中楼预览的一行 = **名字 + 分隔冒号 + 正文**，合成同一条富文本。
+  ///
+  /// 为什么把名字并进正文、而不是左侧一个 UILabel + 右侧一个 TextNode：两个排版引擎在
+  /// 同一个 20pt 行盒里放首行基线的方式不同，名字与正文会差出一两个点（用户 2026-10-07
+  /// 报「xxxxx 和用户名没有居中对齐」）。并成一条富文本后由 TextNode 一次排版，基线天然重合。
+  ///
+  /// ⚠️ 冒号归一化：服务端下发的名字**和**正文都可能自带冒号（与 PbContent 的「@」同一类
+  /// 问题：@ 提及的正文里已经带了 @）。先把两边的冒号削掉再补一个 —— 只判"要不要补"不够：
+  /// 名字带尾冒号、正文带前导冒号时，两个都留着，就是用户看到的「用户名：：正文」。
+  static func subPostLine(
+    name: String,
+    content: NSAttributedString?,
+    palette: TiebaFeedRowPalette,
+    scale: Double
+  ) -> NSAttributedString {
+    // ⚠️ 名字与正文**两侧**都可能自带冒号（服务端下发）：名字 "xxx："、正文 "：yyy"。
+    // 只判"要不要补一个"会留下两个（用户 2026-10-07 复报「用户名：：正文」）——
+    // 所以先把两边自带的冒号削掉，再统一补**一个**分隔冒号。
+    var display = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    while display.hasSuffix("：") || display.hasSuffix(":") {
+      display.removeLast()
+      display = display.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    if display.isEmpty { display = "吧友" }
+
+    let body = NSMutableAttributedString(attributedString: content ?? NSAttributedString())
+    // 正文开头：空白 → 最多一个冒号 → 冒号后的空白，一起删掉（按 UTF-16 单位走，
+    // 只比较单字符，"：" 与 ":" 都在 BMP，不会踩到代理对）。
+    let raw = body.string as NSString
+    func isSpace(at index: Int) -> Bool {
+      guard index < raw.length, let scalar = UnicodeScalar(raw.character(at: index)) else { return false }
+      return CharacterSet.whitespacesAndNewlines.contains(scalar)
+    }
+    var drop = 0
+    while isSpace(at: drop) { drop += 1 }
+    if drop < raw.length {
+      let unit = raw.substring(with: NSRange(location: drop, length: 1))
+      if unit == "：" || unit == ":" { drop += 1 }
+    }
+    while isSpace(at: drop) { drop += 1 }
+    if drop > 0 { body.deleteCharacters(in: NSRange(location: 0, length: drop)) }
+    let head = display + "："
+    let line = NSMutableAttributedString(
+      string: head,
+      attributes: [
+        .font: TiebaPostRowLayout.subPostNameFont(scale),
+        .foregroundColor: palette.textSecondary,
+        .paragraphStyle: TiebaPostRowLayout.subPostNameParagraph(scale),
+      ]
+    )
+    line.append(body)
+    return line
+  }
+
   static func buildContent(
     _ content: [TiebaThreadContentSegment],
     preferences: TiebaPostPreferences,
@@ -347,14 +401,6 @@ private final class TiebaEmoticonRunDelegate {
   /// 列表展示档：all_origin 用原图，其余用服务端显示档（src = cdn_src，对 GIF
   /// 即 g=0 静态档；CDN 的 sign 绑定变换段，客户端不许改写，见 TiebaNuke「GIF
   /// 三档」注）。
-  static func displayURL(_ image: TiebaThreadImage, preferences: TiebaPostPreferences) -> URL? {
-    if preferences.imageLoadType == "all_no" { return nil }
-    let raw = preferences.imageLoadType == "all_origin"
-      ? (image.originSrc.isEmpty ? image.src : image.originSrc)
-      : (image.src.isEmpty ? image.originSrc : image.src)
-    return TiebaPhotoItem.normalizedURL(raw)
-  }
-
   /// GIF 判定候选链（列表行用；按可靠度排序，去重由 TiebaNuke.firstGIFURL 做）。
   ///
   /// 线上取证（2026-10-06，用户报的 p/11060036651 全量 29 图 / 25 张动图）：

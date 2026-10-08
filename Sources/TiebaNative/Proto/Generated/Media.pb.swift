@@ -20,36 +20,36 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Media: Sendable {
+nonisolated public struct Tieba_Media: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var type: Int32 = 0
+  public var type: Int32 = 0
 
-  var bigPic: String = String()
+  public var bigPic: String = String()
 
-  var srcPic: String = String()
+  public var srcPic: String = String()
 
-  var width: UInt32 = 0
+  public var width: UInt32 = 0
 
-  var height: UInt32 = 0
+  public var height: UInt32 = 0
 
-  var originPic: String = String()
+  public var originPic: String = String()
 
-  var originSize: UInt32 = 0
+  public var originSize: UInt32 = 0
 
-  var postID: Int64 = 0
+  public var postID: Int64 = 0
 
-  var dynamicPic: String = String()
+  public var dynamicPic: String = String()
 
-  var isLongPic: UInt32 = 0
+  public var isLongPic: UInt32 = 0
 
-  var showOriginalBtn: UInt32 = 0
+  public var showOriginalBtn: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -57,10 +57,10 @@ nonisolated struct Tieba_Media: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Media: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Media"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{2}\u{2}bigPic\0\u{2}\u{5}srcPic\0\u{2}\u{2}width\0\u{1}height\0\u{2}\u{4}originPic\0\u{1}originSize\0\u{1}postId\0\u{1}dynamicPic\0\u{1}isLongPic\0\u{1}showOriginalBtn\0")
+  static public let protoMessageName: String = _protobuf_package + ".Media"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{2}\u{2}bigPic\0\u{2}\u{5}srcPic\0\u{2}\u{2}width\0\u{1}height\0\u{2}\u{4}originPic\0\u{1}originSize\0\u{1}postId\0\u{1}dynamicPic\0\u{1}isLongPic\0\u{1}showOriginalBtn\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -82,7 +82,7 @@ nonisolated extension Tieba_Media: SwiftProtobuf.Message, SwiftProtobuf._Message
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.type != 0 {
       try visitor.visitSingularInt32Field(value: self.type, fieldNumber: 1)
     }
@@ -119,7 +119,7 @@ nonisolated extension Tieba_Media: SwiftProtobuf.Message, SwiftProtobuf._Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Media, rhs: Tieba_Media) -> Bool {
+  static public func ==(lhs: Tieba_Media, rhs: Tieba_Media) -> Bool {
     if lhs.type != rhs.type {return false}
     if lhs.bigPic != rhs.bigPic {return false}
     if lhs.srcPic != rhs.srcPic {return false}

@@ -20,239 +20,239 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_BookInfo: @unchecked Sendable {
+nonisolated public struct Tieba_BookInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var bookID: String {
+  public var bookID: String {
     get {_storage._bookID}
     set {_uniqueStorage()._bookID = newValue}
   }
 
-  var title: String {
+  public var title: String {
     get {_storage._title}
     set {_uniqueStorage()._title = newValue}
   }
 
-  var cover: String {
+  public var cover: String {
     get {_storage._cover}
     set {_uniqueStorage()._cover = newValue}
   }
 
-  var bookType: UInt32 {
+  public var bookType: UInt32 {
     get {_storage._bookType}
     set {_uniqueStorage()._bookType = newValue}
   }
 
-  var classID: UInt32 {
+  public var classID: UInt32 {
     get {_storage._classID}
     set {_uniqueStorage()._classID = newValue}
   }
 
-  var className: String {
+  public var className: String {
     get {_storage._className}
     set {_uniqueStorage()._className = newValue}
   }
 
-  var subClassID: UInt32 {
+  public var subClassID: UInt32 {
     get {_storage._subClassID}
     set {_uniqueStorage()._subClassID = newValue}
   }
 
-  var subClassName: String {
+  public var subClassName: String {
     get {_storage._subClassName}
     set {_uniqueStorage()._subClassName = newValue}
   }
 
-  var bookSize: UInt32 {
+  public var bookSize: UInt32 {
     get {_storage._bookSize}
     set {_uniqueStorage()._bookSize = newValue}
   }
 
-  var intro: String {
+  public var intro: String {
     get {_storage._intro}
     set {_uniqueStorage()._intro = newValue}
   }
 
-  var author: String {
+  public var author: String {
     get {_storage._author}
     set {_uniqueStorage()._author = newValue}
   }
 
-  var authorIntro: String {
+  public var authorIntro: String {
     get {_storage._authorIntro}
     set {_uniqueStorage()._authorIntro = newValue}
   }
 
-  var tags: [Tieba_BookTag] {
+  public var tags: [Tieba_BookTag] {
     get {_storage._tags}
     set {_uniqueStorage()._tags = newValue}
   }
 
-  var totalChapter: UInt32 {
+  public var totalChapter: UInt32 {
     get {_storage._totalChapter}
     set {_uniqueStorage()._totalChapter = newValue}
   }
 
-  var words: UInt32 {
+  public var words: UInt32 {
     get {_storage._words}
     set {_uniqueStorage()._words = newValue}
   }
 
-  var orignalPrice: UInt32 {
+  public var orignalPrice: UInt32 {
     get {_storage._orignalPrice}
     set {_uniqueStorage()._orignalPrice = newValue}
   }
 
-  var price: UInt32 {
+  public var price: UInt32 {
     get {_storage._price}
     set {_uniqueStorage()._price = newValue}
   }
 
-  var discountRatio: String {
+  public var discountRatio: String {
     get {_storage._discountRatio}
     set {_uniqueStorage()._discountRatio = newValue}
   }
 
-  var isFinish: UInt32 {
+  public var isFinish: UInt32 {
     get {_storage._isFinish}
     set {_uniqueStorage()._isFinish = newValue}
   }
 
-  var adCode: String {
+  public var adCode: String {
     get {_storage._adCode}
     set {_uniqueStorage()._adCode = newValue}
   }
 
-  var isBuy: UInt32 {
+  public var isBuy: UInt32 {
     get {_storage._isBuy}
     set {_uniqueStorage()._isBuy = newValue}
   }
 
-  var freeInfo: String {
+  public var freeInfo: String {
     get {_storage._freeInfo}
     set {_uniqueStorage()._freeInfo = newValue}
   }
 
-  var publisher: String {
+  public var publisher: String {
     get {_storage._publisher}
     set {_uniqueStorage()._publisher = newValue}
   }
 
-  var isbn: String {
+  public var isbn: String {
     get {_storage._isbn}
     set {_uniqueStorage()._isbn = newValue}
   }
 
-  var copyright: String {
+  public var copyright: String {
     get {_storage._copyright}
     set {_uniqueStorage()._copyright = newValue}
   }
 
-  var publishText: String {
+  public var publishText: String {
     get {_storage._publishText}
     set {_uniqueStorage()._publishText = newValue}
   }
 
-  var copyrightText: String {
+  public var copyrightText: String {
     get {_storage._copyrightText}
     set {_uniqueStorage()._copyrightText = newValue}
   }
 
-  var publishTime: String {
+  public var publishTime: String {
     get {_storage._publishTime}
     set {_uniqueStorage()._publishTime = newValue}
   }
 
-  var publishType: String {
+  public var publishType: String {
     get {_storage._publishType}
     set {_uniqueStorage()._publishType = newValue}
   }
 
-  var updateTime: UInt32 {
+  public var updateTime: UInt32 {
     get {_storage._updateTime}
     set {_uniqueStorage()._updateTime = newValue}
   }
 
-  var bigCover: String {
+  public var bigCover: String {
     get {_storage._bigCover}
     set {_uniqueStorage()._bigCover = newValue}
   }
 
-  var discountType: UInt32 {
+  public var discountType: UInt32 {
     get {_storage._discountType}
     set {_uniqueStorage()._discountType = newValue}
   }
 
-  var discountIcon: String {
+  public var discountIcon: String {
     get {_storage._discountIcon}
     set {_uniqueStorage()._discountIcon = newValue}
   }
 
-  var readCount: UInt32 {
+  public var readCount: UInt32 {
     get {_storage._readCount}
     set {_uniqueStorage()._readCount = newValue}
   }
 
-  var totalPage: UInt32 {
+  public var totalPage: UInt32 {
     get {_storage._totalPage}
     set {_uniqueStorage()._totalPage = newValue}
   }
 
-  var bookVer: String {
+  public var bookVer: String {
     get {_storage._bookVer}
     set {_uniqueStorage()._bookVer = newValue}
   }
 
-  var chapterVer: String {
+  public var chapterVer: String {
     get {_storage._chapterVer}
     set {_uniqueStorage()._chapterVer = newValue}
   }
 
-  var forumID: UInt64 {
+  public var forumID: UInt64 {
     get {_storage._forumID}
     set {_uniqueStorage()._forumID = newValue}
   }
 
-  var forumName: String {
+  public var forumName: String {
     get {_storage._forumName}
     set {_uniqueStorage()._forumName = newValue}
   }
 
-  var discuss: String {
+  public var discuss: String {
     get {_storage._discuss}
     set {_uniqueStorage()._discuss = newValue}
   }
 
-  var cpID: String {
+  public var cpID: String {
     get {_storage._cpID}
     set {_uniqueStorage()._cpID = newValue}
   }
 
-  var paperPrice: String {
+  public var paperPrice: String {
     get {_storage._paperPrice}
     set {_uniqueStorage()._paperPrice = newValue}
   }
 
-  var firstChapter: UInt32 {
+  public var firstChapter: UInt32 {
     get {_storage._firstChapter}
     set {_uniqueStorage()._firstChapter = newValue}
   }
 
-  var chargeType: UInt32 {
+  public var chargeType: UInt32 {
     get {_storage._chargeType}
     set {_uniqueStorage()._chargeType = newValue}
   }
 
-  var memberShowType: UInt32 {
+  public var memberShowType: UInt32 {
     get {_storage._memberShowType}
     set {_uniqueStorage()._memberShowType = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -262,8 +262,8 @@ nonisolated struct Tieba_BookInfo: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_BookInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".BookInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}book_id\0\u{1}title\0\u{1}cover\0\u{3}book_type\0\u{3}class_id\0\u{3}class_name\0\u{3}sub_class_id\0\u{3}sub_class_name\0\u{3}book_size\0\u{1}intro\0\u{1}author\0\u{3}author_intro\0\u{1}tags\0\u{3}total_chapter\0\u{1}words\0\u{3}orignal_price\0\u{1}price\0\u{3}discount_ratio\0\u{3}is_finish\0\u{3}ad_code\0\u{3}is_buy\0\u{3}free_info\0\u{1}publisher\0\u{1}isbn\0\u{1}copyright\0\u{3}publish_text\0\u{3}copyright_text\0\u{3}publish_time\0\u{3}publish_type\0\u{3}update_time\0\u{3}big_cover\0\u{3}discount_type\0\u{3}discount_icon\0\u{3}read_count\0\u{3}total_page\0\u{3}book_ver\0\u{3}chapter_ver\0\u{3}forum_id\0\u{3}forum_name\0\u{1}discuss\0\u{3}cp_id\0\u{3}paper_price\0\u{3}first_chapter\0\u{3}charge_type\0\u{3}member_show_type\0")
+  static public let protoMessageName: String = _protobuf_package + ".BookInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}book_id\0\u{1}title\0\u{1}cover\0\u{3}book_type\0\u{3}class_id\0\u{3}class_name\0\u{3}sub_class_id\0\u{3}sub_class_name\0\u{3}book_size\0\u{1}intro\0\u{1}author\0\u{3}author_intro\0\u{1}tags\0\u{3}total_chapter\0\u{1}words\0\u{3}orignal_price\0\u{1}price\0\u{3}discount_ratio\0\u{3}is_finish\0\u{3}ad_code\0\u{3}is_buy\0\u{3}free_info\0\u{1}publisher\0\u{1}isbn\0\u{1}copyright\0\u{3}publish_text\0\u{3}copyright_text\0\u{3}publish_time\0\u{3}publish_type\0\u{3}update_time\0\u{3}big_cover\0\u{3}discount_type\0\u{3}discount_icon\0\u{3}read_count\0\u{3}total_page\0\u{3}book_ver\0\u{3}chapter_ver\0\u{3}forum_id\0\u{3}forum_name\0\u{1}discuss\0\u{3}cp_id\0\u{3}paper_price\0\u{3}first_chapter\0\u{3}charge_type\0\u{3}member_show_type\0")
 
   fileprivate class _StorageClass {
     var _bookID: String = String()
@@ -376,7 +376,7 @@ nonisolated extension Tieba_BookInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -435,7 +435,7 @@ nonisolated extension Tieba_BookInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       if !_storage._bookID.isEmpty {
         try visitor.visitSingularStringField(value: _storage._bookID, fieldNumber: 1)
@@ -576,7 +576,7 @@ nonisolated extension Tieba_BookInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_BookInfo, rhs: Tieba_BookInfo) -> Bool {
+  static public func ==(lhs: Tieba_BookInfo, rhs: Tieba_BookInfo) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

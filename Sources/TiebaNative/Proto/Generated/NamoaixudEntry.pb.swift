@@ -20,40 +20,40 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_NamoaixudEntry: Sendable {
+nonisolated public struct Tieba_NamoaixudEntry: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var tip: String = String()
+  public var tip: String = String()
 
-  var amount: String = String()
+  public var amount: String = String()
 
-  var amountMsg: String = String()
+  public var amountMsg: String = String()
 
-  var encourageIcon: String = String()
+  public var encourageIcon: String = String()
 
-  var encourageDesc: String = String()
+  public var encourageDesc: String = String()
 
-  var gotoButtonName: String = String()
+  public var gotoButtonName: String = String()
 
-  var gotoButtonURL: String = String()
+  public var gotoButtonURL: String = String()
 
-  var activityTimestamp: String = String()
+  public var activityTimestamp: String = String()
 
-  var activityDesc: String = String()
+  public var activityDesc: String = String()
 
-  var activityLinkType: String = String()
+  public var activityLinkType: String = String()
 
-  var activityLinkAddr: String = String()
+  public var activityLinkAddr: String = String()
 
-  var layoutType: String = String()
+  public var layoutType: String = String()
 
-  var encourageIconDark: String = String()
+  public var encourageIconDark: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -61,10 +61,10 @@ nonisolated struct Tieba_NamoaixudEntry: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_NamoaixudEntry: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".NamoaixudEntry"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tip\0\u{1}amount\0\u{3}amount_msg\0\u{3}encourage_icon\0\u{3}encourage_desc\0\u{3}goto_button_name\0\u{3}goto_button_url\0\u{3}activity_timestamp\0\u{3}activity_desc\0\u{3}activity_link_type\0\u{3}activity_link_addr\0\u{3}layout_type\0\u{3}encourage_icon_dark\0")
+  static public let protoMessageName: String = _protobuf_package + ".NamoaixudEntry"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tip\0\u{1}amount\0\u{3}amount_msg\0\u{3}encourage_icon\0\u{3}encourage_desc\0\u{3}goto_button_name\0\u{3}goto_button_url\0\u{3}activity_timestamp\0\u{3}activity_desc\0\u{3}activity_link_type\0\u{3}activity_link_addr\0\u{3}layout_type\0\u{3}encourage_icon_dark\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -88,7 +88,7 @@ nonisolated extension Tieba_NamoaixudEntry: SwiftProtobuf.Message, SwiftProtobuf
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.tip.isEmpty {
       try visitor.visitSingularStringField(value: self.tip, fieldNumber: 1)
     }
@@ -131,7 +131,7 @@ nonisolated extension Tieba_NamoaixudEntry: SwiftProtobuf.Message, SwiftProtobuf
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_NamoaixudEntry, rhs: Tieba_NamoaixudEntry) -> Bool {
+  static public func ==(lhs: Tieba_NamoaixudEntry, rhs: Tieba_NamoaixudEntry) -> Bool {
     if lhs.tip != rhs.tip {return false}
     if lhs.amount != rhs.amount {return false}
     if lhs.amountMsg != rhs.amountMsg {return false}

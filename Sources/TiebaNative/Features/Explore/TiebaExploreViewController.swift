@@ -14,7 +14,7 @@ final class TiebaExploreViewController: UIViewController, TiebaTabReselectable, 
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    view.backgroundColor = TiebaChromeTheme.current.background
     segmented.selectedSegmentIndex = 0
     segmented.addTarget(self, action: #selector(handleSegmentChange), for: .valueChanged)
     for subview in [segmented, container] as [UIView] {
@@ -50,7 +50,7 @@ final class TiebaExploreViewController: UIViewController, TiebaTabReselectable, 
 
   /// 主题变化（含跟随系统实时切换）：底色现取主题（动态色，等价重设一次）。
   func screenThemeDidChange() {
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    view.backgroundColor = TiebaChromeTheme.current.background
   }
 
   @objc private func handleSegmentChange() {

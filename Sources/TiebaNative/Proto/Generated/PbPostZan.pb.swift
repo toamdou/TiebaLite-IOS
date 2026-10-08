@@ -20,18 +20,18 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PbPostZan: Sendable {
+nonisolated public struct Tieba_PbPostZan: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var zanNum: Int64 = 0
+  public var zanNum: Int64 = 0
 
-  var hasZan_p: Int32 = 0
+  public var hasZan_p: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -39,10 +39,10 @@ nonisolated struct Tieba_PbPostZan: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_PbPostZan: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PbPostZan"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}zan_num\0\u{3}has_zan\0")
+  static public let protoMessageName: String = _protobuf_package + ".PbPostZan"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}zan_num\0\u{3}has_zan\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -55,7 +55,7 @@ nonisolated extension Tieba_PbPostZan: SwiftProtobuf.Message, SwiftProtobuf._Mes
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.zanNum != 0 {
       try visitor.visitSingularInt64Field(value: self.zanNum, fieldNumber: 1)
     }
@@ -65,7 +65,7 @@ nonisolated extension Tieba_PbPostZan: SwiftProtobuf.Message, SwiftProtobuf._Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PbPostZan, rhs: Tieba_PbPostZan) -> Bool {
+  static public func ==(lhs: Tieba_PbPostZan, rhs: Tieba_PbPostZan) -> Bool {
     if lhs.zanNum != rhs.zanNum {return false}
     if lhs.hasZan_p != rhs.hasZan_p {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

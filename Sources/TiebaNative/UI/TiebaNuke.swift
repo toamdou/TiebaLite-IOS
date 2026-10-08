@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite RN — Nuke 共享图片管线（TiebaNuke）
 //
 // 全 App 唯一一条图片缓存/请求管线（2026-09-13 完成收敛，原 TiebaImageIO 已删除）。
@@ -34,7 +33,7 @@
 // 防盗链：贴吧图床要求 Referer: https://tieba.baidu.com/
 //   - 所有图片请求都经本管线注入；不要再手写 URLSession 取图（丢 Referer
 //     且会分裂缓存）。
-//   - 图片请求不设 User-Agent（TiebaNativeClient.swift:133 的 "tieba/12.41.7.1"
+//   - 图片请求不设 User-Agent（TiebaNativeClient 的 `tieba/12.41.7.1`
 //     只用于 API 请求）；需要再加头时用 TiebaNukePipelineDelegate(additionalHeaders:)。
 //
 // 缓存上限：磁盘 400MB（偏好 cacheMaxSizeMb）、内存按磁盘推出（见
@@ -45,7 +44,6 @@
 //
 // ATS：Nuke 默认 DataLoader 走 URLSession，受 ATS 约束，http:// 图片经
 // secureURL(_:) 升级为 https（与 src/utils/thumbnail.ts 同一策略）。
-// ============================================================
 
 import Foundation
 import Nuke
@@ -336,11 +334,8 @@ public enum TiebaNuke {
     return options
   }
 
-  // 一步式加载（`TiebaNuke.load(into:…)`）已删除：视图加载统一走 NukeExtensions
-  // （loadImage(with:options:into:progress:completion:) / cancelRequest(for:)），
-  // 它自带"换图先取消在途请求、isPrepareForReuseEnabled 清旧图、过渡动画、
-  // 视图释放自动取消"，本文件曾手写一遍的那套关联对象/ Cancellable 包装因此
-  // 全部删除（手写版漏过：复用行重放淡入、换图不取消旧请求）。
+  // 一步式加载（`TiebaNuke.load(into:…)`）已删除：视图加载统一走 NukeExtensions（换图先取消在途请求、
+  // isPrepareForReuseEnabled 清旧图、过渡动画、视图释放自动取消）；手写版漏过「复用行重放淡入、换图不取消旧请求」。
 
   // MARK: 工具
 

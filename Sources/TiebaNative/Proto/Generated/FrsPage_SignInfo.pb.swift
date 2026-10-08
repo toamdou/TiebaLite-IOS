@@ -20,32 +20,32 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_FrsPage_SignInfo: @unchecked Sendable {
+nonisolated public struct Tieba_FrsPage_SignInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var userInfo: Tieba_FrsPage_SignUser {
+  public var userInfo: Tieba_FrsPage_SignUser {
     get {_storage._userInfo ?? Tieba_FrsPage_SignUser()}
     set {_uniqueStorage()._userInfo = newValue}
   }
   /// Returns true if `userInfo` has been explicitly set.
-  var hasUserInfo: Bool {_storage._userInfo != nil}
+  public var hasUserInfo: Bool {_storage._userInfo != nil}
   /// Clears the value of `userInfo`. Subsequent reads from it will return its default value.
-  mutating func clearUserInfo() {_uniqueStorage()._userInfo = nil}
+  mutating public func clearUserInfo() {_uniqueStorage()._userInfo = nil}
 
-  var forumInfo: Tieba_FrsPage_SignForum {
+  public var forumInfo: Tieba_FrsPage_SignForum {
     get {_storage._forumInfo ?? Tieba_FrsPage_SignForum()}
     set {_uniqueStorage()._forumInfo = newValue}
   }
   /// Returns true if `forumInfo` has been explicitly set.
-  var hasForumInfo: Bool {_storage._forumInfo != nil}
+  public var hasForumInfo: Bool {_storage._forumInfo != nil}
   /// Clears the value of `forumInfo`. Subsequent reads from it will return its default value.
-  mutating func clearForumInfo() {_uniqueStorage()._forumInfo = nil}
+  mutating public func clearForumInfo() {_uniqueStorage()._forumInfo = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -55,8 +55,8 @@ nonisolated struct Tieba_FrsPage_SignInfo: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.frsPage"
 
 nonisolated extension Tieba_FrsPage_SignInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SignInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_info\0\u{3}forum_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".SignInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_info\0\u{3}forum_info\0")
 
   fileprivate class _StorageClass {
     var _userInfo: Tieba_FrsPage_SignUser? = nil
@@ -83,7 +83,7 @@ nonisolated extension Tieba_FrsPage_SignInfo: SwiftProtobuf.Message, SwiftProtob
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -99,7 +99,7 @@ nonisolated extension Tieba_FrsPage_SignInfo: SwiftProtobuf.Message, SwiftProtob
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -115,7 +115,7 @@ nonisolated extension Tieba_FrsPage_SignInfo: SwiftProtobuf.Message, SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_FrsPage_SignInfo, rhs: Tieba_FrsPage_SignInfo) -> Bool {
+  static public func ==(lhs: Tieba_FrsPage_SignInfo, rhs: Tieba_FrsPage_SignInfo) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

@@ -20,18 +20,18 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_FrsPage_Group: Sendable {
+nonisolated public struct Tieba_FrsPage_Group: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var hideRecommendGroup: Int32 = 0
+  public var hideRecommendGroup: Int32 = 0
 
-  var groupCount: Int32 = 0
+  public var groupCount: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -39,10 +39,10 @@ nonisolated struct Tieba_FrsPage_Group: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.frsPage"
 
 nonisolated extension Tieba_FrsPage_Group: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Group"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}hide_recommend_group\0\u{3}group_count\0")
+  static public let protoMessageName: String = _protobuf_package + ".Group"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}hide_recommend_group\0\u{3}group_count\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -55,7 +55,7 @@ nonisolated extension Tieba_FrsPage_Group: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.hideRecommendGroup != 0 {
       try visitor.visitSingularInt32Field(value: self.hideRecommendGroup, fieldNumber: 1)
     }
@@ -65,7 +65,7 @@ nonisolated extension Tieba_FrsPage_Group: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_FrsPage_Group, rhs: Tieba_FrsPage_Group) -> Bool {
+  static public func ==(lhs: Tieba_FrsPage_Group, rhs: Tieba_FrsPage_Group) -> Bool {
     if lhs.hideRecommendGroup != rhs.hideRecommendGroup {return false}
     if lhs.groupCount != rhs.groupCount {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

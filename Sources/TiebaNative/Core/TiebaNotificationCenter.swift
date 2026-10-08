@@ -161,7 +161,7 @@ public final class TiebaNotificationCenter: NSObject, UNUserNotificationCenterDe
       Self.log.error("invalid deep link in notification payload: \(deepLink, privacy: .public)")
       return
     }
-    if !TiebaNavigator.shared.open(url: url) {
+    if !TiebaAppHooks.open(url: url) {
       // 原生路由表不认（不是本仓的深链格式）：记日志，不静默。
       Self.log.error("notification deep link not recognized: \(deepLink, privacy: .public)")
     }

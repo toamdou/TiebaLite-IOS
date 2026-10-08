@@ -20,18 +20,18 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_DelThreadText: Sendable {
+nonisolated public struct Tieba_DelThreadText: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var textID: Int32 = 0
+  public var textID: Int32 = 0
 
-  var textInfo: String = String()
+  public var textInfo: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -39,10 +39,10 @@ nonisolated struct Tieba_DelThreadText: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_DelThreadText: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DelThreadText"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}text_id\0\u{3}text_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".DelThreadText"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}text_id\0\u{3}text_info\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -55,7 +55,7 @@ nonisolated extension Tieba_DelThreadText: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.textID != 0 {
       try visitor.visitSingularInt32Field(value: self.textID, fieldNumber: 1)
     }
@@ -65,7 +65,7 @@ nonisolated extension Tieba_DelThreadText: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_DelThreadText, rhs: Tieba_DelThreadText) -> Bool {
+  static public func ==(lhs: Tieba_DelThreadText, rhs: Tieba_DelThreadText) -> Bool {
     if lhs.textID != rhs.textID {return false}
     if lhs.textInfo != rhs.textInfo {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

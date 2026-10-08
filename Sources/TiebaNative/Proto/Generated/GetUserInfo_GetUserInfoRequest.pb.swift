@@ -20,23 +20,23 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_GetUserInfo_GetUserInfoRequest: Sendable {
+nonisolated public struct Tieba_GetUserInfo_GetUserInfoRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var data: Tieba_GetUserInfo_GetUserInfoRequestData {
+  public var data: Tieba_GetUserInfo_GetUserInfoRequestData {
     get {_data ?? Tieba_GetUserInfo_GetUserInfoRequestData()}
     set {_data = newValue}
   }
   /// Returns true if `data` has been explicitly set.
-  var hasData: Bool {self._data != nil}
+  public var hasData: Bool {self._data != nil}
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
-  mutating func clearData() {self._data = nil}
+  mutating public func clearData() {self._data = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _data: Tieba_GetUserInfo_GetUserInfoRequestData? = nil
 }
@@ -46,10 +46,10 @@ nonisolated struct Tieba_GetUserInfo_GetUserInfoRequest: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.getUserInfo"
 
 nonisolated extension Tieba_GetUserInfo_GetUserInfoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetUserInfoRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}data\0")
+  static public let protoMessageName: String = _protobuf_package + ".GetUserInfoRequest"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}data\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_GetUserInfo_GetUserInfoRequest: SwiftProtobuf.Messag
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -72,7 +72,7 @@ nonisolated extension Tieba_GetUserInfo_GetUserInfoRequest: SwiftProtobuf.Messag
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GetUserInfo_GetUserInfoRequest, rhs: Tieba_GetUserInfo_GetUserInfoRequest) -> Bool {
+  static public func ==(lhs: Tieba_GetUserInfo_GetUserInfoRequest, rhs: Tieba_GetUserInfo_GetUserInfoRequest) -> Bool {
     if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

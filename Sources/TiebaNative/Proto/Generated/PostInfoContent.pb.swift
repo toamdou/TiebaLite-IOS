@@ -20,26 +20,26 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_PostInfoContent: Sendable {
+nonisolated public struct Tieba_PostInfoContent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var postContent: [Tieba_Abstract] = []
+  public var postContent: [Tieba_Abstract] = []
 
-  var createTime: UInt64 = 0
+  public var createTime: UInt64 = 0
 
-  var postType: UInt64 = 0
+  public var postType: UInt64 = 0
 
-  var postID: UInt64 = 0
+  public var postID: UInt64 = 0
 
-  var isAuthorView: Int32 = 0
+  public var isAuthorView: Int32 = 0
 
-  var targetScheme: String = String()
+  public var targetScheme: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -47,10 +47,10 @@ nonisolated struct Tieba_PostInfoContent: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_PostInfoContent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PostInfoContent"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_content\0\u{3}create_time\0\u{3}post_type\0\u{3}post_id\0\u{3}is_author_view\0\u{4}\u{2}target_scheme\0")
+  static public let protoMessageName: String = _protobuf_package + ".PostInfoContent"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_content\0\u{3}create_time\0\u{3}post_type\0\u{3}post_id\0\u{3}is_author_view\0\u{4}\u{2}target_scheme\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -67,7 +67,7 @@ nonisolated extension Tieba_PostInfoContent: SwiftProtobuf.Message, SwiftProtobu
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.postContent.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.postContent, fieldNumber: 1)
     }
@@ -89,7 +89,7 @@ nonisolated extension Tieba_PostInfoContent: SwiftProtobuf.Message, SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_PostInfoContent, rhs: Tieba_PostInfoContent) -> Bool {
+  static public func ==(lhs: Tieba_PostInfoContent, rhs: Tieba_PostInfoContent) -> Bool {
     if lhs.postContent != rhs.postContent {return false}
     if lhs.createTime != rhs.createTime {return false}
     if lhs.postType != rhs.postType {return false}

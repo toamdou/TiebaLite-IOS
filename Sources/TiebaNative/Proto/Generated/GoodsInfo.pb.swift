@@ -20,167 +20,167 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_GoodsInfo: @unchecked Sendable {
+nonisolated public struct Tieba_GoodsInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var id: Int32 {
+  public var id: Int32 {
     get {_storage._id}
     set {_uniqueStorage()._id = newValue}
   }
 
-  var userName: String {
+  public var userName: String {
     get {_storage._userName}
     set {_uniqueStorage()._userName = newValue}
   }
 
-  var userPortrait: String {
+  public var userPortrait: String {
     get {_storage._userPortrait}
     set {_uniqueStorage()._userPortrait = newValue}
   }
 
-  var threadTitle: String {
+  public var threadTitle: String {
     get {_storage._threadTitle}
     set {_uniqueStorage()._threadTitle = newValue}
   }
 
-  var threadPic: String {
+  public var threadPic: String {
     get {_storage._threadPic}
     set {_uniqueStorage()._threadPic = newValue}
   }
 
-  var popWindowText: String {
+  public var popWindowText: String {
     get {_storage._popWindowText}
     set {_uniqueStorage()._popWindowText = newValue}
   }
 
-  var goodsStyle: Int32 {
+  public var goodsStyle: Int32 {
     get {_storage._goodsStyle}
     set {_uniqueStorage()._goodsStyle = newValue}
   }
 
-  var threadPicList: [Tieba_ThreadPicList] {
+  public var threadPicList: [Tieba_ThreadPicList] {
     get {_storage._threadPicList}
     set {_uniqueStorage()._threadPicList = newValue}
   }
 
-  var labelVisible: Int32 {
+  public var labelVisible: Int32 {
     get {_storage._labelVisible}
     set {_uniqueStorage()._labelVisible = newValue}
   }
 
-  var labelText: String {
+  public var labelText: String {
     get {_storage._labelText}
     set {_uniqueStorage()._labelText = newValue}
   }
 
-  var rankLevel: Int32 {
+  public var rankLevel: Int32 {
     get {_storage._rankLevel}
     set {_uniqueStorage()._rankLevel = newValue}
   }
 
-  var threadType: String {
+  public var threadType: String {
     get {_storage._threadType}
     set {_uniqueStorage()._threadType = newValue}
   }
 
-  var buttonText: String {
+  public var buttonText: String {
     get {_storage._buttonText}
     set {_uniqueStorage()._buttonText = newValue}
   }
 
-  var cardDesc: String {
+  public var cardDesc: String {
     get {_storage._cardDesc}
     set {_uniqueStorage()._cardDesc = newValue}
   }
 
-  var cardTag: String {
+  public var cardTag: String {
     get {_storage._cardTag}
     set {_uniqueStorage()._cardTag = newValue}
   }
 
-  var width: Int32 {
+  public var width: Int32 {
     get {_storage._width}
     set {_uniqueStorage()._width = newValue}
   }
 
-  var height: Int32 {
+  public var height: Int32 {
     get {_storage._height}
     set {_uniqueStorage()._height = newValue}
   }
 
-  var labelMeasure: Int32 {
+  public var labelMeasure: Int32 {
     get {_storage._labelMeasure}
     set {_uniqueStorage()._labelMeasure = newValue}
   }
 
-  var threadContent: String {
+  public var threadContent: String {
     get {_storage._threadContent}
     set {_uniqueStorage()._threadContent = newValue}
   }
 
-  var legoCard: String {
+  public var legoCard: String {
     get {_storage._legoCard}
     set {_uniqueStorage()._legoCard = newValue}
   }
 
-  var videoInfo: Tieba_VideoInfo {
+  public var videoInfo: Tieba_VideoInfo {
     get {_storage._videoInfo ?? Tieba_VideoInfo()}
     set {_uniqueStorage()._videoInfo = newValue}
   }
   /// Returns true if `videoInfo` has been explicitly set.
-  var hasVideoInfo: Bool {_storage._videoInfo != nil}
+  public var hasVideoInfo: Bool {_storage._videoInfo != nil}
   /// Clears the value of `videoInfo`. Subsequent reads from it will return its default value.
-  mutating func clearVideoInfo() {_uniqueStorage()._videoInfo = nil}
+  mutating public func clearVideoInfo() {_uniqueStorage()._videoInfo = nil}
 
-  var tagName: String {
+  public var tagName: String {
     get {_storage._tagName}
     set {_uniqueStorage()._tagName = newValue}
   }
 
-  var buttonURL: String {
+  public var buttonURL: String {
     get {_storage._buttonURL}
     set {_uniqueStorage()._buttonURL = newValue}
   }
 
-  var adSource: String {
+  public var adSource: String {
     get {_storage._adSource}
     set {_uniqueStorage()._adSource = newValue}
   }
 
-  var tagNameURL: String {
+  public var tagNameURL: String {
     get {_storage._tagNameURL}
     set {_uniqueStorage()._tagNameURL = newValue}
   }
 
-  var tagNameWh: String {
+  public var tagNameWh: String {
     get {_storage._tagNameWh}
     set {_uniqueStorage()._tagNameWh = newValue}
   }
 
-  var brandIcon: String {
+  public var brandIcon: String {
     get {_storage._brandIcon}
     set {_uniqueStorage()._brandIcon = newValue}
   }
 
-  var brandIconWh: String {
+  public var brandIconWh: String {
     get {_storage._brandIconWh}
     set {_uniqueStorage()._brandIconWh = newValue}
   }
 
-  var closeInfo: Tieba_AdCloseInfo {
+  public var closeInfo: Tieba_AdCloseInfo {
     get {_storage._closeInfo ?? Tieba_AdCloseInfo()}
     set {_uniqueStorage()._closeInfo = newValue}
   }
   /// Returns true if `closeInfo` has been explicitly set.
-  var hasCloseInfo: Bool {_storage._closeInfo != nil}
+  public var hasCloseInfo: Bool {_storage._closeInfo != nil}
   /// Clears the value of `closeInfo`. Subsequent reads from it will return its default value.
-  mutating func clearCloseInfo() {_uniqueStorage()._closeInfo = nil}
+  mutating public func clearCloseInfo() {_uniqueStorage()._closeInfo = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -190,8 +190,8 @@ nonisolated struct Tieba_GoodsInfo: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_GoodsInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GoodsInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}user_name\0\u{3}user_portrait\0\u{3}thread_title\0\u{3}thread_pic\0\u{3}pop_window_text\0\u{3}goods_style\0\u{3}thread_pic_list\0\u{3}label_visible\0\u{3}label_text\0\u{3}rank_level\0\u{3}thread_type\0\u{3}button_text\0\u{3}card_desc\0\u{3}card_tag\0\u{1}width\0\u{1}height\0\u{3}label_measure\0\u{3}thread_content\0\u{3}lego_card\0\u{3}video_info\0\u{3}tag_name\0\u{3}button_url\0\u{3}ad_source\0\u{3}tag_name_url\0\u{3}tag_name_wh\0\u{3}brand_icon\0\u{3}brand_icon_wh\0\u{3}close_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".GoodsInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}user_name\0\u{3}user_portrait\0\u{3}thread_title\0\u{3}thread_pic\0\u{3}pop_window_text\0\u{3}goods_style\0\u{3}thread_pic_list\0\u{3}label_visible\0\u{3}label_text\0\u{3}rank_level\0\u{3}thread_type\0\u{3}button_text\0\u{3}card_desc\0\u{3}card_tag\0\u{1}width\0\u{1}height\0\u{3}label_measure\0\u{3}thread_content\0\u{3}lego_card\0\u{3}video_info\0\u{3}tag_name\0\u{3}button_url\0\u{3}ad_source\0\u{3}tag_name_url\0\u{3}tag_name_wh\0\u{3}brand_icon\0\u{3}brand_icon_wh\0\u{3}close_info\0")
 
   fileprivate class _StorageClass {
     var _id: Int32 = 0
@@ -272,7 +272,7 @@ nonisolated extension Tieba_GoodsInfo: SwiftProtobuf.Message, SwiftProtobuf._Mes
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -315,7 +315,7 @@ nonisolated extension Tieba_GoodsInfo: SwiftProtobuf.Message, SwiftProtobuf._Mes
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -412,7 +412,7 @@ nonisolated extension Tieba_GoodsInfo: SwiftProtobuf.Message, SwiftProtobuf._Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GoodsInfo, rhs: Tieba_GoodsInfo) -> Bool {
+  static public func ==(lhs: Tieba_GoodsInfo, rhs: Tieba_GoodsInfo) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

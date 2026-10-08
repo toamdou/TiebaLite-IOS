@@ -292,10 +292,10 @@ private final class TiebaRuleSectionHeaderView: UITableViewHeaderFooterView {
   override init(reuseIdentifier: String?) {
     super.init(reuseIdentifier: reuseIdentifier)
     chip.font = TiebaSimpleText.font(size: 13, weight: .heavy)
-    chip.textColor = TiebaNavigator.shared.chromeTheme.tint
+    chip.textColor = TiebaChromeTheme.current.tint
     chip.textAlignment = .center
     chip.translatesAutoresizingMaskIntoConstraints = false
-    chipBox.backgroundColor = TiebaNavigator.shared.chromeTheme.tint.withAlphaComponent(0.1)
+    chipBox.backgroundColor = TiebaChromeTheme.current.tint.withAlphaComponent(0.1)
     chipBox.layer.cornerRadius = 12
     chipBox.translatesAutoresizingMaskIntoConstraints = false
     chipBox.addSubview(chip)
@@ -416,7 +416,7 @@ private final class TiebaRulePrefaceCell: UITableViewCell {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
     selectionStyle = .none
     let icon = UIImageView(image: UIImage(systemName: "text.quote"))
-    icon.tintColor = TiebaNavigator.shared.chromeTheme.tint
+    icon.tintColor = TiebaChromeTheme.current.tint
     icon.setContentHuggingPriority(.required, for: .horizontal)
     icon.setContentCompressionResistancePriority(.required, for: .horizontal)
     let stack = UIStackView(arrangedSubviews: [icon, label])
@@ -425,7 +425,7 @@ private final class TiebaRulePrefaceCell: UITableViewCell {
     stack.spacing = 9
     stack.translatesAutoresizingMaskIntoConstraints = false
     contentView.addSubview(stack)
-    contentView.backgroundColor = TiebaNavigator.shared.chromeTheme.tint.withAlphaComponent(0.06)
+    contentView.backgroundColor = TiebaChromeTheme.current.tint.withAlphaComponent(0.06)
     contentView.layer.cornerRadius = 16
     contentView.layer.cornerCurve = .continuous
     NSLayoutConstraint.activate([
@@ -485,7 +485,7 @@ private final class TiebaRuleQuoteCell: UITableViewCell {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
     selectionStyle = .none
     let bar = UIView()
-    bar.backgroundColor = TiebaNavigator.shared.chromeTheme.tint
+    bar.backgroundColor = TiebaChromeTheme.current.tint
     bar.translatesAutoresizingMaskIntoConstraints = false
     bar.widthAnchor.constraint(equalToConstant: 3).isActive = true
     let row = UIStackView(arrangedSubviews: [bar, label])
@@ -631,8 +631,8 @@ private final class TiebaRuleLinkCell: UITableViewCell {
     config.image = UIImage(systemName: "link")
     config.imagePadding = 4
     config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
-    config.baseForegroundColor = TiebaNavigator.shared.chromeTheme.tint
-    config.background.backgroundColor = TiebaNavigator.shared.chromeTheme.tint.withAlphaComponent(0.08)
+    config.baseForegroundColor = TiebaChromeTheme.current.tint
+    config.background.backgroundColor = TiebaChromeTheme.current.tint.withAlphaComponent(0.08)
     config.background.cornerRadius = 8
     config.titleLineBreakMode = .byTruncatingTail
     button.configuration = config

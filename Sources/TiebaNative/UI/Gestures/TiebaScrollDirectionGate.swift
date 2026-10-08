@@ -1,4 +1,3 @@
-// ============================================================
 // 滚动方向门（TiebaScrollDirectionGate）
 //
 // 移植自上游 submodules/Display/Source/ListView.swift:1023-1029（generalAccumulatedDeltaY）：
@@ -14,7 +13,11 @@
 // 阈值出处：TiebaMotionSpec.Scroll.directionFlipThreshold（= 14.0，上游同值）。
 // 调用方：Features/Thread/TiebaThreadViewController（浮条自动隐藏）
 //         Features/Forum/TiebaForumViewController（悬浮按钮自动隐藏）。
-// ============================================================
+//
+// ⚠️ 2026-10-08 用户复报「手指下滑才隐藏，我要上滑隐藏」：这里的三元**写反了**
+// （写成 accumulated < 0 → .forward），与下方 Direction 的定义正好相反——于是浮条
+// 与悬浮按钮是在"往回翻"时收起、读内容时挂着。判据以 Direction 的定义为准：
+// ΔY > 0（contentOffset 增大 = 手指上滑）⇒ .forward ⇒ 收起。
 
 import CoreGraphics
 
@@ -52,7 +55,7 @@ struct TiebaScrollDirectionGate: Sendable {
     lastOffsetY = contentOffsetY
     accumulated += contentOffsetY - last
     guard abs(accumulated) > TiebaMotionSpec.Scroll.directionFlipThreshold else { return nil }
-    let next: Direction = accumulated < 0 ? .forward : .backward
+    let next: Direction = accumulated > 0 ? .forward : .backward
     accumulated = 0
     guard direction != next else { return nil }
     direction = next

@@ -8,7 +8,6 @@
 
 import UIKit
 
-// ---------------------------------------------------------------------------
 // [移植] 上游 CAAnimationUtils.swift 依赖 ObjC 模块 UIKitRuntimeUtils。本移植不引入该
 // 模块（上游 Display 模块 只搬纯 UIKit/Swift 部分），因此把本文件用到的 4 个上游 helper
 // 以文件私有的纯 Swift 等价实现内联在此。函数名统一加 tieba 前缀，避免与
@@ -19,7 +18,6 @@ import UIKit
 //   * makeSpringAnimation(_:duration:)   <- UIKitUtils.m makeSpringAnimationImpl
 //   * makeSpringBounceAnimation(_:_:_:)  <- UIKitUtils.m makeSpringBounceAnimationImpl
 // 除函数名外，参数、常量、时序与上游 ObjC 实现一一对应。
-// ---------------------------------------------------------------------------
 private func tiebaAnimationDurationFactor() -> Double {
     // [移植] 上游 UIKitRuntimeUtils/UIKitUtils.m：模拟器返回 UIAnimationDragCoefficient()
     // （私有符号，Swift 不可用），真机恒为 1.0。此处取真机语义。

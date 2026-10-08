@@ -20,122 +20,122 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_GetDislikeList_ForumList: Sendable {
+nonisolated public struct Tieba_GetDislikeList_ForumList: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var forumID: Int64 = 0
+  public var forumID: Int64 = 0
 
-  var forumName: String = String()
+  public var forumName: String = String()
 
-  var avatar: String = String()
+  public var avatar: String = String()
 
-  var memberCount: Int32 = 0
+  public var memberCount: Int32 = 0
 
-  var slogan: String = String()
+  public var slogan: String = String()
 
-  var content: String = String()
+  public var content: String = String()
 
-  var postNum: Int64 = 0
+  public var postNum: Int64 = 0
 
-  var threadNum: Int64 = 0
+  public var threadNum: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-nonisolated struct Tieba_GetDislikeList_GetDislikeListRequestData: Sendable {
+nonisolated public struct Tieba_GetDislikeList_GetDislikeListRequestData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var common: Tieba_CommonRequest {
+  public var common: Tieba_CommonRequest {
     get {_common ?? Tieba_CommonRequest()}
     set {_common = newValue}
   }
   /// Returns true if `common` has been explicitly set.
-  var hasCommon: Bool {self._common != nil}
+  public var hasCommon: Bool {self._common != nil}
   /// Clears the value of `common`. Subsequent reads from it will return its default value.
-  mutating func clearCommon() {self._common = nil}
+  mutating public func clearCommon() {self._common = nil}
 
-  var userID: Int64 = 0
+  public var userID: Int64 = 0
 
-  var pn: Int32 = 0
+  public var pn: Int32 = 0
 
-  var rn: Int32 = 0
+  public var rn: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _common: Tieba_CommonRequest? = nil
 }
 
-nonisolated struct Tieba_GetDislikeList_GetDislikeListRequest: Sendable {
+nonisolated public struct Tieba_GetDislikeList_GetDislikeListRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var data: Tieba_GetDislikeList_GetDislikeListRequestData {
+  public var data: Tieba_GetDislikeList_GetDislikeListRequestData {
     get {_data ?? Tieba_GetDislikeList_GetDislikeListRequestData()}
     set {_data = newValue}
   }
   /// Returns true if `data` has been explicitly set.
-  var hasData: Bool {self._data != nil}
+  public var hasData: Bool {self._data != nil}
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
-  mutating func clearData() {self._data = nil}
+  mutating public func clearData() {self._data = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _data: Tieba_GetDislikeList_GetDislikeListRequestData? = nil
 }
 
-nonisolated struct Tieba_GetDislikeList_GetDislikeListResponseData: Sendable {
+nonisolated public struct Tieba_GetDislikeList_GetDislikeListResponseData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var forumList: [Tieba_GetDislikeList_ForumList] = []
+  public var forumList: [Tieba_GetDislikeList_ForumList] = []
 
-  var hasMore_p: Int32 = 0
+  public var hasMore_p: Int32 = 0
 
-  var curPage: Int32 = 0
+  public var curPage: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-nonisolated struct Tieba_GetDislikeList_GetDislikeListResponse: Sendable {
+nonisolated public struct Tieba_GetDislikeList_GetDislikeListResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var error: Tieba_Error {
+  public var error: Tieba_Error {
     get {_error ?? Tieba_Error()}
     set {_error = newValue}
   }
   /// Returns true if `error` has been explicitly set.
-  var hasError: Bool {self._error != nil}
+  public var hasError: Bool {self._error != nil}
   /// Clears the value of `error`. Subsequent reads from it will return its default value.
-  mutating func clearError() {self._error = nil}
+  mutating public func clearError() {self._error = nil}
 
-  var data: Tieba_GetDislikeList_GetDislikeListResponseData {
+  public var data: Tieba_GetDislikeList_GetDislikeListResponseData {
     get {_data ?? Tieba_GetDislikeList_GetDislikeListResponseData()}
     set {_data = newValue}
   }
   /// Returns true if `data` has been explicitly set.
-  var hasData: Bool {self._data != nil}
+  public var hasData: Bool {self._data != nil}
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
-  mutating func clearData() {self._data = nil}
+  mutating public func clearData() {self._data = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _error: Tieba_Error? = nil
   fileprivate var _data: Tieba_GetDislikeList_GetDislikeListResponseData? = nil
@@ -146,10 +146,10 @@ nonisolated struct Tieba_GetDislikeList_GetDislikeListResponse: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.getDislikeList"
 
 nonisolated extension Tieba_GetDislikeList_ForumList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ForumList"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}forum_id\0\u{3}forum_name\0\u{1}avatar\0\u{3}member_count\0\u{1}slogan\0\u{1}content\0\u{3}post_num\0\u{3}thread_num\0")
+  static public let protoMessageName: String = _protobuf_package + ".ForumList"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}forum_id\0\u{3}forum_name\0\u{1}avatar\0\u{3}member_count\0\u{1}slogan\0\u{1}content\0\u{3}post_num\0\u{3}thread_num\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -168,7 +168,7 @@ nonisolated extension Tieba_GetDislikeList_ForumList: SwiftProtobuf.Message, Swi
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.forumID != 0 {
       try visitor.visitSingularInt64Field(value: self.forumID, fieldNumber: 1)
     }
@@ -196,7 +196,7 @@ nonisolated extension Tieba_GetDislikeList_ForumList: SwiftProtobuf.Message, Swi
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GetDislikeList_ForumList, rhs: Tieba_GetDislikeList_ForumList) -> Bool {
+  static public func ==(lhs: Tieba_GetDislikeList_ForumList, rhs: Tieba_GetDislikeList_ForumList) -> Bool {
     if lhs.forumID != rhs.forumID {return false}
     if lhs.forumName != rhs.forumName {return false}
     if lhs.avatar != rhs.avatar {return false}
@@ -211,10 +211,10 @@ nonisolated extension Tieba_GetDislikeList_ForumList: SwiftProtobuf.Message, Swi
 }
 
 nonisolated extension Tieba_GetDislikeList_GetDislikeListRequestData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetDislikeListRequestData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}common\0\u{3}user_id\0\u{1}pn\0\u{1}rn\0")
+  static public let protoMessageName: String = _protobuf_package + ".GetDislikeListRequestData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}common\0\u{3}user_id\0\u{1}pn\0\u{1}rn\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -229,7 +229,7 @@ nonisolated extension Tieba_GetDislikeList_GetDislikeListRequestData: SwiftProto
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -249,7 +249,7 @@ nonisolated extension Tieba_GetDislikeList_GetDislikeListRequestData: SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GetDislikeList_GetDislikeListRequestData, rhs: Tieba_GetDislikeList_GetDislikeListRequestData) -> Bool {
+  static public func ==(lhs: Tieba_GetDislikeList_GetDislikeListRequestData, rhs: Tieba_GetDislikeList_GetDislikeListRequestData) -> Bool {
     if lhs._common != rhs._common {return false}
     if lhs.userID != rhs.userID {return false}
     if lhs.pn != rhs.pn {return false}
@@ -260,10 +260,10 @@ nonisolated extension Tieba_GetDislikeList_GetDislikeListRequestData: SwiftProto
 }
 
 nonisolated extension Tieba_GetDislikeList_GetDislikeListRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetDislikeListRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}data\0")
+  static public let protoMessageName: String = _protobuf_package + ".GetDislikeListRequest"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}data\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -275,7 +275,7 @@ nonisolated extension Tieba_GetDislikeList_GetDislikeListRequest: SwiftProtobuf.
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -286,7 +286,7 @@ nonisolated extension Tieba_GetDislikeList_GetDislikeListRequest: SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GetDislikeList_GetDislikeListRequest, rhs: Tieba_GetDislikeList_GetDislikeListRequest) -> Bool {
+  static public func ==(lhs: Tieba_GetDislikeList_GetDislikeListRequest, rhs: Tieba_GetDislikeList_GetDislikeListRequest) -> Bool {
     if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -294,10 +294,10 @@ nonisolated extension Tieba_GetDislikeList_GetDislikeListRequest: SwiftProtobuf.
 }
 
 nonisolated extension Tieba_GetDislikeList_GetDislikeListResponseData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetDislikeListResponseData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}forum_list\0\u{3}has_more\0\u{3}cur_page\0")
+  static public let protoMessageName: String = _protobuf_package + ".GetDislikeListResponseData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}forum_list\0\u{3}has_more\0\u{3}cur_page\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -311,7 +311,7 @@ nonisolated extension Tieba_GetDislikeList_GetDislikeListResponseData: SwiftProt
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.forumList.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.forumList, fieldNumber: 1)
     }
@@ -324,7 +324,7 @@ nonisolated extension Tieba_GetDislikeList_GetDislikeListResponseData: SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GetDislikeList_GetDislikeListResponseData, rhs: Tieba_GetDislikeList_GetDislikeListResponseData) -> Bool {
+  static public func ==(lhs: Tieba_GetDislikeList_GetDislikeListResponseData, rhs: Tieba_GetDislikeList_GetDislikeListResponseData) -> Bool {
     if lhs.forumList != rhs.forumList {return false}
     if lhs.hasMore_p != rhs.hasMore_p {return false}
     if lhs.curPage != rhs.curPage {return false}
@@ -334,10 +334,10 @@ nonisolated extension Tieba_GetDislikeList_GetDislikeListResponseData: SwiftProt
 }
 
 nonisolated extension Tieba_GetDislikeList_GetDislikeListResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetDislikeListResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}data\0")
+  static public let protoMessageName: String = _protobuf_package + ".GetDislikeListResponse"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}data\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -350,7 +350,7 @@ nonisolated extension Tieba_GetDislikeList_GetDislikeListResponse: SwiftProtobuf
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -364,7 +364,7 @@ nonisolated extension Tieba_GetDislikeList_GetDislikeListResponse: SwiftProtobuf
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GetDislikeList_GetDislikeListResponse, rhs: Tieba_GetDislikeList_GetDislikeListResponse) -> Bool {
+  static public func ==(lhs: Tieba_GetDislikeList_GetDislikeListResponse, rhs: Tieba_GetDislikeList_GetDislikeListResponse) -> Bool {
     if lhs._error != rhs._error {return false}
     if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

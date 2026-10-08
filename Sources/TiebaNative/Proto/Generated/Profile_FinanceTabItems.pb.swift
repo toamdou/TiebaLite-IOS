@@ -20,28 +20,28 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Profile_FinanceTabItems: Sendable {
+nonisolated public struct Tieba_Profile_FinanceTabItems: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var tabName: String = String()
+  public var tabName: String = String()
 
-  var tabURL: String = String()
+  public var tabURL: String = String()
 
-  var iconURL: String = String()
+  public var iconURL: String = String()
 
-  var descText: String = String()
+  public var descText: String = String()
 
-  var tabBubble: String = String()
+  public var tabBubble: String = String()
 
-  var tabType: String = String()
+  public var tabType: String = String()
 
-  var statistic: String = String()
+  public var statistic: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -49,10 +49,10 @@ nonisolated struct Tieba_Profile_FinanceTabItems: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.profile"
 
 nonisolated extension Tieba_Profile_FinanceTabItems: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".FinanceTabItems"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}tab_name\0\u{3}tab_url\0\u{3}icon_url\0\u{3}desc_text\0\u{3}tab_bubble\0\u{3}tab_type\0\u{1}statistic\0")
+  static public let protoMessageName: String = _protobuf_package + ".FinanceTabItems"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}tab_name\0\u{3}tab_url\0\u{3}icon_url\0\u{3}desc_text\0\u{3}tab_bubble\0\u{3}tab_type\0\u{1}statistic\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -70,7 +70,7 @@ nonisolated extension Tieba_Profile_FinanceTabItems: SwiftProtobuf.Message, Swif
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.tabName.isEmpty {
       try visitor.visitSingularStringField(value: self.tabName, fieldNumber: 1)
     }
@@ -95,7 +95,7 @@ nonisolated extension Tieba_Profile_FinanceTabItems: SwiftProtobuf.Message, Swif
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Profile_FinanceTabItems, rhs: Tieba_Profile_FinanceTabItems) -> Bool {
+  static public func ==(lhs: Tieba_Profile_FinanceTabItems, rhs: Tieba_Profile_FinanceTabItems) -> Bool {
     if lhs.tabName != rhs.tabName {return false}
     if lhs.tabURL != rhs.tabURL {return false}
     if lhs.iconURL != rhs.iconURL {return false}

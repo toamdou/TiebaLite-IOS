@@ -20,6 +20,8 @@ final class TiebaPostRowView: UIView {
   private var assignedText: NSAttributedString?
 
   private let cardView = UIView()
+  /// 行底**通栏**发际线（扁平档的行间分隔；卡片档整条收起，见 TiebaListAppearance）。
+  private let rowHairline = UIView()
   private var avatarView: TiebaForumAvatarView?
   private let titleLabel = UILabel()
   private let nameLabel = UILabel()
@@ -63,12 +65,12 @@ final class TiebaPostRowView: UIView {
   private var videoView: TiebaInlineVideoView?
   private var audioView: TiebaAudioPillView?
   private let subPostsControl = UIControl()
-  private let subPostsHairline = UIView()
-  private var subPostNameLabels: [UILabel] = []
-  // 楼中楼预览同样是 TextNode：两行截断（truncationType = .end，与 UILabel 的 byTruncatingTail 同口径），
-  // 行盒与左侧名字标签共用，链接色已烘进 attributed。
+  /// 楼中楼预览框：浅底圆角矩形，垫在预览文字下面（非交互）。
+  private let subPostsBox = UIView()
+  // 楼中楼预览同样是 TextNode：两行截断（truncationType = .end，与 UILabel 的 byTruncatingTail 同口径）。
+  // 名字不再单独一个 UILabel —— 它与冒号、正文合成同一条富文本（见 TiebaPostRowText.subPostLine），
+  // 否则两个排版引擎在同一行盒里的首行基线会差出一两个点。
   private var subPostTextNodes: [TiebaImmediateTextNode] = []
-  private var subPostDividers: [UIView] = []
   private let subPostsMoreLabel = UILabel()
   private let toolbarView = UIView()
   private let toolbarReplyLabel = UILabel()
@@ -84,6 +86,12 @@ final class TiebaPostRowView: UIView {
     backgroundColor = .clear
     clipsToBounds = true
     buildSubviews()
+    // 加在最后 = 画在最上层：行底那条线要压在卡面之上（它落在卡面 16pt 内边距的
+    // 空白里，不与内容重叠，压上来只是保证任何情况下都不会被卡面盖掉）。
+    rowHairline.isHidden = true
+    // 裸 UIView 默认吃触摸：发际线叠在卡之上，不关掉会吞掉行底 1px 带上的长按。
+    rowHairline.isUserInteractionEnabled = false
+    addSubview(rowHairline)
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -118,9 +126,14 @@ final class TiebaPostRowView: UIView {
     cardView.frame = plan.cardFrame
     cardView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
     cardView.layer.cornerCurve = .continuous
-    cardView.backgroundColor = model.palette.card
-    cardView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
-    cardView.layer.borderColor = model.palette.borderCard.cgColor
+    // 卡面底色 / 描边**由外观档给**：扁平档没有独立卡面（底色 = 页面底色、不描边），
+    // 行与行靠下面的 rowHairline 分隔。这里不写 if —— 绘制期不加外观分支（49 号 §1）。
+    cardView.backgroundColor = TiebaListAppearance.rowSurface(card: model.palette.card)
+    cardView.layer.borderWidth = TiebaListAppearance.rowBorderWidth(
+      scale: traitCollection.displayScale)
+    cardView.layer.borderColor =
+      TiebaListAppearance.rowBorderColor(card: model.palette.borderCard)?.cgColor
+    layoutRowHairline(plan)
 
     avatarControl.frame = plan.avatarFrame
     titleLabel.isHidden = plan.titleFrame == nil
@@ -230,16 +243,17 @@ final class TiebaPostRowView: UIView {
     imageBadge.textColor = .white
     // 与 buildSubviews 里的规范值同源（黑 55%；改前这里是 45%，会把新规范覆盖回旧值）。
     imageBadge.backgroundColor = UIColor.black.withAlphaComponent(0.55)
-    subPostsHairline.backgroundColor = palette.separator
-    for divider in subPostDividers { divider.backgroundColor = palette.separator }
-    for label in subPostNameLabels { label.textColor = palette.textSecondary }
+    subPostsBox.backgroundColor = TiebaListAppearance.subPostBoxBackground
+    rowHairline.backgroundColor = palette.separator
     // 楼中楼正文颜色同样烘在 attributed 里（palette.text），与主贴正文一致。
     subPostsMoreLabel.textColor = palette.primary
     // 底色 = 主题 surfaceSecondary（原 JS replyToolbar 的 colors.surfaceSecondary，
     // 浅色下与页面底色同值）：只靠 hairline 描边成卡，不用 .systemFill —— 那块灰
     // 在浅色下是一整条"脏底"（用户实证）。
-    toolbarView.backgroundColor = TiebaSimpleRowPalette.default.surfaceSecondary
-    toolbarView.layer.borderColor = palette.borderCard.cgColor
+    toolbarView.backgroundColor = TiebaListAppearance.rowSurface(
+      card: TiebaSimpleRowPalette.default.surfaceSecondary)
+    toolbarView.layer.borderColor =
+      TiebaListAppearance.rowBorderColor(card: palette.borderCard)?.cgColor
     toolbarReplyLabel.textColor = palette.text
     seeLzButton.tintColor = palette.primary
     sortButton.tintColor = palette.primary
@@ -425,14 +439,15 @@ final class TiebaPostRowView: UIView {
     // GIF 角标样式（用户口径：无底纯白字 + 阴影，不要胶囊底）已收进 makeGifBadge()，见文件内。
 
     subPostsControl.addTarget(self, action: #selector(handleSubPosts), for: .touchUpInside)
-    addSubview(subPostsHairline)
+    // 楼中楼预览框：整段收进一个浅底圆角矩形（取代旧版"逐条上方一条分隔线 +
+    // 块顶一条 hairline"）。非交互：只垫在文字下面，点按仍归 subPostsControl。
+    subPostsBox.isUserInteractionEnabled = false
+    subPostsBox.isHidden = true
+    subPostsBox.layer.cornerRadius = TiebaPostRowLayout.subPostBoxRadius
+    subPostsBox.layer.cornerCurve = .continuous
+    addSubview(subPostsBox)
     addSubview(subPostsControl)
     for _ in 0..<3 {
-      let name = UILabel()
-      name.numberOfLines = 1
-      name.font = TiebaPostRowLayout.subPostNameFont
-      addSubview(name)
-      subPostNameLabels.append(name)
       let text = TiebaImmediateTextNode()
       // 楼中楼预览**两行截断**：maximumNumberOfLines + truncationType(.end) —— 与 plan 里的
       // measureBody(maxLines: 2) 同一口径（TextNode 自排自量，不再有第二套 TextKit 测量）。
@@ -441,9 +456,6 @@ final class TiebaPostRowView: UIView {
       text.isUserInteractionEnabled = false
       addSubview(text)
       subPostTextNodes.append(text)
-      let divider = UIView()
-      addSubview(divider)
-      subPostDividers.append(divider)
     }
     subPostsMoreLabel.font = TiebaPostRowLayout.moreFont
     subPostsMoreLabel.numberOfLines = 1
@@ -545,7 +557,7 @@ final class TiebaPostRowView: UIView {
         // 显示档 = 服务端 cdn_src（对 GIF 即 g=0 静态压缩档，真首帧几十 KB）；
         // 探测到 GIF 再拉 big_cdn_src 动图档起播（见 TiebaNuke「GIF 三档」注）。
         tiebaPostLoadDisplayImage(
-          TiebaPostRowText.displayURL(image, preferences: model.preferences),
+          model.preferences.displayURL(for: image),
           targetSize: view.bounds.size,
           cornerRadius: TiebaPostRowLayout.imageRadius,
           scale: scale,
@@ -719,38 +731,29 @@ final class TiebaPostRowView: UIView {
     }
   }
 
+  /// 行底通栏发际线：只有扁平档有 frame（卡片档 plan 里就是 nil ⇒ 整条收起）。
+  private func layoutRowHairline(_ plan: TiebaPostRowPlan) {
+    guard let frame = plan.rowHairlineFrame else {
+      rowHairline.isHidden = true
+      return
+    }
+    rowHairline.isHidden = false
+    rowHairline.frame = frame
+  }
+
   private func layoutSubPosts(model: TiebaPostRowModel, plan: TiebaPostRowPlan) {
     guard let frame = plan.subPostsFrame else {
       subPostsControl.frame = .zero
-      subPostsHairline.isHidden = true
-      for label in subPostNameLabels { label.isHidden = true }
+      subPostsBox.isHidden = true
       for node in subPostTextNodes { node.isHidden = true }
-      for divider in subPostDividers { divider.isHidden = true }
       subPostsMoreLabel.isHidden = true
       return
     }
-    let contentX = frame.minX + TiebaPostRowLayout.cardPadding
-    subPostsHairline.isHidden = false
-    subPostsHairline.frame = CGRect(x: contentX, y: frame.minY, width: frame.width - TiebaPostRowLayout.cardPadding * 2, height: 1 / max(traitCollection.displayScale, 1))
+    subPostsBox.isHidden = false
+    subPostsBox.frame = plan.subPostsBoxFrame ?? .zero
     subPostsControl.frame = frame
-    for (index, label) in subPostNameLabels.enumerated() {
+    for (index, text) in subPostTextNodes.enumerated() {
       let hasPost = index < model.post.subPosts.count
-      label.isHidden = !hasPost
-      if hasPost, plan.subPostNameFrames.indices.contains(index) {
-        label.frame = plan.subPostNameFrames[index]
-        // 与正文文本框共用行盒（见 subPostNameParagraph），否则首行基线对不齐。
-        label.attributedText = NSAttributedString(
-          string: "\(model.post.subPosts[index].displayName)：",
-          attributes: [
-            .font: TiebaPostRowLayout.subPostNameFont,
-            .foregroundColor: model.palette.textSecondary,
-            .paragraphStyle: TiebaPostRowLayout.subPostNameParagraph(
-              Double(model.preferences.fontScaleClamped)
-            ),
-          ]
-        )
-      }
-      let text = subPostTextNodes[index]
       text.isHidden = !hasPost
       if hasPost, plan.subPostTextFrames.indices.contains(index) {
         let frame = plan.subPostTextFrames[index]
@@ -759,14 +762,6 @@ final class TiebaPostRowView: UIView {
         text.attributedText = model.subPostTexts.indices.contains(index) ? model.subPostTexts[index] : nil
         // 两行截断：行数只看 maximumNumberOfLines = 2（与 measureBody 同口径）。
         _ = text.updateLayout(CGSize(width: frame.width, height: .greatestFiniteMagnitude))
-      }
-      // 分隔线显隐与页头/页脚同趟写完（原来先整轮 hide、再第二轮放开）。
-      let divider = subPostDividers[index]
-      if index < model.post.subPosts.count, plan.subPostDividerFrames.indices.contains(index) {
-        divider.isHidden = false
-        divider.frame = plan.subPostDividerFrames[index]
-      } else {
-        divider.isHidden = true
       }
     }
     subPostsMoreLabel.isHidden = plan.subPostsMoreFrame == nil
@@ -796,7 +791,9 @@ final class TiebaPostRowView: UIView {
     toolbarView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
     toolbarView.layer.cornerCurve = .continuous
     // glassCard 的 hairline 描边：浅色下工具栏底色贴近页面底色，没有描边整条看不出来。
-    toolbarView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
+    // （扁平档没有卡面 ⇒ 描边宽 0，见 TiebaListAppearance.rowBorderWidth。）
+    toolbarView.layer.borderWidth = TiebaListAppearance.rowBorderWidth(
+      scale: traitCollection.displayScale)
     toolbarView.layer.borderColor = model.palette.borderCard.cgColor
     if let textFrame = plan.toolbarTextFrame {
       toolbarReplyLabel.frame = textFrame
@@ -1159,7 +1156,6 @@ extension TiebaPostRowView: @MainActor UIEditMenuInteractionDelegate {
     selectionMenu ?? UIMenu(children: suggestedActions)
   }
 }
-// MARK: - TextNode 连线（本轮已接）
 //
 // 正文与楼中楼现在都由 TextNode 渲染（textNode / subPostTextNodes），系统 UITextView / UILabel 退场。
 // 四层的接法见 buildSubviews：文本 → 链接按压高亮（TiebaLinkHighlightingNode）→ 无障碍元素层

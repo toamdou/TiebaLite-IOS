@@ -20,30 +20,30 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_BawuThrones: Sendable {
+nonisolated public struct Tieba_BawuThrones: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var totalRecommendNum: Int32 = 0
+  public var totalRecommendNum: Int32 = 0
 
-  var usedRecommendNum: Int32 = 0
+  public var usedRecommendNum: Int32 = 0
 
-  var bazhuLevel: String = String()
+  public var bazhuLevel: String = String()
 
-  var usedBcastCnt: Int32 = 0
+  public var usedBcastCnt: Int32 = 0
 
-  var totalBcastCnt: Int32 = 0
+  public var totalBcastCnt: Int32 = 0
 
-  var newestBcastPv: Int32 = 0
+  public var newestBcastPv: Int32 = 0
 
-  var hasSendBcast_p: Int32 = 0
+  public var hasSendBcast_p: Int32 = 0
 
-  var newestBcastPushuserCnt: Int32 = 0
+  public var newestBcastPushuserCnt: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -51,10 +51,10 @@ nonisolated struct Tieba_BawuThrones: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_BawuThrones: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".BawuThrones"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}total_recommend_num\0\u{3}used_recommend_num\0\u{3}bazhu_level\0\u{3}used_bcast_cnt\0\u{3}total_bcast_cnt\0\u{3}newest_bcast_pv\0\u{3}has_send_bcast\0\u{3}newest_bcast_pushuser_cnt\0")
+  static public let protoMessageName: String = _protobuf_package + ".BawuThrones"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}total_recommend_num\0\u{3}used_recommend_num\0\u{3}bazhu_level\0\u{3}used_bcast_cnt\0\u{3}total_bcast_cnt\0\u{3}newest_bcast_pv\0\u{3}has_send_bcast\0\u{3}newest_bcast_pushuser_cnt\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -73,7 +73,7 @@ nonisolated extension Tieba_BawuThrones: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.totalRecommendNum != 0 {
       try visitor.visitSingularInt32Field(value: self.totalRecommendNum, fieldNumber: 1)
     }
@@ -101,7 +101,7 @@ nonisolated extension Tieba_BawuThrones: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_BawuThrones, rhs: Tieba_BawuThrones) -> Bool {
+  static public func ==(lhs: Tieba_BawuThrones, rhs: Tieba_BawuThrones) -> Bool {
     if lhs.totalRecommendNum != rhs.totalRecommendNum {return false}
     if lhs.usedRecommendNum != rhs.usedRecommendNum {return false}
     if lhs.bazhuLevel != rhs.bazhuLevel {return false}

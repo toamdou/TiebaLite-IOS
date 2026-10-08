@@ -51,7 +51,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    view.backgroundColor = TiebaChromeTheme.current.background
     applyPalette()
     list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     list.isHidden = true
@@ -136,7 +136,6 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
         detail = result
         isFollowing = result.isConcerned
         isOwn = result.uid == TiebaBackgroundSnapshot.shared.uid
-        // 回复 tab 只在本人主页存在：别人的主页被指到 replies 时回落贴子（旧页同判据）。
         if !isOwn, activeTab == "replies" { activeTab = "threads" }
         // 行还没测量落地时不让位：列表行由 loadList 另路发布，数据到手 ≠ 行能画，
         // 这里提前让位就是页头先画出来、正文空白。
@@ -428,7 +427,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
       action: nil
     )
     item.accessibilityLabel = "分享主页"
-    item.tintColor = TiebaNavigator.shared.chromeTheme.navTint
+    item.tintColor = TiebaChromeTheme.current.navTint
     item.primaryAction = UIAction { [weak self] _ in self?.shareProfile() }
     return [item]
   }
@@ -741,7 +740,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
 
   private func applyPalette() {
     list.palette = TiebaChromePalette.listPalette()
-    skeletonView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    skeletonView.isDark = TiebaChromeTheme.current.dark
   }
 }
 

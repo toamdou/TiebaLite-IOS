@@ -20,16 +20,16 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_UserPostPerm: Sendable {
+nonisolated public struct Tieba_UserPostPerm: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var notShowHideThread: UInt32 = 0
+  public var notShowHideThread: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -37,10 +37,10 @@ nonisolated struct Tieba_UserPostPerm: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_UserPostPerm: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UserPostPerm"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}not_show_hide_thread\0")
+  static public let protoMessageName: String = _protobuf_package + ".UserPostPerm"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}not_show_hide_thread\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -52,14 +52,14 @@ nonisolated extension Tieba_UserPostPerm: SwiftProtobuf.Message, SwiftProtobuf._
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.notShowHideThread != 0 {
       try visitor.visitSingularUInt32Field(value: self.notShowHideThread, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_UserPostPerm, rhs: Tieba_UserPostPerm) -> Bool {
+  static public func ==(lhs: Tieba_UserPostPerm, rhs: Tieba_UserPostPerm) -> Bool {
     if lhs.notShowHideThread != rhs.notShowHideThread {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

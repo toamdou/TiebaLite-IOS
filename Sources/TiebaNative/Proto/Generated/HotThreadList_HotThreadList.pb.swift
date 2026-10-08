@@ -20,94 +20,94 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_HotThreadList_HotThreadListRequestData: Sendable {
+nonisolated public struct Tieba_HotThreadList_HotThreadListRequestData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var common: Tieba_CommonRequest {
+  public var common: Tieba_CommonRequest {
     get {_common ?? Tieba_CommonRequest()}
     set {_common = newValue}
   }
   /// Returns true if `common` has been explicitly set.
-  var hasCommon: Bool {self._common != nil}
+  public var hasCommon: Bool {self._common != nil}
   /// Clears the value of `common`. Subsequent reads from it will return its default value.
-  mutating func clearCommon() {self._common = nil}
+  mutating public func clearCommon() {self._common = nil}
 
-  var tabID: String = String()
+  public var tabID: String = String()
 
-  var tabCode: String = String()
+  public var tabCode: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _common: Tieba_CommonRequest? = nil
 }
 
-nonisolated struct Tieba_HotThreadList_HotThreadListRequest: Sendable {
+nonisolated public struct Tieba_HotThreadList_HotThreadListRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var data: Tieba_HotThreadList_HotThreadListRequestData {
+  public var data: Tieba_HotThreadList_HotThreadListRequestData {
     get {_data ?? Tieba_HotThreadList_HotThreadListRequestData()}
     set {_data = newValue}
   }
   /// Returns true if `data` has been explicitly set.
-  var hasData: Bool {self._data != nil}
+  public var hasData: Bool {self._data != nil}
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
-  mutating func clearData() {self._data = nil}
+  mutating public func clearData() {self._data = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _data: Tieba_HotThreadList_HotThreadListRequestData? = nil
 }
 
-nonisolated struct Tieba_HotThreadList_HotThreadListResponseData: Sendable {
+nonisolated public struct Tieba_HotThreadList_HotThreadListResponseData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var topicList: [Tieba_RecommendTopicList] = []
+  public var topicList: [Tieba_RecommendTopicList] = []
 
-  var threadInfo: [Tieba_ThreadInfo] = []
+  public var threadInfo: [Tieba_ThreadInfo] = []
 
-  var hotThreadTabInfo: [Tieba_FrsTabInfo] = []
+  public var hotThreadTabInfo: [Tieba_FrsTabInfo] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-nonisolated struct Tieba_HotThreadList_HotThreadListResponse: Sendable {
+nonisolated public struct Tieba_HotThreadList_HotThreadListResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var error: Tieba_Error {
+  public var error: Tieba_Error {
     get {_error ?? Tieba_Error()}
     set {_error = newValue}
   }
   /// Returns true if `error` has been explicitly set.
-  var hasError: Bool {self._error != nil}
+  public var hasError: Bool {self._error != nil}
   /// Clears the value of `error`. Subsequent reads from it will return its default value.
-  mutating func clearError() {self._error = nil}
+  mutating public func clearError() {self._error = nil}
 
-  var data: Tieba_HotThreadList_HotThreadListResponseData {
+  public var data: Tieba_HotThreadList_HotThreadListResponseData {
     get {_data ?? Tieba_HotThreadList_HotThreadListResponseData()}
     set {_data = newValue}
   }
   /// Returns true if `data` has been explicitly set.
-  var hasData: Bool {self._data != nil}
+  public var hasData: Bool {self._data != nil}
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
-  mutating func clearData() {self._data = nil}
+  mutating public func clearData() {self._data = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _error: Tieba_Error? = nil
   fileprivate var _data: Tieba_HotThreadList_HotThreadListResponseData? = nil
@@ -118,10 +118,10 @@ nonisolated struct Tieba_HotThreadList_HotThreadListResponse: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.hotThreadList"
 
 nonisolated extension Tieba_HotThreadList_HotThreadListRequestData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".HotThreadListRequestData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}common\0\u{1}tabId\0\u{1}tabCode\0")
+  static public let protoMessageName: String = _protobuf_package + ".HotThreadListRequestData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}common\0\u{1}tabId\0\u{1}tabCode\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -135,7 +135,7 @@ nonisolated extension Tieba_HotThreadList_HotThreadListRequestData: SwiftProtobu
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -152,7 +152,7 @@ nonisolated extension Tieba_HotThreadList_HotThreadListRequestData: SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_HotThreadList_HotThreadListRequestData, rhs: Tieba_HotThreadList_HotThreadListRequestData) -> Bool {
+  static public func ==(lhs: Tieba_HotThreadList_HotThreadListRequestData, rhs: Tieba_HotThreadList_HotThreadListRequestData) -> Bool {
     if lhs._common != rhs._common {return false}
     if lhs.tabID != rhs.tabID {return false}
     if lhs.tabCode != rhs.tabCode {return false}
@@ -162,10 +162,10 @@ nonisolated extension Tieba_HotThreadList_HotThreadListRequestData: SwiftProtobu
 }
 
 nonisolated extension Tieba_HotThreadList_HotThreadListRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".HotThreadListRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}data\0")
+  static public let protoMessageName: String = _protobuf_package + ".HotThreadListRequest"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}data\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -177,7 +177,7 @@ nonisolated extension Tieba_HotThreadList_HotThreadListRequest: SwiftProtobuf.Me
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -188,7 +188,7 @@ nonisolated extension Tieba_HotThreadList_HotThreadListRequest: SwiftProtobuf.Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_HotThreadList_HotThreadListRequest, rhs: Tieba_HotThreadList_HotThreadListRequest) -> Bool {
+  static public func ==(lhs: Tieba_HotThreadList_HotThreadListRequest, rhs: Tieba_HotThreadList_HotThreadListRequest) -> Bool {
     if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -196,10 +196,10 @@ nonisolated extension Tieba_HotThreadList_HotThreadListRequest: SwiftProtobuf.Me
 }
 
 nonisolated extension Tieba_HotThreadList_HotThreadListResponseData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".HotThreadListResponseData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}topicList\0\u{1}threadInfo\0\u{1}hotThreadTabInfo\0")
+  static public let protoMessageName: String = _protobuf_package + ".HotThreadListResponseData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}topicList\0\u{1}threadInfo\0\u{1}hotThreadTabInfo\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -213,7 +213,7 @@ nonisolated extension Tieba_HotThreadList_HotThreadListResponseData: SwiftProtob
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.topicList.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.topicList, fieldNumber: 1)
     }
@@ -226,7 +226,7 @@ nonisolated extension Tieba_HotThreadList_HotThreadListResponseData: SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_HotThreadList_HotThreadListResponseData, rhs: Tieba_HotThreadList_HotThreadListResponseData) -> Bool {
+  static public func ==(lhs: Tieba_HotThreadList_HotThreadListResponseData, rhs: Tieba_HotThreadList_HotThreadListResponseData) -> Bool {
     if lhs.topicList != rhs.topicList {return false}
     if lhs.threadInfo != rhs.threadInfo {return false}
     if lhs.hotThreadTabInfo != rhs.hotThreadTabInfo {return false}
@@ -236,10 +236,10 @@ nonisolated extension Tieba_HotThreadList_HotThreadListResponseData: SwiftProtob
 }
 
 nonisolated extension Tieba_HotThreadList_HotThreadListResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".HotThreadListResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}data\0")
+  static public let protoMessageName: String = _protobuf_package + ".HotThreadListResponse"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}error\0\u{1}data\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -252,7 +252,7 @@ nonisolated extension Tieba_HotThreadList_HotThreadListResponse: SwiftProtobuf.M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -266,7 +266,7 @@ nonisolated extension Tieba_HotThreadList_HotThreadListResponse: SwiftProtobuf.M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_HotThreadList_HotThreadListResponse, rhs: Tieba_HotThreadList_HotThreadListResponse) -> Bool {
+  static public func ==(lhs: Tieba_HotThreadList_HotThreadListResponse, rhs: Tieba_HotThreadList_HotThreadListResponse) -> Bool {
     if lhs._error != rhs._error {return false}
     if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

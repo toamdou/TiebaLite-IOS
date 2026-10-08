@@ -20,387 +20,387 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_Post: @unchecked Sendable {
+nonisolated public struct Tieba_Post: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var id: UInt64 {
+  public var id: UInt64 {
     get {_storage._id}
     set {_uniqueStorage()._id = newValue}
   }
 
-  var title: String {
+  public var title: String {
     get {_storage._title}
     set {_uniqueStorage()._title = newValue}
   }
 
-  var floor: UInt32 {
+  public var floor: UInt32 {
     get {_storage._floor}
     set {_uniqueStorage()._floor = newValue}
   }
 
-  var time: UInt32 {
+  public var time: UInt32 {
     get {_storage._time}
     set {_uniqueStorage()._time = newValue}
   }
 
-  var content: [Tieba_PbContent] {
+  public var content: [Tieba_PbContent] {
     get {_storage._content}
     set {_uniqueStorage()._content = newValue}
   }
 
-  var arrVideo: [String] {
+  public var arrVideo: [String] {
     get {_storage._arrVideo}
     set {_uniqueStorage()._arrVideo = newValue}
   }
 
-  var lbsInfo: Tieba_Lbs {
+  public var lbsInfo: Tieba_Lbs {
     get {_storage._lbsInfo ?? Tieba_Lbs()}
     set {_uniqueStorage()._lbsInfo = newValue}
   }
   /// Returns true if `lbsInfo` has been explicitly set.
-  var hasLbsInfo: Bool {_storage._lbsInfo != nil}
+  public var hasLbsInfo: Bool {_storage._lbsInfo != nil}
   /// Clears the value of `lbsInfo`. Subsequent reads from it will return its default value.
-  mutating func clearLbsInfo() {_uniqueStorage()._lbsInfo = nil}
+  mutating public func clearLbsInfo() {_uniqueStorage()._lbsInfo = nil}
 
-  var isVote: UInt32 {
+  public var isVote: UInt32 {
     get {_storage._isVote}
     set {_uniqueStorage()._isVote = newValue}
   }
 
-  var isVoice: UInt32 {
+  public var isVoice: UInt32 {
     get {_storage._isVoice}
     set {_uniqueStorage()._isVoice = newValue}
   }
 
-  var isNtitle: UInt32 {
+  public var isNtitle: UInt32 {
     get {_storage._isNtitle}
     set {_uniqueStorage()._isNtitle = newValue}
   }
 
-  var isBub: UInt32 {
+  public var isBub: UInt32 {
     get {_storage._isBub}
     set {_uniqueStorage()._isBub = newValue}
   }
 
-  var voteCrypt: String {
+  public var voteCrypt: String {
     get {_storage._voteCrypt}
     set {_uniqueStorage()._voteCrypt = newValue}
   }
 
-  var subPostNumber: UInt32 {
+  public var subPostNumber: UInt32 {
     get {_storage._subPostNumber}
     set {_uniqueStorage()._subPostNumber = newValue}
   }
 
-  var timeEx: String {
+  public var timeEx: String {
     get {_storage._timeEx}
     set {_uniqueStorage()._timeEx = newValue}
   }
 
-  var subPostList: Tieba_SubPost {
+  public var subPostList: Tieba_SubPost {
     get {_storage._subPostList ?? Tieba_SubPost()}
     set {_uniqueStorage()._subPostList = newValue}
   }
   /// Returns true if `subPostList` has been explicitly set.
-  var hasSubPostList: Bool {_storage._subPostList != nil}
+  public var hasSubPostList: Bool {_storage._subPostList != nil}
   /// Clears the value of `subPostList`. Subsequent reads from it will return its default value.
-  mutating func clearSubPostList() {_uniqueStorage()._subPostList = nil}
+  mutating public func clearSubPostList() {_uniqueStorage()._subPostList = nil}
 
-  var addPostList: Tieba_AddPostList {
+  public var addPostList: Tieba_AddPostList {
     get {_storage._addPostList ?? Tieba_AddPostList()}
     set {_uniqueStorage()._addPostList = newValue}
   }
   /// Returns true if `addPostList` has been explicitly set.
-  var hasAddPostList: Bool {_storage._addPostList != nil}
+  public var hasAddPostList: Bool {_storage._addPostList != nil}
   /// Clears the value of `addPostList`. Subsequent reads from it will return its default value.
-  mutating func clearAddPostList() {_uniqueStorage()._addPostList = nil}
+  mutating public func clearAddPostList() {_uniqueStorage()._addPostList = nil}
 
-  var bimgURL: String {
+  public var bimgURL: String {
     get {_storage._bimgURL}
     set {_uniqueStorage()._bimgURL = newValue}
   }
 
-  var iosBimgFormat: String {
+  public var iosBimgFormat: String {
     get {_storage._iosBimgFormat}
     set {_uniqueStorage()._iosBimgFormat = newValue}
   }
 
-  var authorID: Int64 {
+  public var authorID: Int64 {
     get {_storage._authorID}
     set {_uniqueStorage()._authorID = newValue}
   }
 
-  var addPostNumber: UInt32 {
+  public var addPostNumber: UInt32 {
     get {_storage._addPostNumber}
     set {_uniqueStorage()._addPostNumber = newValue}
   }
 
-  var signature: Tieba_SignatureData {
+  public var signature: Tieba_SignatureData {
     get {_storage._signature ?? Tieba_SignatureData()}
     set {_uniqueStorage()._signature = newValue}
   }
   /// Returns true if `signature` has been explicitly set.
-  var hasSignature: Bool {_storage._signature != nil}
+  public var hasSignature: Bool {_storage._signature != nil}
   /// Clears the value of `signature`. Subsequent reads from it will return its default value.
-  mutating func clearSignature() {_uniqueStorage()._signature = nil}
+  mutating public func clearSignature() {_uniqueStorage()._signature = nil}
 
-  var tailInfo: Tieba_TailInfo {
+  public var tailInfo: Tieba_TailInfo {
     get {_storage._tailInfo ?? Tieba_TailInfo()}
     set {_uniqueStorage()._tailInfo = newValue}
   }
   /// Returns true if `tailInfo` has been explicitly set.
-  var hasTailInfo: Bool {_storage._tailInfo != nil}
+  public var hasTailInfo: Bool {_storage._tailInfo != nil}
   /// Clears the value of `tailInfo`. Subsequent reads from it will return its default value.
-  mutating func clearTailInfo() {_uniqueStorage()._tailInfo = nil}
+  mutating public func clearTailInfo() {_uniqueStorage()._tailInfo = nil}
 
-  var author: Tieba_User {
+  public var author: Tieba_User {
     get {_storage._author ?? Tieba_User()}
     set {_uniqueStorage()._author = newValue}
   }
   /// Returns true if `author` has been explicitly set.
-  var hasAuthor: Bool {_storage._author != nil}
+  public var hasAuthor: Bool {_storage._author != nil}
   /// Clears the value of `author`. Subsequent reads from it will return its default value.
-  mutating func clearAuthor() {_uniqueStorage()._author = nil}
+  mutating public func clearAuthor() {_uniqueStorage()._author = nil}
 
-  var zan: Tieba_Zan {
+  public var zan: Tieba_Zan {
     get {_storage._zan ?? Tieba_Zan()}
     set {_uniqueStorage()._zan = newValue}
   }
   /// Returns true if `zan` has been explicitly set.
-  var hasZan: Bool {_storage._zan != nil}
+  public var hasZan: Bool {_storage._zan != nil}
   /// Clears the value of `zan`. Subsequent reads from it will return its default value.
-  mutating func clearZan() {_uniqueStorage()._zan = nil}
+  mutating public func clearZan() {_uniqueStorage()._zan = nil}
 
-  var storecount: Int32 {
+  public var storecount: Int32 {
     get {_storage._storecount}
     set {_uniqueStorage()._storecount = newValue}
   }
 
-  var tpointPost: Tieba_TPointPost {
+  public var tpointPost: Tieba_TPointPost {
     get {_storage._tpointPost ?? Tieba_TPointPost()}
     set {_uniqueStorage()._tpointPost = newValue}
   }
   /// Returns true if `tpointPost` has been explicitly set.
-  var hasTpointPost: Bool {_storage._tpointPost != nil}
+  public var hasTpointPost: Bool {_storage._tpointPost != nil}
   /// Clears the value of `tpointPost`. Subsequent reads from it will return its default value.
-  mutating func clearTpointPost() {_uniqueStorage()._tpointPost = nil}
+  mutating public func clearTpointPost() {_uniqueStorage()._tpointPost = nil}
 
-  var actPost: Tieba_ActPost {
+  public var actPost: Tieba_ActPost {
     get {_storage._actPost ?? Tieba_ActPost()}
     set {_uniqueStorage()._actPost = newValue}
   }
   /// Returns true if `actPost` has been explicitly set.
-  var hasActPost: Bool {_storage._actPost != nil}
+  public var hasActPost: Bool {_storage._actPost != nil}
   /// Clears the value of `actPost`. Subsequent reads from it will return its default value.
-  mutating func clearActPost() {_uniqueStorage()._actPost = nil}
+  mutating public func clearActPost() {_uniqueStorage()._actPost = nil}
 
-  var present: Tieba_PbPresent {
+  public var present: Tieba_PbPresent {
     get {_storage._present ?? Tieba_PbPresent()}
     set {_uniqueStorage()._present = newValue}
   }
   /// Returns true if `present` has been explicitly set.
-  var hasPresent: Bool {_storage._present != nil}
+  public var hasPresent: Bool {_storage._present != nil}
   /// Clears the value of `present`. Subsequent reads from it will return its default value.
-  mutating func clearPresent() {_uniqueStorage()._present = nil}
+  mutating public func clearPresent() {_uniqueStorage()._present = nil}
 
-  var videoInfo: Tieba_VideoInfo {
+  public var videoInfo: Tieba_VideoInfo {
     get {_storage._videoInfo ?? Tieba_VideoInfo()}
     set {_uniqueStorage()._videoInfo = newValue}
   }
   /// Returns true if `videoInfo` has been explicitly set.
-  var hasVideoInfo: Bool {_storage._videoInfo != nil}
+  public var hasVideoInfo: Bool {_storage._videoInfo != nil}
   /// Clears the value of `videoInfo`. Subsequent reads from it will return its default value.
-  mutating func clearVideoInfo() {_uniqueStorage()._videoInfo = nil}
+  mutating public func clearVideoInfo() {_uniqueStorage()._videoInfo = nil}
 
-  var postZan: Tieba_PbPostZan {
+  public var postZan: Tieba_PbPostZan {
     get {_storage._postZan ?? Tieba_PbPostZan()}
     set {_uniqueStorage()._postZan = newValue}
   }
   /// Returns true if `postZan` has been explicitly set.
-  var hasPostZan: Bool {_storage._postZan != nil}
+  public var hasPostZan: Bool {_storage._postZan != nil}
   /// Clears the value of `postZan`. Subsequent reads from it will return its default value.
-  mutating func clearPostZan() {_uniqueStorage()._postZan = nil}
+  mutating public func clearPostZan() {_uniqueStorage()._postZan = nil}
 
-  var isHotPost: Int32 {
+  public var isHotPost: Int32 {
     get {_storage._isHotPost}
     set {_uniqueStorage()._isHotPost = newValue}
   }
 
-  var extTails: [Tieba_TailInfo] {
+  public var extTails: [Tieba_TailInfo] {
     get {_storage._extTails}
     set {_uniqueStorage()._extTails = newValue}
   }
 
-  var highTogether: Tieba_TogetherHi {
+  public var highTogether: Tieba_TogetherHi {
     get {_storage._highTogether ?? Tieba_TogetherHi()}
     set {_uniqueStorage()._highTogether = newValue}
   }
   /// Returns true if `highTogether` has been explicitly set.
-  var hasHighTogether: Bool {_storage._highTogether != nil}
+  public var hasHighTogether: Bool {_storage._highTogether != nil}
   /// Clears the value of `highTogether`. Subsequent reads from it will return its default value.
-  mutating func clearHighTogether() {_uniqueStorage()._highTogether = nil}
+  mutating public func clearHighTogether() {_uniqueStorage()._highTogether = nil}
 
-  var skinInfo: Tieba_SkinInfo {
+  public var skinInfo: Tieba_SkinInfo {
     get {_storage._skinInfo ?? Tieba_SkinInfo()}
     set {_uniqueStorage()._skinInfo = newValue}
   }
   /// Returns true if `skinInfo` has been explicitly set.
-  var hasSkinInfo: Bool {_storage._skinInfo != nil}
+  public var hasSkinInfo: Bool {_storage._skinInfo != nil}
   /// Clears the value of `skinInfo`. Subsequent reads from it will return its default value.
-  mutating func clearSkinInfo() {_uniqueStorage()._skinInfo = nil}
+  mutating public func clearSkinInfo() {_uniqueStorage()._skinInfo = nil}
 
-  var pbDealInfo: Tieba_DealInfo {
+  public var pbDealInfo: Tieba_DealInfo {
     get {_storage._pbDealInfo ?? Tieba_DealInfo()}
     set {_uniqueStorage()._pbDealInfo = newValue}
   }
   /// Returns true if `pbDealInfo` has been explicitly set.
-  var hasPbDealInfo: Bool {_storage._pbDealInfo != nil}
+  public var hasPbDealInfo: Bool {_storage._pbDealInfo != nil}
   /// Clears the value of `pbDealInfo`. Subsequent reads from it will return its default value.
-  mutating func clearPbDealInfo() {_uniqueStorage()._pbDealInfo = nil}
+  mutating public func clearPbDealInfo() {_uniqueStorage()._pbDealInfo = nil}
 
-  var legoCard: String {
+  public var legoCard: String {
     get {_storage._legoCard}
     set {_uniqueStorage()._legoCard = newValue}
   }
 
-  var agree: Tieba_Agree {
+  public var agree: Tieba_Agree {
     get {_storage._agree ?? Tieba_Agree()}
     set {_uniqueStorage()._agree = newValue}
   }
   /// Returns true if `agree` has been explicitly set.
-  var hasAgree: Bool {_storage._agree != nil}
+  public var hasAgree: Bool {_storage._agree != nil}
   /// Clears the value of `agree`. Subsequent reads from it will return its default value.
-  mutating func clearAgree() {_uniqueStorage()._agree = nil}
+  mutating public func clearAgree() {_uniqueStorage()._agree = nil}
 
-  var fromForum: Tieba_SimpleForum {
+  public var fromForum: Tieba_SimpleForum {
     get {_storage._fromForum ?? Tieba_SimpleForum()}
     set {_uniqueStorage()._fromForum = newValue}
   }
   /// Returns true if `fromForum` has been explicitly set.
-  var hasFromForum: Bool {_storage._fromForum != nil}
+  public var hasFromForum: Bool {_storage._fromForum != nil}
   /// Clears the value of `fromForum`. Subsequent reads from it will return its default value.
-  mutating func clearFromForum() {_uniqueStorage()._fromForum = nil}
+  mutating public func clearFromForum() {_uniqueStorage()._fromForum = nil}
 
-  var isPostVisible: Int32 {
+  public var isPostVisible: Int32 {
     get {_storage._isPostVisible}
     set {_uniqueStorage()._isPostVisible = newValue}
   }
 
-  var needLog: Int32 {
+  public var needLog: Int32 {
     get {_storage._needLog}
     set {_uniqueStorage()._needLog = newValue}
   }
 
-  var imgNumAbtest: Int32 {
+  public var imgNumAbtest: Int32 {
     get {_storage._imgNumAbtest}
     set {_uniqueStorage()._imgNumAbtest = newValue}
   }
 
-  var originThreadInfo: Tieba_OriginThreadInfo {
+  public var originThreadInfo: Tieba_OriginThreadInfo {
     get {_storage._originThreadInfo ?? Tieba_OriginThreadInfo()}
     set {_uniqueStorage()._originThreadInfo = newValue}
   }
   /// Returns true if `originThreadInfo` has been explicitly set.
-  var hasOriginThreadInfo: Bool {_storage._originThreadInfo != nil}
+  public var hasOriginThreadInfo: Bool {_storage._originThreadInfo != nil}
   /// Clears the value of `originThreadInfo`. Subsequent reads from it will return its default value.
-  mutating func clearOriginThreadInfo() {_uniqueStorage()._originThreadInfo = nil}
+  mutating public func clearOriginThreadInfo() {_uniqueStorage()._originThreadInfo = nil}
 
-  var isFold: Int32 {
+  public var isFold: Int32 {
     get {_storage._isFold}
     set {_uniqueStorage()._isFold = newValue}
   }
 
-  var foldTip: String {
+  public var foldTip: String {
     get {_storage._foldTip}
     set {_uniqueStorage()._foldTip = newValue}
   }
 
-  var isTopAgreePost: Int32 {
+  public var isTopAgreePost: Int32 {
     get {_storage._isTopAgreePost}
     set {_uniqueStorage()._isTopAgreePost = newValue}
   }
 
-  var tid: Int64 {
+  public var tid: Int64 {
     get {_storage._tid}
     set {_uniqueStorage()._tid = newValue}
   }
 
-  var showSquared: Int32 {
+  public var showSquared: Int32 {
     get {_storage._showSquared}
     set {_uniqueStorage()._showSquared = newValue}
   }
 
-  var isBjh: Int32 {
+  public var isBjh: Int32 {
     get {_storage._isBjh}
     set {_uniqueStorage()._isBjh = newValue}
   }
 
-  var quoteID: String {
+  public var quoteID: String {
     get {_storage._quoteID}
     set {_uniqueStorage()._quoteID = newValue}
   }
 
-  var isWonderfulPost: Int32 {
+  public var isWonderfulPost: Int32 {
     get {_storage._isWonderfulPost}
     set {_uniqueStorage()._isWonderfulPost = newValue}
   }
 
-  var itemStar: [Tieba_HeadItem] {
+  public var itemStar: [Tieba_HeadItem] {
     get {_storage._itemStar}
     set {_uniqueStorage()._itemStar = newValue}
   }
 
-  var item: Tieba_Item {
+  public var item: Tieba_Item {
     get {_storage._item ?? Tieba_Item()}
     set {_uniqueStorage()._item = newValue}
   }
   /// Returns true if `item` has been explicitly set.
-  var hasItem: Bool {_storage._item != nil}
+  public var hasItem: Bool {_storage._item != nil}
   /// Clears the value of `item`. Subsequent reads from it will return its default value.
-  mutating func clearItem() {_uniqueStorage()._item = nil}
+  mutating public func clearItem() {_uniqueStorage()._item = nil}
 
-  var outerItem: Tieba_Item {
+  public var outerItem: Tieba_Item {
     get {_storage._outerItem ?? Tieba_Item()}
     set {_uniqueStorage()._outerItem = newValue}
   }
   /// Returns true if `outerItem` has been explicitly set.
-  var hasOuterItem: Bool {_storage._outerItem != nil}
+  public var hasOuterItem: Bool {_storage._outerItem != nil}
   /// Clears the value of `outerItem`. Subsequent reads from it will return its default value.
-  mutating func clearOuterItem() {_uniqueStorage()._outerItem = nil}
+  mutating public func clearOuterItem() {_uniqueStorage()._outerItem = nil}
 
-  var advertisement: Tieba_Advertisement {
+  public var advertisement: Tieba_Advertisement {
     get {_storage._advertisement ?? Tieba_Advertisement()}
     set {_uniqueStorage()._advertisement = newValue}
   }
   /// Returns true if `advertisement` has been explicitly set.
-  var hasAdvertisement: Bool {_storage._advertisement != nil}
+  public var hasAdvertisement: Bool {_storage._advertisement != nil}
   /// Clears the value of `advertisement`. Subsequent reads from it will return its default value.
-  mutating func clearAdvertisement() {_uniqueStorage()._advertisement = nil}
+  mutating public func clearAdvertisement() {_uniqueStorage()._advertisement = nil}
 
-  var foldCommentStatus: Int32 {
+  public var foldCommentStatus: Int32 {
     get {_storage._foldCommentStatus}
     set {_uniqueStorage()._foldCommentStatus = newValue}
   }
 
-  var foldCommentApplyURL: String {
+  public var foldCommentApplyURL: String {
     get {_storage._foldCommentApplyURL}
     set {_uniqueStorage()._foldCommentApplyURL = newValue}
   }
 
-  var novelInfo: Tieba_NovelInfo {
+  public var novelInfo: Tieba_NovelInfo {
     get {_storage._novelInfo ?? Tieba_NovelInfo()}
     set {_uniqueStorage()._novelInfo = newValue}
   }
   /// Returns true if `novelInfo` has been explicitly set.
-  var hasNovelInfo: Bool {_storage._novelInfo != nil}
+  public var hasNovelInfo: Bool {_storage._novelInfo != nil}
   /// Clears the value of `novelInfo`. Subsequent reads from it will return its default value.
-  mutating func clearNovelInfo() {_uniqueStorage()._novelInfo = nil}
+  mutating public func clearNovelInfo() {_uniqueStorage()._novelInfo = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -410,8 +410,8 @@ nonisolated struct Tieba_Post: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_Post: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".Post"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}title\0\u{1}floor\0\u{1}time\0\u{1}content\0\u{3}arr_video\0\u{3}lbs_info\0\u{3}is_vote\0\u{3}is_voice\0\u{3}is_ntitle\0\u{3}is_bub\0\u{3}vote_crypt\0\u{3}sub_post_number\0\u{3}time_ex\0\u{3}sub_post_list\0\u{3}add_post_list\0\u{3}bimg_url\0\u{3}ios_bimg_format\0\u{3}author_id\0\u{3}add_post_number\0\u{1}signature\0\u{3}tail_info\0\u{1}author\0\u{1}zan\0\u{1}storecount\0\u{3}tpoint_post\0\u{3}act_post\0\u{1}present\0\u{3}video_info\0\u{3}post_zan\0\u{3}is_hot_post\0\u{3}ext_tails\0\u{3}high_together\0\u{3}skin_info\0\u{3}pb_deal_info\0\u{3}lego_card\0\u{1}agree\0\u{3}from_forum\0\u{3}is_post_visible\0\u{3}need_log\0\u{3}img_num_abtest\0\u{3}origin_thread_info\0\u{3}is_fold\0\u{3}fold_tip\0\u{3}is_top_agree_post\0\u{1}tid\0\u{3}show_squared\0\u{3}is_bjh\0\u{4}\u{2}quote_id\0\u{3}is_wonderful_post\0\u{3}item_star\0\u{1}item\0\u{3}outer_item\0\u{1}advertisement\0\u{3}fold_comment_status\0\u{3}fold_comment_apply_url\0\u{3}novel_info\0")
+  static public let protoMessageName: String = _protobuf_package + ".Post"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}title\0\u{1}floor\0\u{1}time\0\u{1}content\0\u{3}arr_video\0\u{3}lbs_info\0\u{3}is_vote\0\u{3}is_voice\0\u{3}is_ntitle\0\u{3}is_bub\0\u{3}vote_crypt\0\u{3}sub_post_number\0\u{3}time_ex\0\u{3}sub_post_list\0\u{3}add_post_list\0\u{3}bimg_url\0\u{3}ios_bimg_format\0\u{3}author_id\0\u{3}add_post_number\0\u{1}signature\0\u{3}tail_info\0\u{1}author\0\u{1}zan\0\u{1}storecount\0\u{3}tpoint_post\0\u{3}act_post\0\u{1}present\0\u{3}video_info\0\u{3}post_zan\0\u{3}is_hot_post\0\u{3}ext_tails\0\u{3}high_together\0\u{3}skin_info\0\u{3}pb_deal_info\0\u{3}lego_card\0\u{1}agree\0\u{3}from_forum\0\u{3}is_post_visible\0\u{3}need_log\0\u{3}img_num_abtest\0\u{3}origin_thread_info\0\u{3}is_fold\0\u{3}fold_tip\0\u{3}is_top_agree_post\0\u{1}tid\0\u{3}show_squared\0\u{3}is_bjh\0\u{4}\u{2}quote_id\0\u{3}is_wonderful_post\0\u{3}item_star\0\u{1}item\0\u{3}outer_item\0\u{1}advertisement\0\u{3}fold_comment_status\0\u{3}fold_comment_apply_url\0\u{3}novel_info\0")
 
   fileprivate class _StorageClass {
     var _id: UInt64 = 0
@@ -548,7 +548,7 @@ nonisolated extension Tieba_Post: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -619,7 +619,7 @@ nonisolated extension Tieba_Post: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -800,7 +800,7 @@ nonisolated extension Tieba_Post: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_Post, rhs: Tieba_Post) -> Bool {
+  static public func ==(lhs: Tieba_Post, rhs: Tieba_Post) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

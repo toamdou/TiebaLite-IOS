@@ -1,13 +1,10 @@
 // 顶层可见视图控制器查找——原生壳里"要从当前界面 present 一个系统 VC"时的
 // 公共入口（分享面板 / 内置浏览器 / 大图查看器）。
 //
-// 为什么抽出来（2026-09-12）：同一算法原先在 TiebaPhotoBrowser.swift 里以
-// TiebaPhotoBrowserTopViewController 的名字存在一份最小副本，TiebaNavBarChrome
-// 里还有一份 private 的 topScreenView（返回 view）。本次新增分享面板与
-// SFSafariViewController 两个 present 方，再复制第三、第四份就是四处漂移的
-// 隐患——查看器那份的原注释也留了"若再增需求，建议抽公共 helper 收敛"。
-// NavBarChrome 的 topScreenView 不在本次收敛范围（它取的是 view 且与栏扫描
-// 逻辑耦合），保持原样。
+// 为什么抽出来（2026-09-12）：同一算法原先在 TiebaPhotoBrowser（查看器副本）与
+// TiebaNavBarChrome（private topScreenView）各存一份，新增分享面板与
+// SFSafariViewController 两个 present 方时，再复制就是多处漂移的隐患。
+// NavBarChrome 的 topScreenView 仍保留（它取的是 view 且与栏扫描逻辑耦合）。
 //
 // 算法（与 NavBarChrome 同款）：key window（normal 层级优先）→ 沿 presented
 // 链走到最深的一个 → 若是导航容器再取栈顶。深链/模态（分享面板、ActionSheet、
@@ -15,8 +12,7 @@
 // "already presenting"。
 //
 // 同文件另有 chrome 域的视图树查询（forEachSubviewRecursively / nearestAncestor /
-// primaryScrollView）：这些算法原先在 NavigationShell、NavBarChrome、ChromeHaptics、
-// NavDoubleTapToTop 各存一份副本，已收敛到这里唯一一份。
+// primaryScrollView）：全仓唯一一份。
 import UIKit
 
 enum TiebaTopViewController {

@@ -1,4 +1,3 @@
-// ============================================================
 // 惯性滚动守卫（TiebaDecelerationGuard）
 //
 // 移植自上游: submodules/ContextUI/Sources/PeekControllerGestureRecognizer.swift:14-25
@@ -11,9 +10,8 @@
 // 规则：**手指落下那一刻，只要它下方的滚动视图还在减速，长按一律不成立。**
 // 递归下探是为了处理嵌套滚动容器（行内横滑带、楼中楼、图片带）。
 //
-// 与 TiebaKindListView.swift:679 / :1508 既有 isDecelerating 用法的区别：
+// 与 TiebaKindListView 既有 isDecelerating 用法的区别：
 // 那两处是"程序化收尾"和"甩动闸门"，都不是长按入口的准入判断。
-// ============================================================
 
 import UIKit
 

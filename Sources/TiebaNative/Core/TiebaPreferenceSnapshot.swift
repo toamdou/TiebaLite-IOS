@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaPreferenceSnapshot —— 原生偏好的类型化读/写门面（唯一落盘点）
 //
 // 为什么单独一份：偏好存在统一 SQLite 的 kv 表（TiebaKvStore），落盘格式沿用
@@ -18,7 +17,6 @@
 //
 // 读不到（键不存在/解析失败）→ nil / 调用方默认值：与 JS 的
 // sanitizePreferenceValue 同语义（坏值回滚默认，不猜、不抛）。
-// ============================================================
 import Foundation
 
 enum TiebaPreferenceSnapshot {
@@ -40,8 +38,9 @@ enum TiebaPreferenceSnapshot {
   /// 清空读缓存（KV 层全清/偏好前缀清空后必须调用，否则旧值在进程内复活）。
   static func invalidateCache() {
     cacheLock.withLock { cache.removeAll() }
-    // 读缓存清了，字号快照也必须重解析（否则"恢复默认"后字号停在旧档）。
+    // 读缓存清了，字号与外观档快照也必须重解析（否则"恢复默认"后停在旧档）。
     TiebaTypography.reload()
+    TiebaListAppearance.reload()
   }
 
   /// 取偏好键的原始存储串（JSON 字面量形态；逐键优先，旧整份 JSON 兜底）。
@@ -120,9 +119,11 @@ enum TiebaPreferenceSnapshot {
     let value = String(decoding: encoded, as: UTF8.self)
     try TiebaKvStore.shared.set(key: keyPrefix + key, value: value)
     cacheLock.withLock { cache[key] = value }
-    // 字号类键：**先**刷新字号快照（世代 +1）再广播。顺序不能反——广播是同步的，
-    // 订阅者在回调里读 TiebaTypography 时必须已经拿到新字号与新世代（见 TiebaTypography）。
+    // 字号 / 外观档键：**先**刷新快照（世代 +1）再广播。顺序不能反——广播是同步的，
+    // 订阅者在回调里读 TiebaTypography / TiebaListAppearance 时必须已经拿到新值与新
+    // 世代（见两处文件头）。顺序与字号同款。
     if TiebaTypography.isTypographyKey(key) { TiebaTypography.reload() }
+    if TiebaListAppearance.isAppearanceKey(key) { TiebaListAppearance.reload() }
     // 唯一写入点即广播点：在屏页面订阅后立刻刷新（不再等"下次出现时现读"）。
     TiebaPreferenceChange.post(key)
   }

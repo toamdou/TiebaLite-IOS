@@ -91,7 +91,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    view.backgroundColor = TiebaChromeTheme.current.background
     setupSearchBar()
     setupSortButton()
     historyView.onSelect = { [weak self] text in self?.commit(text) }
@@ -102,7 +102,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
       historyViewExpanded.toggle()
       refreshHistory()
     }
-    stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    stateView.isDark = TiebaChromeTheme.current.dark
     stateView.onButtonPress = { [weak self] _ in self?.runSearch(reset: true) }
     // 搜索骨架：贴 tab = thread、吧/人 tab = row（原 SearchResultList.tsx count 6）
     stateView.skeletonVariant = .thread

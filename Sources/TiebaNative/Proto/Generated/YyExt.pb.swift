@@ -20,30 +20,30 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_YyExt: Sendable {
+nonisolated public struct Tieba_YyExt: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var sid: String = String()
+  public var sid: String = String()
 
-  var ssid: String = String()
+  public var ssid: String = String()
 
-  var templateID: String = String()
+  public var templateID: String = String()
 
-  var yyUid: String = String()
+  public var yyUid: String = String()
 
-  var isYyGame: Int32 = 0
+  public var isYyGame: Int32 = 0
 
-  var streamInfo: String = String()
+  public var streamInfo: String = String()
 
-  var rankShow: String = String()
+  public var rankShow: String = String()
 
-  var iconURL: String = String()
+  public var iconURL: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -51,10 +51,10 @@ nonisolated struct Tieba_YyExt: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_YyExt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".YyExt"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sid\0\u{1}ssid\0\u{3}template_id\0\u{3}yy_uid\0\u{3}is_yy_game\0\u{3}stream_info\0\u{3}rank_show\0\u{3}icon_url\0")
+  static public let protoMessageName: String = _protobuf_package + ".YyExt"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sid\0\u{1}ssid\0\u{3}template_id\0\u{3}yy_uid\0\u{3}is_yy_game\0\u{3}stream_info\0\u{3}rank_show\0\u{3}icon_url\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -73,7 +73,7 @@ nonisolated extension Tieba_YyExt: SwiftProtobuf.Message, SwiftProtobuf._Message
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.sid.isEmpty {
       try visitor.visitSingularStringField(value: self.sid, fieldNumber: 1)
     }
@@ -101,7 +101,7 @@ nonisolated extension Tieba_YyExt: SwiftProtobuf.Message, SwiftProtobuf._Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_YyExt, rhs: Tieba_YyExt) -> Bool {
+  static public func ==(lhs: Tieba_YyExt, rhs: Tieba_YyExt) -> Bool {
     if lhs.sid != rhs.sid {return false}
     if lhs.ssid != rhs.ssid {return false}
     if lhs.templateID != rhs.templateID {return false}

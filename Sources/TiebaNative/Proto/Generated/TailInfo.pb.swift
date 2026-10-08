@@ -20,22 +20,22 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_TailInfo: Sendable {
+nonisolated public struct Tieba_TailInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var tailType: Int32 = 0
+  public var tailType: Int32 = 0
 
-  var iconURL: String = String()
+  public var iconURL: String = String()
 
-  var iconLink: String = String()
+  public var iconLink: String = String()
 
-  var content: String = String()
+  public var content: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -43,10 +43,10 @@ nonisolated struct Tieba_TailInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_TailInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".TailInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}tail_type\0\u{3}icon_url\0\u{3}icon_link\0\u{1}content\0")
+  static public let protoMessageName: String = _protobuf_package + ".TailInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}tail_type\0\u{3}icon_url\0\u{3}icon_link\0\u{1}content\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_TailInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.tailType != 0 {
       try visitor.visitSingularInt32Field(value: self.tailType, fieldNumber: 1)
     }
@@ -77,7 +77,7 @@ nonisolated extension Tieba_TailInfo: SwiftProtobuf.Message, SwiftProtobuf._Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_TailInfo, rhs: Tieba_TailInfo) -> Bool {
+  static public func ==(lhs: Tieba_TailInfo, rhs: Tieba_TailInfo) -> Bool {
     if lhs.tailType != rhs.tailType {return false}
     if lhs.iconURL != rhs.iconURL {return false}
     if lhs.iconLink != rhs.iconLink {return false}

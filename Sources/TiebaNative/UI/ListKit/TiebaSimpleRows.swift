@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite RN — 通用列表行（TiebaSimpleRows）
 //
 // 用途（2026-09-13，LegendList 拆除第 3 批）：把"非信息流卡片"的 RN 行
@@ -27,7 +26,6 @@
 //
 // 复用纪律：cell 复用前调 prepareForReuse()（取消在途图片请求、清文本），
 // 绘制内容完全由 (pageKey, index) 对应的模型决定。
-// ============================================================
 
 import UIKit
 import Nuke
@@ -35,268 +33,10 @@ import NukeExtensions
 
 // MARK: - 色板（TiebaFeedRowPalette + 本批行需要的额外 token）
 
-/// 通用行色板 = 信息流色板（card/text/textSecondary/textTertiary/primary/
-/// avatarFallback/isNight…）+ colors.ts 里本批行用到的额外 token。
-/// 默认值 = 应用默认亮/暗语义色（与 colors.ts 的 light/dark 表逐值相同）；
-/// JS 经 themeColors 下发实际主题后非默认主题的 primary/divider 等生效。
-public nonisolated struct TiebaSimpleRowPalette: @unchecked Sendable, Equatable {
-  public var base: TiebaFeedRowPalette
-  /// colors.divider：吧务成员行 0.5pt 描边。
-  public var divider: UIColor
-  /// colors.groupFill：吧务说明卡底色。
-  public var groupFill: UIColor
-  /// colors.surfaceSecondary：计数 chip 底 / 头像占位底。
-  public var surfaceSecondary: UIColor
-  /// colors.textDisabled：消息时间行 / 吧务尾随箭头。
-  public var textDisabled: UIColor
-  /// colors.success：消息"赞"类型图标色。
-  public var success: UIColor
-  /// colors.textOnPrimary：头像首字母色（Avatar.tsx:117）。
-  public var textOnPrimary: UIColor
-
-  public static let `default` = TiebaSimpleRowPalette(
-    base: .default,
-    divider: TiebaSimpleRowPalette.adaptive(light: 0x3C3C43, lightAlpha: 0.12,
-                                            dark: 0x545458, darkAlpha: 0.65),
-    groupFill: TiebaSimpleRowPalette.adaptive(light: 0x787880, lightAlpha: 0.08,
-                                              dark: 0xFFFFFF, darkAlpha: 0.08),
-    surfaceSecondary: TiebaSimpleRowPalette.adaptive(light: 0xF2F2F7, dark: 0x1C1C1E),
-    textDisabled: TiebaSimpleRowPalette.adaptive(light: 0x3C3C43, lightAlpha: 0.2,
-                                                 dark: 0xEBEBF5, darkAlpha: 0.2),
-    success: TiebaSimpleRowPalette.adaptive(light: 0x34C759, dark: 0x30D158),
-    textOnPrimary: .white
-  )
-
-  /// JS 主题字典 → 色板；缺失/解析失败的键保留默认值（旧 JS 不下发时行为与
-  /// 迁移前完全一致）。与 TiebaFeedRowPalette.init(dict:) 同款容错。
-  public init(dict: [String: Any]) {
-    var palette = TiebaSimpleRowPalette.default
-    palette.base = TiebaFeedRowPalette(dict: dict)
-    func apply(_ key: String, _ assign: (UIColor) -> Void) {
-      guard let raw = dict[key] as? String, let color = tiebaColor(from: raw) else { return }
-      assign(color)
-    }
-    apply("divider") { palette.divider = $0 }
-    apply("groupFill") { palette.groupFill = $0 }
-    apply("surfaceSecondary") { palette.surfaceSecondary = $0 }
-    apply("textDisabled") { palette.textDisabled = $0 }
-    apply("success") { palette.success = $0 }
-    apply("textOnPrimary") { palette.textOnPrimary = $0 }
-    self = palette
-  }
-
-  private init(
-    base: TiebaFeedRowPalette,
-    divider: UIColor,
-    groupFill: UIColor,
-    surfaceSecondary: UIColor,
-    textDisabled: UIColor,
-    success: UIColor,
-    textOnPrimary: UIColor
-  ) {
-    self.base = base
-    self.divider = divider
-    self.groupFill = groupFill
-    self.surfaceSecondary = surfaceSecondary
-    self.textDisabled = textDisabled
-    self.success = success
-    self.textOnPrimary = textOnPrimary
-  }
-
-  private static func adaptive(light: UInt32, dark: UInt32) -> UIColor {
-    adaptive(light: light, lightAlpha: 1, dark: dark, darkAlpha: 1)
-  }
-
-  private static func adaptive(
-    light: UInt32,
-    lightAlpha: CGFloat,
-    dark: UInt32,
-    darkAlpha: CGFloat
-  ) -> UIColor {
-    UIColor { traits in
-      traits.userInterfaceStyle == .dark
-        ? color(dark, alpha: darkAlpha)
-        : color(light, alpha: lightAlpha)
-    }
-  }
-
-  private static func color(_ hex: UInt32, alpha: CGFloat) -> UIColor {
-    UIColor(
-      red: CGFloat((hex >> 16) & 0xFF) / 255,
-      green: CGFloat((hex >> 8) & 0xFF) / 255,
-      blue: CGFloat(hex & 0xFF) / 255,
-      alpha: alpha
-    )
-  }
-}
-
 // MARK: - 文本工具（与 typographyStyles 的显式 lineHeight 对齐）
 
 /// 字号 → UIFont.TextStyle 映射（RN 文本 allowFontScaling 默认开，原生用
 /// UIFontMetrics 复刻；映射按字号就近取档，与 TiebaFeedRowLayout.Fonts 同法）。
-nonisolated enum TiebaSimpleText {
-  static func textStyle(for size: CGFloat) -> UIFont.TextStyle {
-    switch size {
-    case ..<11.5: return .caption2
-    case ..<12.5: return .caption1
-    case ..<14.5: return .footnote
-    case ..<15.5: return .subheadline
-    case ..<16.5: return .callout
-    default: return .body
-    }
-  }
-
-  /// RN fontWeight 数值 → UIFont.Weight（RN 的 100…900 → ultralight…black 映射）。
-  static func weight(_ raw: Double) -> UIFont.Weight {
-    switch Int(raw.rounded()) {
-    case ...199: return .ultraLight
-    case 200...299: return .thin
-    case 300...399: return .light
-    case 400...499: return .regular
-    case 500...599: return .medium
-    case 600...699: return .semibold
-    case 700...799: return .bold
-    case 800...899: return .heavy
-    default: return .black
-    }
-  }
-
-  // ── 字体缓存 ──
-  // font(size:weight:) 是全仓行字体的咽喉（帖子行 TiebaPostRowLayout 全部字体 +
-  // 简单行族）：帖子页每行 plan 访问 nameFont/actionFont/metaFont 等 10+ 次，
-  // 400 楼整页 publish ≈ 4000 次 UIFontMetrics descriptor 解析，而 (size,weight)
-  // 组合屈指可数——按组合缓存，系统字号档变化（didChange）整体失效。
-  // UIFont 不可变且线程安全；测量在后台队列跑，访问统一走锁。
-  //
-  // 2026-10-06 两级字号：缓存键用**乘过应用内倍率之后的字号**（size×scale），
-  // 所以「字号变了却命中旧档」在键上就不可能发生；世代（TiebaTypography.generation）
-  // 只用来在变化时把字典清空一次，避免它随世代无限增长。
-  private static let fontCacheLock = NSLock()
-  nonisolated(unsafe) private static var fontCache: [FontKey: UIFont] = [:]
-  nonisolated(unsafe) private static var fontCacheGeneration: UInt64 = .max
-
-  private struct FontKey: Hashable {
-    let size: CGFloat
-    // UIFont.Weight.rawValue 是 CGFloat（不是 UInt）。
-    let weightRaw: CGFloat
-  }
-
-  private static let fontCacheReset: Void = {
-    NotificationCenter.default.addObserver(
-      forName: UIContentSizeCategory.didChangeNotification,
-      object: nil,
-      queue: .main
-    ) { _ in
-      fontCacheLock.withLock { fontCache.removeAll() }
-    }
-    return ()
-  }()
-
-  /// **界面级**字体（界面字号 × 系统 Dynamic Type）。全仓界面文本的默认入口。
-  static func font(size: CGFloat, weight: UIFont.Weight) -> UIFont {
-    scaledFont(size: size, weight: weight, scale: TiebaTypography.uiScale())
-  }
-
-  /// **正文级**字体（正文字号 × 系统 Dynamic Type）：帖子卡片、帖子详情正文/
-  /// 回复/楼中楼专用。与 font(size:weight:) 是同一套实现，只差缩放来源。
-  static func bodyFont(size: CGFloat, weight: UIFont.Weight) -> UIFont {
-    scaledFont(size: size, weight: weight, scale: TiebaTypography.bodyScale())
-  }
-
-  /// **界面级**字体 · 按系统字标（等价于 UIFont.preferredFont(forTextStyle:)，
-  /// 但叠上应用内界面字号）。存在的理由：全仓还有几十处直接写
-  /// .preferredFont(forTextStyle:) 的固定字号，界面字号管不到它们；机械替换成
-  /// 这一句即可，同时保留"跟随系统 Dynamic Type"的既有语义。
-  /// - Parameter weight: 缺省 = headline 用 semibold、其余 regular（与系统同）。
-  static func uiFont(style: UIFont.TextStyle, weight: UIFont.Weight? = nil) -> UIFont {
-    let resolved = weight ?? (style == .headline ? .semibold : .regular)
-    return scaledFont(
-      size: defaultPointSize(style), weight: resolved, scale: TiebaTypography.uiScale())
-  }
-
-  /// 系统字标的**未缩放**基准字号（UIFontMetrics 的原点；乘应用倍率前的那一档）。
-  private static func defaultPointSize(_ style: UIFont.TextStyle) -> CGFloat {
-    switch style {
-    case .largeTitle: return 34
-    case .title1: return 28
-    case .title2: return 22
-    case .title3: return 20
-    case .headline: return 17
-    case .body: return 17
-    case .callout: return 16
-    case .subheadline: return 15
-    case .footnote: return 13
-    case .caption1: return 12
-    case .caption2: return 11
-    default: return 17
-    }
-  }
-
-  /// 指定倍率的字体。**实时示例专用**：滑杆值还没落库时也要能量出目标字号
-  /// （font/bodyFont 读的是已落库的全局快照，量不出"手指当前这一格"）。
-  static func scaledFont(size: CGFloat, weight: UIFont.Weight, scale: CGFloat) -> UIFont {
-    _ = fontCacheReset
-    // 应用内倍率先乘进字号，再过系统 Dynamic Type（UIFontMetrics 的基准字号
-    // 也跟着缩，这样系统档与应用档是叠乘而不是互相覆盖）。
-    let scaledSize = max(size * max(scale, 0.1), 1)
-    let key = FontKey(size: scaledSize, weightRaw: weight.rawValue)
-    return fontCacheLock.withLock {
-      let generation = TiebaTypography.generation
-      if fontCacheGeneration != generation {
-        fontCache.removeAll(keepingCapacity: true)
-        fontCacheGeneration = generation
-      }
-      if let cached = fontCache[key] { return cached }
-      let font = UIFontMetrics(forTextStyle: textStyle(for: size))
-        .scaledFont(for: UIFont.systemFont(ofSize: scaledSize, weight: weight))
-      fontCache[key] = font
-      return font
-    }
-  }
-
-  /// 行高：RN 给了显式 lineHeight → ×UIFontMetrics；未给（RN 走字体默认行高）
-  /// → font.lineHeight 向上取整，避免 UILabel 末行被裁半像素。
-  /// - Parameter scale: 应用内倍率。**必须**与构造 font 时用的那一级一致
-  ///   （正文级传 TiebaTypography.bodyScale()，界面级传 uiScale()），否则字大了
-  ///   行盒没大，多行文本会互相压。
-  static func lineHeight(_ explicit: Double?, font: UIFont, scale: CGFloat) -> CGFloat {
-    guard let explicit, explicit > 0 else { return ceil(font.lineHeight) }
-    return ceil(
-      UIFontMetrics(forTextStyle: textStyle(for: font.pointSize))
-        .scaledValue(for: CGFloat(explicit) * max(scale, 0.1)))
-  }
-
-  /// 测量用 attributed（只用 font + paragraph lineHeight；**不写颜色**——
-  /// 绘制期按色板补色，换主题无需重测）。
-  /// truncating = true（默认）时末行截断加省略号（单/多行摘要用）；false 时按字换行、
-  /// 不截断（不限行的主贴标题用——段落样式里的 byTruncatingTail 会盖过 label 的
-  /// numberOfLines=0，留着它最后一行照样带省略号）。
-  static func makeAttributed(
-    text: String,
-    font: UIFont,
-    lineHeight: CGFloat,
-    truncating: Bool = true
-  ) -> NSAttributedString {
-    let paragraph = NSMutableParagraphStyle()
-    paragraph.minimumLineHeight = lineHeight
-    paragraph.maximumLineHeight = lineHeight
-    paragraph.lineBreakMode = truncating ? .byTruncatingTail : .byWordWrapping
-    return NSAttributedString(
-      string: text,
-      attributes: [.font: font, .paragraphStyle: paragraph]
-    )
-  }
-
-  /// TextKit 测量（实现在 TiebaRowText，全仓唯一一份；调用方保证在测量队列上）。
-  static func measureHeight(_ attributed: NSAttributedString, width: CGFloat, maxLines: Int) -> CGFloat {
-    TiebaRowText.measureHeight(attributed, width: width, maxLines: maxLines)
-  }
-
-  /// 单行文本宽（徽章内联定位用；不改行高）。
-  static func singleLineWidth(_ text: String, font: UIFont) -> CGFloat {
-    TiebaRowText.singleLineWidth(text, font: font)
-  }
-}
 
 // MARK: - 变体与文本块
 
@@ -435,18 +175,6 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
   /// accessibilityLabel（整行朗读；JS 下发，缺省用标题/正文兜底）。
   public let accessibilityLabel: String
 
-  // ── 卡片几何（四个变体共用；无卡片变体 margin/padding 为 0）──
-
-  // ── user / message 共用：头像 ──
-
-  // ── user ──
-
-  // ── message ──
-
-  // ── section ──
-
-  // ── summary ──
-
   // ── 绘制期派生（纯算术）──
   /// 卡片盒（相对行视图坐标）：上下 marginV 各一次 + bottomMargin 一次。
   var cardFrame: CGRect {
@@ -473,7 +201,6 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
       return max(content.width, 0)
     }
   }
-
 
   /// 变体载荷（H12）：字段按变体收进各自 case，互斥由类型保证。
   /// 下面每个旧字段保留一行只读转发，取值与原「平铺并集 + 未参与变体清零」逐字等价，
@@ -816,5 +543,3 @@ public nonisolated final class TiebaSimpleRowModel: @unchecked Sendable {
     }
   }
 }
-
-// MARK: - 字典解析

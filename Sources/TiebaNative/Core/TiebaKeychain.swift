@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaKeychain —— Keychain 单值存取（替代 expo-secure-store）
 //
 // ⚠️ 这个文件的键路径必须与 expo-secure-store **逐字节兼容**：消费方
@@ -22,7 +21,6 @@
 //
 // 不搬 expo 的 `requireAuthentication` / `authenticationPrompt`（kSecAttrAccessControl、
 // 每次读弹面容）：全仓零调用，且会让"后台任务读凭据"失效——不是本仓要的语义。
-// ============================================================
 import Foundation
 import Security
 

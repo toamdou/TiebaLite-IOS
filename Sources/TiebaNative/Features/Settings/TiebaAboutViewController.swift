@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaAboutViewController —— 「关于」页（原 src/app/settings/about.tsx）
 //
 // 整屏原生：视图 = TiebaFormListView（plain UIView，系统表单行），数据与动作全在
@@ -6,7 +5,7 @@
 // 这里直接挂**纯视图本体**，连那层 Expo 适配器都不需要。
 //
 // 布局与文案逐字对齐旧页面：
-//   区块 1：hero 行（打包图 expo.icon/Assets/icon-light.png + 应用名 + Version x）
+//   区块 1：hero 行（打包图 AboutIcon.png + 应用名 + Version x）
 //   区块 2「更新」：检查更新按钮 / 结果文字行（发现新版本… | 已是最新版本）/
 //                  失败文字行（检查失败：…）/ 条件出现的 Release 页面按钮
 //   区块 3「仓库与致谢」：5 个仓库按钮
@@ -21,7 +20,6 @@
 //   - 表单染色的「默认主题不染色」规则：从原生 KV 现读 lightTheme/darkTheme，
 //     主题名为 default 时不下发 tint（行图标五彩、按钮走系统蓝）——与
 //     useFormTintHex() 逐字同义；主色取导航壳的 themeTint（= colors.primary）。
-// ============================================================
 import UIKit
 
 final class TiebaAboutViewController: UIViewController {
@@ -93,7 +91,7 @@ final class TiebaAboutViewController: UIViewController {
 
   private func reloadSections() {
     form.tintHex = Self.formTintHex()
-    form.isDark = TiebaNavigator.shared.chromeTheme.dark
+    form.isDark = TiebaChromeTheme.current.dark
     form.sections = buildSections()
   }
 
@@ -109,10 +107,10 @@ final class TiebaAboutViewController: UIViewController {
   /// 导航壳的 themeTint（= colors.primary）。主题名按当前深浅取 lightTheme/darkTheme
   /// （深浅用导航壳收到的 dark，即 JS 的 isDark，避免被宿主强制 trait 影响判断）。
   private static func formTintHex() -> String? {
-    let dark = TiebaNavigator.shared.chromeTheme.dark
+    let dark = TiebaChromeTheme.current.dark
     let themeName = TiebaPreferenceSnapshot.string(dark ? "darkTheme" : "lightTheme") ?? "default"
     guard themeName != "default" else { return nil }
-    return TiebaFormListView.hexString(from: TiebaNavigator.shared.chromeTheme.tint)
+    return TiebaFormListView.hexString(from: TiebaChromeTheme.current.tint)
   }
 
   private func buildSections() -> [TiebaFormSection] {
@@ -175,7 +173,9 @@ final class TiebaAboutViewController: UIViewController {
             title: "贴吧Lite",
             subtitle: "Version \(TiebaReleaseAPI.currentVersion())",
             textStyle: "title",
-            imageName: "expo.icon/Assets/icon-light.png"
+            // 随包分发的松散图（原读 expo.icon 里的源图，而 .icon 文档只被 actool 编进
+            // Assets.car、源文件不进包 ⇒ 那条路径一直取不到图，hero 行是空的）。
+            imageName: "AboutIcon.png"
           )
         ]
       ),

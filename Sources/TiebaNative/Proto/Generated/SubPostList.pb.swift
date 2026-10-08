@@ -20,86 +20,86 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_SubPostList: @unchecked Sendable {
+nonisolated public struct Tieba_SubPostList: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var id: UInt64 {
+  public var id: UInt64 {
     get {_storage._id}
     set {_uniqueStorage()._id = newValue}
   }
 
-  var content: [Tieba_PbContent] {
+  public var content: [Tieba_PbContent] {
     get {_storage._content}
     set {_uniqueStorage()._content = newValue}
   }
 
-  var time: UInt32 {
+  public var time: UInt32 {
     get {_storage._time}
     set {_uniqueStorage()._time = newValue}
   }
 
-  var authorID: Int64 {
+  public var authorID: Int64 {
     get {_storage._authorID}
     set {_uniqueStorage()._authorID = newValue}
   }
 
-  var title: String {
+  public var title: String {
     get {_storage._title}
     set {_uniqueStorage()._title = newValue}
   }
 
-  var floor: UInt32 {
+  public var floor: UInt32 {
     get {_storage._floor}
     set {_uniqueStorage()._floor = newValue}
   }
 
-  var author: Tieba_User {
+  public var author: Tieba_User {
     get {_storage._author ?? Tieba_User()}
     set {_uniqueStorage()._author = newValue}
   }
   /// Returns true if `author` has been explicitly set.
-  var hasAuthor: Bool {_storage._author != nil}
+  public var hasAuthor: Bool {_storage._author != nil}
   /// Clears the value of `author`. Subsequent reads from it will return its default value.
-  mutating func clearAuthor() {_uniqueStorage()._author = nil}
+  mutating public func clearAuthor() {_uniqueStorage()._author = nil}
 
-  var isGiftpost: Int32 {
+  public var isGiftpost: Int32 {
     get {_storage._isGiftpost}
     set {_uniqueStorage()._isGiftpost = newValue}
   }
 
-  var agree: Tieba_Agree {
+  public var agree: Tieba_Agree {
     get {_storage._agree ?? Tieba_Agree()}
     set {_uniqueStorage()._agree = newValue}
   }
   /// Returns true if `agree` has been explicitly set.
-  var hasAgree: Bool {_storage._agree != nil}
+  public var hasAgree: Bool {_storage._agree != nil}
   /// Clears the value of `agree`. Subsequent reads from it will return its default value.
-  mutating func clearAgree() {_uniqueStorage()._agree = nil}
+  mutating public func clearAgree() {_uniqueStorage()._agree = nil}
 
-  var location: Tieba_Lbs {
+  public var location: Tieba_Lbs {
     get {_storage._location ?? Tieba_Lbs()}
     set {_uniqueStorage()._location = newValue}
   }
   /// Returns true if `location` has been explicitly set.
-  var hasLocation: Bool {_storage._location != nil}
+  public var hasLocation: Bool {_storage._location != nil}
   /// Clears the value of `location`. Subsequent reads from it will return its default value.
-  mutating func clearLocation() {_uniqueStorage()._location = nil}
+  mutating public func clearLocation() {_uniqueStorage()._location = nil}
 
-  var isFakeTop: Int32 {
+  public var isFakeTop: Int32 {
     get {_storage._isFakeTop}
     set {_uniqueStorage()._isFakeTop = newValue}
   }
 
-  var isAuthorView: Int32 {
+  public var isAuthorView: Int32 {
     get {_storage._isAuthorView}
     set {_uniqueStorage()._isAuthorView = newValue}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
@@ -109,8 +109,8 @@ nonisolated struct Tieba_SubPostList: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_SubPostList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SubPostList"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}content\0\u{1}time\0\u{3}author_id\0\u{1}title\0\u{1}floor\0\u{1}author\0\u{3}is_giftpost\0\u{1}agree\0\u{1}location\0\u{3}is_fake_top\0\u{3}is_author_view\0")
+  static public let protoMessageName: String = _protobuf_package + ".SubPostList"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}content\0\u{1}time\0\u{3}author_id\0\u{1}title\0\u{1}floor\0\u{1}author\0\u{3}is_giftpost\0\u{1}agree\0\u{1}location\0\u{3}is_fake_top\0\u{3}is_author_view\0")
 
   fileprivate class _StorageClass {
     var _id: UInt64 = 0
@@ -157,7 +157,7 @@ nonisolated extension Tieba_SubPostList: SwiftProtobuf.Message, SwiftProtobuf._M
     return _storage
   }
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -183,7 +183,7 @@ nonisolated extension Tieba_SubPostList: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -229,7 +229,7 @@ nonisolated extension Tieba_SubPostList: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_SubPostList, rhs: Tieba_SubPostList) -> Bool {
+  static public func ==(lhs: Tieba_SubPostList, rhs: Tieba_SubPostList) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0

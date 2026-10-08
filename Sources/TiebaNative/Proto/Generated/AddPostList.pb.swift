@@ -20,22 +20,22 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_AddPostList: Sendable {
+nonisolated public struct Tieba_AddPostList: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var pid: UInt64 = 0
+  public var pid: UInt64 = 0
 
-  var totalNum: UInt32 = 0
+  public var totalNum: UInt32 = 0
 
-  var totalCount: UInt32 = 0
+  public var totalCount: UInt32 = 0
 
-  var addPostList: [Tieba_SubPostList] = []
+  public var addPostList: [Tieba_SubPostList] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -43,10 +43,10 @@ nonisolated struct Tieba_AddPostList: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_AddPostList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AddPostList"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pid\0\u{3}total_num\0\u{3}total_count\0\u{3}add_post_list\0")
+  static public let protoMessageName: String = _protobuf_package + ".AddPostList"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pid\0\u{3}total_num\0\u{3}total_count\0\u{3}add_post_list\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -61,7 +61,7 @@ nonisolated extension Tieba_AddPostList: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.pid != 0 {
       try visitor.visitSingularUInt64Field(value: self.pid, fieldNumber: 1)
     }
@@ -77,7 +77,7 @@ nonisolated extension Tieba_AddPostList: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_AddPostList, rhs: Tieba_AddPostList) -> Bool {
+  static public func ==(lhs: Tieba_AddPostList, rhs: Tieba_AddPostList) -> Bool {
     if lhs.pid != rhs.pid {return false}
     if lhs.totalNum != rhs.totalNum {return false}
     if lhs.totalCount != rhs.totalCount {return false}

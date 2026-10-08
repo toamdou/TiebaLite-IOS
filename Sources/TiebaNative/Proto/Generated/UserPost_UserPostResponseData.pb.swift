@@ -20,30 +20,30 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_UserPost_UserPostResponseData: Sendable {
+nonisolated public struct Tieba_UserPost_UserPostResponseData: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var postList: [Tieba_PostInfoList] = []
+  public var postList: [Tieba_PostInfoList] = []
 
-  var hidePost: UInt32 = 0
+  public var hidePost: UInt32 = 0
 
-  var time: UInt64 = 0
+  public var time: UInt64 = 0
 
-  var ctime: UInt64 = 0
+  public var ctime: UInt64 = 0
 
-  var logid: UInt64 = 0
+  public var logid: UInt64 = 0
 
-  var maskType: Int32 = 0
+  public var maskType: Int32 = 0
 
-  var viewCardNum: Int32 = 0
+  public var viewCardNum: Int32 = 0
 
-  var reddotDeletedThread: Int32 = 0
+  public var reddotDeletedThread: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -51,10 +51,10 @@ nonisolated struct Tieba_UserPost_UserPostResponseData: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.userPost"
 
 nonisolated extension Tieba_UserPost_UserPostResponseData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UserPostResponseData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_list\0\u{3}hide_post\0\u{1}time\0\u{1}ctime\0\u{1}logid\0\u{3}mask_type\0\u{3}view_card_num\0\u{3}reddot_deleted_thread\0")
+  static public let protoMessageName: String = _protobuf_package + ".UserPostResponseData"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_list\0\u{3}hide_post\0\u{1}time\0\u{1}ctime\0\u{1}logid\0\u{3}mask_type\0\u{3}view_card_num\0\u{3}reddot_deleted_thread\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -73,7 +73,7 @@ nonisolated extension Tieba_UserPost_UserPostResponseData: SwiftProtobuf.Message
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.postList.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.postList, fieldNumber: 1)
     }
@@ -101,7 +101,7 @@ nonisolated extension Tieba_UserPost_UserPostResponseData: SwiftProtobuf.Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_UserPost_UserPostResponseData, rhs: Tieba_UserPost_UserPostResponseData) -> Bool {
+  static public func ==(lhs: Tieba_UserPost_UserPostResponseData, rhs: Tieba_UserPost_UserPostResponseData) -> Bool {
     if lhs.postList != rhs.postList {return false}
     if lhs.hidePost != rhs.hidePost {return false}
     if lhs.time != rhs.time {return false}

@@ -20,20 +20,20 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_BubbleInfo: Sendable {
+nonisolated public struct Tieba_BubbleInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var bubbleID: Int32 = 0
+  public var bubbleID: Int32 = 0
 
-  var bubbleText: String = String()
+  public var bubbleText: String = String()
 
-  var bubblePic: String = String()
+  public var bubblePic: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -41,10 +41,10 @@ nonisolated struct Tieba_BubbleInfo: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba"
 
 nonisolated extension Tieba_BubbleInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".BubbleInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}bubble_id\0\u{3}bubble_text\0\u{3}bubble_pic\0")
+  static public let protoMessageName: String = _protobuf_package + ".BubbleInfo"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}bubble_id\0\u{3}bubble_text\0\u{3}bubble_pic\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -58,7 +58,7 @@ nonisolated extension Tieba_BubbleInfo: SwiftProtobuf.Message, SwiftProtobuf._Me
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.bubbleID != 0 {
       try visitor.visitSingularInt32Field(value: self.bubbleID, fieldNumber: 1)
     }
@@ -71,7 +71,7 @@ nonisolated extension Tieba_BubbleInfo: SwiftProtobuf.Message, SwiftProtobuf._Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_BubbleInfo, rhs: Tieba_BubbleInfo) -> Bool {
+  static public func ==(lhs: Tieba_BubbleInfo, rhs: Tieba_BubbleInfo) -> Bool {
     if lhs.bubbleID != rhs.bubbleID {return false}
     if lhs.bubbleText != rhs.bubbleText {return false}
     if lhs.bubblePic != rhs.bubblePic {return false}

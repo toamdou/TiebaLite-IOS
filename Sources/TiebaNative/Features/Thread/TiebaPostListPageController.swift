@@ -39,6 +39,13 @@ class TiebaPostListPageController: UIViewController {
   /// 替换式加载（reload / jump）自增的代际号；在途 loadMore 回来时代际不符即丢。
   /// 否则「只看楼主 / 倒序」替换 posts 后，旧排序页仍以 replacing:false 追加并覆盖 currentPage。
   var loadGeneration = 0
+  /// 上一次推页时的**外观档世代**（TiebaListAppearance）。.max = 还没推过。
+  ///
+  /// 为什么需要它：帖子行族的度量缓存（TiebaPostRowMetrics）只按 pageKey 键控 ——
+  /// 它**看不见内容身份**，也就看不见外观档。卡片↔扁平切档会改每一行的边距/圆角，
+  /// 旧几何在缓存里照样"命中"，从设置页切档回来就会停在旧几何上（静默错位：
+  /// 卡还缩着 10pt、发际线没有、行高多 8pt）。判据只能自己记一份。
+  private var publishedAppearanceGeneration: UInt64 = .max
 
   // MARK: - 子类差异（覆写）
 
@@ -53,10 +60,25 @@ class TiebaPostListPageController: UIViewController {
   /// 空态副标题（两页文案不同）。
   var emptySecondaryText: String { "" }
 
+  /// 外观档切档后、重推**之前**：子类在这里丢掉"上一轮模型"的复用备忘。
+  /// 复用判据比的是内容指纹与宽度，看不见几何 —— 不清掉，新几何会被旧模型顶回去。
+  func discardReuseMemoForAppearance() {}
+
   // MARK: - 生命周期
 
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
+    // 外观档在离开期间被切过（设置 → 个性化 → 设计风格）⇒ 行几何全变，必须
+    // 丢掉复用备忘并按新几何整页重测重推（见 publishedAppearanceGeneration）。
+    // 首次出现只登记世代：那时还没有可作废的测量。
+    if publishedAppearanceGeneration != TiebaListAppearance.generation {
+      let firstAppear = publishedAppearanceGeneration == .max
+      publishedAppearanceGeneration = TiebaListAppearance.generation
+      if !firstAppear {
+        discardReuseMemoForAppearance()
+        publish(fresh: true)
+      }
+    }
     // 偏好/主题可能在本屏离开期间被改（设置页）：每次出现现读。
     refreshPreferences()
     applyPalette()
@@ -135,7 +157,9 @@ class TiebaPostListPageController: UIViewController {
     list.onListEvent = { [weak self] event in self?.handleListEvent(event) }
     list.onPostEvent = { [weak self] index, event in self?.handlePostEvent(index, event) }
     list.entranceAnimationEnabled = TiebaPreferenceSnapshot.bool("entranceAnimation", default: true)
-    list.separatorHeight = 1
+    // 行间距：卡片档靠这 1pt 空隙把上下两张白卡分开；扁平档行底**自画**发际线
+    //（TiebaPostRowPlan.rowHairlineFrame），再留空隙只会露出一条 1pt 页面底色的灰缝。
+    list.separatorHeight = TiebaListAppearance.isFlat ? 0 : 1
     list.reachEndThreshold = reachEndThreshold
     // 缺页自愈：本页的页记录/度量被别的屏的整页 LRU 挤掉时用同一页键重推一次
     //（数据仍在 rowPosts 里）。不重推的后果是行取不到模型——TiebaPostRowView
@@ -165,14 +189,17 @@ class TiebaPostListPageController: UIViewController {
     )
   }
 
-  /// 页面底色 + 主题色板。楼层卡是白卡（palette.card）：页面底色必须用主题
-  /// background（JS colors.background #F2F2F7/黑）——.systemBackground 浅色下与
-  /// 卡片同白，楼层边界会糊成一片。
+  /// 页面底色 + 主题色板。卡片档下楼层的边界靠"白卡浮在灰底上"，所以页面底色
+  /// 必须是主题 background（#F2F2F7/黑）——.systemBackground 浅色下与卡片同白，
+  /// 楼层边界会糊成一片。**扁平档反过来**：行没有卡、边界靠发际线，页面底色必须
+  /// 与行同色（浅色纯白），否则行与行之间/行左右会露出一圈灰底。
   func applyPalette() {
-    skeletonView.isDark = TiebaNavigator.shared.chromeTheme.dark
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    skeletonView.isDark = TiebaChromeTheme.current.dark
+    view.backgroundColor = TiebaListAppearance.isFlat
+      ? TiebaListAppearance.pageBackground
+      : TiebaChromeTheme.current.background
     var palette = TiebaSimpleRowPalette.default
-    let tint = TiebaNavigator.shared.chromeTheme.tint
+    let tint = TiebaChromeTheme.current.tint
     palette.base.primary = tint
     palette.base.chip = tint.withAlphaComponent(0.12)
     palette.base.onChip = tint

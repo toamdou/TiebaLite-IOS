@@ -20,24 +20,24 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-nonisolated struct Tieba_GetForumDetail_BazhuGrade: Sendable {
+nonisolated public struct Tieba_GetForumDetail_BazhuGrade: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var grade: String = String()
+  public var grade: String = String()
 
-  var gradePoint: [Tieba_GradePoint] = []
+  public var gradePoint: [Tieba_GradePoint] = []
 
-  var estimationLeftText: String = String()
+  public var estimationLeftText: String = String()
 
-  var gradeText: String = String()
+  public var gradeText: String = String()
 
-  var estimationLeftTime: Int32 = 0
+  public var estimationLeftTime: Int32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -45,10 +45,10 @@ nonisolated struct Tieba_GetForumDetail_BazhuGrade: Sendable {
 fileprivate nonisolated let _protobuf_package = "tieba.getForumDetail"
 
 nonisolated extension Tieba_GetForumDetail_BazhuGrade: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".BazhuGrade"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}grade\0\u{3}grade_point\0\u{3}estimation_left_text\0\u{3}grade_text\0\u{3}estimation_left_time\0")
+  static public let protoMessageName: String = _protobuf_package + ".BazhuGrade"
+  static public let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}grade\0\u{3}grade_point\0\u{3}estimation_left_text\0\u{3}grade_text\0\u{3}estimation_left_time\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating public func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -64,7 +64,7 @@ nonisolated extension Tieba_GetForumDetail_BazhuGrade: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.grade.isEmpty {
       try visitor.visitSingularStringField(value: self.grade, fieldNumber: 1)
     }
@@ -83,7 +83,7 @@ nonisolated extension Tieba_GetForumDetail_BazhuGrade: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Tieba_GetForumDetail_BazhuGrade, rhs: Tieba_GetForumDetail_BazhuGrade) -> Bool {
+  static public func ==(lhs: Tieba_GetForumDetail_BazhuGrade, rhs: Tieba_GetForumDetail_BazhuGrade) -> Bool {
     if lhs.grade != rhs.grade {return false}
     if lhs.gradePoint != rhs.gradePoint {return false}
     if lhs.estimationLeftText != rhs.estimationLeftText {return false}

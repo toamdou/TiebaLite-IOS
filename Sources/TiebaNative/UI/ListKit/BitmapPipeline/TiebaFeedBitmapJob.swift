@@ -1,4 +1,3 @@
-// ============================================================
 // TiebaLite — 异步位图管线 · 跨域载荷（Job / Key / Result / 代次）
 //
 // 对应 上游 ASDK 的 displayBlock 载荷 + _displaySentinel（_ASDisplayLayer.mm:108-120、
@@ -12,7 +11,6 @@
 //
 // 本文件只吃 UIKit 的值类型 + Core/TiebaMutex.swift 的跨版本互斥量，
 // 因此可与 BitmapPipeline/ 其余文件一起独立 typecheck（见目录内交付说明）。
-// ============================================================
 
 import UIKit
 
@@ -49,8 +47,7 @@ public final class TiebaFeedBitmapEpoch: Sendable {
 
 /// 位图缓存键 = **所有会影响像素的输入的精确身份**。
 ///
-/// 与旧实现（TiebaFeedRowView.swift:749-760 的 Entry + :862-885 逐字段比对）逐一对应，
-/// 只是把「逐字段线性扫」换成 Hashable 键：
+/// 与旧实现（TiebaFeedRowView 的 Entry + 逐字段线性扫）逐一对应，这里换成 Hashable 键：
 ///   model（弱引用身份）→ ObjectIdentifier
 ///   size / scale / style / palette → 同名字段
 ///
@@ -61,7 +58,7 @@ public final class TiebaFeedBitmapEpoch: Sendable {
 ///
 /// 不带 epoch：代次只用于「结果要不要收」，不影响像素身份（同键必然同像素）。
 public struct TiebaFeedBitmapKey: Hashable, Sendable {
-  /// 模型实例身份（模型不可变，见 TiebaRowMetrics.swift:58）。
+  /// 模型实例身份（模型不可变，见 TiebaFeedRowModel）。
   public let model: ObjectIdentifier
   public let width: CGFloat
   public let height: CGFloat
@@ -96,7 +93,7 @@ public struct TiebaFeedBitmapKey: Hashable, Sendable {
 ///
 /// 为什么要一个箱子：@Sendable 闭包里不能捕获 AnyObject（非 Sendable）。
 /// 箱子里装的 TiebaFeedRowModel 本身是不可变的 @unchecked Sendable
-/// （TiebaRowMetrics.swift:58），这里只是把「借用一次」这件事显式声明出来；
+/// （见 TiebaFeedRowModel），这里只是把「借用一次」这件事显式声明出来；
 /// 箱子的生命周期 = 一次完成回调（毫秒级），不会把已被整页 LRU 淘汰的模型钉住。
 public struct TiebaFeedBitmapModelToken: @unchecked Sendable {
   public let model: AnyObject
@@ -154,7 +151,7 @@ public struct TiebaFeedBitmapJob: @unchecked Sendable {
     self.epoch = epoch
   }
 
-  /// 后备存储字节数（与原 TiebaFeedRowView.swift:842 逐字一致）。
+  /// 后备存储字节数（与原实现逐字一致）。
   public var byteCount: Int {
     Int(size.width * scale) * Int(size.height * scale) * 4
   }
