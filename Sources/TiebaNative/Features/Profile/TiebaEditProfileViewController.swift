@@ -219,10 +219,10 @@ final class TiebaEditProfileViewController: UIViewController {
         : "资料未能加载（\(failedProfileReason)），继续保存会用默认值覆盖服务端。",
       preferredStyle: .alert
     )
-    alert.addAction(UIAlertAction(title: "重试加载", style: .default) { [weak self] in
+    alert.addAction(UIAlertAction(title: "重试加载", style: .default) { [weak self] _ in
       self?.handleRowPress("reloadProfile")
     })
-    alert.addAction(UIAlertAction(title: "仍然保存", style: .destructive) { [weak self] in
+    alert.addAction(UIAlertAction(title: "仍然保存", style: .destructive) { [weak self] _ in
       self?.performSave()
     })
     alert.addAction(UIAlertAction(title: "取消", style: .cancel))
