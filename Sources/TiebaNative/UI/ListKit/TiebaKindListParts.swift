@@ -324,17 +324,28 @@ final class TiebaKindFooterView: UICollectionReusableView {
   private let contentStack = UIStackView()
   private var onTap: (() -> Void)?
 
-  /// 页脚高度：paddingVertical 20×2 + 内容高（spinner 20 / caption1 16 /
-  /// footnoteBold 18 + 按钮 marginVertical 4×2）。
+  /// 页脚文案唯一字阶：四态同档，翻页切换时字号不跳（D3-4：原先 loading/more 走
+  /// footnote 13 semibold、none/empty 走 caption1 12 medium，同级状态两套字阶肉眼可见）。
+  private static var textFont: UIFont {
+    UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .systemFont(ofSize: 13, weight: .semibold))
+  }
+
+  /// 行高与字号同源，避免两处各写一个数后再次分叉。
+  private static var textLineHeight: CGFloat {
+    UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18)
+  }
+
+  /// 页脚高度：paddingVertical 20×2 + 内容高（spinner 20 / 文案行高 / retry 再加
+  /// 按钮 marginVertical 4×2）。
   static func height(for state: TiebaKindFooterState) -> CGFloat {
     let base: CGFloat = 40
     switch state {
     case .loading:
-      return base + max(20, UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18))
+      return base + max(20, Self.textLineHeight)
     case .none, .empty:
-      return base + UIFontMetrics(forTextStyle: .caption1).scaledValue(for: 16)
+      return base + Self.textLineHeight
     case .retry:
-      return base + UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18) + 8
+      return base + Self.textLineHeight + 8
     case .more, .hidden:
       // [用户口径 2026-10-06] "还有更多"不再有可点药丸：页脚整块收起（0 高 = 布局里
       // 连 supplementary 都不生成，见 TiebaRowListLayout 的 `footerHeight > 0` 判据），
@@ -386,34 +397,19 @@ final class TiebaKindFooterView: UICollectionReusableView {
       spinner.startAnimating()
       label.attributedText = NSAttributedString(
         string: "加载中...",
-        attributes: [
-          .font: UIFontMetrics(forTextStyle: .footnote).scaledFont(
-            for: .systemFont(ofSize: 13, weight: .semibold)
-          ),
-          .foregroundColor: textColor,
-        ]
+        attributes: [.font: Self.textFont, .foregroundColor: textColor]
       )
     case .empty:
       spinner.stopAnimating()
       label.attributedText = NSAttributedString(
         string: "还没有人回复这个帖子",
-        attributes: [
-          .font: UIFontMetrics(forTextStyle: .caption1).scaledFont(
-            for: .systemFont(ofSize: 12, weight: .medium)
-          ),
-          .foregroundColor: textColor,
-        ]
+        attributes: [.font: Self.textFont, .foregroundColor: textColor]
       )
     case .none:
       spinner.stopAnimating()
       label.attributedText = NSAttributedString(
         string: "没有更多了",
-        attributes: [
-          .font: UIFontMetrics(forTextStyle: .caption1).scaledFont(
-            for: .systemFont(ofSize: 12, weight: .medium)
-          ),
-          .foregroundColor: textColor,
-        ]
+        attributes: [.font: Self.textFont, .foregroundColor: textColor]
       )
     case .more:
       // 正常态：页脚是 0 高、什么都不画（触底自动加载接管，见 TiebaKindFooterState 的注释）。
