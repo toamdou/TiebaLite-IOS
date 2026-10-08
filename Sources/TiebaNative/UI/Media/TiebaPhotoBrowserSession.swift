@@ -487,7 +487,9 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     // 与 ActionController.pill（:685）同一依据：assumeIsolated 只是把这条既有
     // 契约显式化，同步执行，没有真正的跨域。
     MainActor.assumeIsolated {
-      TiebaAnimation.animate(duration: 0.2) {
+      // 与顶栏同一条动作：顶栏走可中断转场，页码点也要从当前状态续跑——否则连点时
+      // 每次从 0/1 重头来（用户口径「连点顿挫」）。
+      TiebaAnimation.animate(duration: 0.2, options: [.beginFromCurrentState]) {
         self.indicator?.alpha = visible ? 1 : 0
       }
     }
