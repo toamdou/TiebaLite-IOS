@@ -47,6 +47,19 @@ filegroup(
         # 必须是随包分发的松散文件；原先是读 expo.icon 里的源图，而 .icon 文档只被
         # actool 编进 Assets.car、源文件不进包 ⇒ 那条路径一直是悬空的。
         "AboutIcon.png",
+        # 超分辨率模型（PiperSR_2x，CoreML，cc-by-4.0）：三个**原始文件**随包分发，运行期按
+        # mlpackage 规范结构拼回目录再编译一次并缓存（.mlpackage/.mlmodelc 都是目录，而 genrule
+        # 的 outs 只能是文件 —— 见 TiebaSuperResolutionModelStore 的头注释）。
+        # 文件名两条硬约束：
+        #   ① 带 PiperSR_2x_ 前缀：app_resources 按 basename 扁平落盘，"Manifest.json" 会撞名；
+        #   ② 规格文件必须是 **.bin**（不能叫 .mlmodel）：rules_apple 见到 .mlmodel 会自动跑
+        #      coremlc compile，而扁平落盘的 .mlmodel 找不到同目录的 weights/weight.bin
+        #      （实测报错 Could not open .../weights/weight.bin）。改成不透明扩展名即绕过自动编译，
+        #      由运行期自己拼目录编译；将来若改成随包预编译，把 .mlmodelc 目录塞进来即可
+        #      （TiebaSuperResolutionModelStore 会优先用它，代码不用改）。
+        "piper-sr/PiperSR_2x_Manifest.json",
+        "piper-sr/PiperSR_2x_model.bin",
+        "piper-sr/PiperSR_2x_weight.bin",
         # 运行时必需：信息流端点（frsPage/feedThreadList/userLike）走 TiebaSwiftProto
         # 描述符解码（TiebaProtoRegistry.loadBundled），删掉即 preconditionFailure。
         "//Sources/TiebaNative:Proto/proto-descriptors.json",

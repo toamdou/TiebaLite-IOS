@@ -142,6 +142,14 @@ final class TiebaTopicViewController: UIViewController, TiebaNativeScreen {
     return "\(fontScale)#\(hideMedia)#\(showIp)#\(expandedIds.count)"
   }
 
+  /// 同页原地重测（「显示更多」展开长文，不跳滚动位置）。
+  /// ⚠️ 发现页（TiebaExploreFeedViewController）有一份同名实现、并被放宽为 internal，
+  /// 但两页**没有继承关系**，跨类调不到 —— 所以本页保留自己这一份（各 3 行，逻辑同构）。
+  private func publishInPlace() {
+    lastRowSignature = rowSignature()
+    driver.publish(fresh: false, makeRows: { [weak self] in self?.makeRows() ?? [] })
+  }
+
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
     // 偏好（字号/隐藏图片/IP 显示）嵌在每行字典里、测量与渲染都吃这份快照：本页此前

@@ -5,6 +5,15 @@ import JXPhotoBrowser
 import Nuke
 import UIKit
 
+/// 查看器 cell 的弱引用盒：框架会复用 cell，会话若强引用会把离屏 cell（连同一张解码图）留在内存里。
+private final class TiebaPhotoBrowserCellBox {
+  weak var cell: TiebaPhotoBrowserImageCell?
+
+  init(_ cell: TiebaPhotoBrowserImageCell) {
+    self.cell = cell
+  }
+}
+
 @MainActor
 final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDelegate {
   let items: [TiebaPhotoItem]
@@ -13,6 +22,15 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   /// 手动「查看原图」的页（下标集合）：这些页改用原图档重载，菜单项随之消失
   ///（旧 JS ImageViewer 的 manualOriginalPages，逐页生效、翻页不回退）。
   private var manualOriginalPages: Set<Int> = []
+  /// 超分结果内存 LRU（key = 该档 URL + 变体 + 尺寸）：只在内存、关闭查看器即释放、不写盘。
+  private var superResolutionCache: [SuperResolutionKey: UIImage] = [:]
+  /// LRU 使用顺序（尾部最新）；超上限时从头部淘汰。
+  private var superResolutionRecency: [SuperResolutionKey] = []
+  /// 单飞：一次只跑一张（正在跑的下标 + 任务，关闭/换档时取消）。
+  private var superResolutionIndex: Int?
+  private var superResolutionTask: Task<Void, Never>?
+  /// 当前屏上各页的 cell（弱引用盒）：超分输入要取"这一页正在显示的那版像素"。
+  private var visibleCells: [Int: TiebaPhotoBrowserCellBox] = [:]
   private weak var host: UIViewController?
   private(set) var browser: TiebaPhotoBrowserViewController?
   private let actions = TiebaPhotoBrowserActionController()
@@ -57,6 +75,8 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     (action: .saveOriginal, title: "保存原图", icon: "arrow.down.to.line"),
     (action: .viewOriginal, title: "查看原图", icon: "photo"),
     (action: .share, title: "分享图片", icon: "square.and.arrow.up"),
+    // 本仓新增（旧查看器没有）：对"当前这一档已加载像素"做 2× 超分，只换内存图。
+    (action: .superResolution, title: "超分辨率", icon: "wand.and.stars"),
   ]
 
   init(
@@ -178,6 +198,13 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   private func finish() {
     guard !didFinish else { return }
     didFinish = true
+    // 正在跑的超分立刻取消（结果只对当前会话有意义），并丢掉所有内存图。
+    superResolutionTask?.cancel()
+    superResolutionTask = nil
+    superResolutionIndex = nil
+    superResolutionCache.removeAll()
+    superResolutionRecency.removeAll()
+    visibleCells.removeAll()
     sourceThumbnailView?.removeFromSuperview()
     sourceThumbnailView = nil
     removePresentBackdrop()
@@ -383,6 +410,7 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
       for: indexPath
     )
     if let imageCell = cell as? TiebaPhotoBrowserImageCell {
+      visibleCells[index] = TiebaPhotoBrowserCellBox(imageCell)
       imageCell.onSingleTap = { [weak self] in self?.toggleChrome() }
       imageCell.onMenuAction = { [weak self] rawAction in
         guard let self, self.items.indices.contains(index) else { return }
@@ -391,9 +419,14 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
           assertionFailure("未知的查看器动作：\(rawAction)")
           return
         }
-        // 「查看原图」是视图状态（逐页切档 + 重载），不是保存/分享那类动作。
+        // 「查看原图」「超分辨率」都是**视图状态**（逐页换图 + 重载），不是保存/分享那类动作：
+        // 前者切档（会重新下载原图档），后者只把当前已加载的像素换成超分结果（零请求）。
         if action == .viewOriginal {
           self.showOriginal(at: index)
+          return
+        }
+        if action == .superResolution {
+          self.startSuperResolution(at: index)
           return
         }
         self.actions.perform(action: action, item: self.items[index])
@@ -413,11 +446,14 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   ) {
     guard let imageCell = cell as? TiebaPhotoBrowserImageCell,
           items.indices.contains(index) else { return }
+    visibleCells[index] = TiebaPhotoBrowserCellBox(imageCell)
     imageCell.configure(
       item: displayItem(at: index),
       index: index,
       targetPixelSize: downsamplingPixelSize(for: browser),
-      containerSize: browser.view.bounds.size
+      containerSize: browser.view.bounds.size,
+      // 该页已算过超分就交内存图（URL 不变、零请求）；否则 nil = 正常走 Nuke。
+      overrideImage: cachedSuperResolution(at: index)
     )
   }
 
@@ -433,7 +469,176 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   private func showOriginal(at index: Int) {
     guard items.indices.contains(index), items[index].originUrl != nil,
           manualOriginalPages.insert(index).inserted else { return }
+    // 换档后像素来源变了：已算好的超分结果（还有正在跑的那张）必须作废，否则会把
+    // "省流档的超分图"顶在"原图档"上 —— 两档像素并不相同，用户会看到一张不属于该档的图。
+    discardSuperResolution(at: index, cancelRunning: true)
     browser?.reloadData()
+  }
+
+  // MARK: 超分辨率（长按「超分辨率」）
+
+  /// 对**当前这一页正在显示的那一档已加载像素**做 2× 超分：
+  ///   · 输入 = cell 上已经上屏的像素（省流档就是省流档、原图档就是原图档），绝不按 originUrl 再下一遍；
+  ///   · 4MP 上限按这一版的实际像素算（菜单已按同一判据置灰，这里是二次守卫）；
+  ///   · 模型加载与推理都在 actor 执行体上（外面包 Task.detached(priority:.userInitiated)），不占主线程；
+  ///   · **渐进式**：先算当前可见视口内的块，算完立刻换屏上的图（直接改 cell 的图，不重配 ⇒ 缩放/位移不跳），
+  ///     其余区域后台补齐，每约 1/3 再发一张快照；
+  ///   · 结果只进内存 LRU（key = 该档 URL + 变体 + 尺寸），关闭查看器即释放，不写盘、零网络请求。
+  private func startSuperResolution(at index: Int) {
+    guard items.indices.contains(index) else { return }
+    guard superResolutionIndex == nil else { return }
+    guard let cell = visibleCells[index]?.cell,
+          let source = cell.superResolutionSource,
+          TiebaSuperResolutionLimits.canUpscale(width: source.width, height: source.height) else {
+      actions.showTransientFailure("这张图还在加载，或尺寸不适合超分")
+      return
+    }
+    let key = superResolutionKey(for: index)
+    if let cached = superResolutionCache[key] {
+      // 命中缓存：同一张图（同一档 + 同一尺寸）第二次点不再跑模型。
+      touchSuperResolution(key)
+      cell.updateProgressiveImage(cached)
+      actions.showSuccess("超分完成（缓存）")
+      return
+    }
+    superResolutionIndex = index
+    actions.showProgress(text: "加载模型…", progress: nil)
+    // 可见视口 → 源图像素坐标（渐进式的"优先区"：这部分先算完就先清晰）。
+    let priority = cell.visibleImageFraction.map { fraction in
+      CGRect(
+        x: fraction.minX * CGFloat(source.width),
+        y: fraction.minY * CGFloat(source.height),
+        width: fraction.width * CGFloat(source.width),
+        height: fraction.height * CGFloat(source.height)
+      )
+    }
+    let onPartial: @Sendable (CGImage, Int, Int) -> Void = { [weak self] image, done, total in
+      Task { @MainActor in
+        self?.applySuperResolutionPartial(index: index, key: key, image: image, done: done, total: total)
+      }
+    }
+    let progress: @Sendable (Int, Int) -> Void = { [weak self] done, total in
+      Task { @MainActor in self?.updateSuperResolutionProgress(done: done, total: total, index: index) }
+    }
+    superResolutionTask = Task.detached(priority: .userInitiated) { [weak self] in
+      do {
+        let image = try await TiebaSuperResolutionEngine.shared.upscale(
+          source,
+          priority: priority,
+          onPartial: onPartial,
+          progress: progress
+        )
+        await self?.completeSuperResolution(index: index, key: key, image: image)
+      } catch {
+        await self?.failSuperResolution(index: index, error: error)
+      }
+    }
+  }
+
+  private func updateSuperResolutionProgress(done: Int, total: Int, index: Int) {
+    guard superResolutionIndex == index, total > 0 else { return }
+    actions.showProgress(text: "超分中 \(done)/\(total)", progress: Double(done) / Double(total))
+  }
+
+  /// 渐进式快照：立刻换屏上的图（不重配 ⇒ 缩放/位移不跳），并写进缓存供翻页回来复用。
+  private func applySuperResolutionPartial(
+    index: Int,
+    key: SuperResolutionKey,
+    image: CGImage,
+    done: Int,
+    total: Int
+  ) {
+    guard superResolutionIndex == index else { return }
+    let ui = UIImage(cgImage: image)
+    storeSuperResolution(ui, key: key)
+    visibleCells[index]?.cell?.updateProgressiveImage(ui)
+    actions.showProgress(
+      text: total > 0 ? "超分中 \(done)/\(total)" : "超分中",
+      progress: total > 0 ? Double(done) / Double(total) : nil
+    )
+  }
+
+  private func completeSuperResolution(index: Int, key: SuperResolutionKey, image: CGImage) {
+    guard superResolutionIndex == index else { return }
+    superResolutionIndex = nil
+    superResolutionTask = nil
+    let ui = UIImage(cgImage: image)
+    storeSuperResolution(ui, key: key)
+    visibleCells[index]?.cell?.updateProgressiveImage(ui)
+    actions.showSuccess("超分完成")
+  }
+
+  private func failSuperResolution(index: Int, error: Error) {
+    guard superResolutionIndex == index else { return }
+    superResolutionIndex = nil
+    superResolutionTask = nil
+    switch error {
+    case TiebaSuperResolutionError.cancelled:
+      actions.hideProgress()
+    case TiebaSuperResolutionError.tooManyPixels:
+      actions.showTransientFailure("图片太大，不超分")
+    case TiebaSuperResolutionError.modelUnavailable:
+      actions.showTransientFailure("超分模型不可用")
+    default:
+      actions.showTransientFailure("超分失败")
+    }
+    // 失败/取消都保持原图不动：缓存没写入，cell 上仍是原来那张（渐进式已显示的快照也来自同一张图）。
+  }
+
+  // MARK: 超分缓存（内存 LRU）
+
+  /// key = 该档的 URL + 变体（省流/原图）+ 服务端声明的尺寸。
+  /// 变体不同 ⇒ URL 不同 ⇒ 天然不会把省流档的超分图顶到原图档上。
+  private struct SuperResolutionKey: Hashable {
+    let url: String
+    let isOriginalVariant: Bool
+    let pixelWidth: Int
+    let pixelHeight: Int
+  }
+
+  private static let superResolutionCacheLimit = 3
+
+  private func superResolutionKey(for index: Int) -> SuperResolutionKey {
+    let item = items[index]
+    let isOriginal = manualOriginalPages.contains(index)
+    return SuperResolutionKey(
+      url: (isOriginal ? (item.originUrl ?? item.url) : item.url).absoluteString,
+      isOriginalVariant: isOriginal,
+      pixelWidth: Int(item.width.rounded()),
+      pixelHeight: Int(item.height.rounded())
+    )
+  }
+
+  private func cachedSuperResolution(at index: Int) -> UIImage? {
+    let key = superResolutionKey(for: index)
+    guard let image = superResolutionCache[key] else { return nil }
+    touchSuperResolution(key)
+    return image
+  }
+
+  private func storeSuperResolution(_ image: UIImage, key: SuperResolutionKey) {
+    superResolutionCache[key] = image
+    touchSuperResolution(key)
+    while superResolutionRecency.count > Self.superResolutionCacheLimit {
+      let evicted = superResolutionRecency.removeFirst()
+      superResolutionCache[evicted] = nil
+    }
+  }
+
+  private func touchSuperResolution(_ key: SuperResolutionKey) {
+    superResolutionRecency.removeAll { $0 == key }
+    superResolutionRecency.append(key)
+  }
+
+  /// 换档（查看原图）时取消正在跑的那张：像素来源已变，结果不再属于这一页。
+  /// 缓存不用清（key 含变体，旧档的条目只会自然淘汰）。
+  private func discardSuperResolution(at index: Int, cancelRunning: Bool) {
+    if cancelRunning, superResolutionIndex == index {
+      superResolutionTask?.cancel()
+      superResolutionTask = nil
+      superResolutionIndex = nil
+      actions.hideProgress()
+    }
   }
 
   func photoBrowser(
