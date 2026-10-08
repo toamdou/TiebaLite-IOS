@@ -489,6 +489,9 @@ final class TiebaOKSignViewController: UIViewController {
 
   /// 签到成功的彩带 + 对勾。纯新增浮层，不改页面任何既有行为。
   private func playSignSuccess() {
+    // 页面 pop / 切 tab 后服务回调照常触发：离屏跑 3 秒 display link + 彩带粒子纯属白跑
+    //（Home 版同款逻辑有同样的在屏检查，这里此前不对称）。
+    guard view.window != nil else { return }
     TiebaSceneHaptics.fire("action-success")
     successOverlay?.removeFromSuperview()
     let overlay = TiebaSignSuccessOverlay(frame: view.bounds)
