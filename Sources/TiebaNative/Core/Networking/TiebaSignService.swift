@@ -107,7 +107,7 @@ final class TiebaSignService {
     let snapshot = TiebaBackgroundSnapshot.shared
     guard !snapshot.bduss.isEmpty else {
       TiebaSceneHaptics.fire("action-fail")
-      Self.toast("未登录或登录信息已过期，请重新登录", on: presenter)
+      TiebaAppHooks.showSignToast("未登录或登录信息已过期，请重新登录", on: presenter)
       return
     }
     isSigning = true
@@ -138,7 +138,7 @@ final class TiebaSignService {
           isSigning = false
           onStateChange?()
           TiebaSceneHaptics.fire("action-success")
-          Self.toast("今天所有关注的吧都已签到过了", on: presenter)
+          TiebaAppHooks.showSignToast("今天所有关注的吧都已签到过了", on: presenter)
           return
         }
         updateActivity(activityId, done: 0, total: targets.count, name: "", success: 0, fail: 0, exp: 0)
@@ -238,7 +238,7 @@ final class TiebaSignService {
           TiebaSceneHaptics.fire("action-fail")
         }
         if success > 0 || fail > 0 {
-          Self.toast(
+          TiebaAppHooks.showSignToast(
             fail > 0
               ? "成功 \(success) 个吧，失败 \(fail) 个，+\(exp) 经验"
               : "成功签到 \(success) 个吧，+\(exp) 经验",
@@ -254,7 +254,7 @@ final class TiebaSignService {
         isSigning = false
         onStateChange?()
         TiebaSceneHaptics.fire("action-fail")
-        Self.toast("签到失败：\(error.localizedDescription)", on: presenter)
+        TiebaAppHooks.showSignToast("签到失败：\(error.localizedDescription)", on: presenter)
       }
     }
   }
@@ -397,17 +397,6 @@ final class TiebaSignService {
 
   // MARK: - 工具
 
-  private static func toast(_ text: String, on presenter: UIViewController) {
-    let pill = TiebaSignToastView()
-    presenter.view.addSubview(pill)
-    pill.translatesAutoresizingMaskIntoConstraints = false
-    NSLayoutConstraint.activate([
-      pill.centerXAnchor.constraint(equalTo: presenter.view.centerXAnchor),
-      pill.bottomAnchor.constraint(equalTo: presenter.view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-    ])
-    pill.show(success: true, text: text)
-  }
-
   private static func string(_ value: Any?) -> String {
     if let string = value as? String { return string }
     if let number = value as? NSNumber { return number.stringValue }
@@ -426,82 +415,3 @@ final class TiebaSignService {
 /// 签到结果 toast：尺寸沿用旧查看器 pill（圆角 18 / 图标 18 / 2.2s 自动消失），
 /// 材质走系统玻璃（部署底线 iOS 26，UIGlassEffect 恒可用），不再手写深色底。
 /// ⚠️ TiebaPhotoBrowser 里还有同名用途的旧 pill（那个文件不在本批改动范围）。
-private final class TiebaSignToastView: UIView {
-  private static let horizontalPadding: CGFloat = 16
-  private static let verticalPadding: CGFloat = 9
-  private static let contentGap: CGFloat = 6
-  private static let indicatorSize: CGFloat = 18
-
-  private let iconView = UIImageView()
-  private let label = UILabel()
-  private var hideWorkItem: DispatchWorkItem?
-
-  init() {
-    super.init(frame: .zero)
-    layer.cornerRadius = 18
-    layer.cornerCurve = .continuous
-    clipsToBounds = true
-    isUserInteractionEnabled = false
-    isHidden = true
-    alpha = 0
-
-    let backdrop = TiebaGlassContainerView.makeEffect()
-    backdrop.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(backdrop)
-
-    iconView.tintColor = .label
-    iconView.contentMode = .scaleAspectFit
-    iconView.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(iconView)
-
-    label.textColor = .label
-    label.font = .systemFont(ofSize: 14, weight: .medium)
-    label.textAlignment = .center
-    label.lineBreakMode = .byTruncatingTail
-    label.translatesAutoresizingMaskIntoConstraints = false
-    label.setContentCompressionResistancePriority(.required, for: .horizontal)
-    addSubview(label)
-
-    NSLayoutConstraint.activate([
-      backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
-      backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
-      backdrop.topAnchor.constraint(equalTo: topAnchor),
-      backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-      iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.horizontalPadding),
-      iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-      iconView.widthAnchor.constraint(equalToConstant: Self.indicatorSize),
-      iconView.heightAnchor.constraint(equalToConstant: Self.indicatorSize),
-
-      label.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: Self.contentGap),
-      label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.horizontalPadding),
-      label.topAnchor.constraint(equalTo: topAnchor, constant: Self.verticalPadding),
-      label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Self.verticalPadding),
-      label.widthAnchor.constraint(lessThanOrEqualToConstant: 300),
-    ])
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-  func show(success: Bool, text: String) {
-    iconView.image = UIImage(
-      systemName: success ? "checkmark.circle.fill" : "exclamationmark.circle.fill"
-    )
-    label.text = text
-    isHidden = false
-    TiebaAnimation.animate(duration: 0.18) { self.alpha = 1 }
-    hideWorkItem?.cancel()
-    let item = DispatchWorkItem { [weak self] in self?.hideToast() }
-    hideWorkItem = item
-    DispatchQueue.main.asyncAfter(deadline: .now() + 2.2, execute: item)
-  }
-
-  private func hideToast() {
-    hideWorkItem?.cancel()
-    hideWorkItem = nil
-    TiebaAnimation.animate(duration: 0.18, animations: { self.alpha = 0 }) { _ in
-      self.isHidden = true
-    }
-  }
-}

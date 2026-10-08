@@ -557,7 +557,7 @@ final class TiebaPostRowView: UIView {
         // 显示档 = 服务端 cdn_src（对 GIF 即 g=0 静态压缩档，真首帧几十 KB）；
         // 探测到 GIF 再拉 big_cdn_src 动图档起播（见 TiebaNuke「GIF 三档」注）。
         tiebaPostLoadDisplayImage(
-          TiebaPostRowText.displayURL(image, preferences: model.preferences),
+          model.preferences.displayURL(for: image),
           targetSize: view.bounds.size,
           cornerRadius: TiebaPostRowLayout.imageRadius,
           scale: scale,

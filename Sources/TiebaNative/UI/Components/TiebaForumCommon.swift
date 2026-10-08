@@ -1,5 +1,5 @@
-// 吧三页（详情 / 吧规 / 吧务）共用的小件：圆形头像（Nuke + 首字占位）与
-// 人数格式化（与 utils/index.ts formatCount 同规则）。
+//  吧相关的公共视图/格式化口径（头像、数字格式化）。\n//  从 Features/Forum/TiebaForumViews.swift 拆出：列表行与 UI/Components 也要用。
+
 import UIKit
 import Nuke
 import NukeExtensions
