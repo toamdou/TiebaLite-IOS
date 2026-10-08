@@ -185,10 +185,12 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
   // MARK: - 状态遮罩
 
   private func applyPhase() {
-    // 只有终态（成功/失败）才停表：提取阶段也要留着 60s 安全网——Cookie 永不到
-    // 时不能一直停在"正在获取用户信息"。
+    // 只有终态（成功/失败）与 .idle 停表：提取阶段要留着 60s 安全网——Cookie 永不到
+    // 时不能一直停在"正在获取用户信息"；而 .idle 是用户正在通行证页填表（输验证码、
+    // 等短信、调密码管理器），没有任何机器驱动的进展可等，超时只会把表单连同已输入
+    // 内容一起盖掉（走查 D14-1）——所以这里就停表，不靠调用点记得别开。
     switch phase {
-    case .success, .error:
+    case .success, .error, .idle:
       timeoutTask?.cancel()
     default:
       break
@@ -248,9 +250,11 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
     timeoutTask = Task { @MainActor [weak self] in
       try? await Task.sleep(nanoseconds: UInt64(Self.timeoutSeconds * 1_000_000_000))
       guard !Task.isCancelled, let self else { return }
-      // 终态不覆盖；提取阶段（loginProcessed 已置位）同样要有安全网。
+      // 终态不覆盖；提取阶段（loginProcessed 已置位）同样要有安全网；.idle = 用户填表，
+      // 这一拍已经不该再报超时（applyPhase 已停表，这里是兜底：任务可能在相位切换前
+      // 就已排上队）。走查 D14-1。
       switch self.phase {
-      case .success, .error: return
+      case .success, .error, .idle: return
       default: break
       }
       self.phase = .error("登录超时，请在页面中完成百度账号登录后重试")
@@ -279,8 +283,8 @@ final class TiebaLoginViewController: UIViewController, TiebaNativeScreen {
       loginTask = Task { @MainActor in await processLogin() }
     } else if phase == .loading,
       url.contains("passport.baidu.com") || url.contains("wappass.baidu.com") {
+      // 进入用户填表相位：applyPhase 停掉 .loading 那次计时且不再开新表（走查 D14-1）。
       phase = .idle
-      startTimeout()
     }
   }
 
