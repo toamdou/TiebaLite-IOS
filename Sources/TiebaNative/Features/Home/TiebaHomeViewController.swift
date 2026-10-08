@@ -473,7 +473,9 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     }
     guard let rows = try? TiebaSQLite.shared.query(
       database: TiebaSQLite.mainDatabase,
-      sql: "SELECT forum_name, forum_id, avatar FROM visit_history WHERE type = 'forum' ORDER BY timestamp DESC, id DESC",
+      // LIMIT：这是主线程上的整表扫描 + 排序，历史表随使用无限增长（同仓 store 同款查询
+      // 也加了 LIMIT 并留了这条纪律）。ORDER BY 已保证取到的是最新几条。
+      sql: "SELECT forum_name, forum_id, avatar FROM visit_history WHERE type = 'forum' ORDER BY timestamp DESC, id DESC LIMIT 60",
       params: []
     ) else { return [] }
     var seen = Set<String>()
