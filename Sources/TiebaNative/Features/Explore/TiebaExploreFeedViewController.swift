@@ -64,7 +64,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     }
     // 底栏重复点击走 tabReselected（用户口径：先回顶不刷新，顶部再按才刷新）。
     stateView.isHidden = true
-    stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    stateView.isDark = TiebaChromeTheme.current.dark
     // 信息流骨架：thread 卡片、半数带图（原 FeedContent.tsx variant="thread" count={8}）
     stateView.skeletonVariant = .thread
     stateView.skeletonInsets = UIEdgeInsets(top: 8, left: 0, bottom: 24, right: 0)
@@ -128,7 +128,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
 
   private func applyPalette() {
     var palette = TiebaSimpleRowPalette.default
-    let tint = TiebaNavigator.shared.chromeTheme.tint
+    let tint = TiebaChromeTheme.current.tint
     palette.base.primary = tint
     list.palette = palette
   }
@@ -834,7 +834,7 @@ extension TiebaDislikeSheetViewController: UITableViewDataSource, UITableViewDel
     content.text = reason.title
     cell.contentConfiguration = content
     cell.accessoryType = selected.contains(reason.id) ? .checkmark : .none
-    cell.tintColor = TiebaNavigator.shared.chromeTheme.tint
+    cell.tintColor = TiebaChromeTheme.current.tint
     return cell
   }
 

@@ -76,14 +76,14 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    view.backgroundColor = TiebaChromeTheme.current.background
     applyPalette()
     fabFunction = TiebaPreferenceSnapshot.string("forumFabFunction") ?? "refresh"
     list.isHidden = true
     list.onListEvent = { [weak self] event in self?.handleListEvent(event) }
     list.onScroll = { [weak self] scrollView in self?.handleScroll(scrollView) }
     stateView.isHidden = true
-    stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    stateView.isDark = TiebaChromeTheme.current.dark
     // 吧页骨架：thread 卡片（原 forum/[name].tsx SkeletonList count={6} variant="thread"）
     stateView.skeletonVariant = .thread
     stateView.skeletonCount = 6
@@ -1292,7 +1292,7 @@ extension TiebaForumClassifySheetViewController: UITableViewDataSource, UITableV
     cell.contentConfiguration = content
     let isSelected = isAll ? selectedId == nil : classifies[indexPath.row - 1].id == selectedId
     cell.accessoryType = isSelected ? .checkmark : .none
-    cell.tintColor = TiebaNavigator.shared.chromeTheme.tint
+    cell.tintColor = TiebaChromeTheme.current.tint
     return cell
   }
 

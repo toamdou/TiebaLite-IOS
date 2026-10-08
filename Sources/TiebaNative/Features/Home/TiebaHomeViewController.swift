@@ -111,7 +111,9 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .systemGroupedBackground
+    // 页面底色由外观档给：扁平档 = systemBackground = **纯白**（用户明确"不要深灰"）；
+    // 卡片档 = 分组灰（白卡浮在其上）。
+    view.backgroundColor = TiebaListAppearance.pageBackground
     sortMode = loadSortMode()
     isSingleColumn = TiebaPreferenceSnapshot.bool("forumListSingle", default: true)
     let topBar = buildTopBar()
@@ -155,13 +157,15 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     // 设置页改这两个键时本页可能就在屏/在栈里：订阅广播即时生效（列表列数、
     // 历史吧行不等到下次 viewWillAppear）。
     prefToken = TiebaPreferenceChange.observe(
-      keys: ["forumListSingle", "homePageShowHistoryForum"]
+      keys: ["forumListSingle", "homePageShowHistoryForum", TiebaListAppearance.key]
     ) { [weak self] in
       // 这个闭包本身就在主 actor 隔离域里（非 Sendable 闭包继承外层隔离），
       // broadcast 又是 queue: .main 投递的，所以不需要 assumeIsolated 断言。
       guard let self else { return }
       self.isSingleColumn = TiebaPreferenceSnapshot.bool("forumListSingle", default: true)
-      self.updateLayoutMetrics()
+      // 外观档（设置 → 个性化 → 设计风格）切换：底色 / 外边距 / 行距 / 行底发际线
+      // 一起换，换档不做跨档动画（直接整表重配，见 48 号 §3.3）。
+      self.applyAppearance()
       self.loadRecentForums()
     }
     pill.translatesAutoresizingMaskIntoConstraints = false
@@ -290,7 +294,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     let signing = TiebaSignService.shared.isSigning
     var sign = signButton.configuration ?? .gray()
     sign.image = UIImage(systemName: signing ? "checkmark.seal.fill" : "checkmark.seal")
-    sign.baseForegroundColor = signing ? TiebaNavigator.shared.chromeTheme.tint : .label
+    sign.baseForegroundColor = signing ? TiebaChromeTheme.current.tint : .label
     signButton.configuration = sign
     signButton.accessibilityLabel = "一键签到"
     var sort = sortButton.configuration ?? .gray()
@@ -308,7 +312,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     var toggle = UIButton.Configuration.plain()
     toggle.image = UIImage(systemName: "chevron.up")
     toggle.imagePadding = 4
-    toggle.baseForegroundColor = TiebaNavigator.shared.chromeTheme.tint
+    toggle.baseForegroundColor = TiebaChromeTheme.current.tint
     historyToggle.configuration = toggle
     historyToggle.addAction(UIAction { [weak self] _ in self?.toggleHistory() }, for: .touchUpInside)
     let headerStack = UIStackView(arrangedSubviews: [historyTitle, UIView(), historyToggle])
@@ -510,9 +514,16 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
 
   private func buildList() {
     layout.scrollDirection = .vertical
-    layout.minimumLineSpacing = 8
+    // 外边距 / 行距都是外观档的函数：卡片档 = 16 + 8（卡片浮在分组灰底上），
+    // 扁平档 = 0 + 0（**通栏**，行紧贴、由行底发际线分隔）。
+    layout.minimumLineSpacing = listLineSpacing
     layout.minimumInteritemSpacing = 4
-    layout.sectionInset = UIEdgeInsets(top: 8, left: 16, bottom: 24, right: 16)
+    layout.sectionInset = UIEdgeInsets(
+      top: TiebaListAppearance.isFlat ? 0 : 8,
+      left: listHorizontalInset,
+      bottom: 24,
+      right: listHorizontalInset
+    )
     collectionView.translatesAutoresizingMaskIntoConstraints = false
     collectionView.backgroundColor = .clear
     collectionView.alwaysBounceVertical = true
@@ -522,7 +533,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     collectionView.register(TiebaHomeStateCell.self, forCellWithReuseIdentifier: TiebaHomeStateCell.reuseID)
     collectionView.refreshControl = refreshControl
     refreshControl.addTarget(self, action: #selector(handleRefreshControl), for: .valueChanged)
-    stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    stateView.isDark = TiebaChromeTheme.current.dark
     // 首屏骨架：通用列表行（原 index.tsx SkeletonList variant="row" count={8}）
     stateView.skeletonVariant = .row
     stateView.skeletonInsets = UIEdgeInsets(top: 8, left: 16, bottom: 24, right: 16)
@@ -558,7 +569,10 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       ) as? TiebaHomeForumCell
       guard let self, self.displayedForums.indices.contains(indexPath.item) else { return cell }
       let forum = self.displayedForums[indexPath.item]
-      cell?.configure(forum: forum)
+      cell?.configure(
+        forum: forum,
+        showsHairline: self.isSingleColumn && TiebaListAppearance.isFlat
+      )
       cell?.onUnfollow = { [weak self] in self?.confirmUnfollow(forum) }
       if self.entrancePending { cell?.playEntrance(index: indexPath.item) }
       return cell
@@ -592,8 +606,13 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     layout.invalidateLayout()
   }
 
+  /// 列表左右外边距：卡片档 16（卡片浮在分组灰底上），扁平档 0（通栏）。
+  private var listHorizontalInset: CGFloat { TiebaListAppearance.isFlat ? 0 : 16 }
+  /// 行间距：卡片档 8（卡与卡之间留缝），扁平档 0（行紧贴，由行底发际线分隔）。
+  private var listLineSpacing: CGFloat { TiebaListAppearance.isFlat ? 0 : 8 }
+
   private func itemSize(for width: CGFloat) -> CGSize {
-    let available = max(width - 32, 0)
+    let available = max(width - listHorizontalInset * 2, 0)
     if isSingleColumn { return CGSize(width: available, height: 62) }
     return CGSize(width: max((available - 4) / 2, 0), height: 58)
   }
@@ -658,6 +677,21 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
         }
       }
     }
+  }
+
+  /// 外观档落地：页面底色 + 列表外边距 / 行距 + 整表重配（cell 的卡面在 configure 里换）。
+  /// 幂等，可重复调用。
+  private func applyAppearance() {
+    view.backgroundColor = TiebaListAppearance.pageBackground
+    layout.minimumLineSpacing = listLineSpacing
+    layout.sectionInset = UIEdgeInsets(
+      top: TiebaListAppearance.isFlat ? 0 : 8,
+      left: listHorizontalInset,
+      bottom: 24,
+      right: listHorizontalInset
+    )
+    updateLayoutMetrics()
+    applyList()
   }
 
   private func applyList() {

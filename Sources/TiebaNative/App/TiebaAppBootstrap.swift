@@ -17,7 +17,9 @@ public final class TiebaAppBootstrap {
   nonisolated private static let log = Logger(subsystem: "com.tiebalite.app", category: "bootstrap")
 
   /// 底部「消息」tab 下标（未读角标挂它，与 TiebaNavigator 的 tabNames 同序）。
-  static let notificationsTabIndex = 2
+  /// 常量本体在 Core/Routing/TiebaTabIndex.swift —— 后台通知器（Core）也要用，
+  /// 不能让下层反向依赖 App 层，所以这个路由事实放在最底层；这里只是转发。
+  static let notificationsTabIndex = TiebaTabIndex.notifications
 
   private weak var window: UIWindow?
   private var started = false

@@ -7,13 +7,16 @@ import UIKit
 import Nuke
 
 enum TiebaPostRowLayout {
-  /// 左右边距（用户 2026-09-19："帖子卡片与屏幕两边的距离太大" ⇒ 16 收紧到 10）。
-  /// 这个值同时是已知主贴占位卡的边距（TiebaThreadKnownPostView 引它），两边必须同值，
-  /// 否则首包落地换卡时会横向跳一次。
-  static let cardMarginH: CGFloat = 10
-  static let cardMarginV: CGFloat = 4
-  static let cardPadding: CGFloat = 16
-  static let cardRadius: CGFloat = 16
+  /// 卡面几何**由外观档给**（TiebaListAppearance）：卡片档 = 左右 10 / 上下 4 / 圆角 16，
+  /// 扁平档 = 全 0（通栏、行间只靠发际线）。
+  ///
+  /// 卡片档的 10 来自用户 2026-09-19"帖子卡片与屏幕两边的距离太大"（16 收紧到 10）。
+  /// 这个值同时是已知主贴占位卡的边距（TiebaThreadKnownPostView 引它），两边**同源**
+  /// 才不会在首包落地换卡时横向跳一次 —— 所以这里不再各写各的常量，只做转发。
+  static var cardMarginH: CGFloat { TiebaListAppearance.cardMarginH }
+  static var cardMarginV: CGFloat { TiebaListAppearance.cardMarginV }
+  static let cardPadding: CGFloat = TiebaListAppearance.cardPadding
+  static var cardRadius: CGFloat { TiebaListAppearance.cardRadius }
   static let avatarSide: CGFloat = 36
   static let avatarSideMain: CGFloat = 40
   static let avatarGap: CGFloat = 10

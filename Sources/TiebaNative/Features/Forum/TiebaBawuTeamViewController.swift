@@ -216,7 +216,7 @@ final class TiebaBawuTeamViewController: UIViewController {
   /// 串下发（默认值里的 user 行卡片底是固定白，深色下会亮块），主色换成主题主色。
   private func colorStrings() -> [String: String] {
     let palette = TiebaSimpleRowPalette.default
-    let dark = TiebaNavigator.shared.chromeTheme.dark
+    let dark = TiebaChromeTheme.current.dark
     let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
 
     func hex(_ color: UIColor) -> String {
@@ -232,7 +232,7 @@ final class TiebaBawuTeamViewController: UIViewController {
       )
     }
 
-    let tint = TiebaNavigator.shared.chromeTheme.tint
+    let tint = TiebaChromeTheme.current.tint
     return [
       "primary": hex(tint),
       "primarySoft": hex(tint.withAlphaComponent(0.12)),

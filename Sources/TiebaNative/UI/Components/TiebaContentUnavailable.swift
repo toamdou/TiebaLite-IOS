@@ -169,7 +169,7 @@ enum TiebaChromePalette {
   /// 列表色板 = 默认语义色 + 导航壳主色（primary/chip/onChip 三键，与底栏强调色一致）。
   static func listPalette() -> TiebaSimpleRowPalette {
     var palette = TiebaSimpleRowPalette.default
-    let tint = TiebaNavigator.shared.chromeTheme.tint
+    let tint = TiebaChromeTheme.current.tint
     palette.base.primary = tint
     return palette
   }

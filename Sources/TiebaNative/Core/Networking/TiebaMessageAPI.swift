@@ -144,7 +144,7 @@ enum TiebaMessageAPI {
       agree: counts.agree,
       total: counts.total
     )
-    TiebaNavigator.shared.setTabBadge(index: 2, text: counts.total > 99 ? "99+" : (counts.total > 0 ? String(counts.total) : ""))
+    TiebaAppHooks.setTabBadge(index: TiebaTabIndex.notifications, text: counts.total > 99 ? "99+" : (counts.total > 0 ? String(counts.total) : ""))
     Task { try? await UNUserNotificationCenter.current().setBadgeCount(counts.total) }
   }
 
@@ -239,7 +239,7 @@ enum TiebaMessageAPI {
   }
 
   static func hex(_ color: UIColor) -> String {
-    let traits = UITraitCollection(userInterfaceStyle: TiebaNavigator.shared.chromeTheme.dark ? .dark : .light)
+    let traits = UITraitCollection(userInterfaceStyle: TiebaChromeTheme.current.dark ? .dark : .light)
     let resolved = color.resolvedColor(with: traits)
     var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
     resolved.getRed(&r, green: &g, blue: &b, alpha: &a)

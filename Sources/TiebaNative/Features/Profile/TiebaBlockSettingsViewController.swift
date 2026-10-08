@@ -42,11 +42,11 @@ final class TiebaBlockSettingsViewController: TiebaFormPageController {
   private var dislikeState: LoadState = .loading
 
   /// 本页跟导航壳主题（不是偏好直读），并取壳主题色。
-  override var formIsDark: Bool { TiebaNavigator.shared.chromeTheme.dark }
+  override var formIsDark: Bool { TiebaChromeTheme.current.dark }
   override var formTintHex: String? {
     let themeName = TiebaPreferenceSnapshot.string(formIsDark ? "darkTheme" : "lightTheme") ?? "default"
     guard themeName != "default" else { return nil }
-    return TiebaFormListView.hexString(from: TiebaNavigator.shared.chromeTheme.tint)
+    return TiebaFormListView.hexString(from: TiebaChromeTheme.current.tint)
   }
 
   override func viewDidLoad() {

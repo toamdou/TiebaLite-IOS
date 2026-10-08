@@ -33,7 +33,7 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    view.backgroundColor = TiebaChromeTheme.current.background
     applyPalette()
     list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     list.swipeActions = Self.swipeActions
@@ -253,7 +253,7 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
 
   private func applyPalette() {
     list.palette = TiebaChromePalette.listPalette()
-    skeletonView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    skeletonView.isDark = TiebaChromeTheme.current.dark
   }
 
   private func showLoginState() {

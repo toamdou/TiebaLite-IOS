@@ -77,6 +77,10 @@ public nonisolated enum TiebaRowDiff {
     // "这一行是另一行内容"。世代只在字号真的变化时 +1，稳态下是常量，不影响
     // 跨页/跨屏复用命中率。
     mixer.mix(TiebaTypography.generation)
+    // 外观档世代（TiebaListAppearance.generation）：卡片 ↔ 扁平切换会改**每一行**的
+    // 边距/圆角/底色 ⇒ 行几何全变，旧测量必须整体失配重测。与字号世代同一个槽位、
+    // 同一条理由（见 TiebaListAppearance 文件头）：让"换档"直接等于"这是另一行内容"。
+    mixer.mix(TiebaListAppearance.generation)
     mixValue(row, into: &mixer)
     return mixer.value
   }

@@ -20,6 +20,8 @@ final class TiebaPostRowView: UIView {
   private var assignedText: NSAttributedString?
 
   private let cardView = UIView()
+  /// 行底**通栏**发际线（扁平档的行间分隔；卡片档整条收起，见 TiebaListAppearance）。
+  private let rowHairline = UIView()
   private var avatarView: TiebaForumAvatarView?
   private let titleLabel = UILabel()
   private let nameLabel = UILabel()
@@ -84,6 +86,12 @@ final class TiebaPostRowView: UIView {
     backgroundColor = .clear
     clipsToBounds = true
     buildSubviews()
+    // 加在最后 = 画在最上层：行底那条线要压在卡面之上（它落在卡面 16pt 内边距的
+    // 空白里，不与内容重叠，压上来只是保证任何情况下都不会被卡面盖掉）。
+    rowHairline.isHidden = true
+    // 裸 UIView 默认吃触摸：发际线叠在卡之上，不关掉会吞掉行底 1px 带上的长按。
+    rowHairline.isUserInteractionEnabled = false
+    addSubview(rowHairline)
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -118,9 +126,14 @@ final class TiebaPostRowView: UIView {
     cardView.frame = plan.cardFrame
     cardView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
     cardView.layer.cornerCurve = .continuous
-    cardView.backgroundColor = model.palette.card
-    cardView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
-    cardView.layer.borderColor = model.palette.borderCard.cgColor
+    // 卡面底色 / 描边**由外观档给**：扁平档没有独立卡面（底色 = 页面底色、不描边），
+    // 行与行靠下面的 rowHairline 分隔。这里不写 if —— 绘制期不加外观分支（49 号 §1）。
+    cardView.backgroundColor = TiebaListAppearance.rowSurface(card: model.palette.card)
+    cardView.layer.borderWidth = TiebaListAppearance.rowBorderWidth(
+      scale: traitCollection.displayScale)
+    cardView.layer.borderColor =
+      TiebaListAppearance.rowBorderColor(card: model.palette.borderCard)?.cgColor
+    layoutRowHairline(plan)
 
     avatarControl.frame = plan.avatarFrame
     titleLabel.isHidden = plan.titleFrame == nil
@@ -231,14 +244,17 @@ final class TiebaPostRowView: UIView {
     // 与 buildSubviews 里的规范值同源（黑 55%；改前这里是 45%，会把新规范覆盖回旧值）。
     imageBadge.backgroundColor = UIColor.black.withAlphaComponent(0.55)
     subPostsHairline.backgroundColor = palette.separator
+    rowHairline.backgroundColor = palette.separator
     for divider in subPostDividers { divider.backgroundColor = palette.separator }
     // 楼中楼正文颜色同样烘在 attributed 里（palette.text），与主贴正文一致。
     subPostsMoreLabel.textColor = palette.primary
     // 底色 = 主题 surfaceSecondary（原 JS replyToolbar 的 colors.surfaceSecondary，
     // 浅色下与页面底色同值）：只靠 hairline 描边成卡，不用 .systemFill —— 那块灰
     // 在浅色下是一整条"脏底"（用户实证）。
-    toolbarView.backgroundColor = TiebaSimpleRowPalette.default.surfaceSecondary
-    toolbarView.layer.borderColor = palette.borderCard.cgColor
+    toolbarView.backgroundColor = TiebaListAppearance.rowSurface(
+      card: TiebaSimpleRowPalette.default.surfaceSecondary)
+    toolbarView.layer.borderColor =
+      TiebaListAppearance.rowBorderColor(card: palette.borderCard)?.cgColor
     toolbarReplyLabel.textColor = palette.text
     seeLzButton.tintColor = palette.primary
     sortButton.tintColor = palette.primary
@@ -713,6 +729,16 @@ final class TiebaPostRowView: UIView {
     }
   }
 
+  /// 行底通栏发际线：只有扁平档有 frame（卡片档 plan 里就是 nil ⇒ 整条收起）。
+  private func layoutRowHairline(_ plan: TiebaPostRowPlan) {
+    guard let frame = plan.rowHairlineFrame else {
+      rowHairline.isHidden = true
+      return
+    }
+    rowHairline.isHidden = false
+    rowHairline.frame = frame
+  }
+
   private func layoutSubPosts(model: TiebaPostRowModel, plan: TiebaPostRowPlan) {
     guard let frame = plan.subPostsFrame else {
       subPostsControl.frame = .zero
@@ -773,7 +799,9 @@ final class TiebaPostRowView: UIView {
     toolbarView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
     toolbarView.layer.cornerCurve = .continuous
     // glassCard 的 hairline 描边：浅色下工具栏底色贴近页面底色，没有描边整条看不出来。
-    toolbarView.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
+    // （扁平档没有卡面 ⇒ 描边宽 0，见 TiebaListAppearance.rowBorderWidth。）
+    toolbarView.layer.borderWidth = TiebaListAppearance.rowBorderWidth(
+      scale: traitCollection.displayScale)
     toolbarView.layer.borderColor = model.palette.borderCard.cgColor
     if let textFrame = plan.toolbarTextFrame {
       toolbarReplyLabel.frame = textFrame

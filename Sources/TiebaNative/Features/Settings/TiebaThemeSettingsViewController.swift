@@ -22,6 +22,7 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     "lightTheme", "darkTheme", "customPrimaryColor", "followSystemDarkMode", "darkMode",
     "toolbarPrimaryColor", "statusBarFontDark", "entranceAnimation",
     TiebaTypography.bodySizeKey, TiebaTypography.uiSizeKey, TiebaTypography.followsBodyKey,
+    TiebaListAppearance.key,
     // 旧键仍观察：本页的正文滑杆会把倍率镜像写回它（兼容未改造的读取方）。
     TiebaTypography.legacyScaleKey,
   ]
@@ -159,6 +160,16 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
             icon: "iphone",
             value: followSystem ? "1" : "0"
           ),
+          TiebaFormRow(
+            id: TiebaListAppearance.key,
+            kind: .picker,
+            title: "设计风格",
+            subtitle: "扁平：通栏、行间发际线、亮色纯白底；卡片：圆角白卡浮在分组灰底上",
+            icon: "rectangle.split.1x2",
+            value: TiebaListAppearance.style().rawValue,
+            options: options(
+              TiebaListAppearance.Style.allCases.map { (value: $0.rawValue, label: $0.title) })
+          ),
         ]
       ),
       TiebaFormSection(
@@ -290,6 +301,7 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
           "customPrimaryColor", default: TiebaThemePalette.defaultCustomPrimary))
     }
     form.setValue(id: "followSystemDarkMode", value: followSystem ? "1" : "0")
+    form.setValue(id: TiebaListAppearance.key, value: TiebaListAppearance.style().rawValue)
     // 跟随系统时「深色模式」行的显示值是当前外观档（跟随语义），不是落库的 darkMode。
     let darkMode = followSystem ? formIsDark : TiebaPreferences.bool("darkMode", default: false)
     form.setValue(id: "darkMode", value: darkMode ? "1" : "0")
@@ -454,6 +466,12 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
 
   private func handlePick(_ id: String, _ value: String) {
     switch id {
+    case TiebaListAppearance.key:
+      TiebaSceneHaptics.fire("toggle")
+      // 写库 → TiebaListAppearance 快照重解析（世代 +1，全仓度量缓存随之失效）→
+      // 广播回本页与关注页/帖子页。外观档不是结构性变化（不增删行），走 setValue 回推。
+      guard let style = TiebaListAppearance.Style(rawValue: value) else { return }
+      write(id, string: style.rawValue)
     case "lightTheme", "darkTheme":
       TiebaSceneHaptics.fire("toggle")
       guard write(id, string: value) else { return }

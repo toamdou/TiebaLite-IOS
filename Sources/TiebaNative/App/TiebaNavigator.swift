@@ -46,7 +46,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   /// 四个 tab 的 UITab（**顺序 = 路由表声明顺序**，与屏幕上的排列无关）。索引一律走
   /// 这里：侧边栏编辑会改视觉顺序，而 tabIndex / 角标 / 重按回调必须恒定。
   private var tabItems: [UITab] = []
-  private var theme: TiebaChromeTheme = .default
+
 
   /// 当前选中的 tab。读 UIKit 的 selectedTab：用户点底栏/侧边栏与程序化切 tab
   /// 都写这同一个属性，不必再自己记一份。
@@ -65,8 +65,6 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     return currentNav
   }
 
-  /// 当前主题（宿主 VC 画底色要用，保证转场首帧不闪白）。
-  var chromeTheme: TiebaChromeTheme { theme }
   private var hostCounter = 0
   private var tabRootHosts: [Int: TiebaRouteHostViewController] = [:]
   /// hostId → 宿主：NSMapTable 强键弱值。压栈页 VC（含整棵列表树、Nuke 任务）
@@ -96,6 +94,17 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   @discardableResult
   public func install(in window: UIWindow) -> UIViewController {
     self.window = window
+    // 依赖倒置的注入点：Core / UI 不认本类，只认 TiebaAppHooks（见该文件的说明）。
+    // 装壳时把"下层需要的 6 个能力"接上；未装壳前这些口子是 no-op，与改前
+    // "调用发生在装壳前也一样落空"语义一致。
+    TiebaAppHooks.routing = TiebaAppHooks.Routing(
+      setTabBadge: { index, text in TiebaNavigator.shared.setTabBadge(index: index, text: text) },
+      navigate: { TiebaNavigator.shared.navigate($0) },
+      open: { TiebaNavigator.shared.open(url: $0) },
+      scrollCurrentToTop: { TiebaNavigator.shared.scrollCurrentToTop() },
+      applyTheme: { TiebaNavigator.shared.applyTheme($0) },
+      setDefaultStatusBarStyle: { TiebaNavigator.shared.setDefaultStatusBarStyle($0) }
+    )
 
     let tab = TiebaMainTabBarController()
     tab.onReselect = { [weak self] idx in
@@ -155,7 +164,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     // tab bar controller，但显式声明后系统那侧的持久化范围才是确定的）。
     tab.customizationIdentifier = "tieba-main-tabs"
     tab.configureSidebar()
-    tab.applyTheme(theme)
+    tab.applyTheme(TiebaChromeTheme.current)
 
     let shell = TiebaRootNavigationController(rootViewController: tab)
     shell.delegate = self
@@ -167,7 +176,9 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
 
   /// RJ 侧下发主题（跟随应用内主题，不是系统外观）。
   public func applyTheme(_ theme: TiebaChromeTheme) {
-    self.theme = theme
+    // 单一数据源在 Core（TiebaChromeTheme.current）：本类只是**写**入点。
+    // 原来这里是 self.theme = theme、读者绕道 TiebaChromeTheme.current。
+    TiebaChromeTheme.current = theme
     tabBar?.applyTheme(theme)
     // 栏按钮色用 navTint 而不是 tint：默认主题下底栏选中是主色、返回箭头是
     // colors.text，两者本来就不是一个颜色（原 headerTint 的语义）。

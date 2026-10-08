@@ -24,10 +24,10 @@ final class TiebaNotificationsViewController: UIViewController, TiebaTabReselect
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    view.backgroundColor = TiebaChromeTheme.current.background
     segmented.select(0, animated: false)
     segmented.onSelect = { [weak self] index in self?.handleSegmentSelect(index) }
-    stateView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    stateView.isDark = TiebaChromeTheme.current.dark
     stateView.isHidden = true
     stateView.onButtonPress = { [weak self] id in
       if id == "login" {

@@ -319,7 +319,7 @@ enum TiebaFeedRowBuilder {
 enum TiebaRowTheme {
   static func colors() -> [String: String] {
     let palette = TiebaSimpleRowPalette.default
-    let dark = TiebaNavigator.shared.chromeTheme.dark
+    let dark = TiebaChromeTheme.current.dark
     let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
 
     func hex(_ color: UIColor) -> String {
@@ -338,7 +338,7 @@ enum TiebaRowTheme {
       )
     }
 
-    let tint = TiebaNavigator.shared.chromeTheme.tint
+    let tint = TiebaChromeTheme.current.tint
     return [
       "primary": hex(tint),
       "primarySoft": hex(tint.withAlphaComponent(0.12)),

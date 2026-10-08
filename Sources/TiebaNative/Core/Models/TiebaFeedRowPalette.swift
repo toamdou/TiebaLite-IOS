@@ -1,6 +1,3 @@
-// 从 TiebaRowMetrics.swift 拆出（H10 千行文件拆分）：行内配色（JS 主题下发）。
-// 纯搬运：整类型逐字搬走。
-
 import UIKit
 
 public nonisolated struct TiebaFeedRowPalette: @unchecked Sendable, Equatable {

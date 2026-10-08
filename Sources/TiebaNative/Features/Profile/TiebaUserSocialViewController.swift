@@ -32,7 +32,7 @@ final class TiebaUserSocialViewController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    view.backgroundColor = TiebaChromeTheme.current.background
     navigationItem.titleView = segmented
     segmented.selectedSegmentIndex = fans ? 0 : 1
     segmented.addTarget(self, action: #selector(handleSegmentChange), for: .valueChanged)
