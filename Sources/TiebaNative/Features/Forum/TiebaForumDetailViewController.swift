@@ -242,7 +242,7 @@ extension TiebaForumDetailViewController: UITableViewDataSource, UITableViewDele
         config = .cell()
         config.text = "在浏览器中打开"
         config.image = UIImage(systemName: "safari")
-        config.imageProperties.tintColor = TiebaNavigator.shared.chromeTheme.tint
+        config.imageProperties.tintColor = TiebaChromeTheme.current.tint
         tappable = true
       default:
         config = .cell()
@@ -388,9 +388,9 @@ private final class TiebaForumProfileCell: UITableViewCell {
       chipIcon.widthAnchor.constraint(equalToConstant: 12),
       chipIcon.heightAnchor.constraint(equalToConstant: 12),
     ])
-    chipLabel.textColor = TiebaNavigator.shared.chromeTheme.tint
-    chipIcon.tintColor = TiebaNavigator.shared.chromeTheme.tint
-    chipView.backgroundColor = TiebaNavigator.shared.chromeTheme.tint.withAlphaComponent(0.1)
+    chipLabel.textColor = TiebaChromeTheme.current.tint
+    chipIcon.tintColor = TiebaChromeTheme.current.tint
+    chipView.backgroundColor = TiebaChromeTheme.current.tint.withAlphaComponent(0.1)
   }
 
   @available(*, unavailable)

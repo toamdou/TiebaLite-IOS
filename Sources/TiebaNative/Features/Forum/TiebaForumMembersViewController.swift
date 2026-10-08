@@ -85,7 +85,7 @@ final class TiebaForumMembersViewController: UIViewController {
     collectionView.alwaysBounceVertical = true
     collectionView.refreshControl = refreshControl
     collectionView.delegate = self
-    refreshControl.tintColor = TiebaNavigator.shared.chromeTheme.tint
+    refreshControl.tintColor = TiebaChromeTheme.current.tint
     refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
     registerCells()
 
@@ -685,7 +685,7 @@ final class MemberCardCell: UICollectionViewCell {
 
   func configure(info: TiebaForumAPI.TiebaForumMembers.MyInfo?, forumName: String) {
     guard let info else { return }
-    let tint = TiebaNavigator.shared.chromeTheme.tint
+    let tint = TiebaChromeTheme.current.tint
     progress.progressTintColor = tint
     badge.textColor = tint
     badge.backgroundColor = tint.withAlphaComponent(0.15)
@@ -755,7 +755,7 @@ final class MemberGridCell: UICollectionViewCell {
     levelBadge.isHidden = !hasLevel
     levelNameLabel.isHidden = hasLevel
     if hasLevel {
-      let tint = TiebaNavigator.shared.chromeTheme.tint
+      let tint = TiebaChromeTheme.current.tint
       levelBadge.text = "Lv.\(member.userLevel)"
       levelBadge.textColor = tint
       levelBadge.backgroundColor = tint.withAlphaComponent(0.15)
@@ -870,7 +870,7 @@ final class RankRowCell: UICollectionViewCell {
     levelBadge.isHidden = !hasLevel
     placeholderSlot.isHidden = hasLevel
     if hasLevel {
-      let tint = TiebaNavigator.shared.chromeTheme.tint
+      let tint = TiebaChromeTheme.current.tint
       levelBadge.text = "Lv.\(user.level)"
       levelBadge.textColor = tint
       levelBadge.backgroundColor = tint.withAlphaComponent(0.15)
@@ -922,7 +922,7 @@ final class MemberGroupHeaderView: UICollectionReusableView {
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   func configure(title: String, count: Int) {
-    dot.backgroundColor = TiebaNavigator.shared.chromeTheme.tint
+    dot.backgroundColor = TiebaChromeTheme.current.tint
     titleLabel.text = title
     countChip.text = count > 0 ? "\(count)人" : ""
     countChip.isHidden = count <= 0
@@ -959,7 +959,7 @@ final class RankFooterView: UICollectionReusableView {
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   func configure(hasMore: Bool, loading: Bool) {
-    spinner.color = TiebaNavigator.shared.chromeTheme.tint
+    spinner.color = TiebaChromeTheme.current.tint
     var config = UIButton.Configuration.plain()
     config.baseForegroundColor = .tertiaryLabel
     if loading {
@@ -968,7 +968,7 @@ final class RankFooterView: UICollectionReusableView {
       button.isEnabled = false
     } else if hasMore {
       config.title = "加载更多"
-      config.baseForegroundColor = TiebaNavigator.shared.chromeTheme.tint
+      config.baseForegroundColor = TiebaChromeTheme.current.tint
       spinner.stopAnimating()
       button.isEnabled = true
     } else {

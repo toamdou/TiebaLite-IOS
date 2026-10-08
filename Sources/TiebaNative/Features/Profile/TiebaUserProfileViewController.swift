@@ -51,7 +51,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    view.backgroundColor = TiebaChromeTheme.current.background
     applyPalette()
     list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     list.isHidden = true
@@ -427,7 +427,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
       action: nil
     )
     item.accessibilityLabel = "分享主页"
-    item.tintColor = TiebaNavigator.shared.chromeTheme.navTint
+    item.tintColor = TiebaChromeTheme.current.navTint
     item.primaryAction = UIAction { [weak self] _ in self?.shareProfile() }
     return [item]
   }
@@ -740,7 +740,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
 
   private func applyPalette() {
     list.palette = TiebaChromePalette.listPalette()
-    skeletonView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    skeletonView.isDark = TiebaChromeTheme.current.dark
   }
 }
 

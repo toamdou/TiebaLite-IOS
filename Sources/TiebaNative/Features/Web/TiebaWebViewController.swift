@@ -293,7 +293,7 @@ final class TiebaWebViewController: UIViewController {
   // MARK: - 状态刷新
 
   private func updateChrome() {
-    let theme = TiebaNavigator.shared.chromeTheme
+    let theme = TiebaChromeTheme.current
     spinner.color = theme.tint  // colors.primary
     loadingBar.backgroundColor = theme.tint
     loadingOverlay.accentColor = theme.tint

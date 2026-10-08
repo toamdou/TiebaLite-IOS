@@ -52,7 +52,7 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    view.backgroundColor = TiebaChromeTheme.current.background
     applyPalette()
     buildTopBar()
     list.onListEvent = { [weak self] event in self?.handleEvent(event) }
@@ -554,7 +554,7 @@ final class TiebaHistoryViewController: UIViewController, TiebaNativeScreen {
 
   private func applyPalette() {
     list.palette = TiebaChromePalette.listPalette()
-    skeletonView.isDark = TiebaNavigator.shared.chromeTheme.dark
+    skeletonView.isDark = TiebaChromeTheme.current.dark
   }
 
 }

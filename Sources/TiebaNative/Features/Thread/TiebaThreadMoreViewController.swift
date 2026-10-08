@@ -30,7 +30,7 @@ final class TiebaThreadMoreViewController: UIViewController {
     super.viewDidLoad()
     view.backgroundColor = .systemGroupedBackground
     form.translatesAutoresizingMaskIntoConstraints = false
-    form.isDark = TiebaNavigator.shared.chromeTheme.dark
+    form.isDark = TiebaChromeTheme.current.dark
     form.onRowPress = { [weak self] id in self?.handleRowPress(id) }
     form.onPick = { [weak self] group, value in
       guard group == "sort" else { return }

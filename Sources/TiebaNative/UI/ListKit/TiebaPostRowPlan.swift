@@ -35,6 +35,9 @@ struct TiebaPostRowPlanInputs {
 struct TiebaPostRowPlan {
   var rowHeight: CGFloat = 0
   var cardFrame: CGRect = .zero
+  /// 行底**通栏**发际线（只在外观档 = 扁平时有值）：卡片档的行靠卡片间距分隔，
+  /// 扁平档的行与行紧贴，必须有一条线把两行分开。
+  var rowHairlineFrame: CGRect?
   var titleFrame: CGRect?
   var avatarFrame: CGRect = .zero
   var nameFrame: CGRect = .zero
@@ -373,5 +376,17 @@ struct TiebaPostRowPlan {
       bottom = toolbarY + TiebaPostRowLayout.toolbarHeight + 8
     }
     rowHeight = bottom + TiebaPostRowLayout.cardMarginV
+    // 扁平档的行间分隔：通栏 1 物理像素，贴在行底。**行高不变**——扁平档的
+    // cardMarginV 已收到 0，腾出来的位置正好给它，线画在卡面 16pt 内边距的空白里，
+    // 不压任何内容。厚度用 inputs.hairline（模型按屏幕 scale 算好的那份），
+    // 测量与绘制同源 ⇒ 不会出现半像素灰边。
+    if TiebaListAppearance.drawsRowHairline {
+      rowHairlineFrame = CGRect(
+        x: 0,
+        y: max(rowHeight - inputs.hairline, 0),
+        width: width,
+        height: inputs.hairline
+      )
+    }
   }
 }

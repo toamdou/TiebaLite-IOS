@@ -51,7 +51,7 @@ final class TiebaForegroundNotifier {
         TiebaBackgroundSync.shared.clearNotificationCounts(uid: lastKnownUid)
         lastKnownUid = ""
       }
-      TiebaNavigator.shared.setTabBadge(index: TiebaAppBootstrap.notificationsTabIndex, text: "")
+      TiebaAppHooks.setTabBadge(index: TiebaTabIndex.notifications, text: "")
       Task { await TiebaNotificationCenter.shared.setBadge(0) }
       return
     }
@@ -100,8 +100,8 @@ final class TiebaForegroundNotifier {
       let counts = TiebaBackgroundSync.shared.getNotificationCounts(uid: uid)
     else { return }
     let total = counts["total"] as? Int ?? 0
-    TiebaNavigator.shared.setTabBadge(
-      index: TiebaAppBootstrap.notificationsTabIndex,
+    TiebaAppHooks.setTabBadge(
+      index: TiebaTabIndex.notifications,
       text: total > 99 ? "99+" : (total > 0 ? String(total) : "")
     )
   }

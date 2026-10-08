@@ -17,25 +17,8 @@ import UIKit
 // 一起盖掉。分栈后 push 只换内容区。代价是切 tab 不再共享堆栈——这是 iPad 的
 // 常规交互。外层容器栈恒定只有一个 VC，仅为保住 statusBarStyle 链路与顶栏扫描。
 
-/// 主题与状态栏配置：跟随应用内主题，而非系统外观。
-/// Sendable：四个字段全是值类型（UIColor 在 iOS 26 SDK 里本身就是 Sendable），
-/// 所以这里不需要 @unchecked Sendable —— 真 Sendable 就够跨隔离域传主题。
-public struct TiebaChromeTheme: Sendable {
-  /// 底栏选中态 / 强调色（原 colors.primary）
-  public var tint: UIColor
-  /// 导航栏返回箭头与按钮色（原 headerTint：默认 colors.text，可被"工具栏
-  /// 使用主色调"改成 primary）
-  public var navTint: UIColor
-  public var background: UIColor
-  public var dark: Bool
-
-  public static let `default` = TiebaChromeTheme(
-    tint: .label,
-    navTint: .label,
-    background: .systemBackground,
-    dark: false
-  )
-}
+// TiebaChromeTheme 已下移到 Core/TiebaChromeTheme.swift（依赖倒置：UI/设置表单
+// 等下层都要读主题，不能反向依赖 App 层的导航器）。本文件只留壳。
 
 // MARK: - 根导航栈
 
@@ -142,17 +125,19 @@ public final class TiebaMainTabBarController: UITabBarController {
     // "编辑保存后顺序不变"的原因。
     let wanted: UITabBarController.Mode = regular ? .tabSidebar : .tabBar
     if mode != wanted { mode = wanted }
-    // 收纳方向：**上滑（手指向上 = 继续往下读）时收起、下滑恢复**。属于底栏；
-    // iPad 侧边栏形态下没有这回事，交给系统。
+    // 收纳方向：**手指上滑（继续往下读）时收起、手指下滑（往回翻）时恢复**。
+    // 属于底栏；iPad 侧边栏形态下没有这回事，交给系统。
     //
-    // 为什么用 .onScrollUp 而不是 .onScrollDown（2026-10-07 用户复报「浏览内容时
-    // 底栏持续存在」）：系统枚举名的语义是**手指拖动方向**，.onScrollDown = 手指
-    // 下滑时收纳 —— 于是读长帖（手指持续上滑）时底栏一直挂着，正好反了。头文件里
-    // .onScrollUp 的说明是 minimizes when scrolling up, and expands when scrolling
-    // back down，与「读内容时收起、往回翻时恢复」一致。
+    // 枚举名里的 scrolling up/down 指**视口在内容里的走向**，不是手指方向：
+    // scrolling down = contentOffset.y 增大 = 视口往内容后半段走 = 手指上滑。
+    // 所以「手指上滑收起」对应 .onScrollDown。头文件给 .onScrollUp 的适用场景是
+    // "content is aligned to the bottom"（底部对齐、只能往回翻的内容）——正是本 App
+    // 的反面，可作旁证。
+    // ⚠️ f19f33e 曾按"枚举名 = 手指方向"改成了 .onScrollUp，读反了；2026-10-08
+    // 用户复报「动态页仍是手指下滑隐藏」，本次改回 .onScrollDown。
     tabBarMinimizeBehavior = regular
       ? .automatic
-      : (tabBarMinimizeEnabled ? .onScrollUp : .never)
+      : (tabBarMinimizeEnabled ? .onScrollDown : .never)
     guard regular else { return }
     // 只落一次默认展开。之后 sidebar.isHidden 归用户（系统折叠按钮）与
     // TiebaNavigator 的进二级页收起管——这里再写会把用户的折叠顶回去。
@@ -184,8 +169,8 @@ public final class TiebaMainTabBarController: UITabBarController {
     didSet {
       guard oldValue != tabBarMinimizeEnabled else { return }
       guard traitCollection.horizontalSizeClass != .regular else { return }
-      // 方向同 configureSidebar：上滑收纳、下滑恢复（见那里的注释）。
-      tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollUp : .never
+      // 方向同 configureSidebar：手指上滑收纳、下滑恢复（见那里的注释）。
+      tabBarMinimizeBehavior = tabBarMinimizeEnabled ? .onScrollDown : .never
     }
   }
 }
@@ -317,7 +302,7 @@ public final class TiebaRouteHostViewController: UIViewController {
     let root = UIView()
     // 底色用应用主题（不是 .systemBackground）：深色主题 + 系统浅色时，
     // .systemBackground 是白的，push 转场的第一帧会闪一下白。
-    root.backgroundColor = TiebaNavigator.shared.chromeTheme.background
+    root.backgroundColor = TiebaChromeTheme.current.background
     let child = nativeChild
     addChild(child)
     let content: UIView = child.view
@@ -373,7 +358,7 @@ public final class TiebaRouteHostViewController: UIViewController {
   /// trait 源；值仍取自 navigator 的同一主题决定，不新增判据。
   func syncNativeScreenChrome() {
     let child = nativeChild
-    child.overrideUserInterfaceStyle = TiebaNavigator.shared.chromeTheme.dark ? .dark : .light
+    child.overrideUserInterfaceStyle = TiebaChromeTheme.current.dark ? .dark : .light
     guard let screen = child as? TiebaNativeScreen else { return }
     if let title = screen.screenTitle { navigationItem.title = title }
     if let style = screen.preferredScreenStatusBarStyle { statusBarStyleOverride = style }

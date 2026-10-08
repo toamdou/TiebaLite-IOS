@@ -100,7 +100,7 @@ enum TiebaLinkOpener {
   /// dismissButtonStyle done / presentationStyle automatic / barCollapsing /
   /// 非 readerMode。
   static func openInApp(_ urlString: String) {
-    let controlsColor = TiebaFormListView.hexString(from: TiebaNavigator.shared.chromeTheme.tint)
+    let controlsColor = TiebaFormListView.hexString(from: TiebaChromeTheme.current.tint)
     Task { @MainActor in
       do {
         _ = try await TiebaInAppBrowser.open(

@@ -635,7 +635,7 @@ enum TiebaChrome {
   ///      chromeTheme.background 在 applyTheme 之前是同一个实例，比较因此才成立：
   ///      改前症状是每轮都写，改后只在该色真正变化时写一次。
   static var chromeWindowColor: UIColor {
-    return TiebaNavigator.shared.chromeTheme.background
+    return TiebaChromeTheme.current.background
   }
 
   /// 应用主题 → 窗口/chrome trait：nil 还原 .unspecified（跟随系统，不锁窗口）。

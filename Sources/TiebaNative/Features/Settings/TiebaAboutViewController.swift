@@ -91,7 +91,7 @@ final class TiebaAboutViewController: UIViewController {
 
   private func reloadSections() {
     form.tintHex = Self.formTintHex()
-    form.isDark = TiebaNavigator.shared.chromeTheme.dark
+    form.isDark = TiebaChromeTheme.current.dark
     form.sections = buildSections()
   }
 
@@ -107,10 +107,10 @@ final class TiebaAboutViewController: UIViewController {
   /// 导航壳的 themeTint（= colors.primary）。主题名按当前深浅取 lightTheme/darkTheme
   /// （深浅用导航壳收到的 dark，即 JS 的 isDark，避免被宿主强制 trait 影响判断）。
   private static func formTintHex() -> String? {
-    let dark = TiebaNavigator.shared.chromeTheme.dark
+    let dark = TiebaChromeTheme.current.dark
     let themeName = TiebaPreferenceSnapshot.string(dark ? "darkTheme" : "lightTheme") ?? "default"
     guard themeName != "default" else { return nil }
-    return TiebaFormListView.hexString(from: TiebaNavigator.shared.chromeTheme.tint)
+    return TiebaFormListView.hexString(from: TiebaChromeTheme.current.tint)
   }
 
   private func buildSections() -> [TiebaFormSection] {

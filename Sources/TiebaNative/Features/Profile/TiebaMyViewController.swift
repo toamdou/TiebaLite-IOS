@@ -221,7 +221,7 @@ final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
   /// 主题变了要重取：applyAccount 每次 viewWillAppear 必经，挂在这里才不会停旧色。
   private func applyLoginButtonTheme() {
     var config = loginButton.configuration ?? UIButton.Configuration.filled()
-    config.baseBackgroundColor = TiebaNavigator.shared.chromeTheme.tint
+    config.baseBackgroundColor = TiebaChromeTheme.current.tint
     loginButton.configuration = config
   }
 
@@ -270,7 +270,7 @@ final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
       introLabel.isHidden = false
     }
     form.tintHex = Self.formTintHex()
-    form.isDark = TiebaNavigator.shared.chromeTheme.dark
+    form.isDark = TiebaChromeTheme.current.dark
     form.sections = buildSections(loggedIn: loggedIn)
     view.setNeedsLayout()
   }
@@ -281,10 +281,10 @@ final class TiebaMyViewController: UIViewController, TiebaTabReselectable {
   }
 
   private static func formTintHex() -> String? {
-    let dark = TiebaNavigator.shared.chromeTheme.dark
+    let dark = TiebaChromeTheme.current.dark
     let themeName = TiebaPreferenceSnapshot.string(dark ? "darkTheme" : "lightTheme") ?? "default"
     guard themeName != "default" else { return nil }
-    return TiebaFormListView.hexString(from: TiebaNavigator.shared.chromeTheme.tint)
+    return TiebaFormListView.hexString(from: TiebaChromeTheme.current.tint)
   }
 
   private func buildSections(loggedIn: Bool) -> [TiebaFormSection] {

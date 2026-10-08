@@ -191,7 +191,7 @@ final class TiebaUpdateDialogViewController: UIViewController {
     let release = service.release
     let hasUpdate = service.hasUpdate
     let currentVersion = service.currentVersion
-    let theme = TiebaNavigator.shared.chromeTheme
+    let theme = TiebaChromeTheme.current
 
     titleLabel.text = Self.dialogTitle(
       status: status,

@@ -20,7 +20,7 @@ extension TiebaThreadViewController {
       )
       item.accessibilityLabel = label
       item.primaryAction = UIAction { [weak self] _ in self?.openForum() }
-      item.tintColor = TiebaNavigator.shared.chromeTheme.navTint
+      item.tintColor = TiebaChromeTheme.current.navTint
       return [item]
     }
     let item = TiebaThreadForumAvatarItem(frame: CGRect(x: 0, y: 0, width: 30, height: 30))
