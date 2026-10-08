@@ -99,7 +99,8 @@ public nonisolated enum TiebaAnimationFrameRate {
   //   1. TiebaEntrance.play —— 入场组 opacity + translateY，首屏几十行同时跑；
   //   2. tiebaPlaySpring —— 点赞 pop / 计数跳动两条弹簧（弹簧与手势驱动正是 ProMotion
   //      的主场；上游也对 spring 路径单独写过帧率，CAAnimationUtils.swift）；
-  //   3. playCollapseAnimation —— 折叠组 opacity + scaleY，280ms。
+  //   3. （原条目已删）折叠组动画此后改为 UIViewPropertyAnimator（frame + alpha），**没有**接 CA 帧率对齐
+  //      —— 它不再产出 CAAnimation，align 无从下手。按本清单排查帧率覆盖面时，别把折叠当成"已对齐"。
   //
   // 判断"不该接"（各有理由，别"顺手"补）：
   //   - 骨架扫光（TiebaSkeletonView）：repeatCount = .infinity，整个加载期
