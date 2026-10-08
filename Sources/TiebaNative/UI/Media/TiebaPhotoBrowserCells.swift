@@ -83,8 +83,6 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
   private var retryCount = 0
   private var fullImageReady = false
   private var appliedURL: URL?
-  /// 当前上屏的是不是「超分辨率结果」这张内存图（非 Nuke 加载）：同一 URL 下也要能识别换图。
-  private var appliedOverride: UIImage?
   /// 当前页是否有原图档（决定长按菜单是否展示「保存原图」）。
   private var hasOrigin = false
   /// 当前页是否可切看原图（服务端 showOriginalBtn 且有独立原图档，且不在展示原图）。
@@ -142,7 +140,6 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     cancelLoading()
     generation += 1
     appliedURL = nil
-    appliedOverride = nil
     retryCount = 0
     fullImageReady = false
     hasOrigin = false
@@ -154,19 +151,9 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
 
   // MARK: 配置 / 加载
 
-  /// - Parameter overrideImage: 超分辨率结果（内存图）。非 nil 时直接上屏、**不走 Nuke**；
-    ///   nil = 回到按 item.url 正常加载。页面 URL 不变，所以不能再只看 appliedURL 判断"要不要重配"。
-  func configure(
-    item: TiebaPhotoItem,
-    index: Int,
-    targetPixelSize: CGSize,
-    containerSize: CGSize,
-    overrideImage: UIImage? = nil
-  ) {
-    // 同一 URL 但换了超分结果（或从超分结果切回原档）也必须重配，否则屏幕上会留着上一张。
-    guard appliedURL != item.url || appliedOverride !== overrideImage else { return }
+  func configure(item: TiebaPhotoItem, index: Int, targetPixelSize: CGSize, containerSize: CGSize) {
+    guard appliedURL != item.url else { return }
     appliedURL = item.url
-    appliedOverride = overrideImage
     hasOrigin = item.originUrl != nil
     hasViewOriginal = item.canViewOriginal && item.originUrl != nil
     generation += 1
@@ -186,15 +173,6 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     wantsLongFit = item.isLongImage(in: containerSize)
     spinner.stopAnimating()
 
-    // 超分结果直接落位（与"大图已就绪"同一路径：停 spinner、套长图 fit），**不发任何网络请求**。
-    if let overrideImage {
-      imageView.image = overrideImage
-      fullImageReady = true
-      setNeedsLayout()
-      applyLongImageFitIfNeeded()
-      return
-    }
-
     if let thumbRequest = TiebaPhotoBrowserImageLoader.thumbRequest(item.thumbUrl, pixelSize: targetPixelSize) {
       thumbTask = Task { [weak self] in
         guard let container = try? await TiebaPhotoBrowserImageLoader.load(thumbRequest, isGif: false) else {
@@ -213,46 +191,6 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
       containerSize: containerSize,
       generation: generation
     )
-  }
-
-  // MARK: 超分辨率（输入 = 当前页正在显示的已加载像素）
-
-  /// 超分输入：当前这一页**已经加载到屏幕上的那版像素**。大图未就绪时就是垫图那版
-  /// （仍属"当前展示的像素"，且不会为此多发一次请求）。
-  var superResolutionSource: CGImage? {
-    imageView.image?.cgImage
-  }
-
-  /// 菜单里「超分辨率」能否执行（>4MP 或任一边 < 128 时置灰）。
-  var canSuperResolution: Bool {
-    guard let source = superResolutionSource else { return false }
-    return TiebaSuperResolutionLimits.canUpscale(width: source.width, height: source.height)
-  }
-
-  /// 当前可见的那部分图像占整幅的比例（0…1）——渐进式超分据此先算视口内的块。
-  /// 取的是 scrollView 的可见矩形与 imageView（含缩放后）的相交部分，因此缩放/平移状态下同样准。
-  var visibleImageFraction: CGRect? {
-    guard imageView.image != nil, bounds.width > 1, bounds.height > 1 else { return nil }
-    let frame = imageView.frame
-    guard frame.width > 1, frame.height > 1 else { return nil }
-    let visible = CGRect(origin: scrollView.contentOffset, size: scrollView.bounds.size)
-    let intersection = visible.intersection(frame)
-    guard !intersection.isNull, intersection.width > 1, intersection.height > 1 else { return nil }
-    return CGRect(
-      x: (intersection.minX - frame.minX) / frame.width,
-      y: (intersection.minY - frame.minY) / frame.height,
-      width: intersection.width / frame.width,
-      height: intersection.height / frame.height
-    )
-  }
-
-  /// 渐进式超分的中途快照：直接换屏上的图。不重配（不重置缩放/位移），用户看到的是"逐渐变清晰"。
-  func updateProgressiveImage(_ image: UIImage) {
-    appliedOverride = image
-    imageView.image = image
-    fullImageReady = true
-    spinner.stopAnimating()
-    setNeedsLayout()
   }
 
   func cancelLoading() {
@@ -497,23 +435,16 @@ extension TiebaPhotoBrowserImageCell: UIContextMenuInteractionDelegate {
       // 且该页当前没在展示原图（已在展示时切档会把该项摘掉，对齐旧 JS）。
       let showsOrigin = self?.hasOrigin ?? false
       let showsViewOriginal = self?.hasViewOriginal ?? false
-      // 「超分辨率」恒展示，但当前这版像素不适合超分时置灰（>4MP / 任一边 < 128 / 像素还没加载出来）。
-      let canSuperResolve = self?.canSuperResolution ?? false
       let children = TiebaPhotoBrowserSession.menuActions
         .filter { spec in
           switch spec.action {
           case .saveOriginal: return showsOrigin
           case .viewOriginal: return showsViewOriginal
-          case .save, .share, .superResolution: return true
+          case .save, .share: return true
           }
         }
         .map { spec in
-          let disabled = (spec.action == .superResolution) && !canSuperResolve
-          return UIAction(
-            title: spec.title,
-            image: UIImage(systemName: spec.icon),
-            attributes: disabled ? .disabled : []
-          ) { [weak self] _ in
+          UIAction(title: spec.title, image: UIImage(systemName: spec.icon)) { [weak self] _ in
             self?.onMenuAction?(spec.action.rawValue)
           }
         }
