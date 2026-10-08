@@ -51,9 +51,9 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     // 滑杆实时示例的字体**由本页给**：表单层不认识字号体系（正文级/界面级），
     // 示例字号 = "滑杆当前值这么多 pt"——拖动中逐帧现算，不等落库。
     form.slidePreviewFont = { _, value in
-      TiebaSimpleText.scaledFont(
-        size: CGFloat(value), weight: .regular,
-        scale: CGFloat(value / TiebaTypography.referenceSize))
+      // 示例字号 = 滑杆当前值这么多 pt：size 已经是要显示的字号，scale 再乘一遍就成了二次增长
+      //（24 档会显示约 33.9pt、12 档约 8.5pt，只有默认档 17pt 碰巧正确）。
+      TiebaSimpleText.scaledFont(size: CGFloat(value), weight: .regular, scale: 1)
     }
     // 「深色模式」行在跟随系统时 = 当前外观档：系统深浅切换要重算行值。
     styleRegistration = registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
