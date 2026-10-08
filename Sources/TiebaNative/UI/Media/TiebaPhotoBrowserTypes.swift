@@ -81,7 +81,7 @@ public struct TiebaPhotoItem: Sendable {
       ? origin
       : (image.src.isEmpty ? origin : image.src)
     guard let url = TiebaPhotoItem.normalizedURL(raw) else { return nil }
-    let thumbRaw = TiebaPostRowText.displayURL(image, preferences: preferences)?
+    let thumbRaw = preferences.displayURL(for: image)?
       .absoluteString ?? raw
     self.init(
       url: url,
@@ -110,8 +110,7 @@ public struct TiebaPhotoItem: Sendable {
 
   /// 贴吧图源 http:// 一律升级 https（与 TiebaNuke.secureURL 同约定）。
   static func normalizedURL(_ raw: String) -> URL? {
-    let upgraded = raw.hasPrefix("http://") ? "https://" + raw.dropFirst("http://".count) : raw
-    return URL(string: upgraded)
+    TiebaImageURL.normalized(raw)
   }
 }
 

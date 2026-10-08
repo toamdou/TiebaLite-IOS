@@ -591,21 +591,6 @@ extension TiebaForumMembersViewController: UICollectionViewDelegate {
 // MARK: - 单元格
 
 /// 带内边距的等级徽标（chip 形态；未设背景色时就是普通文字标签）。
-final class TiebaMemberBadgeLabel: UILabel {
-  var contentInsets = UIEdgeInsets(top: 1.5, left: 7, bottom: 1.5, right: 7)
-
-  override func drawText(in rect: CGRect) {
-    super.drawText(in: rect.inset(by: contentInsets))
-  }
-
-  override var intrinsicContentSize: CGSize {
-    let size = super.intrinsicContentSize
-    return CGSize(
-      width: size.width + contentInsets.left + contentInsets.right,
-      height: size.height + contentInsets.top + contentInsets.bottom
-    )
-  }
-}
 
 /// 「我的会员卡」：Lv 徽标 + 我在吧名 + 等级/进度 + 星标。
 final class MemberCardCell: UICollectionViewCell {

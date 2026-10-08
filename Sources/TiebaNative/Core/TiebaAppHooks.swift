@@ -36,6 +36,9 @@ nonisolated enum TiebaAppHooks {
     var scrollCurrentToTop: (@Sendable () -> Void)?
     var applyTheme: (@Sendable (TiebaChromeTheme) -> Void)?
     var setDefaultStatusBarStyle: (@Sendable (UIStatusBarStyle) -> Void)?
+    /// 签到结果提示。闭包是 @MainActor（提示要碰视图），故这里不收 Sendable 闭包：
+    /// @MainActor 的函数类型本身就是 Sendable，参数里的 UIViewController 不必再 Sendable。
+    var showSignToast: (@MainActor (String, UIViewController) -> Void)?
   }
 
   private static let box = TiebaMutex<Routing>(Routing())
@@ -61,5 +64,11 @@ nonisolated enum TiebaAppHooks {
 
   static func setDefaultStatusBarStyle(_ style: UIStatusBarStyle) {
     routing.setDefaultStatusBarStyle?(style)
+  }
+
+  /// 签到结果提示：实现由 UI 层给（UI/Overlay/TiebaSignToast.swift），未装壳前静默。
+  @MainActor
+  static func showSignToast(_ text: String, on presenter: UIViewController) {
+    routing.showSignToast?(text, presenter)
   }
 }

@@ -401,14 +401,6 @@ private final class TiebaEmoticonRunDelegate {
   /// 列表展示档：all_origin 用原图，其余用服务端显示档（src = cdn_src，对 GIF
   /// 即 g=0 静态档；CDN 的 sign 绑定变换段，客户端不许改写，见 TiebaNuke「GIF
   /// 三档」注）。
-  static func displayURL(_ image: TiebaThreadImage, preferences: TiebaPostPreferences) -> URL? {
-    if preferences.imageLoadType == "all_no" { return nil }
-    let raw = preferences.imageLoadType == "all_origin"
-      ? (image.originSrc.isEmpty ? image.src : image.originSrc)
-      : (image.src.isEmpty ? image.originSrc : image.src)
-    return TiebaPhotoItem.normalizedURL(raw)
-  }
-
   /// GIF 判定候选链（列表行用；按可靠度排序，去重由 TiebaNuke.firstGIFURL 做）。
   ///
   /// 线上取证（2026-10-06，用户报的 p/11060036651 全量 29 图 / 25 张动图）：

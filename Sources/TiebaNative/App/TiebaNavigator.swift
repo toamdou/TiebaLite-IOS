@@ -95,7 +95,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
   public func install(in window: UIWindow) -> UIViewController {
     self.window = window
     // 依赖倒置的注入点：Core / UI 不认本类，只认 TiebaAppHooks（见该文件的说明）。
-    // 装壳时把"下层需要的 6 个能力"接上；未装壳前这些口子是 no-op，与改前
+    // 装壳时把"下层需要的能力"接上；未装壳前这些口子是 no-op，与改前
     // "调用发生在装壳前也一样落空"语义一致。
     TiebaAppHooks.routing = TiebaAppHooks.Routing(
       setTabBadge: { index, text in TiebaNavigator.shared.setTabBadge(index: index, text: text) },
@@ -103,7 +103,8 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       open: { TiebaNavigator.shared.open(url: $0) },
       scrollCurrentToTop: { TiebaNavigator.shared.scrollCurrentToTop() },
       applyTheme: { TiebaNavigator.shared.applyTheme($0) },
-      setDefaultStatusBarStyle: { TiebaNavigator.shared.setDefaultStatusBarStyle($0) }
+      setDefaultStatusBarStyle: { TiebaNavigator.shared.setDefaultStatusBarStyle($0) },
+      showSignToast: { text, presenter in TiebaSignToast.show(text, on: presenter) }
     )
 
     let tab = TiebaMainTabBarController()

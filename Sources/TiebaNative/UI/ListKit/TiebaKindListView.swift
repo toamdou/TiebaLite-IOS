@@ -1687,7 +1687,7 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
           let frame = single || !row.plan.imageItemFrames.indices.contains(index)
             ? imagesFrame
             : row.plan.imageItemFrames[index]
-          guard let url = TiebaPostRowText.displayURL(image, preferences: row.preferences) else {
+          guard let url = row.preferences.displayURL(for: image) else {
             continue
           }
           appendDisplay(url, size: frame.size, radius: TiebaPostRowLayout.imageRadius)
