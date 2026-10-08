@@ -42,6 +42,8 @@ final class TiebaForumRulesViewController: UIViewController, TiebaNativeScreen {
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+  private static let headerReuseID = "TiebaRuleSectionHeader"
+
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .systemGroupedBackground
@@ -56,6 +58,8 @@ final class TiebaForumRulesViewController: UIViewController, TiebaNativeScreen {
     table.register(TiebaRuleLinkCell.self, forCellReuseIdentifier: TiebaRuleLinkCell.reuseID)
     table.register(TiebaRuleSpacerCell.self, forCellReuseIdentifier: TiebaRuleSpacerCell.reuseID)
     table.register(TiebaRuleFooterCell.self, forCellReuseIdentifier: TiebaRuleFooterCell.reuseID)
+    table.register(
+      TiebaRuleSectionHeaderView.self, forHeaderFooterViewReuseIdentifier: Self.headerReuseID)
     table.rowHeight = UITableView.automaticDimension
     table.estimatedRowHeight = 60
     table.sectionHeaderTopPadding = 12
@@ -211,7 +215,11 @@ extension TiebaForumRulesViewController: UITableViewDataSource, UITableViewDeleg
 
   func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
     guard let title = sections[section].title else { return nil }
-    let header = TiebaRuleSectionHeaderView(reuseIdentifier: nil)
+    // 走复用队列：此前每次显示都新建（子视图 + 5 条约束全建），下拉刷新 reloadData 后
+    // 全部重建；configure 已是就地更新语义。
+    let header = table.dequeueReusableHeaderFooterView(withIdentifier: Self.headerReuseID)
+      as? TiebaRuleSectionHeaderView
+      ?? TiebaRuleSectionHeaderView(reuseIdentifier: Self.headerReuseID)
     header.configure(number: sections[section].number, title: title)
     return header
   }
