@@ -21,6 +21,9 @@ final class TiebaEditProfileViewController: UIViewController {
 
   private var fetchedUid = ""
   private var failedUid = ""
+  /// 拉取失败的原因。失败后本页的简介/性别停在初始默认值，静默保存会把默认值写回服务端，
+  /// 所以失败必须在页面上可见（走查 D11-1）。
+  private var failedProfileReason = ""
   private var loading = false
   private var saving = false
   private var uploading = false
@@ -70,15 +73,19 @@ final class TiebaEditProfileViewController: UIViewController {
         self.fetched = true
         self.reload()
       }
-      guard let detail = try? await TiebaProfileAPI.profile(uid: target) else {
+      do {
+        let detail = try await TiebaProfileAPI.profile(uid: target)
+        guard target == self.uid else { return }
+        self.nickName = detail.nameShow.isEmpty ? detail.name : detail.nameShow
+        self.intro = detail.intro
+        self.sex = detail.sex
+        self.fetchedUid = target
+        self.failedUid = ""
+        self.failedProfileReason = ""
+      } catch {
         self.failedUid = target
-        return
+        self.failedProfileReason = error.localizedDescription
       }
-      guard target == self.uid else { return }
-      self.nickName = detail.nameShow.isEmpty ? detail.name : detail.nameShow
-      self.intro = detail.intro
-      self.sex = detail.sex
-      self.fetchedUid = target
     }
   }
 
@@ -142,9 +149,17 @@ final class TiebaEditProfileViewController: UIViewController {
     let saveRow = saving
       ? TiebaFormRow(id: "saving", kind: .spinner, title: "")
       : TiebaFormRow(id: "save", kind: .button, title: "保存")
+    // 资料没拉到时把"这一页的值不可信"写在页面上，并给一次重试：否则页面看起来完全正常，
+    // 用户只改昵称就保存，简介/性别按默认值覆盖服务端（走查 D11-1）。
+    let profileLoadFailed = !uid.isEmpty && failedUid == uid && !loading
+    var nickSection = TiebaFormSection(title: "昵称", rows: [nickRow])
+    if profileLoadFailed {
+      nickSection.rows.append(TiebaFormRow(id: "reloadProfile", kind: .button, title: "重试加载资料"))
+      nickSection.footer = "资料未能加载：\(failedProfileReason)。简介与性别仍是默认值，保存会按默认值覆盖服务端。"
+    }
     return [
       avatarSection,
-      TiebaFormSection(title: "昵称", rows: [nickRow]),
+      nickSection,
       TiebaFormSection(title: "性别", rows: sexRows),
       TiebaFormSection(title: "个人简介", rows: [introRow]),
       TiebaFormSection(rows: [saveRow]),
@@ -159,6 +174,12 @@ final class TiebaEditProfileViewController: UIViewController {
     } else if id == "avatar" {
       // 有未处理的上传失败时，这一下就是「就地重试」；否则才是选新图。
       if let failure = failedPortrait { uploadPortrait(failure.uri) } else { openPicker() }
+    } else if id == "reloadProfile" {
+      // 两个门都要清：failedUid 挡住 loadProfile 自身，fetched 挡住 viewWillAppear 的入口。
+      failedUid = ""
+      failedProfileReason = ""
+      fetched = false
+      loadProfile()
     } else if id == "avatarRepick" {
       openPicker()
     }
@@ -179,6 +200,36 @@ final class TiebaEditProfileViewController: UIViewController {
       presentAlert("提示", "请先登录")
       return
     }
+    guard !saving else { return }
+    // 资料没拉到就提交 = 用本页初始默认值（简介空、性别保密）覆写服务端昵称之外的字段
+    //（走查 D11-1）。先把后果讲清楚，用户选「仍然保存」才真的写。
+    guard fetchedUid == uid else {
+      presentUnloadedProfileConfirm()
+      return
+    }
+    performSave()
+  }
+
+  /// 资料未加载时的保存确认：说清"简介/性别会按默认值写回"，并给"重试加载"这条正路。
+  private func presentUnloadedProfileConfirm() {
+    let alert = UIAlertController(
+      title: "资料未加载",
+      message: failedProfileReason.isEmpty
+        ? "简介与性别仍是默认值，继续保存会用默认值覆盖服务端。"
+        : "资料未能加载（\(failedProfileReason)），继续保存会用默认值覆盖服务端。",
+      preferredStyle: .alert
+    )
+    alert.addAction(UIAlertAction(title: "重试加载", style: .default) { [weak self] in
+      self?.handleRowPress("reloadProfile")
+    })
+    alert.addAction(UIAlertAction(title: "仍然保存", style: .destructive) { [weak self] in
+      self?.performSave()
+    })
+    alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+    (TiebaTopViewController.find() ?? self).present(alert, animated: true)
+  }
+
+  private func performSave() {
     guard !saving else { return }
     saving = true
     reload()
