@@ -103,6 +103,17 @@ nonisolated enum TiebaListAppearance {
   /// 行卡面描边宽：扁平档不描边（没有卡面就没有轮廓）。
   static func rowBorderWidth(scale: CGFloat) -> CGFloat { isFlat ? 0 : 1 / max(scale, 1) }
 
+  /// 楼中楼预览框底色：比页面底再深一档的填充（亮色 #F2F2F7；暗色用白色 7% 叠加，
+  /// AMOLED 纯黑底上落成 #121212 一档，仍读得成"一块框"）。两档外观同色：框是
+  /// 内嵌分区，不随卡片/扁平改变语义。
+  static var subPostBoxBackground: UIColor {
+    UIColor { trait in
+      trait.userInterfaceStyle == .dark
+        ? UIColor(white: 1, alpha: 0.07)
+        : UIColor(red: 242 / 255, green: 242 / 255, blue: 247 / 255, alpha: 1)
+    }
+  }
+
   /// 行卡面描边色：扁平档无描边 ⇒ nil。
   static func rowBorderColor(card: UIColor) -> UIColor? { isFlat ? nil : card }
 

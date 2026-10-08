@@ -65,12 +65,12 @@ final class TiebaPostRowView: UIView {
   private var videoView: TiebaInlineVideoView?
   private var audioView: TiebaAudioPillView?
   private let subPostsControl = UIControl()
-  private let subPostsHairline = UIView()
+  /// 楼中楼预览框：浅底圆角矩形，垫在预览文字下面（非交互）。
+  private let subPostsBox = UIView()
   // 楼中楼预览同样是 TextNode：两行截断（truncationType = .end，与 UILabel 的 byTruncatingTail 同口径）。
   // 名字不再单独一个 UILabel —— 它与冒号、正文合成同一条富文本（见 TiebaPostRowText.subPostLine），
   // 否则两个排版引擎在同一行盒里的首行基线会差出一两个点。
   private var subPostTextNodes: [TiebaImmediateTextNode] = []
-  private var subPostDividers: [UIView] = []
   private let subPostsMoreLabel = UILabel()
   private let toolbarView = UIView()
   private let toolbarReplyLabel = UILabel()
@@ -243,9 +243,8 @@ final class TiebaPostRowView: UIView {
     imageBadge.textColor = .white
     // 与 buildSubviews 里的规范值同源（黑 55%；改前这里是 45%，会把新规范覆盖回旧值）。
     imageBadge.backgroundColor = UIColor.black.withAlphaComponent(0.55)
-    subPostsHairline.backgroundColor = palette.separator
+    subPostsBox.backgroundColor = TiebaListAppearance.subPostBoxBackground
     rowHairline.backgroundColor = palette.separator
-    for divider in subPostDividers { divider.backgroundColor = palette.separator }
     // 楼中楼正文颜色同样烘在 attributed 里（palette.text），与主贴正文一致。
     subPostsMoreLabel.textColor = palette.primary
     // 底色 = 主题 surfaceSecondary（原 JS replyToolbar 的 colors.surfaceSecondary，
@@ -440,7 +439,13 @@ final class TiebaPostRowView: UIView {
     // GIF 角标样式（用户口径：无底纯白字 + 阴影，不要胶囊底）已收进 makeGifBadge()，见文件内。
 
     subPostsControl.addTarget(self, action: #selector(handleSubPosts), for: .touchUpInside)
-    addSubview(subPostsHairline)
+    // 楼中楼预览框：整段收进一个浅底圆角矩形（取代旧版"逐条上方一条分隔线 +
+    // 块顶一条 hairline"）。非交互：只垫在文字下面，点按仍归 subPostsControl。
+    subPostsBox.isUserInteractionEnabled = false
+    subPostsBox.isHidden = true
+    subPostsBox.layer.cornerRadius = TiebaPostRowLayout.subPostBoxRadius
+    subPostsBox.layer.cornerCurve = .continuous
+    addSubview(subPostsBox)
     addSubview(subPostsControl)
     for _ in 0..<3 {
       let text = TiebaImmediateTextNode()
@@ -451,9 +456,6 @@ final class TiebaPostRowView: UIView {
       text.isUserInteractionEnabled = false
       addSubview(text)
       subPostTextNodes.append(text)
-      let divider = UIView()
-      addSubview(divider)
-      subPostDividers.append(divider)
     }
     subPostsMoreLabel.font = TiebaPostRowLayout.moreFont
     subPostsMoreLabel.numberOfLines = 1
@@ -742,15 +744,13 @@ final class TiebaPostRowView: UIView {
   private func layoutSubPosts(model: TiebaPostRowModel, plan: TiebaPostRowPlan) {
     guard let frame = plan.subPostsFrame else {
       subPostsControl.frame = .zero
-      subPostsHairline.isHidden = true
+      subPostsBox.isHidden = true
       for node in subPostTextNodes { node.isHidden = true }
-      for divider in subPostDividers { divider.isHidden = true }
       subPostsMoreLabel.isHidden = true
       return
     }
-    let contentX = frame.minX + TiebaPostRowLayout.cardPadding
-    subPostsHairline.isHidden = false
-    subPostsHairline.frame = CGRect(x: contentX, y: frame.minY, width: frame.width - TiebaPostRowLayout.cardPadding * 2, height: 1 / max(traitCollection.displayScale, 1))
+    subPostsBox.isHidden = false
+    subPostsBox.frame = plan.subPostsBoxFrame ?? .zero
     subPostsControl.frame = frame
     for (index, text) in subPostTextNodes.enumerated() {
       let hasPost = index < model.post.subPosts.count
@@ -762,14 +762,6 @@ final class TiebaPostRowView: UIView {
         text.attributedText = model.subPostTexts.indices.contains(index) ? model.subPostTexts[index] : nil
         // 两行截断：行数只看 maximumNumberOfLines = 2（与 measureBody 同口径）。
         _ = text.updateLayout(CGSize(width: frame.width, height: .greatestFiniteMagnitude))
-      }
-      // 分隔线显隐与页头/页脚同趟写完（原来先整轮 hide、再第二轮放开）。
-      let divider = subPostDividers[index]
-      if index < model.post.subPosts.count, plan.subPostDividerFrames.indices.contains(index) {
-        divider.isHidden = false
-        divider.frame = plan.subPostDividerFrames[index]
-      } else {
-        divider.isHidden = true
       }
     }
     subPostsMoreLabel.isHidden = plan.subPostsMoreFrame == nil

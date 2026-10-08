@@ -33,7 +33,12 @@ enum TiebaPostRowLayout {
   static let maxImages = 9
   static let audioHeight: CGFloat = 52
   static let subPostTop: CGFloat = 10
+  /// 框内行距的一半（两行之间共 2×gap，与旧版"分隔线上下各一份"同值）。
   static let subPostDividerGap: CGFloat = 8
+  /// 楼中楼预览框：内容列到框边的距离，以及框的圆角。框把预览整段收进一个浅底
+  /// 圆角矩形（取代旧版"逐条上方一条分隔线 + 块顶一条 hairline"）。
+  static let subPostBoxPadding: CGFloat = 10
+  static let subPostBoxRadius: CGFloat = 8
   /// 主贴回复工具栏（ThreadHeader.replyToolbar：paddingVertical 12×2 + 药丸 30）。
   static let toolbarHeight: CGFloat = 54
 

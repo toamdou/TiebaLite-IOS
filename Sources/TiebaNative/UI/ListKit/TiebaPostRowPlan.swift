@@ -62,7 +62,8 @@ struct TiebaPostRowPlan {
   var videoPlaceholderFrame: CGRect?
   var audioFrame: CGRect?
   var subPostsFrame: CGRect?
-  var subPostDividerFrames: [CGRect] = []
+  /// 楼中楼预览框（浅底圆角矩形；无预览时为 nil）。
+  var subPostsBoxFrame: CGRect?
 
   var subPostTextFrames: [CGRect] = []
   var subPostsMoreFrame: CGRect?
@@ -297,15 +298,16 @@ struct TiebaPostRowPlan {
     if !subPosts.isEmpty || inputs.post.subPostNum > 0 {
       flushGap()
       y += TiebaPostRowLayout.subPostTop
-      var subY = y + TiebaPostRowLayout.subPostTop
+      // 预览整段收进一个浅底圆角框：框自己就是"这段是别人的回复"的分区，旧版
+      // 逐条上方的分隔线与块顶那条 hairline 随之取消。内容列（contentX/contentW）
+      // 一字不动，框只是左右各外扩 subPostBoxPadding。
+      let boxPadding = TiebaPostRowLayout.subPostBoxPadding
+      let boxTop = y
+      var subY = boxTop + boxPadding
       for (idx, sub) in subPosts.enumerated() {
         if idx > 0 {
-          // 分隔线上下各 subPostDividerGap：原来把 2×gap 全放在线**之下**，线就贴在
-          // 上一条正文的最后一笔上（用户 2026-09-15 报"每条文字离底线太近"）。
-          // 总间距仍是 2×gap，线以下的内容位置一字不动。
-          subY += TiebaPostRowLayout.subPostDividerGap
-          subPostDividerFrames.append(CGRect(x: contentX, y: subY, width: contentW, height: inputs.hairline))
-          subY += TiebaPostRowLayout.subPostDividerGap
+          // 行与行之间仍留 2×gap（旧版这两段之间还夹着一条分隔线，框内不再画线）。
+          subY += TiebaPostRowLayout.subPostDividerGap * 2
         }
         // 名字与正文在**同一条富文本**里（名字 + 冒号 + 正文，见 TiebaPostRowText.subPostLine）：
         // 一个文本框吃满整行宽，不再有"名字框 + 正文框"两套排版，首行基线不可能错开。
@@ -332,8 +334,15 @@ struct TiebaPostRowPlan {
         subPostsMoreFrame = CGRect(x: contentX, y: subY, width: moreWidth, height: ceil(moreFont.lineHeight))
         subY += subPostsMoreFrame?.height ?? 0
       }
-      subPostsFrame = CGRect(x: TiebaPostRowLayout.cardMarginH, y: y, width: cardW, height: max(subY - y, 0))
-      y = subY
+      let boxHeight = max(subY + boxPadding - boxTop, 0)
+      subPostsFrame = CGRect(x: TiebaPostRowLayout.cardMarginH, y: boxTop, width: cardW, height: boxHeight)
+      subPostsBoxFrame = CGRect(
+        x: contentX - boxPadding,
+        y: boxTop,
+        width: contentW + boxPadding * 2,
+        height: boxHeight
+      )
+      y = boxTop + boxHeight
     }
 
     let cardBottom = y + TiebaPostRowLayout.cardPadding
