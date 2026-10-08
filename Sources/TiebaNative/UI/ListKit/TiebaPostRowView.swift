@@ -263,6 +263,9 @@ final class TiebaPostRowView: UIView {
   }
 
   func prepareForReuse() {
+    // 复用复位契约（TiebaEntrance 文件头）：只清自持状态、不清 layer 上的在途入场动画，
+    // 首屏入场未播完就滚动时，from 值（opacity 0 / y+12）会压住复用后的新楼层。
+    TiebaEntrance.cancel(on: self)
     model = nil
     appliedModel = nil
     imageScrollView.contentOffset = .zero
