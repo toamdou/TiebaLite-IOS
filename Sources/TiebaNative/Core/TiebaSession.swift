@@ -111,6 +111,17 @@ enum TiebaSession {
     return (read("bduss"), read("stoken"), read("cookie"), read("tbs"), read("zid"))
   }
 
+  /// 删除本 App 在 Keychain 里的**全部**凭据（活跃 + 每账号），不依赖 KV。
+  ///
+  /// 「清除全部数据」会先把 KV 整表清掉，account_list 随之消失——靠它枚举账号会一个都
+  /// 删不到，而 Keychain 不随卸载清除，凭据就永久残留（走查 D13-1）。这里改成按 Keychain
+  /// 自己记录的 account 名枚举，所以与"先清 KV 还是先清凭据"无关。
+  static func clearAllCredentials() {
+    for key in TiebaKeychain.keys(prefix: "tiebalite.") {
+      TiebaKeychain.delete(key: key)
+    }
+  }
+
   // MARK: - 僵尸会话清理
 
   /// 卸载重装时 Keychain 存活、沙盒（KV/账号元数据）被清空 —— 快照里仍有凭据，

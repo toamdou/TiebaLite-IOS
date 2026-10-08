@@ -20,10 +20,7 @@ final class TiebaMoreSettingsViewController: TiebaFormPageController {
   /// TiebaKvStore.internalMarkerKeys 提供（clear 内部已强制保留）。
   private static let migrationKey = "@tiebalite:unified_migration_v1"
   private static let legacyKvDatabase = "ExpoSQLiteStorage"
-  private static let activeCredentialKeys = [
-    "tiebalite.active.bduss", "tiebalite.active.stoken", "tiebalite.active.cookie",
-    "tiebalite.active.tbs", "tiebalite.active.zid",
-  ]
+
 
   /// 本页展示的三个偏好键（行 id 与键逐字同名；在屏时被别处改写要即时回推）。
   private static let preferenceKeys = [
@@ -267,7 +264,10 @@ final class TiebaMoreSettingsViewController: TiebaFormPageController {
         database: TiebaSQLite.mainDatabase,
         sql: "DELETE FROM search_history; DELETE FROM visit_history;"
       )
-      clearSecureCredentials()
+      // 凭据删除不读 KV（走查 D13-1）：上面的 KV 全清已把 account_list 删掉，
+      // 旧实现靠它枚举每账号凭据，恒枚举为空 ⇒ Keychain 残留。现在按 Keychain 自己的
+      // account 名枚举，两行的先后顺序不再影响结果。
+      TiebaSession.clearAllCredentials()
       TiebaBackgroundSnapshot.shared.clear()
       TiebaBackgroundSync.shared.cancelAll()
       TiebaNuke.clearCaches()
@@ -297,22 +297,4 @@ final class TiebaMoreSettingsViewController: TiebaFormPageController {
     try TiebaSQLite.shared.deleteDatabase(named: Self.legacyKvDatabase)
   }
 
-  /// 活跃凭据 + 账内凭据（AuthSecureStorage 的 Keychain 布局）。
-  private func clearSecureCredentials() {
-    var uids: [String] = []
-    if let raw = TiebaKvStore.shared.get(key: "@tiebalite:account_list"),
-      let data = raw.data(using: .utf8),
-      let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
-    {
-      uids = list.compactMap { $0["uid"] as? String }
-    }
-    for key in Self.activeCredentialKeys {
-      TiebaKeychain.delete(key: key)
-    }
-    for uid in uids {
-      for field in ["bduss", "stoken", "cookie", "tbs", "zid"] {
-        TiebaKeychain.delete(key: "tiebalite.account.\(uid).\(field)")
-      }
-    }
-  }
 }
