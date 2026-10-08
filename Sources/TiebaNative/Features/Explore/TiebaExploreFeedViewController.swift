@@ -643,7 +643,8 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   /// 屏蔽这个吧 = 提交推荐流的不感兴趣理由「不想看这个吧」（Kotlin DislikeBtn 同一条
   /// 链路：服务端收到该理由即不再推荐这个吧），成功后立刻收起本页该吧的所有行。
   private func blockForum(_ thread: [String: Any]) {
-    let threadId = value(thread, "id")
+    // 回复推荐卡上 id 是回复 pid：提交给服务端的必须是与进帖/点赞同一个帖子本体 id。
+    let threadId = resolvedThreadTarget(thread).threadId
     guard !threadId.isEmpty else { return }
     let name = TiebaFeedRowFallback.forumName(thread)
     let forumId = value(thread, "forumId")
@@ -702,7 +703,8 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   }
 
   private func submitDislike(_ thread: [String: Any], ids: String) {
-    let threadId = value(thread, "id")
+    // 同 blockForum：不感兴趣要挂到帖子本体，回复卡的 pid 会让理由挂错对象。
+    let threadId = resolvedThreadTarget(thread).threadId
     guard !threadId.isEmpty else { return }
     let forumId = value(thread, "forumId")
     Task { @MainActor in
