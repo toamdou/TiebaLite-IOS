@@ -144,6 +144,41 @@ enum TiebaKeychain {
     }
   }
 
+  /// 列出所有 account 以 prefix 开头的键（三个 service 变体去重、排序稳定）。
+  ///
+  /// 为什么需要：删"本 App 的全部凭据"时不能靠 KV 里的账号列表——那条路会被"先清 KV"
+  /// 打断（走查 D13-1），而 Keychain 自己记着 account 名，按它枚举与调用顺序无关。
+  /// 只取属性不取 data：枚举不需要把凭据读进内存。
+  static func keys(prefix: String) -> [String] {
+    guard !prefix.isEmpty else { return [] }
+    var found = Set<String>()
+    for service in [baseService, authService, noAuthService] {
+      let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: service,
+        kSecMatchLimit as String: kSecMatchLimitAll,
+        kSecReturnAttributes as String: kCFBooleanTrue,
+      ]
+      var items: CFTypeRef?
+      guard SecItemCopyMatching(query as CFDictionary, &items) == errSecSuccess,
+        let list = items as? [[String: Any]]
+      else { continue }
+      for item in list {
+        // account 是写入时按 UTF-8 Data 存的（见 baseQuery）；个别系统版本会回成 String，
+        // 两种都认，认不出就跳过（宁可漏删一个自己也不误删别人的 service）。
+        let account: String?
+        if let data = item[kSecAttrAccount as String] as? Data {
+          account = String(data: data, encoding: .utf8)
+        } else {
+          account = item[kSecAttrAccount as String] as? String
+        }
+        guard let account, account.hasPrefix(prefix) else { continue }
+        found.insert(account)
+      }
+    }
+    return found.sorted()
+  }
+
   // MARK: - 原语
 
   private static func copy(service: String, key: String) -> Data? {
