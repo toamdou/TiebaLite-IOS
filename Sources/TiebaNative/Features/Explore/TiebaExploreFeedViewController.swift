@@ -275,6 +275,10 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
       do {
         let result = try await fetch(page: page)
         page += 1
+        // 游标必须跟着翻页走：userLike 是 pageTag 游标分页，fetch 按 page == 1 ? "" : pageTag
+        // 组请求体——只回写首屏那一份游标，第 3 页起会永远重发第 2 页的游标（走查 D9-1）。
+        // 推荐段不用游标（按 page 翻页），原样赋值无副作用。
+        pageTag = result.pageTag
         hasMore = result.hasMore
         items.append(contentsOf: result.items)
         publishFresh()
