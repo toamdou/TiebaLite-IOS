@@ -339,7 +339,9 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       if case .thread(let id, _, _, let fromFavorites) = route, !fromFavorites {
         fromCard = TiebaThreadSnapshots.peek(id: id) != nil
       }
-      nav.hero.isEnabled = fromCard
+      // 减弱动态效果下回落系统 push：这是全仓幅度最大的页面级动效，其余动效（查看器转场/
+      // 首屏入场/骨架扫光等）都有闸门，唯独这条没有。
+      nav.hero.isEnabled = fromCard && !UIAccessibility.isReduceMotionEnabled
     }
   }
 
