@@ -73,6 +73,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private var searchedTabs: Set<Tab> = []
   private var order = 5
   private var page = 1
+  /// 贴 tab 还有下一页吗。**只由贴桶写**：吧/人两桶不分页，而它跨 tab 共享（走查 D10-2）。
   private var hasMore = false
   private var isLoading = false
   private var requestSeq = 0
@@ -452,16 +453,17 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
           }
           page = requestPage
           hasMore = result.hasMore
+        // 吧/人两桶不分页，**不写 hasMore**：它跨 tab 共享，这里清零会把贴桶的分页游标
+        // 一起抹掉——切回贴 tab 后页脚变 .none、loadMore 直接被拒（走查 D10-2）。
+        // 两桶的页脚本来就由 target == .thread 判定压成 .none，不需要它参与。
         case .forum:
           let hits = try await TiebaSearchAPI.forums(keyword: keyword)
           guard seq == requestSeq else { return }
           forumHits = hits
-          hasMore = false
         case .user:
           let hits = try await TiebaSearchAPI.users(keyword: keyword)
           guard seq == requestSeq else { return }
           userHits = hits
-          hasMore = false
         }
         searchedTabs.insert(target)
         // 只有目标 tab 还是当前 tab 才动 UI：切到已缓存 tab 期间到达的响应
