@@ -886,7 +886,9 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       present(alert, animated: true)
       return
     }
-    guard forums.contains(where: { !$0.isSign }) else {
+    // 空列表 = 还在加载或加载失败，不能当成「全部已签到」：contains 恒 false 会把这个快捷检查
+    // 变成提前 return，真实签到流程根本不启动。列表为空时放行，让服务端自己判断。
+    if !forums.isEmpty, !forums.contains(where: { !$0.isSign }) {
       pill.showResult(success: true, text: "今天所有关注的吧都已签到过了")
       return
     }
