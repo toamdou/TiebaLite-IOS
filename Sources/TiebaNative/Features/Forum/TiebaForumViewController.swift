@@ -367,6 +367,9 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     list.footerState = .loading
     let tab = currentTab
     let next = pages[tab] + 1
+    // 与 load() 共用同一条代际：翻页在途时若发生下拉刷新/换排序（loadSeq 自增），
+    // 旧页响应必须整份作废 —— 否则会 append 进已重置的新列表，还会用旧值回写 pages/hasMores。
+    let seq = loadSeq
     Task { @MainActor in
       // [用户口径 2026-10-06] 正常态（.more）不显示「加载更多」药丸 —— 触底即自动加载就够了。
       // 只有**这次翻页失败**才把页脚置成 .retry（那颗药丸现在只在失败态出现），
@@ -376,7 +379,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
         self.isLoadingMore = false
         // 页脚是所有 tab 共享的：请求期间切了 tab 就别拿旧 tab 的结果覆写它
         //（会把有更多内容的新 tab 置成"没有更多了"，只剩触底自动加载）。
-        if tab == self.currentTab {
+        if tab == self.currentTab, seq == self.loadSeq {
           self.list.footerState = didFail ? .retry : (self.hasMores[tab] ? .more : .none)
         }
       }
@@ -389,7 +392,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
           isGood: semantics.isGood,
           classifyId: tab == 2 ? self.classifyId : nil
         )
-        guard tab == self.currentTab else { return }
+        guard tab == self.currentTab, seq == self.loadSeq else { return }
         self.apply(result, tab: tab, page: next, timeType: semantics.timeType)
       } catch {
         didFail = true
