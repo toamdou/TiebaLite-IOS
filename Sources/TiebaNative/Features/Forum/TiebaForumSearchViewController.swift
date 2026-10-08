@@ -379,10 +379,20 @@ extension TiebaForumSearchViewController: UISearchBarDelegate {
 
   func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
     searchBar.showsCancelButton = false
-    // 收起键盘：搜过就回结果列表（历史区让位），没搜过就留在历史区。
+    // 收起键盘：搜过就回结果（历史区让位），没搜过就留在历史区。
     if hasSearched {
       historyView.isHidden = true
-      showList()
+      // 最后一次发布是 0 行页时 showList() 的 reveal 会永远挂在 pendingReveal 上（列表/空态/历史
+      // 三者全隐藏 ⇒ 整页空白，只能靠再次聚焦脱身），这里按命中数直接给空态。
+      if hits.isEmpty {
+        showState(.empty(
+          image: "doc.text.magnifyingglass",
+          text: "未找到相关内容",
+          secondary: "换个关键词试试吧"
+        ))
+      } else {
+        showList()
+      }
     }
   }
 
