@@ -44,6 +44,21 @@ public nonisolated enum TiebaAnimationFrameRate {
     MainActor.assumeIsolated { view.window?.screen.maximumFramesPerSecond ?? 0 }
   }
 
+  /// 从动画宿主 layer 向上找 UIView，再问它所在屏幕的上限。CAAnimationUtils 里
+  /// 的旧路径读 UIScreen.main（iOS 26 已废弃、多场景下也不准确），这里统一收口。
+  nonisolated public static func maximumFramesPerSecond(of layer: CALayer) -> Int {
+    // CALayer 不可跨 actor 发送；先在 nonisolated 侧沿 superlayer 找到 UIView，
+    // 再复用上面的 UIView 入口（后者只捕获 UIView，已通过 Swift 6 隔离检查）。
+    var current: CALayer? = layer
+    while let currentLayer = current {
+      if let view = currentLayer.delegate as? UIView {
+        return maximumFramesPerSecond(of: view)
+      }
+      current = currentLayer.superlayer
+    }
+    return 0
+  }
+
   /// 把动画对齐到该视图所在屏幕的帧率上限：120Hz 档写 `preferredFrameRateRange`，
   /// 其余情况（60Hz / 视图未上屏 / 纯淡入）什么都不做。
   ///
@@ -64,8 +79,11 @@ public nonisolated enum TiebaAnimationFrameRate {
     guard maxFps > promotionThreshold else { return false }
     guard !isPureFade(animation) else { return false }
     let framesPerSecond = Float(maxFps)
+    // ProMotion 动画不应在播放中掉到 30Hz；80 floor 与上游 CAAnimationUtils 的
+    // 高刷弹簧路径同口径，preferred/maximum 仍取屏幕上限。
+    let minimumFPS: Float = framesPerSecond > 61 ? min(80, framesPerSecond) : 30
     applyRange(
-      CAFrameRateRange(minimum: 30, maximum: framesPerSecond, preferred: framesPerSecond),
+      CAFrameRateRange(minimum: minimumFPS, maximum: framesPerSecond, preferred: framesPerSecond),
       to: animation
     )
     return true
@@ -74,6 +92,17 @@ public nonisolated enum TiebaAnimationFrameRate {
   /// 写帧率区间（组动画连子动画一起写）。上游只写顶层那一条；组内子动画是各自独立的
   /// CAAnimation、各有该属性，写全两条路径只是把"调度看组还是看子"这个不确定项消掉
   /// ——属性本身只是提示，多写不改变行为。
+  ///
+  /// ⚠️ 2026-10-21 移除私有 KVC（01-10 / 03-06 / 07-03 全仓核对时发现的自相矛盾）：
+  /// 这里原来还有一行
+  ///     animation.setValue(NSNumber(value: highFrameRateReason), forKey: "highFrameRateReason")
+  /// 把上游那个**未公开**的 CAAnimation 属性当 KVC 写。三个问题：
+  ///   ① 它是私有 API（本仓铁律禁止；矩阵里 01-10/03-06/07-03 三条也明确写着"不做"）；
+  ///   ② `setValue(_:forKey:)` 打不存在的键会抛 `NSUnknownKeyException` —— 一旦系统改掉
+  ///      这个键，就是**每条入场动画都崩**，且崩点在 CoreAnimation 内部很难定位；
+  ///   ③ 它并不影响 `preferredFrameRateRange` 的生效：后者自 iOS 15 起是公开属性，
+  ///      由系统帧率仲裁直接消费，原因码只是上游用来给仲裁器"加权"的私有提示。
+  /// 也就是说：删掉只损失一点调度优先级，保留则承担崩溃与审核风险 —— 删。
   nonisolated private static func applyRange(_ range: CAFrameRateRange, to animation: CAAnimation) {
     animation.preferredFrameRateRange = range
     guard let group = animation as? CAAnimationGroup else { return }

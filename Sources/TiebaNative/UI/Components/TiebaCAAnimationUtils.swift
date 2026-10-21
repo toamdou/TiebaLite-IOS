@@ -35,10 +35,6 @@ private func tiebaMake26SpringAnimation(_ keyPath: String, _ duration: Double) -
     if #available(iOS 17.0, *) {
         springAnimation.allowsOverdamping = false
     }
-    if #available(iOS 15.0, *) {
-        springAnimation.setValue(NSNumber(value: 1048619), forKey: "highFrameRateReason")
-        springAnimation.preferredFrameRateRange = CAFrameRateRange(minimum: 80.0, maximum: 120.0, preferred: 120.0)
-    }
     return springAnimation
 }
 
@@ -118,20 +114,12 @@ public extension CAAnimation {
     }
 }
 
-private func adjustFrameRate(animation: CAAnimation) {
-    if #available(iOS 15.0, *) {
-        let maxFps = Float(UIScreen.main.maximumFramesPerSecond)
-        if maxFps > 61.0 {
-            var preferredFps: Float = maxFps
-            if let animation = animation as? CABasicAnimation {
-                if animation.keyPath == "opacity" {
-                    preferredFps = 60.0
-                    return
-                }
-            }
-            animation.preferredFrameRateRange = CAFrameRateRange(minimum: 30.0, maximum: preferredFps, preferred: maxFps)
-        }
-    }
+private func adjustFrameRate(animation: CAAnimation, layer: CALayer) {
+    let maxFps = TiebaAnimationFrameRate.maximumFramesPerSecond(of: layer)
+    guard maxFps > TiebaAnimationFrameRate.promotionThreshold else { return }
+    // 统一走 TiebaAnimationFrameRate：从宿主视图所在屏幕取上限，并把
+    // highFrameRateReason 与组内子动画一起写。纯 opacity 由该 API 自己拒绝。
+    TiebaAnimationFrameRate.align(animation, maximumFramesPerSecond: maxFps)
 }
 
 public extension CALayer {
@@ -179,7 +167,7 @@ public extension CALayer {
                 animation.beginTime = self.convertTime(CACurrentMediaTime(), from: nil) + delay * tiebaAnimationDurationFactor()
                 animation.fillMode = .both
             }
-            adjustFrameRate(animation: animation)
+            adjustFrameRate(animation: animation, layer: self)
             
             return animation
         } else if timingFunction == tiebaCAMediaTimingFunctionSpring {
@@ -209,7 +197,7 @@ public extension CALayer {
                     animation.fillMode = .both
                 }
                 
-                adjustFrameRate(animation: animation)
+                adjustFrameRate(animation: animation, layer: self)
                 
                 return animation
             } else if duration == 0.5 {
@@ -236,7 +224,7 @@ public extension CALayer {
                     animation.fillMode = .both
                 }
                 
-                adjustFrameRate(animation: animation)
+                adjustFrameRate(animation: animation, layer: self)
                 
                 return animation
             } else {
@@ -266,7 +254,7 @@ public extension CALayer {
                     animation.fillMode = .both
                 }
                 
-                adjustFrameRate(animation: animation)
+                adjustFrameRate(animation: animation, layer: self)
                 
                 return animation
             }
@@ -305,7 +293,7 @@ public extension CALayer {
                 animation.fillMode = .both
             }
             
-            adjustFrameRate(animation: animation)
+            adjustFrameRate(animation: animation, layer: self)
             
             return animation
         }
@@ -354,7 +342,7 @@ public extension CALayer {
             animation.delegate = CALayerAnimationDelegate(animation: animation, completion: completion)
         }
         
-        adjustFrameRate(animation: animation)
+        adjustFrameRate(animation: animation, layer: self)
         
         self.add(animation, forKey: keyPath)
     }
@@ -380,7 +368,7 @@ public extension CALayer {
         animation.speed = speed * Float(animation.duration / duration)
         animation.isAdditive = additive
         
-        adjustFrameRate(animation: animation)
+        adjustFrameRate(animation: animation, layer: self)
         
         return animation
     }
@@ -410,7 +398,7 @@ public extension CALayer {
         animation.speed = speed * Float(animation.duration / duration)
         animation.isAdditive = additive
         
-        adjustFrameRate(animation: animation)
+        adjustFrameRate(animation: animation, layer: self)
         
         self.add(animation, forKey: additive ? key : (key ?? keyPath))
     }
