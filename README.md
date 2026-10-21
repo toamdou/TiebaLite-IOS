@@ -20,22 +20,6 @@
 
 </div>
 
-### iOS 26+ 界面复核（iPhone 17 / iOS 26.0）
-
-<img src="docs/screenshots/ios26/home.jpg" width="24%" alt="关注页" />
-<img src="docs/screenshots/ios26/explore.jpg" width="24%" alt="动态页" />
-<img src="docs/screenshots/ios26/forum.jpg" width="24%" alt="吧页" />
-<img src="docs/screenshots/ios26/thread.jpg" width="24%" alt="帖子页" />
-
-楼中楼二级页：<a href="docs/screenshots/ios26/subposts.jpg">亮色</a> ·
-<a href="docs/screenshots/ios26/subposts-dark.jpg">深色</a>。
-帖子页深色：<a href="docs/screenshots/ios26/thread-dark.jpg">thread-dark</a> ·
-刷新回顶验收：<a href="docs/screenshots/ios26/explore-refreshed.jpg">explore-refreshed</a> ·
-独立标题字号设置：<a href="docs/screenshots/ios26/settings-theme.jpg">settings-theme</a>。
-截图为无头 iPhone 17 / iOS 26.0 模拟器实机分辨率输出（1206×2622）。
-以上均为系统默认字号（Large）的正常状态；AX5 / Increase Contrast 压测图单独放在
-`docs/screenshots/ios26/audit/`，不参与正常状态展示。
-
 ---
 
 ## ✨ 功能一览
