@@ -102,11 +102,17 @@ nonisolated enum TiebaFeedRowLayout {
   // TweetCard.tsx 常量
   /// 左右边距 16：与首页关注吧网格（sectionInset 16）、最近访问条一致，
   /// 也是系统 inset 列表的标准档。原 10 与页面其余部分对不齐（2026-09-19）。
-  static let cardMarginH: CGFloat = 16
-  static let cardMarginV: CGFloat = 4
-  static let cardPaddingX: CGFloat = 12
-  static let cardPaddingTop: CGFloat = 12
-  static let cardPaddingBottom: CGFloat = 8
+  // 设计风格统一从这里出：扁平档 = 内容通栏 + 行底 hairline；卡片档 = 白卡浮在
+  // 中性页面底上。禁止在行视图里另写一套边距（测量/绘制必须同源）。
+  static var cardMarginH: CGFloat { TiebaListAppearance.isFlat ? 0 : 16 }
+  static var cardMarginV: CGFloat { TiebaListAppearance.isFlat ? 0 : 4 }
+  static var cardPaddingX: CGFloat { TiebaListAppearance.isFlat ? 16 : 12 }
+  static var cardPaddingTop: CGFloat { TiebaListAppearance.isFlat ? 16 : 12 }
+  static var cardPaddingBottom: CGFloat { TiebaListAppearance.isFlat ? 12 : 8 }
+  /// 行卡面圆角：扁平档没有卡面，自然为 0。
+  static var cardRadius: CGFloat { TiebaListAppearance.isFlat ? 0 : 20 }
+  /// 扁平档在行底画 1 物理像素 hairline；卡片档靠间距分隔，不画。
+  static var drawsRowHairline: Bool { TiebaListAppearance.isFlat }
   static let avatarSize: CGFloat = 44
   static let avatarGap: CGFloat = 10
   static let contentIndent: CGFloat = avatarSize + avatarGap // 54
@@ -138,10 +144,10 @@ nonisolated enum TiebaFeedRowLayout {
   static let bannerIconSize: CGFloat = 15
   static let bannerGap: CGFloat = 8
   // MediaPager.tsx 常量
-  static let mediaHeightMax: CGFloat = 520
-  static let mediaFallbackHeight: CGFloat = 260
+  static let mediaHeightMax: CGFloat = 420
+  static let mediaFallbackHeight: CGFloat = 240
   static let stripHeightMin: CGFloat = 160
-  static let stripHeightMax: CGFloat = 340
+  static let stripHeightMax: CGFloat = 300
   static let stripGap: CGFloat = 4
   static let longImageRatio: CGFloat = 2.4
   static let maxImagesPerRow = 9
@@ -165,20 +171,20 @@ nonisolated enum TiebaFeedRowLayout {
     let badge: UIFont
 
     init(fontScale: CGFloat) {
-      displayName = Self.scaled(size: 15, weight: .semibold, style: .subheadline, scale: fontScale)
-      handle = Self.scaled(size: 15, weight: .regular, style: .subheadline, scale: fontScale)
-      time = Self.scaled(size: 15, weight: .regular, style: .subheadline, scale: fontScale)
-      ip = Self.scaled(size: 11, weight: .regular, style: .caption2, scale: fontScale)
-      title = Self.scaled(size: 17, weight: .medium, style: .headline, scale: fontScale)
+      displayName = Self.scaled(size: 17, weight: .semibold, style: .headline, scale: fontScale)
+      handle = Self.scaled(size: 13, weight: .regular, style: .footnote, scale: fontScale)
+      time = Self.scaled(size: 13, weight: .regular, style: .footnote, scale: fontScale)
+      ip = Self.scaled(size: 13, weight: .regular, style: .footnote, scale: fontScale)
+      title = Self.scaled(size: 17, weight: .semibold, style: .headline, scale: fontScale)
       abstract = Self.scaled(size: 15, weight: .regular, style: .subheadline, scale: fontScale)
       showMore = Self.scaled(size: 15, weight: .semibold, style: .subheadline, scale: fontScale)
-      quoteForum = Self.scaled(size: 12, weight: .semibold, style: .caption1, scale: fontScale)
-      quoteTitle = Self.scaled(size: 13, weight: .semibold, style: .footnote, scale: fontScale)
-      quoteContent = Self.scaled(size: 13, weight: .regular, style: .footnote, scale: fontScale)
-      chipText = Self.scaled(size: 12, weight: .regular, style: .caption1, scale: fontScale)
+      quoteForum = Self.scaled(size: 13, weight: .semibold, style: .footnote, scale: fontScale)
+      quoteTitle = Self.scaled(size: 15, weight: .semibold, style: .subheadline, scale: fontScale)
+      quoteContent = Self.scaled(size: 15, weight: .regular, style: .subheadline, scale: fontScale)
+      chipText = Self.scaled(size: 13, weight: .regular, style: .footnote, scale: fontScale)
       actionText = Self.scaled(size: 13, weight: .medium, style: .footnote, scale: fontScale)
       bannerText = Self.scaled(size: 13, weight: .medium, style: .footnote, scale: fontScale)
-      badge = Self.scaled(size: 12, weight: .semibold, style: .caption1, scale: fontScale)
+      badge = Self.scaled(size: 11, weight: .semibold, style: .caption2, scale: fontScale)
     }
 
     private static func scaled(
@@ -205,13 +211,13 @@ nonisolated enum TiebaFeedRowLayout {
     let bannerText: CGFloat
 
     init(fontScale: CGFloat) {
-      subhead = Self.scaled(20, style: .subheadline, scale: fontScale)
-      title = Self.scaled(22, style: .headline, scale: fontScale)
+      subhead = Self.scaled(22, style: .subheadline, scale: fontScale)
+      title = Self.scaled(23, style: .headline, scale: fontScale)
       abstract = Self.scaled(22, style: .subheadline, scale: fontScale)
-      quoteForum = Self.scaled(16, style: .caption1, scale: fontScale)
-      quoteTitle = Self.scaled(18, style: .footnote, scale: fontScale)
-      quoteContent = Self.scaled(18, style: .footnote, scale: fontScale)
-      chipText = Self.scaled(16, style: .caption1, scale: fontScale)
+      quoteForum = Self.scaled(18, style: .footnote, scale: fontScale)
+      quoteTitle = Self.scaled(21, style: .subheadline, scale: fontScale)
+      quoteContent = Self.scaled(21, style: .subheadline, scale: fontScale)
+      chipText = Self.scaled(18, style: .footnote, scale: fontScale)
       actionText = Self.scaled(18, style: .footnote, scale: fontScale)
       bannerText = Self.scaled(18, style: .footnote, scale: fontScale)
     }
@@ -429,11 +435,22 @@ nonisolated enum TiebaFeedRowLayout {
 
     // ── 头部 ──
     let headerTop = cardY + cardPaddingTop
-    let avatarFrame = CGRect(x: innerX, y: headerTop, width: avatarSize, height: avatarSize)
-    let nameContentHeight = geometry.lineHeights.subhead
-      + (blocks.ipWidth == nil ? 0 : 1 + geometry.fonts.ip.lineHeight)
-    let nameTop = headerTop + max((blocks.headerHeight - nameContentHeight) / 2, 0)
     let nameRowHeight = geometry.lineHeights.subhead
+    // AX1+：名字与时间/句柄拆成上下两行，避免把「发帖于…」挤成省略号。
+    let stacksHeaderForAccessibility = geometry.fonts.displayName.pointSize >= 28
+    let hasMeta = blocks.handleWidth != nil || blocks.timeWidth != nil
+    let ipHeight = geometry.fonts.ip.lineHeight
+    let stackedContentHeight = nameRowHeight
+      + (stacksHeaderForAccessibility && hasMeta ? 1 + nameRowHeight : 0)
+      + (blocks.ipWidth == nil ? 0 : 1 + ipHeight)
+    let headerHeight = stacksHeaderForAccessibility
+      ? max(TiebaFeedRowLayout.avatarSize, stackedContentHeight)
+      : blocks.headerHeight
+    let avatarFrame = CGRect(x: innerX, y: headerTop, width: avatarSize, height: avatarSize)
+    let nameContentHeight = nameRowHeight + (blocks.ipWidth == nil ? 0 : 1 + ipHeight)
+    let nameTop = stacksHeaderForAccessibility
+      ? headerTop
+      : headerTop + max((headerHeight - nameContentHeight) / 2, 0)
     // 右上角「更多」钮在 headerRow 里参与 flex 布局（26pt +
     // headerRow gap 10），名字行可用宽度必须让位，否则长名会压到按钮下面。
     let menuButtonFrame: CGRect? = blocks.showsMenu
@@ -460,25 +477,36 @@ nonisolated enum TiebaFeedRowLayout {
     var metaFrame: CGRect?
     let handleWidth = blocks.handleWidth ?? 0
     let timeWidth = blocks.timeWidth ?? 0
-    if blocks.handleWidth != nil || blocks.timeWidth != nil {
-      let x = nameCursor + headerTextGap
-      let gapBetween = (blocks.handleWidth != nil && blocks.timeWidth != nil) ? headerTextGap : 0
-      let width = max(min(handleWidth + gapBetween + timeWidth, nameRowRight - x), 0)
-      metaFrame = CGRect(x: x, y: nameTop, width: width, height: nameRowHeight)
-      nameCursor = x + width
+    if hasMeta {
+      if stacksHeaderForAccessibility {
+        metaFrame = CGRect(
+          x: contentX,
+          y: displayNameFrame.maxY + 1,
+          width: contentW,
+          height: nameRowHeight
+        )
+        nameCursor = contentX
+      } else {
+        let x = nameCursor + headerTextGap
+        let gapBetween = (blocks.handleWidth != nil && blocks.timeWidth != nil) ? headerTextGap : 0
+        let width = max(min(handleWidth + gapBetween + timeWidth, nameRowRight - x), 0)
+        metaFrame = CGRect(x: x, y: nameTop, width: width, height: nameRowHeight)
+        nameCursor = x + width
+      }
     }
     var ipFrame: CGRect?
     if blocks.ipWidth != nil {
-      ipFrame = CGRect(
-        x: contentX,
-        y: nameTop + nameRowHeight + 1,
-        width: contentW,
-        height: geometry.fonts.ip.lineHeight
-      )
+      let y: CGFloat
+      if stacksHeaderForAccessibility, let metaFrame {
+        y = metaFrame.maxY + 1
+      } else {
+        y = nameTop + nameRowHeight + 1
+      }
+      ipFrame = CGRect(x: contentX, y: y, width: contentW, height: ipHeight)
     }
 
     // ── 内容列（顺序与 TweetCard contentCol 子节点一致：正文 → 媒体 → 引用 → chip → 操作栏）──
-    var cursor = headerTop + blocks.headerHeight + contentColumnTopOffset
+    var cursor = headerTop + headerHeight + contentColumnTopOffset
     var placedAny = false
     func nextChildY() -> CGFloat {
       if placedAny { cursor += contentColumnGap }
@@ -536,7 +564,8 @@ nonisolated enum TiebaFeedRowLayout {
           ? 0
           : x - stripGap // 末图后无间距
       } else {
-        // 单图 / 视频 poster：贴文本列，绘制侧给圆角。
+        // 单图 / 视频 poster 与正文左边界对齐，宽度也收进正文列；
+        // 不再横跨头像列，避免图片和正文像两套无关的栅格。
         mediaFrame = CGRect(x: contentX, y: y, width: contentW, height: mediaHeight)
       }
       cursor += mediaHeight
@@ -602,8 +631,10 @@ nonisolated enum TiebaFeedRowLayout {
     var actionIconFrames: [CGRect] = []
     var actionLabelFrames: [CGRect] = []
     if let actionHeight = blocks.actionHeight {
+      // 视觉仍用测量出的 actionHeight；命中/UIControl 框抬到 44pt。
+      let hitHeight = max(actionHeight, 44)
       let y = nextChildY() + 2 // actionRow.marginTop: 2（叠加 contentCol gap）
-      actionRowFrame = CGRect(x: contentX, y: y, width: contentW, height: actionHeight)
+      actionRowFrame = CGRect(x: contentX, y: y, width: contentW, height: hitHeight)
       let buttonWidth = contentW / 3
       let textWidths = [blocks.replyWidth, blocks.shareWidth, blocks.likeWidth]
       for i in 0..<3 {
@@ -611,7 +642,7 @@ nonisolated enum TiebaFeedRowLayout {
           x: contentX + buttonWidth * CGFloat(i),
           y: y,
           width: buttonWidth,
-          height: actionHeight
+          height: hitHeight
         )
         actionButtonFrames.append(button)
         let pairWidth = actionIconSize + actionIconGap + textWidths[i]
@@ -624,12 +655,12 @@ nonisolated enum TiebaFeedRowLayout {
         ))
         actionLabelFrames.append(CGRect(
           x: startX + actionIconSize + actionIconGap,
-          y: button.minY,
+          y: button.midY - actionHeight / 2,
           width: textWidths[i],
           height: actionHeight
         ))
       }
-      cursor += actionHeight + 2
+      cursor += hitHeight + 2
     }
 
     let cardHeight = cursor + cardPaddingBottom - cardY

@@ -41,7 +41,7 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
   public let pageKey: String
   public let index: Int
   // [R4-3] 原 `fingerprint: UInt64` 字段已删除：消费方为零（复用判据与差量走 TiebaRowDiff.Entry，缓存键用 Entry.Identity）。
-  // TiebaRowFingerprint 类型本身保留（Entry 侧另用）。
+  // 同源的 TiebaRowFingerprint 整个文件已删除（生产调用点为 0，见 TiebaRowDiff 文件头）。
   /// 帖子 id（JS 下发）：行复用时区分"同一帖重配"与"换了另一帖"——计数跳动
   /// 只在同一帖的计数变化时播（对齐 RN 的组件复用语义）。
   public let threadId: String
@@ -152,6 +152,9 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
     let fonts = geometry.fonts
     let lineHeights = geometry.lineHeights
     let textWidth = geometry.textColumnWidth
+    // 单图是内容面媒体，不嵌在文本列里：左右各到卡片内边距，和 Apple News 的
+    // 文章卡一样让图片获得完整宽度；测量/预取/展示都必须共用 contentWidth。
+    let mediaWidth = geometry.contentWidth
 
     // ── 头部 ──
     let authorNameShow = TiebaRowDict.nonEmpty(raw["authorNameShow"]) ?? ""
@@ -480,6 +483,33 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
       ? max(TiebaFeedRowLayout.actionRowMinHeight, lineHeights.actionText)
       : nil
 
+    // 置顶横幅：AX 大字号下标题必须换行，不能沿用固定 1 行高度导致右侧裁切。
+    let bannerBadgeWidth = isTop
+      ? TiebaRowText.singleLineWidth("置顶", font: fonts.badge) + 16
+      : 0
+    let bannerTextWidth = isTop
+      ? max(
+        geometry.containerWidth
+          - TiebaFeedRowLayout.bannerPaddingH * 2
+          - TiebaFeedRowLayout.bannerIconSize
+          - TiebaFeedRowLayout.bannerGap * 2
+          - bannerBadgeWidth,
+        1
+      )
+      : 0
+    let bannerTextHeight = isTop
+      ? TiebaSimpleText.measureHeight(
+        TiebaFeedRowLayout.makeAttributed(
+          text: bannerText,
+          font: fonts.bannerText,
+          color: .label,
+          lineHeight: lineHeights.bannerText
+        ),
+        width: bannerTextWidth,
+        maxLines: 0
+      )
+      : 0
+
     let blocks = TiebaFeedRowBlocks(
       isBanner: isTop,
       showsMenu: !isTop && !menuOptions.isEmpty,
@@ -515,12 +545,10 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
         ? TiebaFeedRowLayout.bannerPaddingV * 2 + max(
             TiebaFeedRowLayout.bannerIconSize,
             lineHeights.quoteForum + 4,
-            lineHeights.bannerText
+            bannerTextHeight
           )
         : 0,
-      bannerBadgeWidth: isTop
-        ? TiebaRowText.singleLineWidth("置顶", font: fonts.badge) + 16
-        : 0
+      bannerBadgeWidth: bannerBadgeWidth
     )
 
     // ── 赋值 ──
