@@ -48,6 +48,10 @@
 import Foundation
 import Nuke
 import NukeExtensions
+#if DEBUG
+import os
+private let tiebaNukePerfLog = Logger(subsystem: "com.tiebalite.app", category: "image-prefetch")
+#endif
 
 // MARK: - 防盗链数据加载器（Referer 注入）
 
@@ -59,7 +63,7 @@ import NukeExtensions
 /// 的既有约定一致；本类无需 NSLock）。
 ///
 /// - note: `ImagePipeline.Delegate` 在 Nuke 13 里要求 `AnyObject & Sendable`，
-///   并带一组协议扩展默认实现（含 `willLoadData`）；本类只覆写 dataLoader。
+///   并带一组协议扩展默认实现（含 `willLoadData`）；本类覆写 dataLoader / willLoadData / imageTask。
 ///
 /// [接线 2026-10-05] 原为 `@unchecked Sendable`（人工断言，绕过编译器检查）。现在改成编译器校验的
 /// `Sendable`：本类唯一的存储属性是 Nuke 的 `DataLoader`，而 `DataLoader` 自身已经是
@@ -82,6 +86,110 @@ public final class TiebaNukePipelineDelegate: ImagePipeline.Delegate, Sendable {
 
   public func dataLoader(for request: ImageRequest, pipeline: ImagePipeline) -> any DataLoading {
     dataLoader
+  }
+
+  /// 只改 URLRequest 的调度元数据，不改 ImageRequest/imageID/processors：
+  /// Nuke 的缓存键仍由展示侧同一 request 生成，预取与展示键保持逐字节一致。
+  @ImagePipelineActor
+  public func willLoadData(
+    for request: ImageRequest,
+    urlRequest: URLRequest,
+    pipeline: ImagePipeline
+  ) async throws -> URLRequest {
+    var urlRequest = urlRequest
+    let network = TiebaNetworkMonitor.shared.snapshot()
+    let baseTimeout = urlRequest.timeoutInterval > 0
+      ? urlRequest.timeoutInterval
+      : (network.isExpensive || network.isConstrained ? 30 : 20)
+    urlRequest.timeoutInterval = TiebaNetworkMonitor.shared.adjustedTimeout(
+      base: baseTimeout,
+      maximum: 90
+    )
+    switch request.priority {
+    case .veryHigh, .high, .normal:
+      urlRequest.networkServiceType = .responsiveData
+    case .low:
+      urlRequest.networkServiceType = .default
+    case .veryLow:
+      urlRequest.networkServiceType = .background
+    }
+    return urlRequest
+  }
+
+  /// 预取失败退避只作用于 low/veryLow 任务；展示侧 normal 以上的失败不在这里
+  /// 重试，避免与页面自己的错误态/重试按钮重复请求。键取自 Nuke 的 data cache
+  /// key（URL + 处理器），不覆盖 cacheKey，也不会改变处理器参数。
+  public func imageTask(
+    _ task: ImageTask,
+    didReceiveEvent event: ImageTask.Event,
+    pipeline: ImagePipeline
+  ) {
+    guard task.request.priority <= .low else { return }
+    let key = pipeline.cache.makeDataCacheKey(for: task.request)
+    switch event {
+    case .finished(.success):
+      Self.clearPrefetchRetryState(for: key)
+    case .finished(.failure(let error)):
+      if case .cancelled = error {
+        Self.clearPrefetchRetryState(for: key)
+        return
+      }
+      guard let delay = Self.nextPrefetchRetryDelay(for: key) else { return }
+      let request = task.request
+      let pipeline = pipeline
+#if DEBUG
+      tiebaNukePerfLog.debug(
+        "prefetch retry scheduled path=\(request.url?.path ?? "", privacy: .public)"
+      )
+#endif
+      Task.detached(priority: .utility) {
+        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        guard Task.isCancelled == false else { return }
+        let retry = pipeline.imageTask(with: request)
+        _ = try? await retry.response
+      }
+    default:
+      break
+    }
+  }
+
+  private struct PrefetchRetryState {
+    var attempts: Int
+    var nextAttemptAt: TimeInterval
+  }
+
+  private static let prefetchRetryStates = TiebaMutex<[String: PrefetchRetryState]>([:])
+  private static let prefetchRetryDelays: [TimeInterval] = [0.75, 2.0, 5.0]
+
+  private static func nextPrefetchRetryDelay(for key: String) -> TimeInterval? {
+    let now = Date().timeIntervalSince1970
+    return prefetchRetryStates.withLock { states in
+      // 失败键常驻会随滚动无限增长；超过上限的旧条目整表丢弃，退避本身不是
+      // 正确性状态，丢掉最多让某张图重新从第一档退避开始。
+      if states.count > 256 {
+        states.removeAll(keepingCapacity: true)
+      }
+      guard let state = states[key] else {
+        let delay = prefetchRetryDelays[0] + Double.random(in: 0...0.25)
+        states[key] = PrefetchRetryState(attempts: 1, nextAttemptAt: now + delay)
+        return delay
+      }
+      guard now >= state.nextAttemptAt else { return nil }
+      let nextAttempt = state.attempts + 1
+      guard nextAttempt <= prefetchRetryDelays.count else {
+        states[key] = PrefetchRetryState(attempts: state.attempts, nextAttemptAt: now + 30)
+        return nil
+      }
+      let delay = prefetchRetryDelays[nextAttempt - 1] + Double.random(in: 0...0.25)
+      states[key] = PrefetchRetryState(attempts: nextAttempt, nextAttemptAt: now + delay)
+      return delay
+    }
+  }
+
+  private static func clearPrefetchRetryState(for key: String) {
+    prefetchRetryStates.withLock { states in
+      _ = states.removeValue(forKey: key)
+    }
   }
 }
 
@@ -192,17 +300,51 @@ public enum TiebaNuke {
   /// 供原生列表/浏览器共用的预取器工厂（每个屏幕一个实例；预取器释放时自动
   /// 取消未完成任务，见 prefetching.md）。
   ///
-  /// 预取请求请带上与展示时**相同**的下采样处理器（resizeProcessor/fitProcessor），
-  /// 否则内存缓存里存的是全尺寸位图（prefetching.md 的 warning）；预取优先级自动为 .low。
+  /// 预取请求必须与展示侧同 URL + 同处理器：缓存键逐字节一致才会命中。
+  /// Nuke 的 ImagePrefetcher 自带按 request 键去重、跳过已缓存项，并在 pipeline
+  /// 内与展示请求合并；这里只负责把整批预取压到 veryLow，让可见图请求（默认
+  /// normal）在任务队列/网络调度上自然优先。列表的甩动闸门仍在调用方，未改动。
   public static func makePrefetcher() -> ImagePrefetcher {
-    ImagePrefetcher(
+    makePrefetcher(priority: .veryLow)
+  }
+
+  /// 显式优先级版本：慢滑窗口可用 .low，静止预取可用 .veryLow；缓存键与展示侧
+  /// 一致，不因优先级不同而改变。
+  public static func makePrefetcher(priority: ImageRequest.Priority) -> ImagePrefetcher {
+    let prefetcher = ImagePrefetcher(
       pipeline: pipeline,
       destination: .memoryCache,
       // [接线] 低端机串行预取（1 条），其余 2 条：并发解码是内存峰值的主要来源，
       // 低端机 CPU 核数少、内存也小，降并发只影响预取速度，不影响已显示的任何像素。
       maxConcurrentRequestCount: self.isLowTierDevice ? 1 : 2
     )
+    prefetcher.priority = priority
+    return prefetcher
   }
+
+  /// 页面快照首图预取：只预取原始字节到 Nuke DataCache，不套处理器、不塞全尺寸
+  /// 位图内存。展示请求带处理器时，Nuke 会先递归查无处理器 request 的磁盘数据，
+  /// 因此这份 raw data 可被实际展示复用；若已有同图数据则直接命中/去重，不重复
+  /// 下载。缓存键/处理器参数完全不变。
+  public static func prefetchFirstImageData(urls: [URL]) {
+    var seen = Set<URL>()
+    let unique = urls.filter { seen.insert($0).inserted }.prefix(12)
+    guard unique.isEmpty == false else { return }
+    firstImageDataPrefetcher.startPrefetching(with: Array(unique))
+  }
+
+  /// 生命周期跟随进程的 raw-data prefetcher：ImagePrefetcher 释放会取消在途任务，
+  /// 所以不能为每次快照临时 new 一个。destination=.diskCache 表示只下载字节并写
+  /// DataCache，不做解码/下采样。
+  private static let firstImageDataPrefetcher: ImagePrefetcher = {
+    let prefetcher = ImagePrefetcher(
+      pipeline: pipeline,
+      destination: .diskCache,
+      maxConcurrentRequestCount: 2
+    )
+    prefetcher.priority = .veryLow
+    return prefetcher
+  }()
 
   // MARK: 下采样
 
@@ -409,6 +551,7 @@ public enum TiebaNuke {
   private static func performGIFProbe(_ url: URL) async -> Bool? {
     var request = URLRequest(url: url)
     request.httpMethod = "HEAD"
+    request.networkServiceType = .responsiveData
     request.setValue(referer, forHTTPHeaderField: "Referer")
     guard let (_, response) = try? await sharedSession.data(for: request),
           let http = response as? HTTPURLResponse else { return nil }
@@ -454,6 +597,7 @@ public enum TiebaNuke {
   /// 失败返回 nil（调用方据此不缓存结论，下次重试）。
   private static func sniffGIFMagic(_ url: URL) async -> Bool? {
     var request = URLRequest(url: url)
+    request.networkServiceType = .responsiveData
     request.setValue(referer, forHTTPHeaderField: "Referer")
     request.setValue("bytes=0-5", forHTTPHeaderField: "Range")
     guard let (data, response) = try? await sharedSession.data(for: request),
@@ -466,7 +610,12 @@ public enum TiebaNuke {
   private static let sharedSession: URLSession = {
     let config = URLSessionConfiguration.ephemeral
     config.urlCache = nil
+    config.requestCachePolicy = .reloadIgnoringLocalCacheData
+    config.waitsForConnectivity = true
+    config.timeoutIntervalForRequest = 20
+    config.timeoutIntervalForResource = 60
     config.httpShouldUsePipelining = true
+    config.httpMaximumConnectionsPerHost = 3
     return URLSession(configuration: config)
   }()
 
@@ -536,6 +685,13 @@ public enum TiebaNuke {
   ) -> DataLoader {
     let configuration = DataLoader.defaultConfiguration
     configuration.urlCache = nil
+    configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+    configuration.waitsForConnectivity = true
+    configuration.timeoutIntervalForRequest = 20
+    configuration.timeoutIntervalForResource = 120
+    // 同一 session 全 App 复用；HTTP/2 由系统按 ALPN 自动多路复用。
+    configuration.httpShouldUsePipelining = true
+    configuration.httpMaximumConnectionsPerHost = 6
 
     var headers = configuration.httpAdditionalHeaders ?? [:]
     headers["Referer"] = referer
