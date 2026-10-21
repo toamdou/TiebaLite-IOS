@@ -19,6 +19,24 @@ extension TiebaHomeViewController: UICollectionViewDelegate {
     applyListShift(CGPoint(x: 0, y: -delta), isExternal: false)
   }
 
+  /// 轻吸附：回落点已非常接近顶部/底部时收齐最后几十 pt，不做强分页。
+  func scrollViewWillEndDragging(
+    _ scrollView: UIScrollView,
+    withVelocity velocity: CGPoint,
+    targetContentOffset: UnsafeMutablePointer<CGPoint>
+  ) {
+    let top = -scrollView.adjustedContentInset.top
+    let bottom = max(
+      top,
+      scrollView.contentSize.height + scrollView.adjustedContentInset.bottom - scrollView.bounds.height
+    )
+    if targetContentOffset.pointee.y > top, targetContentOffset.pointee.y - top < 34 {
+      targetContentOffset.pointee.y = top
+    } else if bottom - targetContentOffset.pointee.y < 22, targetContentOffset.pointee.y < bottom {
+      targetContentOffset.pointee.y = bottom
+    }
+  }
+
   func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
     collectionView.deselectItem(at: indexPath, animated: false)
     guard displayedForums.indices.contains(indexPath.item) else { return }
@@ -62,10 +80,21 @@ final class TiebaHomeForumCell: UICollectionViewCell {
   private let chipStack = UIStackView()
   private let levelLabel = UILabel()
   private let checkIcon = UIImageView()
+  private var textToChip: NSLayoutConstraint?
+  private var textToEdge: NSLayoutConstraint?
   private var playedEntrance = false
 
   override init(frame: CGRect) {
     super.init(frame: frame)
+    isAccessibilityElement = true
+    accessibilityTraits = .button
+    accessibilityCustomActions = [UIAccessibilityCustomAction(
+      name: "取消关注"
+    ) { [weak self] _ in
+      guard let self, let onUnfollow = self.onUnfollow else { return false }
+      onUnfollow()
+      return true
+    }]
     // 卡面几何/底色由外观档给（扁平档 = 无圆角、底色 = 页面底色，见 TiebaListAppearance）。
     card.layer.cornerRadius = TiebaListAppearance.surfaceRadius(20)
     card.layer.cornerCurve = .continuous
@@ -75,7 +104,7 @@ final class TiebaHomeForumCell: UICollectionViewCell {
     nameLabel.adjustsFontForContentSizeCategory = true
     nameLabel.numberOfLines = 1
     metaLabel.font = TiebaSimpleText.font(size: 12, weight: .regular)
-    metaLabel.textColor = .tertiaryLabel
+    metaLabel.textColor = TiebaHomeAccessibleColor.secondaryText
     levelLabel.font = TiebaSimpleText.font(size: 12, weight: .bold)
     checkIcon.contentMode = .center
     let textColumn = UIStackView(arrangedSubviews: [nameLabel, metaLabel])
@@ -96,6 +125,12 @@ final class TiebaHomeForumCell: UICollectionViewCell {
     card.addSubview(avatar)
     card.addSubview(textColumn)
     card.addSubview(chip)
+    let toChip = textColumn.trailingAnchor.constraint(
+      lessThanOrEqualTo: chip.leadingAnchor, constant: -8)
+    let toEdge = textColumn.trailingAnchor.constraint(
+      lessThanOrEqualTo: card.trailingAnchor, constant: -14)
+    textToChip = toChip
+    textToEdge = toEdge
     NSLayoutConstraint.activate([
       card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
       card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
@@ -105,7 +140,7 @@ final class TiebaHomeForumCell: UICollectionViewCell {
       avatar.centerYAnchor.constraint(equalTo: card.centerYAnchor),
       textColumn.leadingAnchor.constraint(equalTo: avatar.trailingAnchor, constant: 10),
       textColumn.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-      textColumn.trailingAnchor.constraint(lessThanOrEqualTo: chip.leadingAnchor, constant: -8),
+      toChip,
       chip.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -14),
       chip.centerYAnchor.constraint(equalTo: card.centerYAnchor),
       chipStack.leadingAnchor.constraint(equalTo: chip.leadingAnchor, constant: 6),
@@ -129,6 +164,12 @@ final class TiebaHomeForumCell: UICollectionViewCell {
       width: bounds.width,
       height: thickness
     )
+    if TiebaListAppearance.isFlat == false {
+      card.layer.borderColor = UIColor.separator
+        .withAlphaComponent(0.45)
+        .resolvedColor(with: traitCollection)
+        .cgColor
+    }
   }
 
   @available(*, unavailable)
@@ -137,8 +178,10 @@ final class TiebaHomeForumCell: UICollectionViewCell {
   /// - Parameter showsHairline: 扁平档 + 单列时才画行底发际线（双列由 4pt 网格间距
   ///   分隔，画半宽线反而像断线）。
   func configure(forum: TiebaForumInfo, showsHairline: Bool) {
-    card.backgroundColor = TiebaListAppearance.rowSurface(card: .secondarySystemGroupedBackground)
+    card.backgroundColor = TiebaListAppearance.rowSurface(card: .systemBackground)
     card.layer.cornerRadius = TiebaListAppearance.surfaceRadius(20)
+    card.layer.borderWidth = 0
+    card.layer.borderColor = UIColor.clear.cgColor
     rowHairline.backgroundColor = .separator
     rowHairline.isHidden = !showsHairline
     let tint = TiebaChromeTheme.current.tint
@@ -146,9 +189,13 @@ final class TiebaHomeForumCell: UICollectionViewCell {
       url: TiebaSimpleRowParser.avatarURL(forum.avatar)?.absoluteString ?? "",
       initial: forum.displayName.isEmpty ? "吧" : String(forum.displayName.prefix(1))
     )
+    let accessibilityLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+    nameLabel.numberOfLines = accessibilityLayout ? 2 : 1
     nameLabel.text = "\(forum.displayName)吧"
     metaLabel.text = forum.memberCount > 0 ? "\(TiebaForumFormat.count(forum.memberCount)) 关注" : nil
     metaLabel.isHidden = forum.memberCount <= 0
+    textToChip?.isActive = accessibilityLayout == false
+    textToEdge?.isActive = accessibilityLayout
     levelLabel.text = forum.levelId > 0 ? "Lv.\(forum.levelId)" : nil
     // 等级色与帖子行同一套（Kotlin getIconColorByLevel）：不同等级不同颜色，
     // 不再统一用主题色（用户 2026-09-17 要求）。
@@ -159,9 +206,37 @@ final class TiebaHomeForumCell: UICollectionViewCell {
     )
     checkIcon.tintColor = tint
     checkIcon.isHidden = !forum.isSign
-    chip.isHidden = forum.levelId <= 0 && !forum.isSign
+    chip.isHidden = accessibilityLayout || (forum.levelId <= 0 && forum.isSign == false)
     chip.backgroundColor = .tertiarySystemFill
-    accessibilityLabel = "\(forum.displayName)吧"
+    var spoken: [String] = ["\(forum.displayName)吧"]
+    if forum.memberCount > 0 {
+      spoken.append("\(TiebaForumFormat.count(forum.memberCount))关注")
+    }
+    if forum.levelId > 0 { spoken.append("等级\(forum.levelId)") }
+    if forum.isSign { spoken.append("已签到") }
+    accessibilityLabel = spoken.joined(separator: "，")
+    accessibilityHint = "打开贴吧"
+  }
+
+  override var isHighlighted: Bool {
+    didSet {
+      let apply = {
+        self.card.alpha = self.isHighlighted ? 0.82 : 1
+        self.card.transform = self.isHighlighted
+          ? CGAffineTransform(scaleX: 0.985, y: 0.985)
+          : .identity
+      }
+      guard UIAccessibility.isReduceMotionEnabled == false else {
+        apply()
+        return
+      }
+      TiebaAnimation.animate(
+        curve: .easeOut,
+        duration: TiebaAnimationDuration.microFeedback,
+        options: [.beginFromCurrentState, .allowUserInteraction],
+        animations: apply
+      )
+    }
   }
 
   /// 首屏入场（原 EntranceRow）：参数与其余三族共用 TiebaEntrance。
@@ -179,6 +254,9 @@ final class TiebaHomeForumCell: UICollectionViewCell {
     playedEntrance = false
     alpha = 1
     transform = .identity
+    card.layer.removeAllAnimations()
+    card.alpha = 1
+    card.transform = .identity
     onUnfollow = nil
   }
 }
@@ -203,14 +281,18 @@ extension TiebaHomeForumCell: UIContextMenuInteractionDelegate {
 // MARK: - 最近访问药丸
 
 final class TiebaHistoryPill: UIControl {
-  private let avatar = TiebaForumAvatarView(size: 22)
+  private let surface = UIView()
+  private let avatar = TiebaForumAvatarView(size: 20)
   private let label = UILabel()
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    layer.cornerRadius = 15
-    layer.cornerCurve = .continuous
-    backgroundColor = .tertiarySystemFill
+    backgroundColor = .clear
+    // 44pt 仍是命中区；视觉胶囊缩到 34pt，避免最近访问行看起来像一排大按钮。
+    surface.backgroundColor = .tertiarySystemFill
+    surface.layer.cornerRadius = 17
+    surface.layer.cornerCurve = .continuous
+    surface.isUserInteractionEnabled = false
     label.font = TiebaSimpleText.font(size: 13, weight: .medium)
     label.adjustsFontForContentSizeCategory = true
     label.numberOfLines = 1
@@ -220,12 +302,18 @@ final class TiebaHistoryPill: UIControl {
     stack.spacing = 6
     stack.isUserInteractionEnabled = false
     stack.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(stack)
+    surface.addSubview(stack)
+    addSubview(surface)
+    surface.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
-      stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-      stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-      stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-      stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+      surface.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+      surface.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+      surface.topAnchor.constraint(equalTo: topAnchor, constant: 5),
+      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
+      stack.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: 8),
+      stack.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -10),
+      stack.topAnchor.constraint(equalTo: surface.topAnchor),
+      stack.bottomAnchor.constraint(equalTo: surface.bottomAnchor),
       label.widthAnchor.constraint(lessThanOrEqualToConstant: 140),
     ])
     isAccessibilityElement = true
@@ -234,6 +322,11 @@ final class TiebaHistoryPill: UIControl {
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    surface.layer.cornerRadius = surface.bounds.height / 2
+  }
 
   func configure(name: String, avatar portrait: String) {
     label.text = name
@@ -245,7 +338,24 @@ final class TiebaHistoryPill: UIControl {
   }
 
   override var isHighlighted: Bool {
-    didSet { alpha = isHighlighted ? 0.7 : 1 }
+    didSet {
+      let apply = {
+        self.alpha = self.isHighlighted ? 0.72 : 1
+        self.transform = self.isHighlighted
+          ? CGAffineTransform(scaleX: 0.96, y: 0.96)
+          : .identity
+      }
+      guard UIAccessibility.isReduceMotionEnabled == false else {
+        apply()
+        return
+      }
+      TiebaAnimation.animate(
+        curve: .easeOut,
+        duration: TiebaAnimationDuration.microFeedback,
+        options: [.beginFromCurrentState, .allowUserInteraction],
+        animations: apply
+      )
+    }
   }
 }
 
@@ -265,16 +375,19 @@ final class TiebaHomeStateCell: UICollectionViewCell {
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-  func host(_ stateView: TiebaStateContentView?) {
-    guard let stateView, stateView.superview !== contentView else { return }
-    stateView.removeFromSuperview()
-    stateView.translatesAutoresizingMaskIntoConstraints = false
-    contentView.addSubview(stateView)
+  func host(_ hostedView: UIView?) {
+    guard let hostedView, hostedView.superview !== contentView else { return }
+    for child in contentView.subviews where child !== hostedView {
+      child.removeFromSuperview()
+    }
+    hostedView.removeFromSuperview()
+    hostedView.translatesAutoresizingMaskIntoConstraints = false
+    contentView.addSubview(hostedView)
     NSLayoutConstraint.activate([
-      stateView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-      stateView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-      stateView.topAnchor.constraint(equalTo: contentView.topAnchor),
-      stateView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+      hostedView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+      hostedView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+      hostedView.topAnchor.constraint(equalTo: contentView.topAnchor),
+      hostedView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
     ])
   }
 }

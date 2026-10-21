@@ -21,7 +21,8 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
 
   // 顶栏
   private let avatarControl = UIControl()
-  private let avatarView = TiebaForumAvatarView(size: 36)
+  private let avatarView = TiebaForumAvatarView(size: 38)
+  private let signedOutAvatarGlyph = UIImageView()
   /// 搜索入口 = 玻璃按钮（放大镜 + 占位文字）：与签到/排序同一形态，不再是
   /// 「平底输入框 + 外层 control」的三层 hack。
   private let searchButton = UIButton(type: .system)
@@ -29,6 +30,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
   private let sortButton = UIButton(type: .system)
   /// C3（报告 37）：顶栏三块玻璃的 iPad 指针高亮 —— 实例必须强引用（UIPointerInteraction.delegate 是 weak）。
   private var topBarPointers: [TiebaPointerInteraction] = []
+  private var topBarTraitRegistration: UITraitChangeRegistration?
   // 最近访问
   private let historyHeader = UIView()
   private let historyTitle = UILabel()
@@ -36,10 +38,12 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
   private let historyScroll = UIScrollView()
   private let historyStack = UIStackView()
   private var historyHeight: NSLayoutConstraint?
+  private var historyHeaderHeight: NSLayoutConstraint?
   // 列表
   let layout = UICollectionViewFlowLayout()
   private lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
   private let stateView = TiebaStateContentView()
+  private let welcomeView = TiebaHomeWelcomeView()
   /// 空/加载/错误/未登录都做成**列表里的一项**（报告 31 §一-1）：列表因此始终可见，
   /// 下拉刷新、滚动回弹、键盘 inset 与有内容时共用同一条管线，不再靠隐藏列表切换。
   static let stateItemID = "__tieba_home_state__"
@@ -84,10 +88,15 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
   /// 载体 = 本仓既有的 TiebaApparentHeight（视觉高度/布局高度解耦，与 TiebaFeedRowView 的
   /// 折叠同一条约定）：布局高度恒等于最近访问区的内容高度，视觉高度由 0..1 的分数派生；
   /// 动画期间药丸行**按完整高度摆好**、超出部分由滚动视图裁掉（内容不重排）。
-  private static let historyContentHeight: CGFloat = 34
-  private var historyApparentHeight = TiebaApparentHeight(layoutHeight: 34)
+  private var historyContentHeight: CGFloat {
+    let labelLine = ceil(TiebaSimpleText.font(size: 13, weight: .medium).lineHeight)
+    return max(44, labelLine + 8)
+  }
+  private var historyApparentHeight = TiebaApparentHeight(layoutHeight: 44)
+  private var historyStackHeightConstraint: NSLayoutConstraint?
   private var historyFraction: CGFloat = 0
   private var historyAnimator: TiebaDisplayLinkAnimator?
+  private var lastAppliedLoginState: Bool?
   /// 首个同步**不播动画**（首屏数据落地时的高度与改前逐值相同，只是此后不再是硬切）。
   private var historyFractionSynced = false
 
@@ -111,9 +120,9 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    // 页面底色由外观档给：扁平档 = systemBackground = **纯白**（用户明确"不要深灰"）；
-    // 卡片档 = 分组灰（白卡浮在其上）。
-    view.backgroundColor = TiebaListAppearance.pageBackground
+    // 页面底一律 systemBackground：扁平档直接成白色信息流；卡片档也只有
+    // systemBackground 卡 + hairline，不再用分组灰铺底。
+    view.backgroundColor = .systemBackground
     sortMode = loadSortMode()
     isSingleColumn = TiebaPreferenceSnapshot.bool("forumListSingle", default: true)
     let topBar = buildTopBar()
@@ -149,7 +158,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       guard let self else { return }
       TiebaUserAPI.refreshLoginSnapshot()
       hasLoadedOnce = false
-      applyLoginState()
+      applyLoginState(animated: true)
       loadFollowedForums(force: true)
       loadRecentForums()
       applySignButton()
@@ -177,6 +186,17 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       pill.widthAnchor.constraint(lessThanOrEqualToConstant: TiebaLayout.floatingMaxWidth),
     ])
     applyLoginState()
+    topBarTraitRegistration = registerForTraitChanges([
+      UITraitPreferredContentSizeCategory.self,
+      UITraitAccessibilityContrast.self,
+    ]) {
+      (controller: TiebaHomeViewController, _: UITraitCollection) in
+      controller.updateTopBarTypography()
+      controller.updateHistoryMetricsForContentSize()
+      controller.updateLayoutMetrics()
+      controller.applyList()
+      controller.collectionView.collectionViewLayout.invalidateLayout()
+    }
   }
 
   override func viewWillAppear(_ animated: Bool) {
@@ -200,36 +220,75 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
 
   // MARK: - 顶栏
 
+  /// 玻璃按钮的极轻着色：透明材质在纯白底上仍能看出边界与层次。
+  private static let glassSurfaceTint = UIColor { trait in
+    if trait.accessibilityContrast == .high {
+      return trait.userInterfaceStyle == .dark
+        ? UIColor.white.withAlphaComponent(0.14)
+        : UIColor.black.withAlphaComponent(0.08)
+    }
+    return trait.userInterfaceStyle == .dark
+      ? UIColor.white.withAlphaComponent(0.07)
+      : UIColor.black.withAlphaComponent(0.035)
+  }
+
   @discardableResult
   private func buildTopBar() -> UIStackView {
     avatarView.translatesAutoresizingMaskIntoConstraints = false
     avatarView.isUserInteractionEnabled = false
     avatarControl.addSubview(avatarView)
+    signedOutAvatarGlyph.image = UIImage(
+      systemName: "person.crop.circle",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 25, weight: .regular)
+    )
+    signedOutAvatarGlyph.tintColor = TiebaHomeAccessibleColor.secondaryText
+    signedOutAvatarGlyph.contentMode = .scaleAspectFit
+    signedOutAvatarGlyph.isUserInteractionEnabled = false
+    signedOutAvatarGlyph.translatesAutoresizingMaskIntoConstraints = false
+    avatarControl.addSubview(signedOutAvatarGlyph)
+    avatarControl.isAccessibilityElement = true
+    avatarControl.accessibilityTraits = .button
     avatarControl.addAction(UIAction { [weak self] _ in self?.handleAvatarTap() }, for: .touchUpInside)
     NSLayoutConstraint.activate([
-      avatarView.leadingAnchor.constraint(equalTo: avatarControl.leadingAnchor),
-      avatarView.trailingAnchor.constraint(equalTo: avatarControl.trailingAnchor),
-      avatarView.topAnchor.constraint(equalTo: avatarControl.topAnchor),
-      avatarView.bottomAnchor.constraint(equalTo: avatarControl.bottomAnchor),
-      avatarControl.widthAnchor.constraint(equalToConstant: 36),
-      avatarControl.heightAnchor.constraint(equalToConstant: 36),
+      avatarView.centerXAnchor.constraint(equalTo: avatarControl.centerXAnchor),
+      avatarView.centerYAnchor.constraint(equalTo: avatarControl.centerYAnchor),
+      avatarView.widthAnchor.constraint(equalToConstant: 38),
+      avatarView.heightAnchor.constraint(equalToConstant: 38),
+      signedOutAvatarGlyph.centerXAnchor.constraint(equalTo: avatarControl.centerXAnchor),
+      signedOutAvatarGlyph.centerYAnchor.constraint(equalTo: avatarControl.centerYAnchor),
+      signedOutAvatarGlyph.widthAnchor.constraint(equalToConstant: 28),
+      signedOutAvatarGlyph.heightAnchor.constraint(equalToConstant: 28),
+      avatarControl.widthAnchor.constraint(equalToConstant: 44),
+      avatarControl.heightAnchor.constraint(equalToConstant: 44),
     ])
 
     // 搜索入口：玻璃胶囊按钮，放大镜 + 占位文字左对齐铺满剩余宽度。
     // iOS 26 玻璃；17 退回经典 gray（其余属性逐项不变）。
     var search: UIButton.Configuration = if #available(iOS 26.0, *) { .glass() } else { .gray() }
-    search.image = UIImage(systemName: "magnifyingglass")
+    search.image = UIImage(
+      systemName: "magnifyingglass",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+    )
     search.title = "搜吧、搜贴、搜人"
-    search.baseForegroundColor = .secondaryLabel
+    search.baseForegroundColor = TiebaHomeAccessibleColor.secondaryText
     search.cornerStyle = .capsule
-    search.imagePadding = 6
-    search.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12)
+    search.background.backgroundColor = Self.glassSurfaceTint
+    search.imagePadding = 8
+    search.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 12)
+    search.titleLineBreakMode = .byTruncatingTail
+    search.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+      var outgoing = incoming
+      outgoing.font = TiebaSimpleText.font(size: 14, weight: .regular)
+      return outgoing
+    }
     searchButton.configuration = search
     searchButton.contentHorizontalAlignment = .leading
+    searchButton.accessibilityLabel = "搜索贴吧、帖子或用户"
     searchButton.setContentHuggingPriority(.defaultLow, for: .horizontal)
     searchButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-    searchButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
+    searchButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
     searchButton.addAction(UIAction { _ in
+      TiebaSceneHaptics.fire("press")
       TiebaNavigator.shared.navigate(.search())
     }, for: .touchUpInside)
 
@@ -237,15 +296,30 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       // 原 JS = clear 玻璃圆钮：iOS 26 玻璃；17 退回经典 gray（圆钮/尺寸不变）。
       var config: UIButton.Configuration = if #available(iOS 26.0, *) { .glass() } else { .gray() }
       config.cornerStyle = .capsule
+      config.background.backgroundColor = Self.glassSurfaceTint
       button.configuration = config
       button.translatesAutoresizingMaskIntoConstraints = false
       NSLayoutConstraint.activate([
-        button.widthAnchor.constraint(equalToConstant: 36),
-        button.heightAnchor.constraint(equalToConstant: 36),
+        button.widthAnchor.constraint(equalToConstant: 44),
+        button.heightAnchor.constraint(equalToConstant: 44),
       ])
     }
     signButton.addAction(UIAction { [weak self] _ in self?.handleSignTap() }, for: .touchUpInside)
     sortButton.addAction(UIAction { [weak self] _ in self?.handleSortTap() }, for: .touchUpInside)
+    // 玻璃件的高光边与极轻投影：纯白底上仍能看见材质边界，但不加灰色描边。
+    for button in [searchButton, signButton, sortButton] {
+      button.layer.cornerRadius = 22
+      button.layer.cornerCurve = .continuous
+      button.layer.borderWidth = 0.5
+      button.layer.borderColor = UIColor.white.withAlphaComponent(0.34).cgColor
+      button.layer.shadowColor = UIColor.black.cgColor
+      button.layer.shadowOpacity = 0.055
+      button.layer.shadowRadius = 10
+      button.layer.shadowOffset = CGSize(width: 0, height: 4)
+    }
+    for control in [avatarControl, searchButton, signButton, sortButton] as [UIControl] {
+      installPressFeedback(on: control)
+    }
     applySignButton()
 
     // C3（报告 37）：iPad + 触控板/妙控鼠标悬停时给这三块玻璃一圈高亮（与吧页 FAB、查看器圆钮
@@ -258,10 +332,11 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       TiebaPointerInteraction(view: sortButton, style: .circle(nil)),
     ]
 
+    updateTopBarTypography()
     let row = UIStackView(arrangedSubviews: [avatarControl, searchButton, signButton, sortButton])
     row.axis = .horizontal
     row.alignment = .center
-    row.spacing = 8
+    row.spacing = 10
     row.translatesAutoresizingMaskIntoConstraints = false
 
     // A1（报告 37 第一优先）：这一行里有**三块各自独立**的玻璃（搜索胶囊 + 签到圆钮 + 排序圆钮，
@@ -276,8 +351,8 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     NSLayoutConstraint.activate([
       glassHost.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
       glassHost.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-      glassHost.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-      glassHost.heightAnchor.constraint(equalToConstant: 36),
+      glassHost.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 6),
+      glassHost.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
       // 行**钉在容器上**（不是 contentView）：contentView 的 frame 由 UIVisualEffectView 自己管，
       // 引用它的 anchor 会把行宽绑到 UIKit 的内部布局上；钉容器则与改前的几何逐值相同。
       row.leadingAnchor.constraint(equalTo: glassHost.leadingAnchor),
@@ -291,15 +366,93 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
   private func applySignButton() {
     let signing = TiebaSignService.shared.isSigning
     var sign = signButton.configuration ?? .gray()
-    sign.image = UIImage(systemName: signing ? "checkmark.seal.fill" : "checkmark.seal")
-    sign.baseForegroundColor = signing ? TiebaChromeTheme.current.tint : .label
+    sign.image = UIImage(
+      systemName: signing ? "checkmark.seal.fill" : "checkmark.seal",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+    )
+    sign.baseForegroundColor = signing ? TiebaChromeTheme.current.tint : TiebaHomeAccessibleColor.secondaryText
     signButton.configuration = sign
     signButton.accessibilityLabel = "一键签到"
     var sort = sortButton.configuration ?? .gray()
-    sort.image = UIImage(systemName: sortMode == .level ? "arrow.up.arrow.down" : "textformat.abc")
+    sort.image = UIImage(
+      systemName: sortMode == .level ? "arrow.up.arrow.down" : "textformat.abc",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+    )
+    sort.baseForegroundColor = TiebaHomeAccessibleColor.secondaryText
     sortButton.configuration = sort
     sortButton.isEnabled = isLoggedIn
     sortButton.accessibilityLabel = sortMode == .level ? "按等级排序" : "按名称排序"
+  }
+
+  private func installPressFeedback(on control: UIControl) {
+    control.addAction(UIAction { [weak self, weak control] _ in
+      self?.setControlPressed(control, pressed: true)
+    }, for: .touchDown)
+    for event in [UIControl.Event.touchUpInside, .touchUpOutside, .touchCancel] {
+      control.addAction(UIAction { [weak self, weak control] _ in
+        self?.setControlPressed(control, pressed: false)
+      }, for: event)
+    }
+  }
+
+  private func setControlPressed(_ control: UIControl?, pressed: Bool) {
+    guard let control else { return }
+    let apply = {
+      control.transform = pressed ? CGAffineTransform(scaleX: 0.94, y: 0.94) : .identity
+    }
+    guard UIAccessibility.isReduceMotionEnabled == false else {
+      apply()
+      return
+    }
+    TiebaAnimation.animate(
+      curve: .easeOut,
+      duration: TiebaAnimationDuration.microFeedback,
+      options: [.beginFromCurrentState, .allowUserInteraction],
+      animations: apply
+    )
+  }
+
+  /// 顶栏文字/命中区随 AX 字号切换：标准字号保留完整搜索占位，AX 用短标签避免固定高度裁切。
+  /// 所有按钮的实际命中高度 ≥44；搜索按钮与玻璃容器由 intrinsic height 自然增高。
+  private func updateTopBarTypography() {
+    let accessibility = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+    let fallbackConfiguration: UIButton.Configuration =
+      if #available(iOS 26.0, *) { .glass() } else { .gray() }
+    var search = searchButton.configuration ?? fallbackConfiguration
+    search.title = accessibility ? "搜索" : "搜吧、搜贴、搜人"
+    search.image = accessibility
+      ? nil
+      : UIImage(
+          systemName: "magnifyingglass",
+          withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        )
+    search.titleLineBreakMode = .byTruncatingTail
+    search.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+      var outgoing = incoming
+      outgoing.font = TiebaSimpleText.font(size: 14, weight: .regular)
+      return outgoing
+    }
+    searchButton.configuration = search
+    searchButton.invalidateIntrinsicContentSize()
+    applySignButton()
+    view.setNeedsLayout()
+  }
+
+  private func updateHistoryMetricsForContentSize() {
+    historyTitle.font = TiebaSimpleText.font(size: 15, weight: .semibold)
+    historyHeaderHeight?.constant = historyHeader.isHidden ? 0 : historyHeaderTargetHeight
+    var toggle = historyToggle.configuration ?? .plain()
+    toggle.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+      var outgoing = incoming
+      outgoing.font = TiebaSimpleText.font(size: 15, weight: .semibold)
+      return outgoing
+    }
+    historyToggle.configuration = toggle
+    let newHeight = historyContentHeight
+    historyStackHeightConstraint?.constant = newHeight
+    historyApparentHeight.setLayoutHeight(newHeight)
+    applyHistoryFraction(historyFraction)
+    view.setNeedsLayout()
   }
 
   // MARK: - 最近访问
@@ -307,10 +460,18 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
   private func buildHistoryRow(below topBar: UIStackView) {
     historyTitle.text = "最近访问"
     historyTitle.font = TiebaSimpleText.font(size: 15, weight: .semibold)
+    historyTitle.adjustsFontForContentSizeCategory = true
+    historyTitle.numberOfLines = 1
     var toggle = UIButton.Configuration.plain()
     toggle.image = UIImage(systemName: "chevron.up")
     toggle.imagePadding = 4
-    toggle.baseForegroundColor = TiebaChromeTheme.current.tint
+    toggle.baseForegroundColor = TiebaHomeAccessibleColor.brandForeground
+    toggle.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 8, bottom: 10, trailing: 8)
+    toggle.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+      var outgoing = incoming
+      outgoing.font = TiebaSimpleText.font(size: 15, weight: .semibold)
+      return outgoing
+    }
     historyToggle.configuration = toggle
     historyToggle.addAction(UIAction { [weak self] _ in self?.toggleHistory() }, for: .touchUpInside)
     let headerStack = UIStackView(arrangedSubviews: [historyTitle, UIView(), historyToggle])
@@ -333,11 +494,15 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     view.addSubview(historyScroll)
     let height = historyScroll.heightAnchor.constraint(equalToConstant: 0)
     historyHeight = height
+    let headerHeight = historyHeader.heightAnchor.constraint(equalToConstant: 0)
+    historyHeaderHeight = headerHeight
+    let stackHeight = historyStack.heightAnchor.constraint(equalToConstant: historyContentHeight)
+    historyStackHeightConstraint = stackHeight
     NSLayoutConstraint.activate([
       historyHeader.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
       historyHeader.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
       historyHeader.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 4),
-      historyHeader.heightAnchor.constraint(equalToConstant: 30),
+      headerHeight,
       headerStack.leadingAnchor.constraint(equalTo: historyHeader.leadingAnchor),
       headerStack.trailingAnchor.constraint(equalTo: historyHeader.trailingAnchor),
       headerStack.topAnchor.constraint(equalTo: historyHeader.topAnchor),
@@ -351,7 +516,8 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       historyStack.topAnchor.constraint(equalTo: historyScroll.contentLayoutGuide.topAnchor),
       historyStack.bottomAnchor.constraint(equalTo: historyScroll.contentLayoutGuide.bottomAnchor),
       // C4：内容按**完整高度**摆好（不跟动画中的容器高度走）⇒ 动画期间药丸行不重排、不被压扁。
-      historyStack.heightAnchor.constraint(equalToConstant: 34),
+      stackHeight,
+      historyToggle.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
     ])
     historyHeader.isHidden = true
     historyScroll.isHidden = true
@@ -363,16 +529,37 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     updateHistoryVisibility()
   }
 
+  private var historyHeaderTargetHeight: CGFloat {
+    max(44, ceil(historyTitle.font.lineHeight) + 24)
+  }
+
   private func updateHistoryVisibility() {
     let show = TiebaPreferenceSnapshot.bool("homePageShowHistoryForum", default: true)
-      && !recentForums.isEmpty
-    historyHeader.isHidden = !show
+      && recentForums.isEmpty == false
+    historyHeader.isHidden = show == false
+    historyHeaderHeight?.constant = show ? historyHeaderTargetHeight : 0
     // C4：容器高度由**一个分数**派生（show && historyExpanded → 1/0），不再写死 34/0 两态。
     animateHistoryFraction(to: (show && historyExpanded) ? 1 : 0)
-    var toggle = historyToggle.configuration ?? .plain()
-    toggle.image = UIImage(systemName: historyExpanded ? "chevron.up" : "chevron.down")
-    toggle.title = historyExpanded ? "收起" : "展开"
-    historyToggle.configuration = toggle
+    updateHistoryToggle()
+  }
+
+  private func updateHistoryToggle() {
+    let apply = {
+      var toggle = self.historyToggle.configuration ?? .plain()
+      toggle.image = UIImage(systemName: self.historyExpanded ? "chevron.up" : "chevron.down")
+      toggle.title = self.historyExpanded ? "收起" : "展开"
+      self.historyToggle.configuration = toggle
+    }
+    guard view.window != nil, UIAccessibility.isReduceMotionEnabled == false else {
+      apply()
+      return
+    }
+    UIView.transition(
+      with: historyToggle,
+      duration: TiebaAnimationDuration.stateChange,
+      options: [.transitionCrossDissolve, .allowUserInteraction],
+      animations: apply
+    )
   }
 
   /// C4：把 0..1 的分数动画到目标值（逐帧回调走本仓唯一的 CADisplayLink 驱动）。
@@ -391,34 +578,58 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       applyHistoryFraction(target)
       return
     }
-    guard !UIAccessibility.isReduceMotionEnabled else {
+    guard UIAccessibility.isReduceMotionEnabled == false else {
       applyHistoryFraction(target)
       return
     }
-    historyApparentHeight.beginTransition(to: Self.historyContentHeight)
+    let start = historyFraction
+    historyApparentHeight.beginTransition(to: historyContentHeight)
+    // DisplayLink 只给 0..1 时间进度；这里再映射到仓库既有 close 弹簧阻尼曲线。
     historyAnimator = TiebaDisplayLinkAnimator(
-      duration: TiebaAnimationDuration.stateChange,
-      from: historyFraction,
-      to: target,
-      update: { [weak self] value in self?.applyHistoryFraction(value) },
+      duration: TiebaAnimationDuration.springMass,
+      from: 0,
+      to: 1,
+      update: { [weak self] progress in
+        guard let self else { return }
+        let eased = Self.historyDampedProgress(progress)
+        self.applyHistoryFraction(start + (target - start) * eased)
+      },
       completion: { [weak self] in
         guard let self else { return }
         self.historyAnimator = nil
+        self.applyHistoryFraction(target)
         self.historyApparentHeight.finishTransition()
       }
     )
   }
 
-  /// 分数 → 额外高度：`apparentHeight = 内容高度 × 分数`（TiebaApparentHeight 只换高度，
-  /// origin/宽度不动 ⇒ 顶边不动）。内容视图的高度不跟这个约束走（见 buildHistoryRow），
-  /// 所以动画期间药丸行不会被压扁，只是被裁掉。
+  /// 分数 → 额外高度；内容同步做交叉淡入与 3pt 上移，展开/收起都不硬切。
   private func applyHistoryFraction(_ fraction: CGFloat) {
-    historyFraction = min(max(fraction, 0), 1)
-    historyApparentHeight.setLayoutHeight(Self.historyContentHeight)
-    historyApparentHeight.setApparentHeight(Self.historyContentHeight * historyFraction)
+    let clamped = min(max(fraction, 0), 1)
+    historyFraction = clamped
+    historyApparentHeight.setLayoutHeight(historyContentHeight)
+    historyApparentHeight.setApparentHeight(historyContentHeight * clamped)
     historyHeight?.constant = historyApparentHeight.apparentHeight
-    historyScroll.isHidden = historyFraction <= 0.001
+    let fade = min(max(clamped / 0.72, 0), 1)
+    let smooth = fade * fade * (3 - 2 * fade)
+    let hidden = clamped <= 0.001
+    historyScroll.isHidden = hidden
+    historyScroll.alpha = hidden ? 0 : smooth
+    historyScroll.transform = CGAffineTransform(translationX: 0, y: hidden ? 3 : (1 - smooth) * 3)
     view.setNeedsLayout()
+  }
+
+  private static func historyDampedProgress(_ progress: CGFloat) -> CGFloat {
+    let mass = Double(TiebaMotionSpec.Spring.closeMass)
+    let stiffness = Double(TiebaMotionSpec.Spring.closeStiffness)
+    let damping = Double(TiebaMotionSpec.Spring.closeDamping)
+    let zeta = damping / (2 * sqrt(stiffness * mass))
+    let omega0 = sqrt(stiffness / mass)
+    let omegaD = omega0 * sqrt(1 - zeta * zeta)
+    let t = Double(min(max(progress, 0), 1)) * TiebaAnimationDuration.springMass
+    let oscillation = cos(omegaD * t) + (zeta * omega0 / omegaD) * sin(omegaD * t)
+    let value = 1 - exp(-zeta * omega0 * t) * oscillation
+    return CGFloat(min(max(value, 0), 1))
   }
 
   private func loadRecentForums() {
@@ -444,6 +655,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
         TiebaSceneHaptics.fire("press")
         self?.openForum(forum.forumName)
       }, for: .touchUpInside)
+      control.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
       historyStack.addArrangedSubview(control)
     }
   }
@@ -528,12 +740,15 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     collectionView.backgroundColor = .clear
     collectionView.alwaysBounceVertical = true
     collectionView.contentInsetAdjustmentBehavior = .never
+    collectionView.decelerationRate = TiebaMotionSpec.Scroll.systemDecelerationRate
     collectionView.delegate = self
     collectionView.register(TiebaHomeForumCell.self, forCellWithReuseIdentifier: TiebaHomeForumCell.reuseID)
     collectionView.register(TiebaHomeStateCell.self, forCellWithReuseIdentifier: TiebaHomeStateCell.reuseID)
+    refreshControl.tintColor = TiebaChromeTheme.current.tint
     collectionView.refreshControl = refreshControl
     refreshControl.addTarget(self, action: #selector(handleRefreshControl), for: .valueChanged)
     stateView.isDark = TiebaChromeTheme.current.dark
+    stateView.tintColor = TiebaHomeAccessibleColor.brand
     // 首屏骨架：通用列表行（原 index.tsx SkeletonList variant="row" count={8}）
     stateView.skeletonVariant = .row
     stateView.skeletonInsets = UIEdgeInsets(top: 8, left: 16, bottom: 24, right: 16)
@@ -543,6 +758,12 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       } else {
         self?.loadFollowedForums(force: true)
       }
+    }
+    welcomeView.onLogin = {
+      TiebaNavigator.shared.navigate(.login)
+    }
+    welcomeView.onExplore = {
+      TiebaNavigator.shared.selectTab(1)
     }
     collectionView.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(collectionView)
@@ -560,7 +781,9 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
           withReuseIdentifier: TiebaHomeStateCell.reuseID,
           for: indexPath
         ) as? TiebaHomeStateCell
-        cell?.host(self?.stateView)
+        if let self {
+          cell?.host(self.isLoggedIn ? self.stateView : self.welcomeView)
+        }
         return cell
       }
       let cell = collectionView.dequeueReusableCell(
@@ -571,7 +794,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       let forum = self.displayedForums[indexPath.item]
       cell?.configure(
         forum: forum,
-        showsHairline: self.isSingleColumn && TiebaListAppearance.isFlat
+        showsHairline: self.usesSingleColumnLayout && TiebaListAppearance.isFlat
       )
       cell?.onUnfollow = { [weak self] in self?.confirmUnfollow(forum) }
       if self.entrancePending { cell?.playEntrance(index: indexPath.item) }
@@ -589,7 +812,10 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
       applyListShift(CGPoint(x: origin.x - last.x, y: origin.y - last.y), isExternal: true)
     }
     lastListWindowOrigin = origin
-    collectionView.contentInset.bottom = view.safeAreaInsets.bottom + 16
+    let desiredInset = UIEdgeInsets(top: 8, left: 0, bottom: view.safeAreaInsets.bottom + 20, right: 0)
+    if collectionView.contentInset != desiredInset {
+      collectionView.contentInset = desiredInset
+    }
     let size = itemSize(for: view.bounds.width)
     if layout.itemSize != size {
       layout.itemSize = size
@@ -611,10 +837,21 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
   /// 行间距：卡片档 8（卡与卡之间留缝），扁平档 0（行紧贴，由行底发际线分隔）。
   private var listLineSpacing: CGFloat { TiebaListAppearance.isFlat ? 0 : 8 }
 
+  /// AX 大字号强制单列：两列时名字/关注数没有足够宽度，会互相挤压。
+  private var usesSingleColumnLayout: Bool {
+    isSingleColumn || traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+  }
+
   private func itemSize(for width: CGFloat) -> CGSize {
     let available = max(width - listHorizontalInset * 2, 0)
-    if isSingleColumn { return CGSize(width: available, height: 62) }
-    return CGSize(width: max((available - 4) / 2, 0), height: 58)
+    let nameLine = ceil(TiebaSimpleText.font(size: 15, weight: .semibold).lineHeight)
+    let metaLine = ceil(TiebaSimpleText.font(size: 12, weight: .regular).lineHeight)
+    let nameLines: CGFloat = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? 2 : 1
+    let textHeight = nameLine * nameLines + 2 + metaLine
+    if usesSingleColumnLayout {
+      return CGSize(width: available, height: max(62, textHeight + 24))
+    }
+    return CGSize(width: max((available - 4) / 2, 0), height: max(58, textHeight + 20))
   }
 
   private func sortedForums() -> [TiebaForumInfo] {
@@ -637,7 +874,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     guard isLoggedIn else {
       refreshControl.endRefreshing()
       forums = []
-      applyList()
+      showState(compactLoginState)
       return
     }
     isLoading = true
@@ -654,35 +891,41 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
         loadedDay = TiebaFollowedForums.today()
         hasLoadedOnce = true
         if forums.isEmpty {
-          // 改前症状：空态不带 retryTitle ⇒ 状态块不渲染按钮，而 showState 又把 collectionView
-          // 整个 isHidden（下拉刷新不可达）⇒ 唯一的出路是切 tab 再回来。
-          // 改后行为：空态带「刷新」按钮（id=retry 由 stateView.onButtonPress 接住 → 重新拉取）。
-          showState(.empty(
+          showState(compactState(
             image: "tray",
-            text: "暂无关注的贴吧",
-            secondary: "去发现页探索感兴趣的贴吧吧",
-            retryTitle: "刷新"
-          ))
+            text: "还没有关注的贴吧",
+            secondary: "去动态页发现感兴趣的贴吧",
+            buttonID: "retry",
+            buttonTitle: "刷新",
+            buttonIcon: "arrow.clockwise"
+          ), animated: true)
         } else {
           startEntrance()
-          applyList()
-          showList()
+          showList(animated: true)
         }
-        if isUserRefresh { TiebaSceneHaptics.fire("toggle") }
+        if isUserRefresh { TiebaSceneHaptics.fire("action-success") }
       } catch {
         if forums.isEmpty {
-          showState(.error(message: error.localizedDescription))
+          showState(compactState(
+            image: "wifi.exclamationmark",
+            text: "加载失败",
+            secondary: error.localizedDescription,
+            buttonID: "retry",
+            buttonTitle: "重试",
+            buttonIcon: "arrow.clockwise"
+          ), animated: true)
         } else {
           pill.showResult(success: false, text: "加载失败")
         }
+        if isUserRefresh { TiebaSceneHaptics.fire("action-fail") }
       }
     }
   }
 
-  /// 外观档落地：页面底色 + 列表外边距 / 行距 + 整表重配（cell 的卡面在 configure 里换）。
+  /// 外观档落地：纯 systemBackground 页面 + 列表外边距 / 行距 + 整表重配。
   /// 幂等，可重复调用。
   private func applyAppearance() {
-    view.backgroundColor = TiebaListAppearance.pageBackground
+    view.backgroundColor = .systemBackground
     layout.minimumLineSpacing = listLineSpacing
     layout.sectionInset = UIEdgeInsets(
       top: TiebaListAppearance.isFlat ? 0 : 8,
@@ -694,25 +937,37 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     applyList()
   }
 
-  private func applyList() {
+  private func applyList(animated: Bool = false) {
     displayedForums = sortedForums()
     var snapshot = NSDiffableDataSourceSnapshot<String, String>()
     snapshot.appendSections(["main"])
     if activeState != nil {
-      // 有状态就是"列表里只有状态这一项"：列表保持可见（下拉刷新因此始终可达），
-      // 状态块由 TiebaHomeStateCell 承载并撑满可见区。
+      // 有状态就是"列表里只有状态这一项"：列表保持可见（下拉刷新因此始终可达）。
       snapshot.appendItems([Self.stateItemID], toSection: "main")
     } else {
       snapshot.appendItems(displayedForums.map(\.forumId), toSection: "main")
-      // 同一批 id 时 diff 不重配 cell（签到态/等级更新就看不到）：显式 reload 可见项
-      //（替代原来 updateLayoutMetrics 里的全量 reloadData）。
-      if !snapshot.itemIdentifiers.isEmpty,
+      if snapshot.itemIdentifiers.isEmpty == false,
         snapshot.itemIdentifiers == dataSource?.snapshot().itemIdentifiers
       {
         snapshot.reloadItems(snapshot.itemIdentifiers)
       }
     }
-    dataSource?.apply(snapshot, animatingDifferences: false)
+    let shouldAnimate = animated
+      && UIAccessibility.isReduceMotionEnabled == false
+      && view.window != nil
+      && entrancePending == false
+    if shouldAnimate {
+      UIView.transition(
+        with: collectionView,
+        duration: TiebaAnimationDuration.stateChange,
+        options: [.transitionCrossDissolve, .allowUserInteraction],
+        animations: {
+          _ = self.dataSource?.apply(snapshot, animatingDifferences: false)
+        }
+      )
+    } else {
+      dataSource?.apply(snapshot, animatingDifferences: false)
+    }
   }
 
   /// 首屏入场：只由首批 cell 界定（原 0.6s 时间窗口已删）——批次边界 =
@@ -727,30 +982,105 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
 
   /// 状态 = 列表的一项（改前：stateView 显示 + collectionView 隐藏，两套视图轮流占位；
   /// 空态下下拉刷新不可达，只能靠状态块里的「刷新」按钮兜底）。
-  private func showState(_ state: TiebaState) {
+  private func showState(_ state: TiebaState, animated: Bool = false) {
+    let wasShowingContent = activeState == nil
     activeState = state
-    stateView.state = state
-    applyList()
+    stateView.isHidden = false
+    let applyState = {
+      self.stateView.state = state
+      if case .loading = state { return }
+      // 系统 ContentUnavailableView 层级 + 更小的符号；避开大图与大阴影 CTA。
+      self.stateView.imageSize = 30
+      self.stateView.imageColor = TiebaHomeAccessibleColor.tertiaryIcon
+      self.stateView.textStyle = "headline"
+      self.stateView.textWeight = "semibold"
+      self.stateView.secondaryStyle = "subheadline"
+      self.stateView.secondaryColor = TiebaHomeAccessibleColor.secondaryText
+    }
+    if animated, wasShowingContent == false,
+      UIAccessibility.isReduceMotionEnabled == false,
+      view.window != nil
+    {
+      UIView.transition(
+        with: stateView,
+        duration: TiebaAnimationDuration.stateChange,
+        options: [.transitionCrossDissolve, .allowUserInteraction],
+        animations: applyState
+      )
+    } else {
+      applyState()
+    }
+    applyList(animated: animated && wasShowingContent)
   }
 
-  private func showList() {
+  private func showList(animated: Bool = false) {
+    let hadState = activeState != nil
     activeState = nil
-    applyList()
+    applyList(animated: animated && hadState)
   }
 
-  /// 未登录：顶栏可见（签到/排序禁用）、列表换成登录引导（旧 HomeScreen 分支）。
-  private func applyLoginState() {
-    // 未登录也显示首字占位（原 JS：initials = account?.name?.charAt(0) || '?'）。
-    let account = TiebaUserAPI.currentAccount()
-    avatarView.configure(
-      url: TiebaSimpleRowParser.avatarURL(account?.portrait ?? "")?.absoluteString ?? "",
-      initial: account?.initials ?? "?"
+  private func compactState(
+    image: String,
+    text: String,
+    secondary: String?,
+    buttonID: String,
+    buttonTitle: String,
+    buttonIcon: String?
+  ) -> TiebaState {
+    var raw: [String: Any] = [
+      "id": buttonID,
+      "title": buttonTitle,
+      "style": "bordered",
+      "capsule": true,
+    ]
+    if let buttonIcon { raw["icon"] = buttonIcon }
+    return .custom(
+      image: image,
+      text: text,
+      secondary: secondary,
+      buttons: [TiebaStateButton(raw: raw)]
     )
-    guard isLoggedIn else {
+  }
+
+  private var compactLoginState: TiebaState {
+    compactState(
+      image: "person.crop.circle",
+      text: "尚未登录",
+      secondary: "登录后查看关注的贴吧和最新动态",
+      buttonID: "login",
+      buttonTitle: "登录百度账号",
+      buttonIcon: "person.crop.circle.badge.checkmark"
+    )
+  }
+
+  /// 未登录：头像用克制的 SF 占位；列表换成紧凑、玻璃 CTA 的登录引导。
+  private func applyLoginState(animated: Bool = false) {
+    let loggedIn = isLoggedIn
+    let previousState = lastAppliedLoginState
+    lastAppliedLoginState = loggedIn
+    let account = TiebaUserAPI.currentAccount()
+    avatarView.isHidden = loggedIn == false
+    signedOutAvatarGlyph.isHidden = loggedIn
+    if loggedIn {
+      avatarView.configure(
+        url: TiebaSimpleRowParser.avatarURL(account?.portrait ?? "")?.absoluteString ?? "",
+        initial: account?.initials ?? "吧"
+      )
+    } else {
+      avatarView.configure(url: "", initial: "")
+    }
+    avatarControl.accessibilityLabel = loggedIn ? "个人中心" : "登录百度账号"
+    avatarControl.accessibilityHint = loggedIn ? "打开我的主页" : "前往登录"
+    guard loggedIn else {
       forums = []
-      applyList()
-      showState(.login(text: "你还未登录", secondary: "登录后查看关注的贴吧动态"))
+      showState(compactLoginState, animated: animated)
+      if previousState == true, animated {
+        TiebaSceneHaptics.fire("toggle")
+      }
       return
+    }
+    if previousState == false, animated {
+      TiebaSceneHaptics.fire("action-success")
     }
   }
 
@@ -773,12 +1103,13 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
     saveSortMode()
     collectionView.setContentOffset(
       CGPoint(x: 0, y: -collectionView.adjustedContentInset.top),
-      animated: true
+      animated: UIAccessibility.isReduceMotionEnabled == false
     )
-    applyList()
     applySignButton()
-    // 错误/空态下排序不切列表：forums 为空时 showList 会让错误面板消失只剩空白。
-    if !forums.isEmpty { showList() }
+    if forums.isEmpty == false {
+      activeState = nil
+    }
+    applyList(animated: true)
   }
 
   /// 离开本页：在途飞行体立刻收束（覆盖容器挂在 window 上，不主动摘会留在别人页面上）。
@@ -894,6 +1225,7 @@ final class TiebaHomeViewController: UIViewController, TiebaTabReselectable {
   }
 
   @objc private func handleRefreshControl() {
+    TiebaSceneHaptics.fire("press")
     isUserRefresh = true
     loadFollowedForums(force: true)
     loadRecentForums()
