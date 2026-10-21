@@ -100,6 +100,13 @@ public final class TiebaMainTabBarController: UITabBarController {
   func applyTheme(_ theme: TiebaChromeTheme) {
     self.theme = theme
     tabBar.tintColor = theme.tint
+    // 未选中 tab 用柔和但可读的次级灰，避免底栏四个黑字成为视觉重心。
+    tabBar.unselectedItemTintColor = UIColor { traits in
+      if traits.accessibilityContrast == .high { return .label }
+      return traits.userInterfaceStyle == .dark
+        ? UIColor(white: 0.63, alpha: 1)
+        : UIColor(red: 0.42, green: 0.42, blue: 0.44, alpha: 1)
+    }
     view.backgroundColor = theme.background
     // ⚠️ 不写 tabBar.standardAppearance / scrollEdgeAppearance：任何 bar 级
     // appearance 写入都会让 UIKit 退出自动 Liquid Glass 渲染管线，底栏退化成
@@ -435,7 +442,7 @@ public final class TiebaRouteHostViewController: UIViewController {
     let child = nativeChild
     child.overrideUserInterfaceStyle = TiebaChromeTheme.current.dark ? .dark : .light
     guard let screen = child as? TiebaNativeScreen else { return }
-    if let title = screen.screenTitle { navigationItem.title = title }
+    navigationItem.title = screen.screenTitle ?? ""
     if let style = screen.preferredScreenStatusBarStyle { statusBarStyleOverride = style }
     navigationItem.rightBarButtonItems = screen.screenRightBarItems
     // nil = 保留系统返回箭头（只替换显式声明左侧按钮的屏，如登录页的 xmark）。

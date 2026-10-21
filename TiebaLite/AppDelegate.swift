@@ -48,6 +48,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIWindowSceneDelegate {
     // 冷启动深链在壳建好之后再派发（原生解析）。
     if let url = connectionOptions.urlContexts.first?.url {
       _ = TiebaNavigator.shared.open(url: url)
+    } else if let raw = ProcessInfo.processInfo.environment["TIEBA_UI_ROUTE"],
+      let url = URL(string: raw)
+    {
+      // 无头 UI 验证通道：从 simctl launch 的 SIMCTL_CHILD_TIEBA_UI_ROUTE 直达页面，
+      // 绕过 SpringBoard 对外部自定义 scheme 的“是否打开”系统确认。生产环境无该变量。
+      DispatchQueue.main.async {
+        if raw.hasPrefix("tab:") {
+          TiebaNavigator.shared.selectTab(Int(raw.dropFirst(4)) ?? 0)
+        } else if raw.hasPrefix("path:") {
+          // 设置页等非深链路由的无头验收通道。
+          if let route = TiebaRouteTable.parse(path: String(raw.dropFirst(5))) {
+            TiebaNavigator.shared.navigate(route)
+          }
+        } else {
+          _ = TiebaNavigator.shared.open(url: url)
+        }
+      }
     }
 
     // 通知冷启动：scene 的 connectionOptions.notificationResponse 与

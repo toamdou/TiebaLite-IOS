@@ -36,6 +36,10 @@ public final class TiebaAppBootstrap {
   /// BGTask 的 launch handler 必须在启动结束前注册；UNUserNotificationCenter 的
   /// delegate 必须早于 scene 回调（冷启动点通知的响应只在 launch 阶段可达）。
   public func installLaunchHandlers() {
+    // 侧载覆盖安装后的数据库升级必须与首帧/登录态读取解耦：这里只调度，
+    // 迁移在 utility 队列完成；页面缓存表迁移好之前自动 miss，关注列表等
+    // 登录态数据继续从旧 KV 表读取，不等备份/DDL。
+    TiebaDatabaseSchema.startBackgroundMigration()
     TiebaNotificationCenter.shared.install()
     registerBackgroundTask(TiebaBackgroundSync.notificationTaskIdentifier)
     registerBackgroundTask(TiebaBackgroundSync.autoSignTaskIdentifier)
@@ -79,14 +83,35 @@ public final class TiebaAppBootstrap {
     observeTraitChanges(on: window)
     startSplash()
     installMemoryWarningObserver()
+    #if DEBUG
+    applyLaunchRouteIfNeeded()
+    #endif
 
     // 其余启动项（僵尸会话清理 / 157KB 描述符解析 / 磁盘清扫 / 后台任务重排）
     // 全部离开主线程：@MainActor 类里的 Task{} 会继承主 actor，必须显式 detached。
     Task.detached(priority: .utility) { await TiebaAppBootstrap.runDeferredWork() }
   }
 
-  // MARK: - scene 生命周期（AppDelegate 转发）
+  #if DEBUG
+  /// 无头验证入口（仅 DEBUG）：`simctl launch <udid> <bundle> -TiebaRoute forum/iphone`
+  /// 直接走 navigator 的深链解析，绕过 `simctl openurl` 在 iOS 26 上弹出的
+  /// "在 TiebaLite 中打开？"系统确认框（无头模拟器里没人能点它）。
+  ///
+  /// 延迟 1.5s：等 splash 收起、根控制器完成首次布局，否则压栈会被随后的
+  /// selectTab/popToRoot 顶掉。参数值就是深链 host+path（不含 scheme），
+  /// 与 `tiebalite://<host>/<path>` 同构。
+  private func applyLaunchRouteIfNeeded() {
+    let args = ProcessInfo.processInfo.arguments
+    guard let flag = args.firstIndex(of: "-TiebaRoute"), flag + 1 < args.count else { return }
+    let route = args[flag + 1]
+    guard let url = URL(string: "tiebalite://" + route) else { return }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+      _ = TiebaNavigator.shared.open(url: url)
+    }
+  }
+  #endif
 
+  // MARK: - scene 生命周期（AppDelegate 转发）
   /// 回前台：触觉引擎预热、分享面板预热、前台消息轮询。
   /// ⚠️ 这里**只做准备、不刷新数据**：列表的新数据一律由用户显式动作拉
   /// （下拉刷新 / 底栏重选 / 错误页重试），别在 scene 回调里长刷新路径。
@@ -298,6 +323,9 @@ public final class TiebaAppBootstrap {
 
   /// 通知权限 + 原生后台同步注册（原 JS setupNotifications）。
   private nonisolated static func setupNotifications() async {
+    // 无头 UI 冒烟/截图环境：系统权限弹窗会独占模拟器窗口，导致 autopilot 无法截图。
+    // 只由显式 launch env 触发，生产构建与正常调试路径完全不变。
+    if ProcessInfo.processInfo.environment["TIEBA_UI_TEST"] == "1" { return }
     let center = TiebaNotificationCenter.shared
     var status = await center.permissionStatus()
     if status == .notDetermined { status = await center.requestPermission() }
