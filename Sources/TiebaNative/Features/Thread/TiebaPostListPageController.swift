@@ -10,6 +10,20 @@
 import UIKit
 
 class TiebaPostListPageController: UIViewController {
+  private var contentSizeRegistration: UITraitChangeRegistration?
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    // iOS Settings 里改字号的实时回归：只重排当前行模型/量高，不重建数据源。
+    contentSizeRegistration = registerForTraitChanges([
+      UITraitPreferredContentSizeCategory.self,
+    ]) { (self: TiebaPostListPageController, _: UITraitCollection) in
+      TiebaTypography.invalidateForSystemContentSizeCategoryChange()
+      self.discardReuseMemoForAppearance()
+      self.publish(fresh: true)
+    }
+  }
+
   // MARK: - 共享子视图
 
   let list = TiebaKindListContentView()
@@ -22,17 +36,27 @@ class TiebaPostListPageController: UIViewController {
 
   /// 发布给列表的行数据（应用 hideBlockedContent 过滤后，与行下标一一对应）。
   var rowPosts: [TiebaThreadPost] = []
+  /// 行页驱动：**页键、宽度闸门、发布序号、回主双守卫都归它**。
+  /// 子类只负责「造模型 + 整页测量」（帖子行模型带页级上下文，字典还原不出来）。
+  ///
+  /// 懒建：前缀依赖子类自己的 id（thread-<tid> / subposts-<tid>-<pid>），
+  /// 那些属性在 viewDidLoad 之后才确定；driver 自己再追加实例域与发布序号。
+  private var _driver: TiebaRowPageDriver?
+  var driver: TiebaRowPageDriver {
+    if let driver = _driver { return driver }
+    let driver = TiebaRowPageDriver(list: list, keyPrefix: driverKeyPrefix)
+    _driver = driver
+    return driver
+  }
+  /// 页键命名空间前缀（子类覆写）。
+  var driverKeyPrefix: String { "post" }
+  /// 当前页键。**只读镜像**：唯一写者是 driver（见 publishPrepared）。
+  var pageKey: String { _driver?.pageKey ?? "" }
   var currentPage = 1
   var hasMore = false
   var isLoading = false
   var isLoadingMore = false
   var isUserRefresh = false
-  var pageKey = ""
-  var pageSeq = 0
-  var lastWidth: CGFloat = 0
-  var needsPublish = false
-  /// 自愈重推的节流：与列表侧**同一套**自适应节流（改前这里是硬编码 0.5s 的第二套机制）。
-  private var republishThrottle = TiebaAdaptiveThrottle()
   var inFlight: Set<String> = []
   var mediaVisibleKeys: Set<String> = []
   var visibleRange: (start: Int, end: Int)?
@@ -46,6 +70,14 @@ class TiebaPostListPageController: UIViewController {
   /// 旧几何在缓存里照样"命中"，从设置页切档回来就会停在旧几何上（静默错位：
   /// 卡还缩着 10pt、发际线没有、行高多 8pt）。判据只能自己记一份。
   private var publishedAppearanceGeneration: UInt64 = .max
+
+  /// 上一次推页时的**正文字号世代**（TiebaTypography.textGeneration）。.max = 还没推过。
+  /// 正文滑杆变化会改帖子卡片/正文/回复的行盒，必须整页丢复用重测。
+  private var publishedTextGeneration: UInt64 = .max
+  /// 上一次推页时的**帖子标题字号世代**（TiebaTypography.titleGeneration）。
+  /// 标题滑杆只改主贴标题，但当前帖子页按整页重测；关键是不能把 bodyScale
+  /// 一并改掉，也不能因界面字号变化误重推。
+  private var publishedTitleGeneration: UInt64 = .max
 
   // MARK: - 子类差异（覆写）
 
@@ -68,16 +100,28 @@ class TiebaPostListPageController: UIViewController {
 
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
-    // 外观档在离开期间被切过（设置 → 个性化 → 设计风格）⇒ 行几何全变，必须
-    // 丢掉复用备忘并按新几何整页重测重推（见 publishedAppearanceGeneration）。
-    // 首次出现只登记世代：那时还没有可作废的测量。
-    if publishedAppearanceGeneration != TiebaListAppearance.generation {
-      let firstAppear = publishedAppearanceGeneration == .max
-      publishedAppearanceGeneration = TiebaListAppearance.generation
-      if !firstAppear {
-        discardReuseMemoForAppearance()
-        publish(fresh: true)
-      }
+    let textGeneration = TiebaTypography.textGeneration
+    let titleGeneration = TiebaTypography.titleGeneration
+    let typographyChanged =
+      publishedTextGeneration != textGeneration
+      || publishedTitleGeneration != titleGeneration
+    let firstTypographyAppearance =
+      publishedTextGeneration == .max || publishedTitleGeneration == .max
+    publishedTextGeneration = textGeneration
+    publishedTitleGeneration = titleGeneration
+
+    let appearanceGeneration = TiebaListAppearance.generation
+    let appearanceChanged = publishedAppearanceGeneration != appearanceGeneration
+    let firstAppearance = publishedAppearanceGeneration == .max
+    publishedAppearanceGeneration = appearanceGeneration
+
+    // 首次出现只登记世代；返回本页时若外观/正文字号/标题字号任一生效值变化，
+    // 抛弃上一轮模型复用并按新测量链整页重推。
+    if (firstAppearance == false && appearanceChanged)
+      || (firstTypographyAppearance == false && typographyChanged)
+    {
+      discardReuseMemoForAppearance()
+      publish(fresh: true)
     }
     // 偏好/主题可能在本屏离开期间被改（设置页）：每次出现现读。
     refreshPreferences()
@@ -106,12 +150,8 @@ class TiebaPostListPageController: UIViewController {
     let width = TiebaLayout.quantize(list.bounds.width - list.horizontalInset * 2)
     // 宽度变化（旋转/分屏）必须按新宽度重测重推：行高按精确宽度键控，旧宽度的度量
     // 会被宽度闸门拒绝（新宽度下只有可见窗口能当场同步补测，其余行等本轮重推落地）。
-    let resized = width != lastWidth && lastWidth > 0
-    lastWidth = width
-    if width > 0, resized || needsPublish {
-      needsPublish = false
-      publish(fresh: false)
-    }
+    // 宽度闸门与"宽度未就位就暂存"都归 driver：这里只把量化宽度交给它。
+    driver.updateWidth(width)
   }
 
   override func viewSafeAreaInsetsDidChange() {
@@ -161,21 +201,13 @@ class TiebaPostListPageController: UIViewController {
     //（TiebaPostRowPlan.rowHairlineFrame），再留空隙只会露出一条 1pt 页面底色的灰缝。
     list.separatorHeight = TiebaListAppearance.isFlat ? 0 : 1
     list.reachEndThreshold = reachEndThreshold
-    // 缺页自愈：本页的页记录/度量被别的屏的整页 LRU 挤掉时用同一页键重推一次
-    //（数据仍在 rowPosts 里）。不重推的后果是行取不到模型——TiebaPostRowView
-    // 会直接 isHidden，整行消失，看起来就是"帖子突然空白"。
-    list.onPageDataMissing = { [weak self] in self?.republishCurrentPage() }
+    // 缺页自愈的接线归 driver（它在 init 里装 onPageDataMissing，并用同一页键重推）。
+    // 这里**不要**再装一次：后装的会顶掉 driver 那份，重推就退回"手动 publish"。
   }
 
-  /// 同页键重推（缺页自愈出口）。列表侧也有一道节流，这里兜第二道 —— 但**用同一套自适应节流**：
-  /// 连续缺页时退避到 2s、静默后回到 0.5s、页面不可见时直接用最大间隔。
-  /// 改前是硬编码 0.5s：既与列表侧策略不一致，又让"连续缺页"每 0.5s 重推一整页。
-  private func republishCurrentPage() {
-    guard !pageKey.isEmpty, lastWidth > 0 else { return }
-    let now = ProcessInfo.processInfo.systemUptime
-    guard republishThrottle.shouldPass(now: now, inactive: view.window == nil) else { return }
-    publish(fresh: false)
-  }
+  /// 同页键重推（缺页自愈出口）现在归 driver：`republishCurrentPage()` 会用它上次
+  /// 存下的 prepare/land 以同页键重跑一遍。页面侧不再自己兜第二道节流 ——
+  /// 列表侧的 notifyPageDataMissing 已经按同一套自适应节流（0.5s 起步、离屏取最大间隔）。
 
   /// 列表自带 refreshControl 且 contentInsetAdjustmentBehavior = .never：顶部内白自补。
   /// 底部内缩各页不同，由子类在 applyInsets() 里补。
@@ -195,9 +227,7 @@ class TiebaPostListPageController: UIViewController {
   /// 与行同色（浅色纯白），否则行与行之间/行左右会露出一圈灰底。
   func applyPalette() {
     skeletonView.isDark = TiebaChromeTheme.current.dark
-    view.backgroundColor = TiebaListAppearance.isFlat
-      ? TiebaListAppearance.pageBackground
-      : TiebaChromeTheme.current.background
+    view.backgroundColor = TiebaListAppearance.pageBackground
     var palette = TiebaSimpleRowPalette.default
     let tint = TiebaChromeTheme.current.tint
     palette.base.primary = tint

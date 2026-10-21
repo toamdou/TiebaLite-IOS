@@ -8,13 +8,7 @@
 import UIKit
 
 final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeScreen {
-  var screenTitle: String? {
-    // 列表→详情快照的标题先顶上（原 Stack.Screen options：快照标题 || 帖子标题），
-    // 首包返回后由真实标题接管。
-    if let title = thread?.title, !title.isEmpty { return title }
-    guard let known = knownSnapshot?.title, !known.isEmpty else { return nil }
-    return known
-  }
+  var screenTitle: String? { nil }
   var screenRightBarItems: [UIBarButtonItem]? { forumBarItems() }
 
   private let threadId: String
@@ -29,6 +23,10 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private var isCollected: Bool
 
   private let floatingBar = TiebaThreadFloatingBar()
+  #if DEBUG
+  /// 无头 UI 冒烟：自动打开第一条有楼中楼的回复，供楼中楼页截图验收。
+  private var didAutoOpenSubposts = false
+  #endif
 
   var thread: TiebaThreadInfo?
   /// 回复（不含主贴）。
@@ -50,6 +48,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private var lastPublishedToolbar = ""
   /// 显示设置（现读偏好；布局路径不重复查 KV）。
   private var showShortcut = true
+  /// 控制浮条入场只在该次 appear 后触发一次，避免 viewWillAppear 的
+  /// applyChromeVisibility 与 viewDidAppear 各推一次。
+  private var hasAppeared = false
 
   override var skeletonVariant: TiebaSkeletonVariant { .post }
   override var skeletonCount: Int { 5 }
@@ -98,6 +99,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       knownPostView = known
     }
     configureSharedList()
+    // 帖子行的 conversation 分隔由 TiebaPostRowPlan 统一画（回复从 body 列起笔），
+    // 关闭列表的卡片档行距缝隙，避免双分隔/灰带。
+    list.separatorHeight = 0
     // 转场期给整页轻微压暗（Hero 的 beginWith overlay）：让放大的卡片从背景里浮出来。
     // 只在本页是"配对目标"（有快照 = 从列表点进来的）时加——深链直达没有源卡片，
     // 压暗只会让首帧凭空暗一下。
@@ -142,6 +146,19 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     reload()
   }
 
+  override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    hasAppeared = true
+    // Hero 返回/首次落位完成后，浮条再做 10pt 的短浮入；它只动 chrome，
+    // 不抢主贴卡目标几何，也不会与导航转场同时抢第一帧。
+    floatingBar.playEntranceIfNeeded()
+  }
+
+  override func viewWillDisappear(_ animated: Bool) {
+    hasAppeared = false
+    super.viewWillDisappear(animated)
+  }
+
   /// 偏好/主题可能在本屏离开期间被改（设置页）：每次出现现读。
   override func refreshPreferences() {
     showShortcut = TiebaPreferenceSnapshot.bool("showShortcutInThread", default: true)
@@ -151,10 +168,19 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   /// 主题变化（含跟随系统时的实时切换）→ 重取主题重刷自绘色（页面底色/列表色板/页头）。
   func screenThemeDidChange() {
     applyPalette()
+    floatingBar.configure(
+      hasAgree: thread?.hasAgree ?? false,
+      zanNum: thread?.zanNum ?? 0,
+      isCollected: isCollected,
+      palette: list.palette.base
+    )
   }
 
   override func applyPalette() {
     super.applyPalette()
+    // Conversation reading canvas 与 hero 都回到系统内容面；层级由 hairline/shadow 表达。
+    view.backgroundColor = .systemBackground
+    list.backgroundColor = .clear
     knownPostView?.applyPalette(list.palette.base)
   }
 
@@ -176,7 +202,13 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
 
   /// 状态视图/列表切换后同步浮动胶囊（隐藏时也要跟着藏，避免压在状态块上）。
   override func applyChromeVisibility() {
-    floatingBar.isHidden = list.isHidden || !showShortcut
+    let shouldShow = list.isHidden == false && showShortcut
+    let wasHidden = floatingBar.isHidden
+    floatingBar.isHidden = shouldShow == false
+    // 首次内容落地或从状态页恢复时补一次浮入；返回子页由 viewDidAppear 负责。
+    if shouldShow, wasHidden, hasAppeared {
+      floatingBar.playEntranceIfNeeded()
+    }
   }
 
   // MARK: - 数据
@@ -381,6 +413,17 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     )
     recordVisitIfNeeded()
     if let host = parent as? TiebaRouteHostViewController { host.syncNativeScreenChrome() }
+    #if DEBUG
+    if ProcessInfo.processInfo.environment["TIEBA_UI_OPEN_SUBPOSTS"] == "1",
+      didAutoOpenSubposts == false,
+      let post = posts.first
+    {
+      didAutoOpenSubposts = true
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+        self?.openSubPosts(post)
+      }
+    }
+    #endif
   }
 
   /// 外观档（卡片 ↔ 扁平）切档：行几何全变，上一轮模型即便内容没变也不能复用
@@ -392,21 +435,34 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     lastPublishedToolbar = ""
   }
 
-  /// 行模型构建 + 两族度量（与 topic 页同流程：后台测量 → 发布页记录 → setPage）。
+  override var driverKeyPrefix: String { "thread-\(threadId)" }
+
+  /// 后台测量结果盒：prepare 在 detached 上写、land 在主线程读；两者在**同一个 Task 内
+  /// 顺序 await**（写在前、读在后），不存在并发访问 —— 这是 @unchecked Sendable 的论据。
+  private final class PreparedThreadPage: @unchecked Sendable {
+    var models: [TiebaPostRowModel] = []
+    var posts: [TiebaThreadPost] = []
+    var identities: [TiebaRowDiff.Entry.Identity] = []
+    var fingerprints: [String: String] = [:]
+  }
+
+  /// 行模型构建 + 两族度量。
+  ///
+  /// 页键 / 宽度闸门 / 发布序号 / 回主双守卫都交给 `TiebaRowPageDriver.publishPrepared`；
+  /// 本方法只剩两件事：`prepare` 里造模型 + 整页测量，`land` 里落地（页记录 / setPage /
+  /// 工具栏刷新 / 媒体可见性）。
   override func publish(fresh: Bool) {
-    if fresh {
-      pageSeq += 1
-      pageKey = "thread-\(threadId)-\(pageSeq)"
-    }
-    guard !pageKey.isEmpty else { return }
-    guard lastWidth > 0 else {
-      needsPublish = true
-      return
-    }
-    let key = pageKey
-    let width = lastWidth
     // 行来源 = 钉住的主贴（第 0 行）+ 回复；主贴卡与回复工具栏只挂在第 0 行上。
     let source = (mainPost.map { [$0] } ?? []) + posts
+    // 纯追加判据：新行以旧行**逐行为前缀**（只比 id，O(行数) 的整数比较）。
+    // 加载下一页时成立 ⇒ 驱动不换页键 ⇒ diffable 只 insert 尾部，既有 cell 不销毁。
+    // 内容变化（点赞/编辑/换排序）由内容身份 diffable 处理，不该靠换页键 ——
+    // 换键是整页 reload，而那恰好发生在"滚到底加载下一页"这一刻。
+    let previousIds = lastPublishedModels.map(\.post.id)
+    let appendOnly =
+      !previousIds.isEmpty
+      && source.count >= previousIds.count
+      && zip(source, previousIds).allSatisfy { $0.id == $1 }
     let threadAuthorId = thread?.authorId ?? ""
     let forumName = thread?.forumName ?? ""
     let threadTitle = thread?.title ?? ""
@@ -431,70 +487,74 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     // 页码**不进**指纹：翻页只改工具栏那行文案，主贴行的行高/plan/正文都不变。
     // 进了指纹就是每翻一页把主贴卡重建 + 重测一次（正文一次完整 CoreText 排版）。
     let toolbarFingerprint = "\(toolbar.replyNum)|\(toolbar.seeLz)|\(toolbar.sort.rawValue)"
-
-    Task { @MainActor in
-      // 离屏（被 push 盖住 / 还没上屏）时降档 .utility：与 TiebaRowPageDriver 同判据——
-      // 用户看不见的页没必要和滚动抢 CPU（改前一律 .userInitiated）。
-      let measurementPriority: TaskPriority = view.window == nil ? .utility : .userInitiated
-      let box = await Task.detached(priority: measurementPriority) { () -> (models: [TiebaPostRowModel], posts: [TiebaThreadPost]) in
-        var models: [TiebaPostRowModel] = []
-        var kept: [TiebaThreadPost] = []
-        for (index, post) in source.enumerated() {
-          // 主贴缺失（深链落中间页/切排序）时第 0 行不能顶替成主贴：它会被渲染成主贴卡
-          //（放大头像、注入标题、挂主帖工具栏）并躲过下面的 hideBlocked 过滤 —— 与 apply() 同口径。
-          let isMain = mainId.map { $0 == post.id } ?? false
-          if hideBlocked, !isMain {
-            if blockFilter.isUserBlocked(uid: post.authorId, name: post.authorName) { continue }
-            if blockFilter.isContentBlocked(post.plainText) { continue }
-          }
-          // 未变行复用：同一 id、行指纹相同、宽度与主贴工具栏未变 → 上一份模型
-          // 原样复用（emoji 升级缓存/plan/测量全部继承，零重测）。
-          if width == previousWidth,
-             let prev = previousById[post.id],
-             previousFingerprints[post.id] == Self.postFingerprint(post),
-             (!isMain || toolbarFingerprint == previousToolbar)
-          {
-            models.append(prev)
-            kept.append(post)
-            continue
-          }
-          models.append(TiebaPostRowModel(
-            pageKey: key,
-            index: models.count,
-            post: post,
-            isMain: isMain,
-            canDelete: !accountUid.isEmpty && post.authorId == accountUid,
-            threadAuthorId: threadAuthorId,
-            toolbar: isMain ? toolbar : nil,
-            preferences: preferences,
-            blockFilter: blockFilter,
-            palette: palette,
-            forumName: forumName,
-            containerWidth: width,
-            title: threadTitle,
-            // 进帖转场的目标端：只有主贴卡参与配对（回复卡不配对，避免与
-            // 列表里的行抢同一个 id）。
-            heroThreadId: isMain ? heroThreadId : nil
-          ))
-          kept.append(post)
+    let box = PreparedThreadPage()
+    driver.publishPrepared(fresh: fresh, appendOnly: appendOnly) { key, width in
+      var models: [TiebaPostRowModel] = []
+      var kept: [TiebaThreadPost] = []
+      var identities: [TiebaRowDiff.Entry.Identity] = []
+      var fingerprints: [String: String] = [:]
+      for post in source {
+        // 主贴缺失（深链落中间页/切排序）时第 0 行不能顶替成主贴：它会被渲染成主贴卡
+        //（放大头像、注入标题、挂主帖工具栏）并躲过下面的 hideBlocked 过滤 —— 与 apply() 同口径。
+        let isMain = mainId.map { $0 == post.id } ?? false
+        if hideBlocked, !isMain {
+          if blockFilter.isUserBlocked(uid: post.authorId, name: post.authorName) { continue }
+          if blockFilter.isContentBlocked(post.plainText) { continue }
         }
-        return (models, kept)
-      }.value
-      guard self.pageKey == key else { return }
+        // 内容指纹只算一次：既是模型复用判据，也是 diffable/帧高缓存的内容身份来源。
+        let fingerprint = Self.postFingerprint(post)
+        fingerprints[post.id] = fingerprint
+        identities.append(TiebaPostRowIdentity.make(post, fingerprint: fingerprint))
+        // 未变行复用：同一 id、行指纹相同、宽度与主贴工具栏未变 → 上一份模型
+        // 原样复用（emoji 升级缓存/plan/测量全部继承，零重测）。
+        if width == previousWidth,
+           let prev = previousById[post.id],
+           previousFingerprints[post.id] == fingerprint,
+           (!isMain || toolbarFingerprint == previousToolbar)
+        {
+          models.append(prev)
+          kept.append(post)
+          continue
+        }
+        models.append(TiebaPostRowModel(
+          pageKey: key,
+          index: models.count,
+          post: post,
+          isMain: isMain,
+          canDelete: !accountUid.isEmpty && post.authorId == accountUid,
+          threadAuthorId: threadAuthorId,
+          toolbar: isMain ? toolbar : nil,
+          preferences: preferences,
+          blockFilter: blockFilter,
+          palette: palette,
+          forumName: forumName,
+          containerWidth: width,
+          title: threadTitle,
+          // 进帖转场的目标端：只有主贴卡参与配对（回复卡不配对，避免与
+          // 列表里的行抢同一个 id）。
+          heroThreadId: isMain ? heroThreadId : nil
+        ))
+        kept.append(post)
+      }
+      box.models = models
+      box.posts = kept
+      box.identities = identities
+      box.fingerprints = fingerprints
+    } land: { [weak self] key in
+      guard let self else { return }
       self.rowPosts = box.posts
       self.lastPublishedModels = box.models
-      self.lastPublishedFingerprints = Dictionary(
-        uniqueKeysWithValues: box.posts.map { ($0.id, Self.postFingerprint($0)) }
-      )
-      self.lastPublishedWidth = width
+      self.lastPublishedFingerprints = box.fingerprints
+      self.lastPublishedWidth = self.driver.publishedWidth
       self.lastPublishedToolbar = toolbarFingerprint
       // 复用主贴行时把新页码就地写回模型：主贴行沿用同一实例，行视图的 apply 会按身份
       // 提前返回，页码只能走「就地更新 + 只刷工具栏」；写回放在 MainActor 上，
       // 避免后台测量线程去动行视图已经持有的模型。
       if let main = box.models.first(where: { $0.isMain }) { main.updateToolbar(toolbar) }
       TiebaPostRowMetrics.shared.prepare(pageKey: key, models: box.models)
-      TiebaKindRowPages.shared.publish(pageKey: key, kinds: Array(repeating: .post, count: box.models.count))
-      self.list.setPage(pageKey: key)
+      TiebaKindRowPages.shared.publish(
+        pageKey: key, kinds: Array(repeating: .post, count: box.models.count))
+      self.list.setPage(pageKey: key, identities: box.identities)
       // 主贴行（下标 0）的模型实例没换，重配时 apply 直接返回 —— 页码必须显式只刷工具栏，
       // 否则翻页后工具栏还停在上一个页码。
       self.list.refreshToolbar(index: 0)
@@ -517,7 +577,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private func toolbarModel() -> TiebaPostToolbarModel {
     TiebaPostToolbarModel(
       replyNum: thread?.replyNum ?? 0,
-      pageLabel: totalPages > 0 ? "\(max(currentPage, 1))/\(totalPages)页" : nil,
+      pageLabel: totalPages > 1 ? "\(max(currentPage, 1))/\(totalPages)页" : nil,
       seeLz: seeLz,
       sort: sort
     )
@@ -548,7 +608,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     case .copyLink:
       copyLink(postId: post.id)
     case .delete:
-      confirmDelete(post: post)
+      // 本 App 只读，不提供删除写的入口；旧事件保留兼容但无动作。
+      break
     case .subPosts:
       openSubPosts(post)
     case .image(let mediaIndex, let rect):
@@ -610,8 +671,6 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       presentJumpDialog()
     case .share:
       share(post: nil)
-    case .delete:
-      confirmDelete(post: nil)
     }
   }
 
@@ -718,11 +777,31 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     let key = pageKey
     Task { @MainActor in
       let model = await Task.detached(priority: .userInitiated) {
-        TiebaPostRowModel(replacing: current, post: updated)
+        // 显式保留 heroThreadId / sourceTitle / 工具栏：点赞后返回仍要命中原来的
+        // Hero 配对；convenience init 不携带 hero 身份，不能在这条热路径上丢。
+        TiebaPostRowModel(
+          pageKey: current.pageKey,
+          index: current.index,
+          post: updated,
+          isMain: current.isMain,
+          canDelete: current.canDelete,
+          threadAuthorId: current.threadAuthorId,
+          toolbar: current.toolbar,
+          preferences: current.preferences,
+          blockFilter: current.blockFilter,
+          palette: current.palette,
+          forumName: current.forumName,
+          containerWidth: current.containerWidth,
+          title: current.sourceTitle,
+          heroThreadId: current.heroThreadId
+        )
       }.value
       guard self.pageKey == key else { return }
       TiebaPostRowMetrics.shared.replace(pageKey: key, index: index, model: model)
-      self.list.setPage(pageKey: key)
+      self.list.setPage(
+        pageKey: key,
+        identities: self.rowPosts.map { TiebaPostRowIdentity.make($0) }
+      )
     }
   }
 
@@ -814,47 +893,6 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private func buildThreadUrl(postId: String?) -> String {
     guard let postId, !postId.isEmpty else { return "https://tieba.baidu.com/p/\(threadId)" }
     return "https://tieba.baidu.com/p/\(threadId)?pid=\(postId)\(seeLz ? "&see_lz=1" : "")"
-  }
-
-  private func confirmDelete(post: TiebaThreadPost?) {
-    let deletingThread = post == nil || post?.id == threadId || post?.id == mainPost?.id
-    let alert = UIAlertController(
-      title: deletingThread ? "删除帖子" : "删除回复",
-      message: deletingThread ? "确定要删除这条帖子吗？" : "确定要删除这条回复吗？",
-      preferredStyle: .alert
-    )
-    alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-    alert.addAction(UIAlertAction(title: "确定", style: .destructive) { [weak self] _ in
-      self?.performDelete(post: post, deletingThread: deletingThread)
-    })
-    presenterViewController.present(alert, animated: true)
-  }
-
-  private func performDelete(post: TiebaThreadPost?, deletingThread: Bool) {
-    guard requireLogin(), runOnce("delete") else { return }
-    Task { @MainActor in
-      defer { finishOnce("delete") }
-      do {
-        try await TiebaThreadActionAPI.delete(
-          threadId: threadId,
-          forumId: thread?.forumId ?? "",
-          forumName: thread?.forumName ?? "",
-          postId: deletingThread ? nil : post?.id
-        )
-        TiebaSceneHaptics.fire("action-success")
-        if deletingThread {
-          TiebaNavigator.shared.goBack()
-        } else if let post {
-          posts.removeAll { $0.id == post.id }
-          publish(fresh: true)
-        }
-      } catch {
-        TiebaSceneHaptics.fire("action-fail")
-        let alert = UIAlertController(title: "错误", message: "删除失败", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "好", style: .default))
-        presenterViewController.present(alert, animated: true)
-      }
-    }
   }
 
   private func openSubPosts(_ post: TiebaThreadPost) {

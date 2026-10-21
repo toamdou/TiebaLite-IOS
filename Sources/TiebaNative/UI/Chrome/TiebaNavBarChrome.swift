@@ -7,29 +7,27 @@ import Foundation
 import ObjectiveC
 import UIKit
 
-/// 主线程执行（已在主线程则就地同步执行）。
-/// ⚠️ 按裸名 `onMain` 搜索引用，不要写成 `\.onMain(`——曾因此被误判为死代码删除。
-func onMain(_ work: @escaping () -> Void) {
-  if Thread.isMainThread {
-    work()
-  } else {
-    DispatchQueue.main.async(execute: work)
-  }
-}
+// 主线程跳板 onMain 在 Core/TiebaMainQueue.swift（全仓唯一一份）。
 
+@MainActor
 enum TiebaChrome {
   /// chrome 侧可变状态与懒加载钩子。
+  ///
+  /// @MainActor：这里的每一项都是纯主线程状态（原先是 8 个 nonisolated(unsafe)
+  /// static var，靠"都在主线程"的口头约定）。标上隔离后编译器替我们守着这条
+  /// 约定；从非隔离入口进来一律先过 onMain。
+  @MainActor
   enum ChromeState {
     /// 应用实际主题（JS 下发）：nil = 跟随系统，非 nil = 应用手动指定深/浅。
-    nonisolated(unsafe) static var darkMode: Bool? = nil
-    nonisolated(unsafe) static var scrollHooked = false
+    static var darkMode: Bool? = nil
+    static var scrollHooked = false
     /// 已写过"透明外观"的栏（弱引用，随栏释放自动清理）。
     /// 只写一次：写 appearance 会让 UIKit 重建栏底，周期性重写 = 周期性重建。
-    nonisolated(unsafe) static let transparentAppearanceBars = NSHashTable<UINavigationBar>.weakObjects()
+    static let transparentAppearanceBars = NSHashTable<UINavigationBar>.weakObjects()
     /// 上一次把字体写进栏 appearance 时的**字号世代**（TiebaTypography.generation）。
     /// 栏外观是"写过即不再写"的记账（transparentAppearanceBars），字体变了必须让
     /// 全部栏重写一次——这里存世代当失效信号，见 applyChromeTypographyIfNeeded。
-    nonisolated(unsafe) static var typographyGeneration: UInt64 = .max
+    static var typographyGeneration: UInt64 = .max
 
     // ── 空转治理（2026-09-12 发热审查）──
     // force 每次要做两趟视图树全量遍历：collectChromeBars 扫所有窗口的
@@ -44,12 +42,12 @@ enum TiebaChrome {
     // 事件仍无周期任务，且任何情况下主队列至多一个待执行 tick 块。
     /// 视图层级已变化（新 bar / 新页面级滚动视图挂载、栏结构布局、回前台、
     /// 转场完成、主题或路由门控），下一次重扫需要全量遍历。
-    nonisolated(unsafe) static var needsRescan = true
+    static var needsRescan = true
     /// 结构纪元（monotonic）：markChromeDirty 每次调用 +1。NavigationShell 的
     /// 主滚动视图解析缓存以此为失效信号；全部调用在主线程（单写者），直接 Int。
-    nonisolated(unsafe) static var structuralEpoch = 0
+    static var structuralEpoch = 0
     /// 上次全量重扫时间（CACurrentMediaTime），节流用。
-    nonisolated(unsafe) static var lastScanAt: CFTimeInterval = 0
+    static var lastScanAt: CFTimeInterval = 0
     /// tick 路径（栏/滚动视图挂载与布局这类高频事件）的最小重扫间隔：挂载事件
     /// 已按"页面级滚动视图"收窄（见 navChromeScrollHooks），但同一转场里仍可能
     /// 连来几拍，合并到 2s 一次（列表挂载 → 顶栏模糊最迟 2s 到位；空闲时零成本）。
@@ -62,15 +60,15 @@ enum TiebaChrome {
     /// 转场/滚动期间栏逐帧布局、列表回收让滚动件反复挂载，主队列被无界块
     /// 灌满，每帧数趟全树遍历（持续发热的真凶之一）。现在至多一个块在飞，
     /// 重复事件只写 needsRescan 这一个布尔。
-    nonisolated(unsafe) static var tickScheduled = false
+    static var tickScheduled = false
     /// bar 最近一次布局观察到的结构指纹（弱键，bar 销毁自动清理）。只含窗口
     /// 身份 / bounds / 安全区 / 生效 trait / 隐藏位，**不含 frame**：转场期间
     /// frame 逐帧变化，含它标脏会退化成每帧一次。
-    /// nonisolated(unsafe)：NSMapTable 不是 Sendable，但只在主线程读写——唯一
-    /// 读写点 noteBarLayoutIfStructuralChange 的两条调用路径都是主线程：
-    /// layoutSubviews 钩子调它之前先 guard Thread.isMainThread（见下），
-    /// 另一条是 forceNavBarLiquidGlass（入口主线程兜底）。
-    nonisolated(unsafe) static let barLayoutSignatures =
+    /// NSMapTable 不是 Sendable，但这里由 ChromeState 的 @MainActor 隔离兜住：
+    /// 唯一读写点 noteBarLayoutIfStructuralChange 的两条调用路径都在主线程
+    ///（layoutSubviews 钩子先 guard Thread.isMainThread，另一条是
+    /// forceNavBarLiquidGlass，入口主线程兜底）。
+    static let barLayoutSignatures =
       NSMapTable<UINavigationBar, BarLayoutSignatureBox>.weakToStrongObjects()
   }
 
@@ -97,11 +95,14 @@ enum TiebaChrome {
     ChromeState.tickScheduled = true
     let elapsed = CACurrentMediaTime() - ChromeState.lastScanAt
     let delay = max(0, ChromeState.tickScanInterval - elapsed)
+    // asyncAfter 只负责"延时"；块体读写的是 @MainActor 状态，交给 onMain 进主域。
     DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-      ChromeState.tickScheduled = false
-      _ = TiebaChrome.forceNavBarLiquidGlass(tick: true)
-      if ChromeState.needsRescan {
-        TiebaChrome.scheduleChromeTick()
+      onMain {
+        ChromeState.tickScheduled = false
+        _ = TiebaChrome.forceNavBarLiquidGlass(tick: true)
+        if ChromeState.needsRescan {
+          TiebaChrome.scheduleChromeTick()
+        }
       }
     }
   }
@@ -183,7 +184,7 @@ enum TiebaChrome {
   /// 栏 appearance 只在挂载时写一次（见 applyBarAppearance 的记账），没有这个
   /// 信号就会出现"设置里调了界面字号，顶栏标题还是旧大小"。这里只标脏 + 排一次
   /// tick，真正的重写在重扫里做（事件驱动，不新增周期任务）。
-  private nonisolated(unsafe) static var typographyObserver: NSObjectProtocol?
+  private static var typographyObserver: NSObjectProtocol?
 
   /// 幂等：装一次观察者（TiebaPreferenceChange 是主队列广播）。
   private static let typographyObserverInstall: Void = {
@@ -192,8 +193,12 @@ enum TiebaChrome {
         TiebaTypography.bodySizeKey, TiebaTypography.uiSizeKey, TiebaTypography.followsBodyKey,
       ]
     ) {
-      TiebaChrome.markChromeDirty()
-      TiebaChrome.scheduleChromeTick()
+      // 回调是裸闭包（非隔离），标脏/排 tick 都是 @MainActor 状态：先回主线程。
+      // 广播本身在主队列，onMain 会就地同步执行。
+      onMain {
+        TiebaChrome.markChromeDirty()
+        TiebaChrome.scheduleChromeTick()
+      }
     }
     return ()
   }()
@@ -212,8 +217,9 @@ enum TiebaChrome {
   static let navChromeHooks: Void = {
     let nc = NotificationCenter.default
     nc.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+      // 0.5s 延时照旧（等转场跑完）；块体进主域交给 onMain。
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-        TiebaChrome.forceNavBarLiquidGlass()
+        onMain { _ = TiebaChrome.forceNavBarLiquidGlass() }
       }
     }
     // 转场完成重扫（2026-09-02 修复）：push/pop 动画期间 RunLoop 处于 tracking
@@ -232,6 +238,45 @@ enum TiebaChrome {
     // navChromeScrollHooks 的 didMoveToWindow/layoutSubviews、主题或路由门控设置。
     return ()
   }()
+
+  /// 只把新实现装在**目标类**上的方法替换。
+  ///
+  /// `class_getInstanceMethod` 对"继承来的 selector"返回的是**父类**的 Method：
+  /// 直接 `method_setImplementation` 改的是父类实现 —— 全进程每个 UIView 都会跑
+  /// 这段 block；更糟的是两个目标类继承同一个父类 Method 时，后装的会顶掉先装的。
+  /// 本文件就踩过：`UINavigationBar` 的 `didMoveToWindow` 钩子先装在 UIView 上，
+  /// 随后 `UIScrollView` 取到的是同一个 Method，第二次 setImplementation 直接把
+  /// 导航栏那段顶掉（"首帧即深色"静默失效）。
+  ///
+  /// `class_addMethod` 先试"给目标类加一个自己的入口"：
+  ///   · 成功 ⇒ selector 原本继承自父类，现在只有目标类受影响（父类实现不动）；
+  ///   · 失败 ⇒ 目标类本来就自己实现，直接替换该 Method。
+  /// 两种情况下 block 里都应该调用**替换前取到的原 IMP**，不能再去调 selector
+  /// （那会在 class_addMethod 成功的分支里递归到自己）。
+  private static func installHook(on cls: AnyClass, selector: Selector, block: Any) {
+    guard let method = class_getInstanceMethod(cls, selector),
+      let types = method_getTypeEncoding(method)
+    else { return }
+    // 01-13：替换前校验完整类型编码。
+    //
+    // `class_addMethod` 会**信任**我们传进去的 types，而 types 取自"当前系统版本上
+    // 这个方法"的实际编码。三个钩子都是 `- (void)foo`（返回 void、只吃 self/_cmd），
+    // 期望编码 `v@:`。如果哪天系统把它改成带参数或带返回值，把 `v@:` 的 block 装到
+    // 一个 `v@:@` 的方法上，调用约定就对不上 —— 轻则参数错位，重则崩在 UIKit 内部
+    // 且栈里全是系统帧（极难定位）。
+    //
+    // 这里的选择是**放弃安装**而不是"按实际编码凑一个 block"：我们只有一种 block 形态，
+    // 编码不匹配说明假设已经不成立，静默不装比装错安全（外观会退回系统默认，可见）。
+    let encoding = String(cString: types)
+    guard encoding.hasPrefix(Self.expectedHookTypes) else { return }
+    if class_addMethod(cls, selector, imp_implementationWithBlock(block), types) {
+      return
+    }
+    method_setImplementation(method, imp_implementationWithBlock(block))
+  }
+
+  /// 三个钩子的共同签名：`- (void)foo`（void 返回，只有 self 与 _cmd）。
+  private static let expectedHookTypes = "v@:"
 
   static let navChromeScrollHooks: Void = {
     guard !ChromeState.scrollHooked else { return }
@@ -268,7 +313,7 @@ enum TiebaChrome {
           TiebaChrome.scheduleChromeTick()
         }
       }
-      method_setImplementation(moveMethod, imp_implementationWithBlock(moveBlock))
+      installHook(on: UINavigationBar.self, selector: moveSelector, block: moveBlock)
     }
     // layoutSubviews：bar 尺寸/外观变化（外观重写、安全区、旋屏、栏底重建都
     // 会带来一次布局）是"结构可能变了"的事件源。放在布局结束后执行，避免在
@@ -283,8 +328,9 @@ enum TiebaChrome {
         layoutOriginalFn(bar, layoutSelector)
         guard let navBar = bar as? UINavigationBar else { return }
         // 布局必在主线程；万一被后台触达只标脏（不碰任何 UIKit 状态），保底不崩。
+        // 标脏写的是 @MainActor 状态，所以经 onMain 回主线程写，不就地竞争写。
         guard Thread.isMainThread else {
-          TiebaChrome.markChromeDirty()
+          onMain { TiebaChrome.markChromeDirty() }
           return
         }
         // 2026-09-12 二轮空转治理：改前这里每次布局都标脏 + 无条件 async 一个
@@ -292,11 +338,15 @@ enum TiebaChrome {
         // 现在先用结构指纹过滤重复布局，只有真的变了才标脏，重扫交给至多一个
         // 合并 tick。行为 4（栏底重建）仍由下一次结构布局捕捉；行为 1 由上面的
         // didMoveToWindow 同步写 trait/外观/手势独立保证，不依赖本钩子。
-        guard TiebaChrome.noteBarLayoutIfStructuralChange(navBar) else { return }
-        TiebaChrome.markChromeDirty()
-        TiebaChrome.scheduleChromeTick()
+        // 下面的调用都是 @MainActor 状态，而本块是非隔离的 ObjC block：上面已确认
+        // 在主线程，这里 assumeIsolated 把这条既有契约显式告诉编译器。
+        MainActor.assumeIsolated {
+          guard TiebaChrome.noteBarLayoutIfStructuralChange(navBar) else { return }
+          TiebaChrome.markChromeDirty()
+          TiebaChrome.scheduleChromeTick()
+        }
       }
-      method_setImplementation(layoutMethod, imp_implementationWithBlock(layoutBlock))
+      installHook(on: UINavigationBar.self, selector: layoutSelector, block: layoutBlock)
     }
     // 滚动视图挂载即标脏（2026-09-12）：列表在页面 didShow 之后才挂载是常见
     // 路径（骨架 → 列表、加载完成后换数据），事件驱动下必须把这个来源接上，
@@ -336,13 +386,13 @@ enum TiebaChrome {
           TiebaChrome.scheduleChromeTick()
         }
       }
-      method_setImplementation(scrollMoveMethod, imp_implementationWithBlock(scrollBlock))
+      installHook(on: UIScrollView.self, selector: moveSelector, block: scrollBlock)
     }
     // 启动首扫（原 1.5s timer 的第一拍职责）：钩子安装时可能已经有滚动视图/
     // 导航栏挂载过（swizzle 装晚了错过 didMoveToWindow），标脏 + 立即扫一次，
     // 保证首屏状态确定（needsRescan 初值就是 true，这里只是显式化）。
     TiebaChrome.markChromeDirty()
-    DispatchQueue.main.async {
+    onMain {
       _ = TiebaChrome.forceNavBarLiquidGlass()
     }
     return ()
@@ -482,7 +532,7 @@ enum TiebaChrome {
     // 内部走 NSISEngine，非主线程直接触发 Auto Layout 断言 SIGABRT。
     // 各入口理论都应主线程，这里统一兜底跳转而非崩溃。
     guard Thread.isMainThread else {
-      DispatchQueue.main.async { _ = TiebaChrome.forceNavBarLiquidGlass(tick: tick) }
+      onMain { _ = TiebaChrome.forceNavBarLiquidGlass(tick: tick) }
       return false
     }
     // 空转治理（2026-09-12）：tick 路径（栏/滚动件挂载与布局这类高频事件）

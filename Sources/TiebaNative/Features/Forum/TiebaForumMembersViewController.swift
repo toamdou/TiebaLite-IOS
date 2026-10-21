@@ -73,7 +73,7 @@ final class TiebaForumMembersViewController: UIViewController {
   override func viewDidLoad() {
     super.viewDidLoad()
     // = 旧 colors.background（浅 #F2F2F7 / 深 #000）；卡片用 palette.card 才对比得出来
-    view.backgroundColor = .systemGroupedBackground
+    view.backgroundColor = .systemBackground
 
     segmented.select(Segment.members.rawValue, animated: false)
     segmented.translatesAutoresizingMaskIntoConstraints = false
@@ -623,7 +623,7 @@ final class MemberCardCell: UICollectionViewCell {
     titleLabel.textColor = .label
     subtitleLabel.font = TiebaSimpleText.uiFont(style: .caption1)
     subtitleLabel.adjustsFontForContentSizeCategory = true
-    subtitleLabel.textColor = .tertiaryLabel
+    subtitleLabel.textColor = TiebaAccessibleColors.metadata
 
     starView.image = UIImage(
       systemName: "star.fill",
@@ -704,7 +704,7 @@ final class MemberGridCell: UICollectionViewCell {
     nameLabel.textAlignment = .center
     nameLabel.numberOfLines = 1
     levelNameLabel.font = TiebaSimpleText.uiFont(style: .caption2)
-    levelNameLabel.textColor = .tertiaryLabel
+    levelNameLabel.textColor = TiebaAccessibleColors.metadata
     levelNameLabel.textAlignment = .center
     levelNameLabel.numberOfLines = 1
     levelBadge.font = TiebaSimpleText.font(size: 10, weight: .bold)
@@ -757,8 +757,6 @@ final class MemberGridCell: UICollectionViewCell {
 final class RankRowCell: UICollectionViewCell {
   static let reuseIdentifier = "members-rank"
 
-  private static let hotColors: [UIColor] = [.systemRed, .systemOrange, .systemYellow]
-
   private let card = UIView()
   private let rankLabel = UILabel()
   private let avatar = TiebaForumAvatarView(size: 40)
@@ -786,7 +784,7 @@ final class RankRowCell: UICollectionViewCell {
     nameLabel.lineBreakMode = .byTruncatingTail
     subtitleLabel.font = TiebaSimpleText.uiFont(style: .caption1)
     subtitleLabel.adjustsFontForContentSizeCategory = true
-    subtitleLabel.textColor = .tertiaryLabel
+    subtitleLabel.textColor = TiebaAccessibleColors.metadata
 
     crownView.image = UIImage(
       systemName: "crown.fill",
@@ -803,7 +801,7 @@ final class RankRowCell: UICollectionViewCell {
       systemName: "person.fill",
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .regular)
     )
-    placeholderSlot.tintColor = .tertiaryLabel
+    placeholderSlot.tintColor = TiebaAccessibleColors.metadata
     placeholderSlot.contentMode = .center
     placeholderSlot.setContentHuggingPriority(.required, for: .horizontal)
 
@@ -845,7 +843,8 @@ final class RankRowCell: UICollectionViewCell {
 
   func configure(user: TiebaForumAPI.TiebaForumRankUser, rank: Int) {
     rankLabel.text = String(rank)
-    rankLabel.textColor = rank <= 3 ? Self.hotColors[rank - 1] : .tertiaryLabel
+    // 名次本身已用 heavy 字形表达层级；不再用黄/橙等低对比色做唯一前景。
+    rankLabel.textColor = TiebaAccessibleColors.metadata
     let displayName = user.userName.isEmpty ? "未知用户" : user.userName
     avatar.configure(url: "", initial: displayName)
     nameLabel.text = displayName
@@ -880,7 +879,7 @@ final class MemberGroupHeaderView: UICollectionReusableView {
     titleLabel.font = TiebaSimpleText.font(size: 15, weight: .bold)
     titleLabel.textColor = .label
     countChip.font = TiebaSimpleText.font(size: 11, weight: .bold)
-    countChip.textColor = .tertiaryLabel
+    countChip.textColor = TiebaAccessibleColors.metadata
     countChip.backgroundColor = TiebaSimpleRowPalette.default.surfaceSecondary
     countChip.layer.cornerRadius = 8
     countChip.layer.masksToBounds = true
@@ -946,7 +945,7 @@ final class RankFooterView: UICollectionReusableView {
   func configure(hasMore: Bool, loading: Bool) {
     spinner.color = TiebaChromeTheme.current.tint
     var config = UIButton.Configuration.plain()
-    config.baseForegroundColor = .tertiaryLabel
+    config.baseForegroundColor = TiebaAccessibleColors.metadata
     if loading {
       config.title = "加载中..."
       spinner.startAnimating()

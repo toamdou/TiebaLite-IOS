@@ -46,8 +46,9 @@ final class TiebaForumRulesViewController: UIViewController, TiebaNativeScreen {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .systemGroupedBackground
+    view.backgroundColor = .systemBackground
     table.dataSource = self
+    table.backgroundColor = .systemBackground
     table.delegate = self
     table.register(TiebaRuleTitleCell.self, forCellReuseIdentifier: TiebaRuleTitleCell.reuseID)
     table.register(TiebaRuleAuthorCell.self, forCellReuseIdentifier: TiebaRuleAuthorCell.reuseID)
@@ -382,7 +383,7 @@ private final class TiebaRuleAuthorCell: UITableViewCell {
     nameLabel.textColor = .label
     nameLabel.numberOfLines = 1
     timeLabel.font = TiebaSimpleText.uiFont(style: .caption1)
-    timeLabel.textColor = .tertiaryLabel
+    timeLabel.textColor = TiebaAccessibleColors.metadata
     timeLabel.numberOfLines = 1
     let column = UIStackView(arrangedSubviews: [nameLabel, timeLabel])
     column.axis = .vertical
@@ -417,7 +418,7 @@ private final class TiebaRuleAuthorCell: UITableViewCell {
 private final class TiebaRulePrefaceCell: UITableViewCell {
   static let reuseID = "TiebaRulePrefaceCell"
   private let label = TiebaSelectableLabel(
-    font: TiebaSimpleText.uiFont(style: .subheadline), color: .secondaryLabel
+    font: TiebaSimpleText.uiFont(style: .subheadline), color: TiebaAccessibleColors.metadata
   )
 
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -456,7 +457,7 @@ private final class TiebaRulePrefaceCell: UITableViewCell {
 private final class TiebaRuleTextCell: UITableViewCell {
   static let reuseID = "TiebaRuleTextCell"
   private let label = TiebaSelectableLabel(
-    font: TiebaSimpleText.uiFont(style: .subheadline), color: .secondaryLabel
+    font: TiebaSimpleText.uiFont(style: .subheadline), color: TiebaAccessibleColors.metadata
   )
 
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -486,7 +487,7 @@ private final class TiebaRuleTextCell: UITableViewCell {
 private final class TiebaRuleQuoteCell: UITableViewCell {
   static let reuseID = "TiebaRuleQuoteCell"
   private let label = TiebaSelectableLabel(
-    font: TiebaSimpleText.uiFont(style: .footnote), color: .secondaryLabel
+    font: TiebaSimpleText.uiFont(style: .footnote), color: TiebaAccessibleColors.metadata
   )
 
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -538,7 +539,7 @@ private final class TiebaRuleImageCell: UITableViewCell {
     ruleImageView.translatesAutoresizingMaskIntoConstraints = false
     placeholder.text = "[图片]"
     placeholder.font = TiebaSimpleText.uiFont(style: .subheadline)
-    placeholder.textColor = .tertiaryLabel
+    placeholder.textColor = TiebaAccessibleColors.metadata
     placeholder.translatesAutoresizingMaskIntoConstraints = false
     contentView.addSubview(ruleImageView)
     contentView.addSubview(placeholder)
@@ -679,7 +680,7 @@ private final class TiebaRuleFooterCell: UITableViewCell {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
     selectionStyle = .none
     label.font = TiebaSimpleText.uiFont(style: .caption1)
-    label.textColor = .tertiaryLabel
+    label.textColor = TiebaAccessibleColors.metadata
     label.textAlignment = .center
     label.numberOfLines = 0
     label.translatesAutoresizingMaskIntoConstraints = false

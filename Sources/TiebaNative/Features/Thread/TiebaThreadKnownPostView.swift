@@ -48,13 +48,26 @@ final class TiebaThreadKnownPostView: UIView {
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    card.layer.shadowPath = UIBezierPath(
+      roundedRect: card.bounds,
+      cornerRadius: card.layer.cornerRadius
+    ).cgPath
+  }
+
   func applyPalette(_ palette: TiebaFeedRowPalette) {
     self.palette = palette
-    card.backgroundColor = palette.card
-    card.layer.borderColor = palette.borderCard.cgColor
+    card.backgroundColor = TiebaAccessibleColors.elevatedSurface
+    let dark = palette.isNight || traitCollection.userInterfaceStyle == .dark
+    card.layer.cornerRadius = TiebaAccessibleColors.surfaceRadius
+    card.layer.borderWidth = 0
+    card.layer.borderColor = UIColor.clear.cgColor
+    card.layer.shadowColor = UIColor.black.cgColor
+    card.layer.shadowOpacity = dark ? 0.10 : 0.08
     titleLabel.textColor = palette.text
-    authorLabel.textColor = palette.textSecondary
-    abstractLabel.textColor = palette.textSecondary
+    authorLabel.textColor = TiebaAccessibleColors.metadata
+    abstractLabel.textColor = TiebaAccessibleColors.metadata
     imageView.backgroundColor = palette.placeholder
   }
 
@@ -69,19 +82,28 @@ final class TiebaThreadKnownPostView: UIView {
     if snapshot.imageURL != nil {
       TiebaHeroTransition.markImage(imageView, threadId: snapshot.id)
     }
-    card.layer.cornerRadius = TiebaPostRowLayout.cardRadius
+    // 与真实 Hero 共用同一套 surface token：12pt 页边距、24pt 圆角、无边框，
+    // 避免首包从占位卡切到真实 Hero 时横向收放或圆角跳变。
+    card.layer.cornerRadius = TiebaAccessibleColors.surfaceRadius
     card.layer.cornerCurve = .continuous
-    card.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
+    card.layer.borderWidth = 0
+    card.layer.shadowColor = UIColor.black.cgColor
+    card.layer.shadowOpacity = 0.08
+    card.layer.shadowRadius = 16
+    card.layer.shadowOffset = CGSize(width: 0, height: 6)
     card.translatesAutoresizingMaskIntoConstraints = false
     addSubview(card)
 
     let stack = UIStackView()
     stack.axis = .vertical
     stack.alignment = .fill
-    stack.spacing = 12 // knownCard gap
+    stack.spacing = 18 // 与真实 Hero 的 title/author/body 呼吸一致
     stack.isLayoutMarginsRelativeArrangement = true
     stack.directionalLayoutMargins = NSDirectionalEdgeInsets(
-      top: 16, leading: 16, bottom: 16, trailing: 16
+      top: 22,
+      leading: 20,
+      bottom: 22,
+      trailing: 20
     )
     // 占位卡挂在全屏列表顶部，顶部留白由 contentInset.top 承担，不让栈再吃
     // 安全区边距（否则测量/布局两趟差一份安全区高，卡片会被撑开一片空白）。
@@ -93,8 +115,11 @@ final class TiebaThreadKnownPostView: UIView {
     // 有，漏掉它占位卡就没有帖名——与作者行、摘要同尺排下去，换真卡不位移。
     if !snapshot.title.isEmpty {
       // 字号/行高与真实主贴卡同源（TiebaPostRowLayout.titleFont/titleLineHeight）：
-      // 正文级字号一变，占位卡与真卡同步变，换卡时才不位移。
-      titleLabel.font = TiebaPostRowLayout.titleFont
+      // 这两个都只读独立的 titleScale（默认 22pt/28pt），与正文/界面字号互不影响。
+      // 同一次取出来再传给 label 与 attributedText，避免两次快照读取之间错过变更。
+      let titleFont = TiebaPostRowLayout.titleFont
+      let titleLineHeight = max(TiebaPostRowLayout.titleLineHeight, ceil(titleFont.lineHeight))
+      titleLabel.font = titleFont
       // 与真卡（TiebaPostRowLayout.titleLineLimit = 0）保持一致：都不截断，
       // 否则换卡那一刻标题行数会变、下面整块跳一次。
       // makeAttributed 的 truncating 默认 true，会以 byTruncatingTail 盖过 numberOfLines=0
@@ -102,8 +127,8 @@ final class TiebaThreadKnownPostView: UIView {
       titleLabel.numberOfLines = TiebaPostRowLayout.titleLineLimit
       titleLabel.attributedText = TiebaSimpleText.makeAttributed(
         text: snapshot.title,
-        font: TiebaPostRowLayout.titleFont,
-        lineHeight: TiebaPostRowLayout.titleLineHeight,
+        font: titleFont,
+        lineHeight: titleLineHeight,
         truncating: TiebaPostRowLayout.titleLineLimit > 0
       )
       stack.addArrangedSubview(titleLabel)
@@ -119,7 +144,9 @@ final class TiebaThreadKnownPostView: UIView {
     row.addArrangedSubview(avatar)
     authorLabel.text = snapshot.authorName
     authorLabel.font = TiebaPostRowLayout.nameFontMain
-    authorLabel.numberOfLines = 1
+    let ax = TiebaPostRowLayout.nameFont.pointSize >= 20
+    authorLabel.numberOfLines = ax ? 0 : 2
+    authorLabel.lineBreakMode = ax ? .byWordWrapping : .byTruncatingTail
     row.addArrangedSubview(authorLabel)
     stack.addArrangedSubview(row)
 
@@ -128,11 +155,14 @@ final class TiebaThreadKnownPostView: UIView {
       // 字号/行高与真实主贴正文同尺（15pt/22pt，见 TiebaPostRowMetrics.buildContent）：
       // 摘要本来就是正文的预览，行高不一致时换卡会整块上下跳（用户 2026-09-15 报）。
       // 颜色留次要色——预览的视觉设计不变。
-      abstractLabel.font = TiebaSimpleText.bodyFont(size: 15, weight: .regular)
-      abstractLabel.numberOfLines = 2
+      abstractLabel.font = TiebaSimpleText.bodyFont(size: 17, weight: .regular)
+      abstractLabel.numberOfLines = TiebaPostRowLayout.nameFont.pointSize >= 20 ? 0 : 2
+      abstractLabel.lineBreakMode = abstractLabel.numberOfLines == 0
+        ? .byWordWrapping
+        : .byTruncatingTail
       abstractLabel.attributedText = TiebaSimpleText.makeAttributed(
         text: snapshot.abstract,
-        font: TiebaSimpleText.bodyFont(size: 15, weight: .regular),
+        font: TiebaSimpleText.bodyFont(size: 17, weight: .regular),
         lineHeight: TiebaPostRowLayout.abstractLineHeight
       )
       stack.addArrangedSubview(abstractLabel)
@@ -176,10 +206,9 @@ final class TiebaThreadKnownPostView: UIView {
     }
 
     NSLayoutConstraint.activate([
-      // 左右边距与真实主贴卡同值（TiebaPostRowLayout.cardMarginH）：否则换卡瞬间
-      // 卡片会横向收放一次。
-      card.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TiebaPostRowLayout.cardMarginH),
-      card.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -TiebaPostRowLayout.cardMarginH),
+      // 左右边距与真实 Hero 同源：统一 12pt 外距。
+      card.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+      card.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
       card.topAnchor.constraint(equalTo: topAnchor),
       // 底部 12 = SkeletonList 的 paddingTop（JS 两个块之间的间距）。
       card.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),

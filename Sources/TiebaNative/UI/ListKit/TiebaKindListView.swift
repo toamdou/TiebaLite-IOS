@@ -96,6 +96,13 @@ public final class TiebaKindListContentView: UIView {
     }
   }
 
+  /// Dynamic Type 改变时 spec 字典通常等值，didSet 会拒绝重建；页头高度/字号却必须
+  /// 重测。调用方显式触发一次重建，避免 AX 字号下页头压到导航栏。
+  func refreshHeaderForContentSizeChange() {
+    guard headerSpec != nil else { return }
+    rebuildHeader()
+  }
+
   public var footerState: TiebaKindFooterState = .hidden {
     didSet {
       guard footerState != oldValue else { return }
@@ -139,7 +146,9 @@ public final class TiebaKindListContentView: UIView {
   }
 
   /// 触底阈值（视口高的比例；距内容底 < 阈值×视口高即发 reachEnd）。
-  public var reachEndThreshold: CGFloat = 0.3
+  public var reachEndThreshold: CGFloat = 0.3 {
+    didSet { reachEndGateDirty = true }
+  }
 
   /// 顶部内容内白（对齐 contentContainerStyle.paddingTop）。
   /// ⚠️ 这是**内容内白**（加在内容顶端之上、可随滚动滑出），不是
@@ -231,6 +240,8 @@ public final class TiebaKindListContentView: UIView {
   }
 
   public func setPage(pageKey: String, identities: [TiebaRowDiff.Entry.Identity] = []) {
+    let previousItemCount = itemCount
+    let previousIdentities = currentIdentities
     self.currentIdentities = identities
     let previousKey = self.pageKey
     let isSamePage = (previousKey == pageKey)
@@ -250,9 +261,7 @@ public final class TiebaKindListContentView: UIView {
       // 记住的行高是"上一页的行"的：换页必须清，否则新页的第 i 行会顶着旧页第 i 行的高度。
       rememberedHeights.removeAll(keepingCapacity: true)
     }
-    // 拉取式布局按需取帧（见 TiebaRowListLayout）：行高变了只需作废缓存 + 失效布局，
-    // 不再有"构建期快照"要重建。
-    frameHeightCache = nil
+    reachEndGateDirty = true
     if !isSamePage {
       // 换页后可见区间即便与旧页数值相同（都 0…7）也必须重发，否则懒回填
       //（History/Subposts 依赖 visibleRangeChange）被去重吞掉。
@@ -262,6 +271,16 @@ public final class TiebaKindListContentView: UIView {
     // 行数取自页记录（[精简] 优先本列表自持的 currentPage）：度量被 LRU 淘汰时仍要画出
     // 等量占位行（行高走兜底），不能靠度量缓存的行数。
     let count = currentPage?.count ?? 0
+    // 纯追加时保留旧帧高前缀：滚动到底加载下一页不再重查前 N 行。
+    let canReuseFrameHeightPrefix =
+      isSamePage
+      && count > previousItemCount
+      && identities.count == count
+      && previousIdentities.count == previousItemCount
+      && Array(identities.prefix(previousItemCount)) == previousIdentities
+    if !canReuseFrameHeightPrefix {
+      frameHeightCache = nil
+    }
     // [采用] 内容身份下，diffable 自己就能算出"哪几行变了"（旧身份消失 + 新身份出现），
     // 因此同页重推**不再需要 reconfigureSamePageItems() 把可见行全部重配**。
     // 位置身份（identities 未传，帖子页等整页重发路径）时行为不变，仍走全量重配。
@@ -340,10 +359,55 @@ public final class TiebaKindListContentView: UIView {
   /// 同一批里出现过强请求就整批按强失效走。
   private func applyGeometryInvalidation(rebuild: Bool) {
     geometryInvalidationCount += 1
+    reachEndGateDirty = true
+    // 04-07：重建会重算**全部** frame。如果视口上方那几行（补测窗口是「可见 ±4」）的高度
+    // 被修正，`contentOffset` 不变就意味着可见内容整体上下位移 —— 用户看到的是「自己跳了一下」。
+    //
+    // 修法：重建前后各取一次「首个可见行的 minY」，把差值补进 contentOffset。
+    // 锚点行消失（被移除/换页）时退回「首个可见行」策略 —— 取不到就不动，宁可不动也不要乱动。
+    let anchor = rebuild ? scrollAnchorSnapshot() : nil
     if rebuild, let layout = collectionView.collectionViewLayout as? TiebaRowListLayout {
       layout.invalidateAndRebuild()
     } else {
       collectionView.collectionViewLayout.invalidateLayout()
+    }
+    if let anchor {
+      restoreScrollAnchor(anchor)
+    }
+  }
+
+  /// 视口锚点：重建前记下「首个可见行的下标 + 它当前的布局 y」。
+  ///
+  /// 为什么按下标而不是内容身份：`TiebaRowListLayout` 本身就是按下标算 frame 的，
+  /// 补偿量必须与**布局自己**的口径一致；跨页换键时 `pageKey` 已经变了，调用方本来
+  /// 也不该走到锚定分支（见 `setPage` 的整页 reload 路径）。
+  private func scrollAnchorSnapshot() -> (index: Int, minY: CGFloat)? {
+    guard collectionView.window != nil else { return nil }
+    let visible = collectionView.indexPathsForVisibleItems
+    guard let first = visible.min(by: { $0.item < $1.item }) else { return nil }
+    guard
+      let attributes = collectionView.collectionViewLayout.layoutAttributesForItem(at: first)
+    else { return nil }
+    return (index: first.item, minY: attributes.frame.minY)
+  }
+
+  /// 重建后把锚点行拉回重建前的位置。
+  ///
+  /// `contentOffset` 的写入必须包在 `withoutScrollCallbacks` 里：否则会触发一次虚假
+  /// `didScroll`，下游（吸合/上拉加载/埋点）会把它当成用户滚动。
+  private func restoreScrollAnchor(_ anchor: (index: Int, minY: CGFloat)) {
+    guard collectionView.window != nil else { return }
+    guard anchor.index < collectionView.numberOfItems(inSection: 0) else { return }
+    guard
+      let attributes = collectionView.collectionViewLayout.layoutAttributesForItem(
+        at: IndexPath(item: anchor.index, section: 0)
+      )
+    else { return }
+    let delta = attributes.frame.minY - anchor.minY
+    // 半像素以内不动：浮点误差不该产生一次 contentOffset 写入。
+    guard abs(delta) > 0.5 else { return }
+    withoutScrollCallbacks {
+      collectionView.contentOffset.y += delta
     }
   }
 
@@ -498,6 +562,47 @@ public final class TiebaKindListContentView: UIView {
   /// 判定"甩起来了"的竖直速度阈值（pt/s）。取高值：正常拖动/慢滑不受影响，
   /// 只有真甩动（每秒掠过好几行）才闸。
   private static let flingVelocityThreshold: CGFloat = 2500
+  private static let onScrollMinimumInterval: CFTimeInterval = 1.0 / 60.0
+  private var lastOnScrollEmitTime: CFTimeInterval = 0
+  private var lastOnScrollOffsetY: CGFloat?
+  private var onScrollEmitPending = false
+  private var onScrollEmitScheduled = false
+
+  private var lastScrollSampleTime: CFTimeInterval = 0
+  private var lastScrollSampleOffsetY: CGFloat = 0
+  private var smoothedScrollVelocityY: CGFloat = 0
+  private var lastFlingEvaluationTime: CFTimeInterval = 0
+  private var lastGateDragging = false
+  private var lastGateDecelerating = false
+
+  private struct ReachEndGate {
+    let triggerOffsetY: CGFloat
+  }
+
+  private var reachEndGate: ReachEndGate?
+  private var reachEndGateDirty = true
+  private var deferredGeometryInvalidationPending = false
+  private var deferredGeometryNeedsRebuild = false
+  private var scrollSettleWorkScheduled = false
+  private var needsPostScrollVisibleRemeasure = false
+
+  private static let maxDeferredPrefetchRows = 24
+  private static let maxSettledPrefetchRows = 10
+  private static let maxImagePrefetchRequests = 32
+  private static let maxBitmapPrewarmRows = 16
+  /// 04-11：视口外软预载窗口（知识库是 500pt）。取的是**滚动方向前方**这一段，
+  /// 不是「已经可见的那些行」—— 后者永远发生在「已经看见」之后，等于没有提前量。
+  private static let aheadPrewarmLookahead: CGFloat = 500
+  /// 前方预烘的节流间隔：0.1s。甩动一屏约 0.3s，这个粒度够追得上，又不会每帧都算布局。
+  private static let aheadPrewarmInterval: CFTimeInterval = 0.1
+  private var lastAheadPrewarmTime: CFTimeInterval = 0
+  private var deferredPrefetchIndexes: Set<Int> = []
+  private var prefetchFlushScheduled = false
+
+  /// 触摸/拖拽/惯性窗口内一律不做主线程 TextKit 补测、不做新预取。
+  private var isScrollInteractionActive: Bool {
+    collectionView.isDragging || collectionView.isDecelerating || collectionView.isTracking
+  }
 
   // MARK: 几何失效事务队
 
@@ -507,7 +612,13 @@ public final class TiebaKindListContentView: UIView {
   /// TiebaGeometryInvalidationQueue 的头注。
   private lazy var geometryInvalidations = TiebaGeometryInvalidationQueue(
     apply: { [weak self] rebuild in
-      self?.applyGeometryInvalidation(rebuild: rebuild)
+      guard let self else { return }
+      if self.isScrollInteractionActive {
+        self.deferredGeometryInvalidationPending = true
+        self.deferredGeometryNeedsRebuild = self.deferredGeometryNeedsRebuild || rebuild
+        return
+      }
+      self.applyGeometryInvalidation(rebuild: rebuild)
     }
   )
 
@@ -520,6 +631,7 @@ public final class TiebaKindListContentView: UIView {
     view.backgroundColor = .clear
     view.isOpaque = false
     view.alwaysBounceVertical = true
+    view.decelerationRate = .normal
     view.showsVerticalScrollIndicator = true
     view.contentInsetAdjustmentBehavior = .never
     view.allowsSelection = false
@@ -600,11 +712,43 @@ public final class TiebaKindListContentView: UIView {
   }()
 
   /// 简单行 cell（TiebaSimpleRowView；命中区域 = 行视图自己判定）。
+  /// 三个 cell registration 的统一复用复位。只清 cell 根层/contentView 的临时
+  /// presentation 状态与在途 CAAnimation；行视图内部的 mask/contents 仍由各行的
+  /// prepareForReuse 负责，避免这里误伤业务绘制。
+  private static func prepareCellForReuse(_ cell: UICollectionViewCell) {
+    resetTransientLayerState(cell.layer)
+    resetTransientLayerState(cell.contentView.layer)
+  }
+
+  private static func resetTransientLayerState(_ layer: CALayer) {
+    let hasAnimations = (layer.animationKeys()?.isEmpty ?? true) == false
+    guard hasAnimations
+      || layer.opacity != 1
+      || CATransform3DIsIdentity(layer.transform) == false
+      || layer.mask != nil
+      || layer.contents != nil
+    else { return }
+    layer.removeAllAnimations()
+    layer.opacity = 1
+    layer.transform = CATransform3DIdentity
+    layer.mask = nil
+    layer.contents = nil
+  }
+
+  /// 首屏入场只在上屏、非滚动、非 Reduce Motion、非低电量时启动；
+  /// 其他情况保持终态，不创建一次性 CAAnimation。
+  private var canPlayEntranceAnimation: Bool {
+    guard entrancePending, isScrollInteractionActive == false, window != nil else { return false }
+    guard UIAccessibility.isReduceMotionEnabled == false else { return false }
+    return ProcessInfo.processInfo.isLowPowerModeEnabled == false
+  }
+
   private lazy var simpleCellRegistration =
     UICollectionView.CellRegistration<TiebaKindListViewCell, TiebaKindItem> {
       [weak self] cell, indexPath, item in
       // 同 dataSource cellProvider：注册闭包由 UIKit 侧持有，宿主析构后仍可能被调一次。
       guard let self else { return }
+      Self.prepareCellForReuse(cell)
       cell.onTap = { [weak self] point in
         self?.handleTap(at: indexPath, point: point)
       }
@@ -616,7 +760,7 @@ public final class TiebaKindListContentView: UIView {
         self.notifyPageDataMissing()
       }
       cell.apply(model: model)
-      if self.entrancePending {
+      if self.canPlayEntranceAnimation {
         cell.playEntrance(index: item.index)
       }
     }
@@ -626,6 +770,7 @@ public final class TiebaKindListContentView: UIView {
     UICollectionView.CellRegistration<TiebaKindListFeedCell, TiebaKindItem> {
       [weak self] cell, indexPath, item in
       guard let self else { return }
+      Self.prepareCellForReuse(cell)
       cell.onTap = { [weak self] point in
         self?.handleTap(at: indexPath, point: point)
       }
@@ -651,7 +796,7 @@ public final class TiebaKindListContentView: UIView {
       } else {
         self.notifyPageDataMissing()
       }
-      if self.entrancePending {
+      if self.canPlayEntranceAnimation {
         cell.playEntrance(index: item.index)
       }
     }
@@ -661,6 +806,7 @@ public final class TiebaKindListContentView: UIView {
     UICollectionView.CellRegistration<TiebaKindListPostCell, TiebaKindItem> {
       [weak self] cell, indexPath, item in
       guard let self else { return }
+      Self.prepareCellForReuse(cell)
       cell.onPostEvent = { [weak self] event in
         self?.onPostEvent?(indexPath.item, event)
       }
@@ -674,7 +820,7 @@ public final class TiebaKindListContentView: UIView {
       if self.postModel(at: item.index) == nil {
         self.notifyPageDataMissing()
       }
-      if self.entrancePending {
+      if self.canPlayEntranceAnimation {
         cell.playEntrance(index: item.index)
       }
     }
@@ -720,7 +866,7 @@ public final class TiebaKindListContentView: UIView {
 
   public override func layoutSubviews() {
     super.layoutSubviews()
-    if collectionView.frame != bounds {
+    if !tiebaViewIsAlreadyAtFrame(collectionView, bounds) {
       collectionView.frame = bounds
     }
     // 宽度变化 = 行宽变化（高度缓存按宽度键控）：显式让 section provider 按新宽度
@@ -880,61 +1026,24 @@ public final class TiebaKindListContentView: UIView {
   private func frameHeight(
     at index: Int, width: CGFloat, syncRemeasure: Bool
   ) -> (height: CGFloat, authoritative: Bool) {
+    // 阶梯只写一遍；三族的差异（怎么取已测模型 / 怎么补测 / 缺页通知闸门）全在
+    // TiebaRowFamily 里（见 TiebaRowFamily.swift）。
+    let family = TiebaRowFamily(kind(at: index, pageKey: pageKey))
     var height: CGFloat
     var authoritative = true
-    switch kind(at: index, pageKey: pageKey) {
-    case .post:
-      // 帖子行：高度自带（含卡片内外边距）；宽度闸门同 feed 行。
-      if let model = postModel(at: index), model.containerWidth == width {
-        height = model.measuredHeight
-      } else if syncRemeasure, let sub = subIndex(at: index),
-        let remeasured = TiebaPostRowMetrics.shared.ensureRow(
-          pageKey: pageKey, index: sub, containerWidth: width)
-      {
-        height = remeasured.measuredHeight
-      } else if let remembered = rememberedHeights[index] {
-        authoritative = false
-        height = remembered
-      } else {
-        notifyPageDataMissing()
-        authoritative = false
-        height = 0
-      }
-    case .feed:
-      // 信息流行：高度 = 行模型自带（含卡片外 4pt 上下边距）。
-      // 取模型走 feedModel(at:width:)（**内容身份优先**）：本页的度量页索引被整页 LRU
-      // 挤掉也照样命中。
-      if let row = feedModel(at: index, width: width), row.containerWidth == width {
-        height = row.measuredHeight
-      } else if syncRemeasure, let identity = contentIdentity(at: index),
-        let remeasured = TiebaRowMetrics.shared.ensureFeedRow(
-          identity: identity, pageKey: pageKey, index: index, containerWidth: width)
-      {
-        height = remeasured.measuredHeight
-      } else if let remembered = rememberedHeights[index] {
-        authoritative = false
-        height = remembered
-      } else {
-        notifyPageDataMissing()
-        authoritative = false
-        height = 0
-      }
-    case .simple, .none:
-      if let measured = simpleModel(at: index, width: width)?.measuredHeight, measured > 0 {
-        height = measured
-      } else if syncRemeasure, let identity = contentIdentity(at: index),
-        let remeasured = TiebaSimpleRowMetrics.shared.ensureRow(
-          identity: identity, pageKey: pageKey, index: index, containerWidth: width)
-      {
-        height = remeasured.measuredHeight
-      } else if let remembered = rememberedHeights[index] {
-        authoritative = false
-        height = remembered
-      } else {
-        if pageRowCount > 0, !pageKey.isEmpty { notifyPageDataMissing() }
-        authoritative = false
-        height = 0
-      }
+    if let measured = family.measuredHeight(in: self, at: index, width: width) {
+      height = measured
+    } else if syncRemeasure,
+      let remeasured = family.ensureHeight(in: self, at: index, width: width)
+    {
+      height = remeasured
+    } else if let remembered = rememberedHeights[index] {
+      authoritative = false
+      height = remembered
+    } else {
+      if family.notifiesOnMissing(in: self) { notifyPageDataMissing() }
+      authoritative = false
+      height = 0
     }
     if height > 0 {
       rememberedHeights[index] = height
@@ -970,36 +1079,78 @@ public final class TiebaKindListContentView: UIView {
     return max(low - buffer, 0)...min(high + buffer, count - 1)
   }
 
-  /// 整页帧高：按 (pageKey, itemWidth, 行数) 缓存 **+ 权威位图**。页脚/主题/contentInset 变化
-  /// 都会 invalidateLayout，但帧高输入没变——只重建失效部分，不逐行重查度量。
-  ///
-  /// [N3] 缓存只在"当前可见窗口整段都权威（当前宽度实测过）"时才复用：否则滚到还没补测的行上
-  /// 会一直读上一宽度的高度。窗口外的非权威行留在缓存里也没关系——它们一旦进入可见窗口，
-  /// 这个条件就会让这一趟重算并当场补测。宿主页后台重推落地时走 setPage（会清这份缓存）。
+  /// 整页帧高：按 (pageKey, itemWidth, 行数) 缓存 + 权威位图。
+  /// 纯追加只补尾部；滚动中绝不进主线程 TextKit 补测，并只重测可见窗口里不权威的槽位。
   private func frameHeights(width: CGFloat, count: Int) -> [CGFloat] {
+    guard count > 0 else { return [] }
     let window = syncRemeasureWindow(count: count)
+    let allowsSync = !isScrollInteractionActive
+
+    func markNonAuthoritativeVisible(_ authoritative: [Bool]) {
+      guard allowsSync == false else { return }
+      if window.contains(where: { $0 < authoritative.count && authoritative[$0] == false }) {
+        needsPostScrollVisibleRemeasure = true
+      }
+    }
+
     if let cache = frameHeightCache,
        cache.pageKey == pageKey,
        cache.width == width,
        cache.heights.count == count,
-       cache.authoritative.count == count,
-       window.allSatisfy({ cache.authoritative[$0] })
+       cache.authoritative.count == count
     {
-      return cache.heights
+      if allowsSync == false {
+        markNonAuthoritativeVisible(cache.authoritative)
+        return cache.heights
+      }
+      if window.allSatisfy({ cache.authoritative[$0] }) {
+        return cache.heights
+      }
+      var heights = cache.heights
+      var authoritative = cache.authoritative
+      for index in window where authoritative[index] == false {
+        let row = frameHeight(at: index, width: width, syncRemeasure: true)
+        heights[index] = row.height
+        authoritative[index] = row.authoritative
+      }
+      frameHeightCache = (pageKey, width, heights, authoritative)
+      return heights
     }
+
     var heights: [CGFloat] = []
     var authoritative: [Bool] = []
+    var start = 0
+    if let cache = frameHeightCache,
+       cache.pageKey == pageKey,
+       cache.width == width,
+       cache.heights.count < count,
+       cache.authoritative.count == cache.heights.count
+    {
+      heights = cache.heights
+      authoritative = cache.authoritative
+      start = heights.count
+    }
     heights.reserveCapacity(count)
     authoritative.reserveCapacity(count)
-    for index in 0..<count {
-      let row = frameHeight(at: index, width: width, syncRemeasure: window.contains(index))
+
+    if allowsSync, start > 0 {
+      for index in window where index < start && authoritative[index] == false {
+        let row = frameHeight(at: index, width: width, syncRemeasure: true)
+        heights[index] = row.height
+        authoritative[index] = row.authoritative
+      }
+    }
+
+    for index in start..<count {
+      let maySync = allowsSync && window.contains(index)
+      let row = frameHeight(at: index, width: width, syncRemeasure: maySync)
       heights.append(row.height)
       authoritative.append(row.authoritative)
     }
     frameHeightCache = (pageKey, width, heights, authoritative)
+    markNonAuthoritativeVisible(authoritative)
     return heights
   }
-
   // MARK: 滚动头（top boundary supplementary item）
 
   /// 页头项高 = 页头在**内容列宽**下的自适应高（顶部内白由 contentInset.top 承担）。
@@ -1187,7 +1338,54 @@ public final class TiebaKindListContentView: UIView {
       remove()
       return
     }
-    cell.playCollapse(completion: remove)
+    // 04-08 + 04-09：折叠只收**本行**高度（`TiebaApparentHeight`：顶边不动、下方行不位移），
+    // 于是 280ms 里下面留出一段空白，动画结束真正 `remove` 时下方整体上跳一次 ——
+    // 观感上"折叠"被拆成了两段。
+    //
+    // 修法：给下方可见行加一条**同曲线、同时长**的纯合成位移（`transform.translation.y`）。
+    // 为什么不用逐帧回调改 frame：`UIViewPropertyAnimator` 的 block 只在开始设终值，
+    // 中间帧由 Core Animation 插值，我们拿不到每帧回调；而两条同参数动画天然同步。
+    // transform 不参与布局，所以既不会触发重排，也不会污染 cell 复用的 frame。
+    let shiftDistance = cell.bounds.height
+    let followers = visibleCellsBelow(indexPath)
+    animateCollapseShift(followers, distance: shiftDistance)
+    cell.playCollapse { [weak self] in
+      // 此刻真布局已经把这一行删掉、下方行自然落位；把合成位移撤掉不会看到跳。
+      self?.clearCollapseShift(followers)
+      remove()
+    }
+  }
+
+  /// 折叠行下方（item 更大）的可见 cell。
+  private func visibleCellsBelow(_ indexPath: IndexPath) -> [UICollectionViewCell] {
+    collectionView.visibleCells.filter { cell in
+      guard let path = collectionView.indexPath(for: cell) else { return false }
+      return path.item > indexPath.item
+    }
+  }
+
+  /// 给下方行挂一条与折叠同参数的位移动画（0 → -distance，easeOut，fillMode forwards）。
+  private func animateCollapseShift(_ cells: [UICollectionViewCell], distance: CGFloat) {
+    guard distance > 0 else { return }
+    let duration = TiebaFeedRowView.collapseDuration
+    for cell in cells {
+      cell.layer.removeAnimation(forKey: "collapseShift")
+      let shift = CABasicAnimation(keyPath: "transform.translation.y")
+      shift.fromValue = 0
+      shift.toValue = -distance
+      shift.duration = duration
+      // 与 `playCollapseAnimation` 的 `.easeOut` 同一条曲线，两条动画才不会"错拍"。
+      shift.timingFunction = CAMediaTimingFunction(name: .easeOut)
+      shift.fillMode = .forwards
+      shift.isRemovedOnCompletion = false
+      cell.layer.add(shift, forKey: "collapseShift")
+    }
+  }
+
+  private func clearCollapseShift(_ cells: [UICollectionViewCell]) {
+    for cell in cells {
+      cell.layer.removeAnimation(forKey: "collapseShift")
+    }
   }
 
   /// 图片长按菜单（保存照片 / 分享照片）事件外传（水印偏好/相册权限/toast 由
@@ -1303,12 +1501,17 @@ public final class TiebaKindListContentView: UIView {
       onClose: { [weak self] in
         self?.isBrowserPresented = false
         self?.updatePrefetcherPause()
+        // 查看器是 present 出来的：列表仍在 window 内，isOnScreen 求交为真，
+        // 屏下的 GIF 会继续 tick + 解帧。模态关闭时解除这个原因。
+        TiebaGIFPauseGate.shared.resume(.modalOverlay)
       },
       onPresented: onPresented
     )
     if presented {
       isBrowserPresented = true
       updatePrefetcherPause()
+      // 同上：模态覆盖期间全局暂停行内 GIF（原因成对增删，不会和内存告警互相覆盖）。
+      TiebaGIFPauseGate.shared.pause(.modalOverlay)
     }
     return presented
   }
@@ -1347,29 +1550,56 @@ public final class TiebaKindListContentView: UIView {
     onListEvent?(.visibleRangeChange(start: first, end: last, count: itemCount))
   }
 
-  /// 触底（阈值制）：距内容底 < 阈值×视口高 且已武装 → 发一次 reachEnd；
-  /// 离开阈值区重新武装（一次性语义）。
-  private func updateReachEnd() {
-    guard itemCount > 0, !pageKey.isEmpty else { return }
-    let inset = collectionView.adjustedContentInset
-    let visibleHeight = collectionView.bounds.height
-    guard visibleHeight > 0 else { return }
-    // setPage 末尾的 setNeedsLayout 会先触发 layoutSubviews：此刻集合视图尚未
-    // 按新快照布局（contentSize = 0/上一页高），负距离会直接误发 reachEnd。
-    guard collectionView.contentSize.height > 0 else { return }
-    let distance = collectionView.contentSize.height
-      + inset.bottom
-      - (collectionView.contentOffset.y + visibleHeight)
-    let trigger = max(reachEndThreshold, 0) * visibleHeight
-    if distance > trigger {
-      reachEndArmed = true
+  /// 重新计算触底阈值对应的 offset，并把当前状态按旧语义武装/触发。
+  /// offset 缓存后 scrollViewDidScroll 每帧只做一次比较，不再重复读 contentSize/inset。
+  private func rebuildReachEndGate() {
+    reachEndGateDirty = false
+    guard itemCount > 0, pageKey.isEmpty == false else {
+      reachEndGate = nil
       return
     }
-    guard reachEndArmed else { return }
-    reachEndArmed = false
-    onListEvent?(.reachEnd(count: itemCount))
+    let inset = collectionView.adjustedContentInset
+    let viewport = collectionView.bounds.height
+    let contentHeight = collectionView.contentSize.height
+    guard viewport > 0, contentHeight > 0 else {
+      reachEndGate = nil
+      return
+    }
+    let triggerDistance = max(reachEndThreshold, 0) * viewport
+    reachEndGate = ReachEndGate(
+      triggerOffsetY: contentHeight + inset.bottom - viewport - triggerDistance
+    )
   }
 
+  private func updateReachEnd() {
+    rebuildReachEndGate()
+    guard let gate = reachEndGate else { return }
+    if collectionView.contentOffset.y >= gate.triggerOffsetY {
+      guard reachEndArmed else { return }
+      reachEndArmed = false
+      onListEvent?(.reachEnd(count: itemCount))
+    } else {
+      reachEndArmed = true
+    }
+  }
+
+  /// 逐帧热路径：闸门有效时只比较缓存的 triggerOffsetY。布局/页数据变化会把
+  /// reachEndGateDirty 置真，下一帧再走一次完整重算；离开阈值区仍会重新武装。
+  private func updateReachEndDuringScroll(_ scrollView: UIScrollView) {
+    if reachEndGateDirty || reachEndGate == nil {
+      updateReachEnd()
+      return
+    }
+    guard let gate = reachEndGate else { return }
+    let y = scrollView.contentOffset.y
+    if reachEndArmed {
+      guard y >= gate.triggerOffsetY else { return }
+      reachEndArmed = false
+      onListEvent?(.reachEnd(count: itemCount))
+    } else if y < gate.triggerOffsetY {
+      reachEndArmed = true
+    }
+  }
   /// 首屏入场批次边界：首个布局趟里所有 willDisplay 已走完（下个 runloop 才清
   /// 标志），后续滚动回填的 cell 不再播入场——替代原来的 0.5s 时间窗口。
   private func endEntranceBatch() {
@@ -1402,66 +1632,259 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
     updateVisibleRange()
   }
 
-  public func scrollViewDidScroll(_ scrollView: UIScrollView) {
-    // ⚠️ 这里**不**扫可见区间：willDisplay/didEndDisplaying 对每次进出都会回调，
-    // 区间只可能在那些时刻变化；滚动回调里再扫一遍等于每帧一次
-    // indexPathsForVisibleItems（数组分配 + 逐个 IndexPath），而绝大多数帧的区间
-    // 与上一帧相同 ⇒ 纯浪费（120Hz 下每秒 120 次）。
-    guard !ignoreDidScroll else { return }
-    updateFlingGate(scrollView)
+  public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+    guard ignoreDidScroll == false else { return }
+    lastScrollSampleTime = 0
+    lastScrollSampleOffsetY = scrollView.contentOffset.y
+    smoothedScrollVelocityY = 0
+    lastFlingEvaluationTime = 0
+    updateScrollGate(dragging: true, decelerating: false)
+    prefetcher.stopPrefetching()
+    onScrollEmitPending = false
+    deliverOnScroll(scrollView, force: true)
     updateReachEnd()
-    onScroll?(scrollView)
   }
 
-  /// 减速开始前给外部一次改写落点的机会（上游 ScrollComponent.swift:100-105）。
+  public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    guard ignoreDidScroll == false else { return }
+    sampleScrollVelocity(scrollView)
+    updateScrollGateFromScrollView(scrollView)
+    updateReachEndDuringScroll(scrollView)
+    emitOnScrollThrottled(scrollView)
+    prewarmAheadDuringScroll(scrollView)
+  }
+
+  // MARK: 前方预烘（04-11 + 04-16）
+
+  /// 按 `contentOffset` 估出**滚动方向前方** 500pt 里的行，交给位图预热。
+  ///
+  /// 三个判据，缺一不可：
+  ///   ① `!isDragging` —— 手指按住拖动时主线程最忙（手势、吸合、上拉判定全在这一拍），
+  ///      让位。**惯性滑行期放行**：那正是新行涌进来、最需要提前量的窗口，
+  ///      旧代码在这里用 `isScrollInteractionActive == false` 把惯性期也一起挡掉了。
+  ///   ② 0.1s 节流 —— `scrollViewDidScroll` 每帧都来，不节流等于每帧算一次布局。
+  ///   ③ 在屏 + 有页键 —— 离屏预热是纯浪费（缓存还会被 byteBudget 挤掉）。
+  private func prewarmAheadDuringScroll(_ scrollView: UIScrollView) {
+    guard pageKey.isEmpty == false, tiebaIsOnScreen else { return }
+    guard scrollView.isDragging == false else { return }
+    let now = CACurrentMediaTime()
+    guard now - lastAheadPrewarmTime >= Self.aheadPrewarmInterval else { return }
+    lastAheadPrewarmTime = now
+    guard let paths = aheadIndexPaths(scrollView), paths.isEmpty == false else { return }
+    prewarmFeedBitmaps(at: paths)
+  }
+
+  /// 前方窗口内的行下标，按「离视口由近到远」排序（预算有限时先烘最近的那几行）。
+  private func aheadIndexPaths(_ scrollView: UIScrollView) -> [IndexPath]? {
+    guard collectionView.numberOfItems(inSection: 0) > 0 else { return nil }
+    let offsetY = scrollView.contentOffset.y
+    let viewportHeight = scrollView.bounds.height
+    guard viewportHeight > 0 else { return nil }
+    // 方向：用已有的平滑速度；为 0（刚起步）时按「往下」算 —— 用户绝大多数是往下翻。
+    let downward = smoothedScrollVelocityY >= 0
+    let windowMin: CGFloat
+    let windowMax: CGFloat
+    if downward {
+      windowMin = offsetY + viewportHeight
+      windowMax = windowMin + Self.aheadPrewarmLookahead
+    } else {
+      windowMax = offsetY
+      windowMin = max(0, windowMax - Self.aheadPrewarmLookahead)
+    }
+    guard windowMax > windowMin else { return nil }
+    let rect = CGRect(
+      x: 0,
+      y: windowMin,
+      width: max(scrollView.bounds.width, 1),
+      height: windowMax - windowMin
+    )
+    // 布局已就位时 `layoutAttributesForElements` 只做一次二分查找 + 区间收集，不触发布局。
+    guard
+      let attributes = collectionView.collectionViewLayout.layoutAttributesForElements(in: rect),
+      attributes.isEmpty == false
+    else { return nil }
+    return attributes
+      .sorted { lhs, rhs in
+        abs(lhs.frame.minY - offsetY) < abs(rhs.frame.minY - offsetY)
+      }
+      .prefix(Self.maxBitmapPrewarmRows)
+      .map { IndexPath(item: $0.indexPath.item, section: 0) }
+  }
+
   public func scrollViewWillEndDragging(
     _ scrollView: UIScrollView,
     withVelocity velocity: CGPoint,
     targetContentOffset: UnsafeMutablePointer<CGPoint>
   ) {
     contentOffsetWillCommit?(scrollView, &targetContentOffset.pointee)
+    applyEdgeSnap(scrollView, target: &targetContentOffset.pointee)
+    setFlinging(abs(velocity.y) > Self.flingVelocityThreshold)
   }
 
   public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-    if !decelerate { setFlinging(false) }
+    if decelerate {
+      updateScrollGate(dragging: false, decelerating: true)
+    } else {
+      finishScrollInteraction()
+    }
   }
 
   public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-    setFlinging(false)
+    finishScrollInteraction()
   }
 
-  /// 甩动判定：拖拽/惯性中且竖直速度过阈值。速度掉回阈值以下（用户慢下来了）
-  /// 或滚动结束就放闸——放闸那一拍补一次可见窗口的预取，把闸住的那几行补上。
-  private func updateFlingGate(_ scrollView: UIScrollView) {
-    let moving = scrollView.isDragging || scrollView.isDecelerating
-    let fast = abs(scrollView.panGestureRecognizer.velocity(in: scrollView).y)
-      > Self.flingVelocityThreshold
-    setFlinging(moving && fast)
+  public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+    finishScrollInteraction()
+    onScrollAnimationEnd?()
+  }
+
+  private func finishScrollInteraction() {
+    updateScrollGate(dragging: false, decelerating: false)
+    lastScrollSampleTime = 0
+    smoothedScrollVelocityY = 0
+    setFlinging(false)
+    if ignoreDidScroll == false {
+      deliverOnScroll(collectionView, force: true)
+      updateReachEnd()
+    }
+    if tiebaIsOnScreen {
+      prefetchVisibleWindow()
+    }
+    scheduleScrollSettleWork()
+  }
+
+  /// 松手落点的 8pt 边缘吸合。外部 contentOffsetWillCommit 先执行；这里只做
+  /// 顶部/底部的补充收口，不改变其可修改 target 的契约。
+  private func applyEdgeSnap(_ scrollView: UIScrollView, target: inout CGPoint) {
+    let top = -scrollView.adjustedContentInset.top
+    let bottom = max(
+      top,
+      scrollView.contentSize.height + scrollView.adjustedContentInset.bottom - scrollView.bounds.height
+    )
+    let snap: CGFloat = 8
+    if target.y >= top, target.y - top <= snap {
+      target.y = top
+      return
+    }
+    if target.y <= bottom, bottom - target.y <= snap {
+      target.y = bottom
+    }
+  }
+
+  private func sampleScrollVelocity(_ scrollView: UIScrollView) {
+    let now = CACurrentMediaTime()
+    let y = scrollView.contentOffset.y
+    if lastScrollSampleTime > 0 {
+      let dt = now - lastScrollSampleTime
+      if dt > 0.0001 {
+        let instant = (y - lastScrollSampleOffsetY) / CGFloat(dt)
+        smoothedScrollVelocityY = smoothedScrollVelocityY * 0.7 + instant * 0.3
+      }
+      let moving = scrollView.isDragging || scrollView.isDecelerating
+      let crossed = isFlinging == false
+        && abs(smoothedScrollVelocityY) > Self.flingVelocityThreshold
+      if now - lastFlingEvaluationTime >= 0.08 || crossed {
+        setFlinging(moving && abs(smoothedScrollVelocityY) > Self.flingVelocityThreshold)
+        lastFlingEvaluationTime = now
+      }
+    } else {
+      smoothedScrollVelocityY = 0
+    }
+    lastScrollSampleTime = now
+    lastScrollSampleOffsetY = y
+  }
+
+  private func updateScrollGateFromScrollView(_ scrollView: UIScrollView) {
+    let dragging = scrollView.isDragging
+    let decelerating = scrollView.isDecelerating
+    guard dragging != lastGateDragging || decelerating != lastGateDecelerating else { return }
+    updateScrollGate(dragging: dragging, decelerating: decelerating)
+  }
+
+  private func updateScrollGate(dragging: Bool, decelerating: Bool) {
+    guard dragging != lastGateDragging || decelerating != lastGateDecelerating else { return }
+    lastGateDragging = dragging
+    lastGateDecelerating = decelerating
+    TiebaFeedScrollGate.shared.update(isDragging: dragging, isDecelerating: decelerating)
+    if dragging || decelerating {
+      prefetcher.stopPrefetching()
+    }
   }
 
   private func setFlinging(_ value: Bool) {
     guard value != isFlinging else { return }
     isFlinging = value
-    guard !value else { return }
+    guard value == false else { return }
     prefetchVisibleWindow()
   }
 
-  /// 放闸后补预取：只取当前可见窗口（预取窗口由 UIKit 在后续滚动中自然补齐）。
+  private func emitOnScrollThrottled(_ scrollView: UIScrollView) {
+    let now = CACurrentMediaTime()
+    if now - lastOnScrollEmitTime >= Self.onScrollMinimumInterval {
+      deliverOnScroll(scrollView, force: false)
+      return
+    }
+    onScrollEmitPending = true
+    scheduleOnScrollTrailing()
+  }
+
+  private func deliverOnScroll(_ scrollView: UIScrollView, force: Bool) {
+    guard ignoreDidScroll == false else {
+      onScrollEmitPending = false
+      return
+    }
+    guard force || onScrollEmitPending || lastOnScrollOffsetY != scrollView.contentOffset.y else {
+      return
+    }
+    onScrollEmitPending = false
+    lastOnScrollEmitTime = CACurrentMediaTime()
+    lastOnScrollOffsetY = scrollView.contentOffset.y
+    onScroll?(scrollView)
+  }
+
+  private func scheduleOnScrollTrailing() {
+    guard onScrollEmitScheduled == false else { return }
+    onScrollEmitScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.onScrollEmitScheduled = false
+      guard self.onScrollEmitPending, self.ignoreDidScroll == false else { return }
+      self.deliverOnScroll(self.collectionView, force: true)
+    }
+  }
+
+  private func scheduleScrollSettleWork() {
+    guard scrollSettleWorkScheduled == false else { return }
+    scrollSettleWorkScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.scrollSettleWorkScheduled = false
+      guard self.isScrollInteractionActive == false else { return }
+      if self.deferredGeometryInvalidationPending {
+        self.deferredGeometryInvalidationPending = false
+        let rebuild = self.deferredGeometryNeedsRebuild
+        self.deferredGeometryNeedsRebuild = false
+        if rebuild {
+          self.geometryInvalidations.invalidateAndRebuild()
+        } else {
+          self.geometryInvalidations.invalidate()
+        }
+      }
+      if self.needsPostScrollVisibleRemeasure {
+        self.needsPostScrollVisibleRemeasure = false
+        self.geometryInvalidations.invalidateAndRebuild()
+      }
+      self.schedulePrefetchFlush()
+    }
+  }
+
+  /// 放闸/停稳后只把当前可见窗口排进下一 runloop 的预取队；真正启动统一由
+  /// schedulePrefetchFlush 在非滚动窗口执行。
   private func prefetchVisibleWindow() {
-    guard !pageKey.isEmpty, tiebaIsOnScreen else { return }
-    let paths = collectionView.indexPathsForVisibleItems
-    guard !paths.isEmpty else { return }
-    let requests = prefetchRequests(for: paths)
-    guard !requests.isEmpty else { return }
-    prefetcher.startPrefetching(with: requests)
+    guard pageKey.isEmpty == false, tiebaIsOnScreen else { return }
+    enqueueDeferredPrefetch(collectionView.indexPathsForVisibleItems)
+    schedulePrefetchFlush()
   }
-
-  /// 程序化滚动落位（setContentOffset(animated:)/scrollToTop 的完成回调）。
-  public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-    setFlinging(false)
-    onScrollAnimationEnd?()
-  }
-
   /// 拖尾侧滑（**系统自带**，替代手写 TiebaSwipeActionView）：手势/物理/揭示
   /// 动画全由 UIKit 负责，本方法只按调用方下发的配置组装动作。
   /// 视觉映射（删除动作的原参数）：
@@ -1513,50 +1936,80 @@ extension TiebaKindListContentView: UICollectionViewDelegate {
 
 extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
   public func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
-    // 甩动期间不预取：预取会给"马上就被划走"的行启动完整取图管线（建任务 + 读缓存
-    // + 解码 + 缩放 + 写回内存缓存），主线程上落一份、后台又与滚动抢 CPU/带宽——
-    // 掉一帧的感觉就是这么来的。停下来那一拍再补（见 setFlinging(false) 的
-    // prefetchVisibleWindow）。慢滑/拖动不受影响。
-    guard !isFlinging else { return }
-    let requests = prefetchRequests(for: indexPaths)
-    if !requests.isEmpty {
-      prefetcher.startPrefetching(with: requests)
-    }
-    // 位图预热：与取图**并行**的第二条独立管线（BitmapPipeline/ 说明 §四.1）。
-    // 预取窗口里就把行位图烘进 TiebaFeedBitmapStore，等 cell 上屏时画布的
-    // applyBitmap 直接命中缓存 —— 否则第一次出现的行仍是静止路径的同步烘制
-    // （异步化的收益全丢在这一拍）。
-    // ⚠️ 不随 requests 是否为空短路：纯文本行（无头像/无图/无吧徽章）同样有 9 段
-    // 文字要趁预取窗口烘好，而取图那条本来就没活干。
-    prewarmFeedBitmaps(at: indexPaths)
+    // 不在 prefetch 回调里直接启动 Nuke/位图烘制：先入有界队列，下一 runloop
+    // 且必须已经离开 tracking/decelerating 才真正执行。高刷甩动时主线程不再被
+    // "预取 → 解码/建任务"的同步头段打断。
+    enqueueDeferredPrefetch(indexPaths)
   }
 
-  /// 位图预热（只写缓存、不 attach；谁拥有 layer.contents 始终是画布）。
+  private func enqueueDeferredPrefetch(_ indexPaths: [IndexPath]) {
+    guard pageKey.isEmpty == false else { return }
+    var remaining = Self.maxDeferredPrefetchRows - deferredPrefetchIndexes.count
+    if remaining <= 0 {
+      schedulePrefetchFlush()
+      return
+    }
+    for path in indexPaths where remaining > 0 {
+      if deferredPrefetchIndexes.insert(path.item).inserted {
+        remaining -= 1
+      }
+    }
+    schedulePrefetchFlush()
+  }
+
+  private func schedulePrefetchFlush() {
+    guard prefetchFlushScheduled == false else { return }
+    prefetchFlushScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.prefetchFlushScheduled = false
+      guard self.isScrollInteractionActive == false, self.tiebaIsOnScreen else { return }
+      self.flushDeferredPrefetch()
+    }
+  }
+
+  private func flushDeferredPrefetch() {
+    guard pageKey.isEmpty == false, tiebaIsOnScreen, isScrollInteractionActive == false else {
+      return
+    }
+    var selected: [Int] = []
+    var seen = Set<Int>()
+    for path in collectionView.indexPathsForVisibleItems {
+      if seen.insert(path.item).inserted, selected.count < Self.maxSettledPrefetchRows {
+        selected.append(path.item)
+      }
+    }
+    for index in deferredPrefetchIndexes.sorted() {
+      if selected.count >= Self.maxSettledPrefetchRows { break }
+      if seen.insert(index).inserted {
+        selected.append(index)
+      }
+    }
+    guard selected.isEmpty == false else { return }
+    deferredPrefetchIndexes.subtract(selected)
+    let paths = selected.map { IndexPath(item: $0, section: 0) }
+    let requests = Array(prefetchRequests(for: paths).prefix(Self.maxImagePrefetchRequests))
+    if requests.isEmpty == false {
+      prefetcher.startPrefetching(with: requests)
+    }
+    prewarmFeedBitmaps(at: paths)
+  }
+
+  /// 位图预热（只写缓存、不 attach）。窗口硬上限 16 行；同键在途直接跳过，
+  /// 避免 prefetch 回调反复为同一行重建 runs 与 Job。
   ///
-  /// Job 必须与画布**同键**，逐字段对齐 TiebaFeedRowTextCanvas.applyBitmap：
-  ///   size    = plan.cardFrame.size（= cardView.bounds = 画布 bounds）
-  ///   scale   = max(displayScale, 1)（= 画布的 scaleForDisplay）
-  ///   styleRaw / paletteFingerprint = 本视图 traitCollection 与 palette.base
-  ///   runs    = TiebaFeedRowView.makeRuns（与画布同一条静态纯函数产出）
-  ///   epoch   = 0（纯预取，不发生取消；见 TiebaFeedBitmapJob 的 epoch 契约）
-  /// ⚠️ 键里**不含 runs**，只认 (model, size, scale, styleRaw, paletteFingerprint) ——
-  /// 所以 runs 也必须同源，否则画布会命中一张"键对但内容不对"的位图。
-  /// ⚠️ **只在 kind == .feed 时**做：simple / post 行各有自己的绘制路径，不走位图管线。
-  /// ⚠️ 甩动期间不预热（prefetchItemsAt 顶部的 isFlinging 闸门）——与取图同一条纪律。
+  /// 闸门从「非滚动」放宽到「非拖动」：惯性滑行期允许预热，那正是新行涌进来的窗口。
+  /// 拖动中仍然让位 —— 那一拍主线程在跑手势、吸合与上拉判定。
   private func prewarmFeedBitmaps(at indexPaths: [IndexPath]) {
-    guard !pageKey.isEmpty else { return }
+    guard pageKey.isEmpty == false, collectionView.isDragging == false else { return }
     let traits = traitCollection
     let scale = max(traits.displayScale, 1)
     let styleRaw = traits.userInterfaceStyle.rawValue
     let palette = self.palette.base
     let paletteFingerprint = palette.bitmapFingerprint(in: traits)
-    for path in indexPaths {
-      guard kind(at: path.item, pageKey: pageKey) == .feed else {
-        continue
-      }
-      // 与展示侧取同一个行模型（feedModel 就是 cell 配置用的那条查询）；置顶横幅行
-      // 走 bannerView、画布恒被 clear()，预热它只会白烘一张永远不会命中的位图。
-      guard let model = feedModel(at: path.item), !model.isTopBanner else { continue }
+    for path in indexPaths.prefix(Self.maxBitmapPrewarmRows) {
+      guard kind(at: path.item, pageKey: pageKey) == .feed else { continue }
+      guard let model = feedModel(at: path.item), model.isTopBanner == false else { continue }
       let size = model.plan.cardFrame.size
       let key = TiebaFeedBitmapKey(
         model: ObjectIdentifier(model),
@@ -1565,6 +2018,7 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
         styleRaw: styleRaw,
         paletteFingerprint: paletteFingerprint
       )
+      guard TiebaFeedBitmapStore.shared.isCachedOrPending(key) == false else { continue }
       let job = TiebaFeedBitmapJob(
         key: key,
         runs: TiebaFeedRowView.makeRuns(
@@ -1585,11 +2039,13 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
     _ collectionView: UICollectionView,
     cancelPrefetchingForItemsAt indexPaths: [IndexPath]
   ) {
+    for path in indexPaths {
+      deferredPrefetchIndexes.remove(path.item)
+    }
     let requests = prefetchRequests(for: indexPaths)
-    guard !requests.isEmpty else { return }
+    guard requests.isEmpty == false else { return }
     prefetcher.stopPrefetching(with: requests)
   }
-
   /// 预取请求必须与展示侧同 URL（secureURL）+ 同处理器：Nuke 的缓存键含处理器，
   /// 裸 URL 预取既不命中展示缓存，还会把全尺寸位图写进内存缓存。
   private func prefetchRequests(for indexPaths: [IndexPath]) -> [ImageRequest] {
@@ -1664,8 +2120,8 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
               appendDisplay(
                 url,
                 size: CGSize(width: columnWidth, height: height),
-                radius: 16,
-                fit: true
+                radius: TiebaListAppearance.cardRadius,
+                fit: false
               )
             } else {
               append(
@@ -1707,3 +2163,34 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
     return requests
   }
 }
+
+// MARK: - 行族契约桥（TiebaRowFamily）
+
+/// `TiebaRowFamily`（TiebaRowFamily.swift）要用到下面这些 **private** 查询。这里只做
+/// **同义转发**（一行一个、零逻辑），不去把 postModel/feedModel/simpleModel/subIndex/
+/// contentIdentity/pageRowCount/notifyPageDataMissing 的访问级别整体放宽——那些名字
+/// 在类内被大量使用，放宽会让"谁都能从文件外碰行模型"变成默认可行。
+extension TiebaKindListContentView {
+  func rowFamilyPostModel(at index: Int) -> TiebaPostRowModel? {
+    postModel(at: index)
+  }
+
+  func rowFamilyFeedModel(at index: Int, width: CGFloat) -> TiebaFeedRowModel? {
+    feedModel(at: index, width: width)
+  }
+
+  func rowFamilySimpleModel(at index: Int, width: CGFloat) -> TiebaSimpleRowModel? {
+    simpleModel(at: index, width: width)
+  }
+
+  func rowFamilySubIndex(at index: Int) -> Int? {
+    subIndex(at: index)
+  }
+
+  func rowFamilyContentIdentity(at index: Int) -> TiebaRowDiff.Entry.Identity? {
+    contentIdentity(at: index)
+  }
+
+  var rowFamilyPageRowCount: Int { pageRowCount }
+}
+

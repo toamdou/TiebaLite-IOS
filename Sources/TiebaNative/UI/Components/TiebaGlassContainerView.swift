@@ -117,15 +117,20 @@ final class TiebaGlassContainerView: UIView {
 /// 收敛前 7 处各写一遍「effect + tint + UIVisualEffectView」的装配，材质规则散在各页；
 /// 现在统一从这里出，观感规则（.regular + 可选 tint）只此一份。
 extension TiebaGlassContainerView {
-  static func makeEffect(tint: UIColor? = nil) -> UIVisualEffectView {
+  static func makeEffect(tint: UIColor? = nil, clear: Bool = false) -> UIVisualEffectView {
     // 降级：UIGlassEffect 是 iOS 26 起。17/18 上用经典超薄材质模糊顶上（最接近的
     // 旧观感，同 TiebaUpdateDialogViewController/TiebaSignService 的 17 配方）；
     // 旧系统的 effect 没有 tintColor 入口，tint 改落在 contentView 底色上——
     // 调用点拿到的仍是"带色的一层材质"，子视图挂载点（contentView）也不变。
     if #available(iOS 26.0, *) {
-      let effect = UIGlassEffect(style: .regular)
+      let effect = UIGlassEffect(style: clear ? .clear : .regular)
       if let tint { effect.tintColor = tint }
-      return UIVisualEffectView(effect: effect)
+      let view = UIVisualEffectView(effect: effect)
+      // 极细的白色反光边：不是内容分隔线，而是玻璃与背景之间的一层高光。
+      // 深色/浅色都用低透明度白色，避免把玻璃重新画成实心卡片。
+      view.layer.borderWidth = 0.5
+      view.layer.borderColor = UIColor.white.withAlphaComponent(0.24).cgColor
+      return view
     }
     let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
     if let tint { view.contentView.backgroundColor = tint }

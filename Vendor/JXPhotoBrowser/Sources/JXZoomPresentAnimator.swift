@@ -79,6 +79,10 @@ open class JXZoomPresentAnimator: NSObject, UIViewControllerAnimatedTransitionin
 
         UIView.animate(withDuration: duration, animations: {
             zoomView.frame = endFrame
+            // 10-10：圆角随放大收到 0。源缩略图在列表里可能是圆角图（帖子/回复的
+            // 媒体格都带圆角），不把它收掉的话放大终点是一张"圆角大图"，
+            // 而查看器的图片视图是方角 —— 落地瞬间会看到四角跳一下。
+            zoomView.layer.cornerRadius = 0
             toView.backgroundColor = .black
         }) { _ in
             let completed = !ctx.transitionWasCancelled
@@ -110,6 +114,12 @@ open class JXZoomPresentAnimator: NSObject, UIViewControllerAnimatedTransitionin
             zoomIV.contentMode = .scaleAspectFill
         }
         zoomIV.clipsToBounds = true
+        // 10-10：带上源视图的圆角，动画起手就是"列表里那张图"的形状（见上面 animate 里
+        // 把它收到 0 的那一行）。圆角常挂在裁剪容器上，这里只认"源视图自己在裁剪且非 0"。
+        if sourceView.clipsToBounds, sourceView.layer.cornerRadius > 0 {
+            zoomIV.layer.cornerRadius = sourceView.layer.cornerRadius
+            zoomIV.layer.cornerCurve = sourceView.layer.cornerCurve
+        }
         return zoomIV
     }
     

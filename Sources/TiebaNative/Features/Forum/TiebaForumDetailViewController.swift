@@ -41,8 +41,9 @@ final class TiebaForumDetailViewController: UIViewController, TiebaNativeScreen 
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .systemGroupedBackground
+    view.backgroundColor = .systemBackground
     table.dataSource = self
+    table.backgroundColor = .systemBackground
     table.delegate = self
     table.register(TiebaForumProfileCell.self, forCellReuseIdentifier: TiebaForumProfileCell.reuseID)
     table.register(TiebaForumStatsCell.self, forCellReuseIdentifier: TiebaForumStatsCell.reuseID)
@@ -116,7 +117,7 @@ final class TiebaForumDetailViewController: UIViewController, TiebaNativeScreen 
         // 行直接带类型化路由（原 "bawu"/"members"/"rules" 字符串拼 path 的替换）。
         .link(route: .forumBawu(name: name, forumId: forumId), title: "吧务团队", subtitle: "查看本吧管理团队", icon: "person.2.fill", tint: .systemBlue),
         .link(route: .forumMembers(name: name, forumId: forumId), title: "吧成员", subtitle: "查看本吧成员信息", icon: "person.3.fill", tint: .systemGreen),
-        .link(route: .forumRules(name: name, forumId: forumId), title: "吧规", subtitle: "发帖前请先阅读吧规", icon: "doc.text.fill", tint: .systemOrange),
+        .link(route: .forumRules(name: name, forumId: forumId), title: "吧规", subtitle: "查看吧内规则与说明", icon: "doc.text.fill", tint: .systemOrange),
       ]),
     ]
     if !detail.intro.isEmpty {
@@ -282,7 +283,7 @@ private final class TiebaForumSelectableCell: UITableViewCell {
     iconView.setContentCompressionResistancePriority(.required, for: .horizontal)
 
     titleLabel.font = TiebaSimpleText.uiFont(style: .body)
-    titleLabel.textColor = .secondaryLabel
+    titleLabel.textColor = TiebaAccessibleColors.metadata
     titleLabel.adjustsFontForContentSizeCategory = true
     titleLabel.setContentHuggingPriority(.required, for: .horizontal)
     titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -314,7 +315,7 @@ private final class TiebaForumSelectableCell: UITableViewCell {
     iconView.tintColor = iconColor
     titleLabel.isHidden = true
     textView.textAlignment = .natural
-    textView.textColor = .secondaryLabel
+    textView.textColor = TiebaAccessibleColors.metadata
     textView.text = text
   }
 
@@ -349,7 +350,7 @@ private final class TiebaForumProfileCell: UITableViewCell {
     nameLabel.textAlignment = .center
     nameLabel.adjustsFontForContentSizeCategory = true
     sloganLabel.font = TiebaSimpleText.uiFont(style: .footnote)
-    sloganLabel.textColor = .secondaryLabel
+    sloganLabel.textColor = TiebaAccessibleColors.metadata
     sloganLabel.textAlignment = .center
     sloganLabel.numberOfLines = 2
     sloganLabel.adjustsFontForContentSizeCategory = true
@@ -438,7 +439,7 @@ private final class TiebaForumStatsCell: UITableViewCell {
       values: stats.map(\.1),
       labels: stats.map(\.0),
       valueColor: .label,
-      labelColor: .tertiaryLabel
+      labelColor: TiebaAccessibleColors.metadata
     )
   }
 }

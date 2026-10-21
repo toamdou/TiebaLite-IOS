@@ -207,7 +207,7 @@ final class TiebaThreadStoreViewController: UIViewController, TiebaNativeScreen 
   // MARK: - 发布
 
   private func publish(fresh: Bool) {
-    driver.publish(fresh: fresh) { [weak self] in
+    driver.publish(fresh: fresh) { [weak self] () -> [[String: Any]] in
       guard let self else { return [] }
       return rows.isEmpty ? emptyRows() : rows
     }
@@ -399,7 +399,7 @@ private final class TiebaThreadStoreUndoBar: UIView {
     layer.cornerCurve = .continuous
     clipsToBounds = true
     // 液态玻璃底（与同批 FAB 的 .glass() 同材质；部署底线 iOS 26，恒可用）。
-    let glass = TiebaGlassContainerView.makeEffect()
+    let glass = TiebaGlassContainerView.makeEffect(clear: true)
     glass.translatesAutoresizingMaskIntoConstraints = false
     addSubview(glass)
     NSLayoutConstraint.activate([

@@ -60,6 +60,10 @@ open class JXZoomDismissAnimator: NSObject, UIViewControllerAnimatedTransitionin
         
         UIView.animate(withDuration: duration, animations: {
             zoomIV.frame = endFrame
+            // 10-10：落回缩略图时圆角要回到缩略图自己的圆角。原来只从查看器图片视图
+            // （方角、radius 0）复制一次，飞回去的终点是方角图压在圆角缩略图上，
+            // 交接那一帧能看到四角"啪"地补上。
+            zoomIV.layer.cornerRadius = thumbnailView.layer.cornerRadius
             fromView.alpha = 0
         }) { _ in
             let completed = !ctx.transitionWasCancelled

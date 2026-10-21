@@ -100,7 +100,7 @@ final class TiebaKindListViewCell: UICollectionViewCell {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    if rowView.frame != contentView.bounds {
+    if !tiebaViewIsAlreadyAtFrame(rowView, contentView.bounds) {
       rowView.frame = contentView.bounds
     }
   }
@@ -199,7 +199,7 @@ final class TiebaKindListFeedCell: UICollectionViewCell {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    if rowView.frame != contentView.bounds {
+    if !tiebaViewIsAlreadyAtFrame(rowView, contentView.bounds) {
       rowView.frame = contentView.bounds
     }
   }
@@ -280,7 +280,7 @@ final class TiebaKindListPostCell: UICollectionViewCell {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    if rowView.frame != contentView.bounds {
+    if !tiebaViewIsAlreadyAtFrame(rowView, contentView.bounds) {
       rowView.frame = contentView.bounds
     }
   }

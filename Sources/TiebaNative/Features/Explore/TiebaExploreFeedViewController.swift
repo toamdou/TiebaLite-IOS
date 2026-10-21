@@ -20,6 +20,12 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   )
   private let stateView = TiebaStateContentView()
   private let pill = TiebaPhotoBrowserPillView()
+  /// 供发现页 chrome 收缩的只读滚动位置；更新只做一次标量赋值与阈值通知。
+  private(set) var chromeScrollOffsetY: CGFloat = 0
+  var onChromeScrollChange: ((CGFloat) -> Void)?
+  private var needsTopAnchorAfterRefresh = false
+  private var topAnchorGeneration = 0
+  private weak var observedListScrollView: UIScrollView?
 
   /// FeedItem 形状（{type, threadInfo}），index 与列表行一一对应。
   private var items: [[String: Any]] = []
@@ -65,11 +71,25 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     // 底栏重复点击走 tabReselected（用户口径：先回顶不刷新，顶部再按才刷新）。
     stateView.isHidden = true
     stateView.isDark = TiebaChromeTheme.current.dark
+    stateView.tintColor = TiebaExploreSurface.brandForeground
     // 信息流骨架：thread 卡片、半数带图（原 FeedContent.tsx variant="thread" count={8}）
     stateView.skeletonVariant = .thread
     stateView.skeletonInsets = UIEdgeInsets(top: 8, left: 0, bottom: 24, right: 0)
     stateView.onButtonPress = { [weak self] id in self?.handleStateButton(id) }
     list.onListEvent = { [weak self] event in self?.handleEvent(event) }
+    list.onScroll = { [weak self] scrollView in
+      guard let self else { return }
+      self.observedListScrollView = scrollView
+      self.chromeScrollOffsetY = scrollView.contentOffset.y
+      self.onChromeScrollChange?(scrollView.contentOffset.y)
+    }
+    list.contentOffsetWillCommit = { scrollView, target in
+      // 只在落点已经贴顶时做一次轻吸附；不抢惯性，也不改分页触发。
+      let top = -scrollView.adjustedContentInset.top
+      if target.y > top, target.y - top < 30 {
+        target.y = top
+      }
+    }
     for subview in [list, stateView, pill] as [UIView] {
       subview.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(subview)
@@ -102,6 +122,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     applyInsets()
+    captureListScrollViewIfNeeded()
     // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含内容列居中留白）。
     driver.updateWidth(list.bounds.width - list.horizontalInset * 2)
   }
@@ -112,8 +133,21 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   }
 
   private func applyInsets() {
-    list.contentInsetTop = 0
-    list.contentInsetBottom = view.safeAreaInsets.bottom + 16
+    // Issue #4（顶栏遮挡）：这里原来是常量 `TiebaExploreSurface.pageTopInset`（= 8）。
+    //
+    // 本页的列表 `topAnchor == view.topAnchor`（全屏出血，内容从屏幕最顶开始画），
+    // 所以静止位必须自己把**状态栏 + 导航栏**的高度让出来。写死 8 的后果是：
+    // contentOffset 停在 -8，第一张卡片的顶边落在屏幕顶端 —— 正好压在玻璃导航栏下面，
+    // 也就是用户报的"最上面的帖子被顶栏遮挡"。
+    //
+    // 为什么下拉刷新看起来正常：`UIRefreshControl` 在刷新期间会把 inset 临时撑大
+    // （约 60pt），内容被顶下来，正好躲过栏；刷新结束 inset 收回，遮挡重新出现，
+    // 只是那时用户已经不看第一行了。所以这不是两个 bug，是同一个静止位算错。
+    //
+    // 口径与同仓其它全屏列表一致（Forum:193 / Topic:117 / UserSocial:76 / Subposts:306
+    // 都是 `view.safeAreaInsets.top`）；本页保留原来的 8pt 呼吸感，加在安全区之上。
+    list.contentInsetTop = view.safeAreaInsets.top + TiebaExploreSurface.pageTopInset
+    list.contentInsetBottom = view.safeAreaInsets.bottom + TiebaExploreSurface.pageBottomExtra
   }
 
   /// 主题变化（含跟随系统时的实时切换）→ 重取主题重刷自绘色（页面底色/列表色板/页头）。
@@ -123,8 +157,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
 
   private func applyPalette() {
     var palette = TiebaSimpleRowPalette.default
-    let tint = TiebaChromeTheme.current.tint
-    palette.base.primary = tint
+    palette.base = TiebaExploreSurface.palette()
     list.palette = palette
   }
 
@@ -157,10 +190,12 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   /// 展示刷新动画并重拉。
   func tabReselected() {
     guard list.isAtTop else {
-      list.scrollToTop(animated: true)
+      list.scrollToTop(animated: UIAccessibility.isReduceMotionEnabled == false)
       return
     }
+    TiebaSceneHaptics.fire("press")
     isUserRefresh = true
+    needsTopAnchorAfterRefresh = true
     list.beginRefreshing()
     reload()
   }
@@ -176,10 +211,35 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     )
   }
 
-  private func showState(_ state: TiebaState) {
+  private func showState(_ state: TiebaState, animated: Bool = false) {
+    let wasShowingList = list.isHidden == false
+    let shouldAnimate = animated
+      && wasShowingList
+      && UIAccessibility.isReduceMotionEnabled == false
+      && view.window != nil
     stateView.state = state
     stateView.isHidden = false
-    list.isHidden = true
+    if shouldAnimate {
+      stateView.alpha = 0
+      TiebaAnimation.animate(
+        curve: .easeOut,
+        duration: TiebaAnimationDuration.stateChange,
+        options: [.beginFromCurrentState, .allowUserInteraction],
+        animations: {
+          self.list.alpha = 0
+          self.stateView.alpha = 1
+        },
+        completion: { _ in
+          self.list.isHidden = true
+          self.list.alpha = 1
+          self.stateView.alpha = 1
+        }
+      )
+    } else {
+      list.isHidden = true
+      list.alpha = 1
+      stateView.alpha = 1
+    }
   }
 
   private func handleStateButton(_ id: String) {
@@ -193,21 +253,108 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   private func showList() {
     // 数据到手 ≠ 行能画：整页测量在后台跑，提前让位就是状态视图先消失、正文空白。
     list.revealWhenReady { [weak self] in
-      self?.stateView.isHidden = true
-      self?.list.isHidden = false
+      guard let self else { return }
+      let fromState = self.stateView.isHidden == false
+      self.list.isHidden = false
+      self.scheduleTopAnchorAfterRefresh()
+      let shouldAnimate = fromState
+        && UIAccessibility.isReduceMotionEnabled == false
+        && self.view.window != nil
+      guard shouldAnimate else {
+        self.stateView.isHidden = true
+        self.stateView.alpha = 1
+        self.list.alpha = 1
+        self.list.transform = .identity
+        return
+      }
+      self.list.alpha = 0
+      self.list.transform = CGAffineTransform(translationX: 0, y: 6)
+      self.stateView.alpha = 1
+      TiebaAnimation.animate(
+        curve: .easeOut,
+        duration: TiebaAnimationDuration.stateChange,
+        options: [.beginFromCurrentState, .allowUserInteraction],
+        animations: {
+          self.list.alpha = 1
+          self.list.transform = .identity
+          self.stateView.alpha = 0
+        },
+        completion: { _ in
+          self.stateView.isHidden = true
+          self.stateView.alpha = 1
+          self.list.alpha = 1
+          self.list.transform = .identity
+          self.scheduleTopAnchorAfterRefresh()
+        }
+      )
     }
+  }
+
+  /// 刷新成功后的可验证 top anchor：立即锁一次，等新行布局后再锁两次。
+  /// 不触碰分页/缓存；只在由 tab 重按或顶部下拉触发的刷新里启用。
+  private func scheduleTopAnchorAfterRefresh() {
+    guard needsTopAnchorAfterRefresh else { return }
+    topAnchorGeneration += 1
+    let generation = topAnchorGeneration
+    let lockTop = { [weak self] in
+      guard let self, self.topAnchorGeneration == generation else { return }
+      self.list.scrollToTop(animated: false)
+      if let scrollView = self.observedListScrollView {
+        TiebaExploreRefreshAnchor.lock(scrollView)
+      }
+    }
+    lockTop()
+    DispatchQueue.main.async { [weak self] in
+      guard let self, self.topAnchorGeneration == generation else { return }
+      // 新行高度/header inset 落地后再锁定；这是一次刷新收尾，不在滚动热路径。
+      self.view.layoutIfNeeded()
+      self.list.layoutIfNeeded()
+      self.captureListScrollViewIfNeeded()
+      lockTop()
+      DispatchQueue.main.async { [weak self] in
+        guard let self, self.topAnchorGeneration == generation else { return }
+        self.captureListScrollViewIfNeeded()
+        lockTop()
+        #if DEBUG
+        if let scrollView = self.observedListScrollView {
+          TiebaExploreRefreshAnchor.logIfClipped(context: "explore-feed.refresh", scrollView: scrollView)
+        }
+        #endif
+        self.cancelPendingTopAnchorRefresh()
+      }
+    }
+  }
+
+  private func cancelPendingTopAnchorRefresh() {
+    topAnchorGeneration += 1
+    needsTopAnchorAfterRefresh = false
+  }
+
+  private func captureListScrollViewIfNeeded() {
+    guard observedListScrollView == nil else { return }
+    observedListScrollView = Self.firstScrollView(in: list)
+  }
+
+  private static func firstScrollView(in view: UIView) -> UIScrollView? {
+    if let scrollView = view as? UIScrollView { return scrollView }
+    for subview in view.subviews {
+      if let scrollView = firstScrollView(in: subview) { return scrollView }
+    }
+    return nil
   }
 
   // MARK: - 数据
 
   private func reload() {
     guard !isLoading else {
+      cancelPendingTopAnchorRefresh()
       list.endRefreshing()
       return
     }
     if segment == .concern, !isLoggedIn {
+      cancelPendingTopAnchorRefresh()
       list.endRefreshing()
-      showState(.login(text: "请先登录", secondary: "登录后查看关注动态"))
+      showState(.login(text: "请先登录", secondary: "登录后查看关注动态"), animated: true)
       return
     }
     isLoading = true
@@ -231,18 +378,21 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
         TiebaFeedAPI.saveSnapshot(items, segment: segment.rawValue)
         publishFresh()
         if items.isEmpty {
-          showState(emptyState)
+          cancelPendingTopAnchorRefresh()
+          showState(emptyState, animated: true)
         } else {
           list.footerState = hasMore ? .more : .none
           showList()
         }
-        if isUserRefresh { TiebaSceneHaptics.fire("toggle") }
+        if isUserRefresh { TiebaSceneHaptics.fire("action-success") }
       } catch {
+        cancelPendingTopAnchorRefresh()
         if items.isEmpty {
-          showState(.error(message: error.localizedDescription))
+          showState(.error(message: error.localizedDescription), animated: true)
         } else {
           pill.showResult(success: false, text: "加载失败")
         }
+        if isUserRefresh { TiebaSceneHaptics.fire("action-fail") }
       }
     }
   }
@@ -333,6 +483,13 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
   }
 
   /// 换新页键（数据/展开态变了，整页重测），并记下当时的行指纹。
+  /// 系统字形/字号实时改变：重建行模型（含 UIFontMetrics 字号）并重推当前页。
+  func contentSizeDidChange() {
+    guard isViewLoaded else { return }
+    TiebaTypography.invalidateForSystemContentSizeCategoryChange()
+    publishFresh()
+  }
+
   private func publishFresh() {
     lastRowSignature = rowSignature()
     driver.publish(fresh: true, makeRows: { [weak self] in self?.makeRows() ?? [] })
@@ -379,7 +536,9 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
     case .reachEnd, .footerTap:
       loadMore()
     case .refreshRequested:
+      TiebaSceneHaptics.fire("press")
       isUserRefresh = true
+      needsTopAnchorAfterRefresh = list.isAtTop
       reload()
     default:
       break
@@ -623,7 +782,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
       return value(info, "authorId") == uid
     }
     if items.isEmpty {
-      showState(emptyState)
+      showState(emptyState, animated: true)
     } else {
       publishFresh()
     }
@@ -672,7 +831,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
         return TiebaSimpleRowParser.string(info["id"]) == threadId
       }
       if self.items.isEmpty {
-        self.showState(self.emptyState)
+        self.showState(self.emptyState, animated: true)
       } else {
         self.publishFresh()
       }
@@ -720,7 +879,7 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
             TiebaSimpleRowParser.string(($0["threadInfo"] as? [String: Any])?["id"]) == threadId
           }
           if self.items.isEmpty {
-            self.showState(self.emptyState)
+            self.showState(self.emptyState, animated: true)
           } else {
             self.publishFresh()
           }
@@ -778,7 +937,7 @@ final class TiebaDislikeSheetViewController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .systemGroupedBackground
+    view.backgroundColor = TiebaListAppearance.pageBackground
     table.dataSource = self
     table.delegate = self
     table.backgroundColor = .clear
@@ -801,7 +960,7 @@ final class TiebaDislikeSheetViewController: UIViewController {
     let header = UILabel()
     header.text = "我们会减少这类内容的推荐"
     header.font = TiebaSimpleText.uiFont(style: .footnote)
-    header.textColor = .secondaryLabel
+    header.textColor = TiebaExploreSurface.readableSecondary
     header.textAlignment = .center
     header.frame = CGRect(x: 0, y: 0, width: 0, height: 44)
     table.tableHeaderView = header

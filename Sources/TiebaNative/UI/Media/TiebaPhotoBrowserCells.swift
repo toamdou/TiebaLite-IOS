@@ -243,7 +243,13 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
             isGif: true
           )
           DispatchQueue.main.async {
-            self?.apply(container: gifContainer, isThumb: false, isGif: true, generation: generation)
+            self?.apply(
+              container: gifContainer,
+              isThumb: false,
+              isGif: true,
+              generation: generation,
+              gifIdentity: gifURL.absoluteString
+            )
           }
           return
         }
@@ -315,7 +321,7 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
   /// 用户报的「点进去大图模式很糊」就是这 3 倍线性差（Gifu 时代查看器 shouldResizeFrames
   /// = false 走原生帧，换自研播放器时按点渲染才引入）。静态图解码档一字未动。
   /// 改后：目标 = 展示像素（视图点数 × 屏幕 scale），上界仍是源像素（只降不升）。
-  private func startGIFPlayback(data: Data) {
+  private func startGIFPlayback(data: Data, identity: String?) {
     let view = self.imageView
     let scale = self.traitCollection.displayScale > 0 ? self.traitCollection.displayScale : 3
     var target = CGSize(width: view.bounds.width * scale, height: view.bounds.height * scale)
@@ -332,7 +338,8 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
       frameBufferSize: 8,
       // [修复 R3-3] 这一帧刚由 Nuke 解好并上屏（见 apply 里 imageView.image = container.image），
       // 传给播放器当第 0 帧：省掉对同一张 GIF 的第二次首帧解码（大图首帧可达数百毫秒）。
-      firstFrame: view.image
+      firstFrame: view.image,
+      identity: identity
     )
   }
 
@@ -342,7 +349,15 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     self.gifPlayer.recycle()
   }
 
-  private func apply(container: ImageContainer, isThumb: Bool, isGif: Bool, generation: Int) {
+  /// - parameter gifIdentity: 动图档的稳定身份（08-08 的共享池键）。同一条 GIF 在
+  ///   查看器与列表行里同时出现时共用一份解码帧；缩略图路径传 nil（不播）。
+  private func apply(
+    container: ImageContainer,
+    isThumb: Bool,
+    isGif: Bool,
+    generation: Int,
+    gifIdentity: String? = nil
+  ) {
     guard generation == self.generation else { return }
     // 大图已到后缩略图任务迟到：不覆盖（保持清晰）。
     if isThumb && fullImageReady { return }
@@ -355,7 +370,7 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     spinner.stopAnimating()
     // [修复] 不再只看 isGif 标志：字节嗅探才是权威判定（服务端对 GIF 无元数据标记）。
     if (isGif || TiebaNuke.isGIFContainer(container)), let data = container.data {
-      startGIFPlayback(data: data)
+      startGIFPlayback(data: data, identity: gifIdentity)
     }
     // 大图落位后再套长图阅读模式（需要真实像素比例算 fit-width）。
     setNeedsLayout()

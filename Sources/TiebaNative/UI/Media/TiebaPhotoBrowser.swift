@@ -186,15 +186,4 @@ public enum TiebaPhotoBrowser {
   static func sessionDidFinish() {
     activeSession = nil
   }
-
-  /// 主线程收束入口：work 声明为 @MainActor @Sendable，闭包体内的会话调用
-  /// 与主 actor 同域；已在主线程时用 assumeIsolated 直接执行（同步、无派发），
-  /// 否则派到主队列再 assumeIsolated（DispatchQueue.main.async 保证主线程）。
-  private static func onMain(_ work: @escaping @MainActor @Sendable () -> Void) {
-    if Thread.isMainThread {
-      MainActor.assumeIsolated(work)
-    } else {
-      DispatchQueue.main.async { MainActor.assumeIsolated(work) }
-    }
-  }
 }

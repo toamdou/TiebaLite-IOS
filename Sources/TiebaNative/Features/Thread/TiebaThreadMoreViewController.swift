@@ -1,14 +1,12 @@
 import UIKit
 
-/// 帖子「更多」sheet（原 src/app/thread/[id]/more.tsx）：行状态来自类型化路由参数
-///（canDelete / seeLz / sort——旧 params 里的 title/forumId/forumName/isCollected
-/// 本页从未读取，迁移时未保留）。
+/// 帖子「更多」sheet（原 src/app/thread/[id]/more.tsx）：只读客户端只保留
+/// 浏览、排序、跳页、分享；canDelete 仍随路由兼容传入，但不再生成删除入口。
 ///
 /// 点行先收起 sheet；本页 viewDidDisappear（收起转场结束）时经 TiebaThreadMoreSignal
 /// 把动作交给帖子页（原 DeviceEventEmitter 通道的原生替身）。
 final class TiebaThreadMoreViewController: UIViewController {
   private let threadId: String
-  private let canDelete: Bool
   private let seeLz: Bool
   private let sort: TiebaThreadSort
   private let form = TiebaFormListView(frame: .zero)
@@ -17,7 +15,6 @@ final class TiebaThreadMoreViewController: UIViewController {
 
   init(threadId: String, canDelete: Bool, seeLz: Bool, sort: TiebaThreadSort) {
     self.threadId = threadId
-    self.canDelete = canDelete
     self.seeLz = seeLz
     self.sort = sort
     super.init(nibName: nil, bundle: nil)
@@ -82,19 +79,10 @@ final class TiebaThreadMoreViewController: UIViewController {
         iconTint: TiebaFormColor.resolve("#0A84FF")
       )
     ]
-    if canDelete {
-      actions.append(TiebaFormRow(
-        id: "delete",
-        kind: .link,
-        title: "删除",
-        icon: "trash",
-        iconTint: TiebaFormColor.resolve("#FF3B30")
-      ))
-    }
     return [
       TiebaFormSection(title: "浏览", rows: browsing),
       TiebaFormSection(title: "排序", rows: sortRows),
-      TiebaFormSection(title: "操作", rows: actions),
+      TiebaFormSection(title: "分享", rows: actions),
     ]
   }
 
@@ -113,7 +101,6 @@ final class TiebaThreadMoreViewController: UIViewController {
     case "seeLz": pendingAction = .seeLz
     case "jump": pendingAction = .jump
     case "share": pendingAction = .share
-    case "delete": pendingAction = .delete
     default: break
     }
     TiebaNavigator.shared.dismissPresented(animated: true)

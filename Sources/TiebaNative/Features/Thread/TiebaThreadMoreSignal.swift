@@ -13,7 +13,6 @@ final class TiebaThreadMoreSignal {
     case selectSort(TiebaThreadSort)
     case jump
     case share
-    case delete
   }
 
   static let shared = TiebaThreadMoreSignal()

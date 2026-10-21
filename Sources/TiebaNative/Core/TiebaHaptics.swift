@@ -5,8 +5,8 @@
 //（表在 JS，过桥要编解码），JS 已不存在，转译层随之删除。
 //
 // 线程：所有操作收束到主线程（CHHapticEngine / UIFeedbackGenerator 都该在主线程用）。
-// 状态只被主线程读写，不需要锁；`nonisolated(unsafe)` 只声明"没有隔离保护"，不等于
-// 安全——纪律同 TiebaChromeHaptics。
+// 状态类型 TiebaHapticState 标了 @MainActor：主线程纪律由编译器守，不需要锁，
+// 也不再靠 nonisolated(unsafe) 的口头约定。
 //
 // 总开关（偏好 hapticFeedback）的真相源在本文件：TiebaHaptics.isEnabled /
 // setEnabled(_:)。TiebaChrome 的 chrome 按压只是转发（含它的临时静音窗口），
@@ -87,20 +87,23 @@ private enum Ahap {
   }
 }
 
-/// 引擎与播放器状态。只允许主线程访问（所有入口经 onMain 收束）。
+/// 引擎与播放器状态。@MainActor：只允许主线程访问（所有入口经 onMain 收束，
+/// 引擎自身的回调也经 onMain 回来），隔离由编译器守，不再靠 nonisolated(unsafe)
+/// 的口头约定。
+@MainActor
 enum TiebaHapticState {
   /// 触觉总闸（偏好 hapticFeedback；启动与设置页经 TiebaHaptics.setEnabled 同步）。
   /// 真相源在引擎层：读方（TiebaSceneHaptics / chrome 按压）全走
   /// TiebaHaptics.isEnabled，chrome 文件不再持有一份 enabled。
-  nonisolated(unsafe) static var enabled = true
-  nonisolated(unsafe) static var engine: CHHapticEngine?
+  static var enabled = true
+  static var engine: CHHapticEngine?
   /// pattern 播放器缓存（键=AHAP 字典的规范化序列化）：press 这类高频场景避免
   /// 每次重建 CHHapticPattern。播放器绑定在引擎上，引擎重建时必须清空
   /// （见 rebuildEngine）。
-  nonisolated(unsafe) static var patternPlayers: [String: CHHapticAdvancedPatternPlayer] = [:]
-  nonisolated(unsafe) static var continuousPlayers: [String: CHHapticAdvancedPatternPlayer] = [:]
+  static var patternPlayers: [String: CHHapticAdvancedPatternPlayer] = [:]
+  static var continuousPlayers: [String: CHHapticAdvancedPatternPlayer] = [:]
   /// 连续播放器构造参数：引擎重建后按此恢复（旧包同名机制，点赞蓄力跨前后台不丢）。
-  nonisolated(unsafe) static var continuousConfigs: [String: (intensity: Double, sharpness: Double)] = [:]
+  static var continuousConfigs: [String: (intensity: Double, sharpness: Double)] = [:]
 }
 
 /// 触觉操作入口（日志与门控集中在这里，便于被 fireScene 复用）。
@@ -108,10 +111,13 @@ enum TiebaHaptics {
   // MARK: - 总开关（引擎层唯一真相源）
 
   /// 触觉总开关当前值（同步读：触觉是热路径，不做线程跳转）。
-  static var isEnabled: Bool { TiebaHapticState.enabled }
+  /// @MainActor：状态本身在主线程域，读它的地方本来也都在主线程（fireScene 等
+  /// 入口经 onMain 收束后的闭包体）。
+  @MainActor static var isEnabled: Bool { TiebaHapticState.enabled }
 
   /// 设置总开关（偏好 hapticFeedback 下发；chrome 的临时静音窗口也走它）。
-  static func setEnabled(_ enabled: Bool) { TiebaHapticState.enabled = enabled }
+  /// 保持非隔离签名（设置页/启动段在非隔离上下文里调它），写入经 onMain 收在主线程。
+  static func setEnabled(_ enabled: Bool) { onMain { TiebaHapticState.enabled = enabled } }
 
   // MARK: - 系统预设（Light/Medium/Heavy/Rigid/Soft 与 Success/Warning/Error）
 
@@ -139,11 +145,14 @@ enum TiebaHaptics {
   // MARK: - AHAP
 
   /// 直传一条 AHAP pattern（场景表之外的临时波形）。
+  ///
+  /// 标 `@MainActor` 而不是走 `onMain`：pattern 字典的值是 `Any`，不是 Sendable，
+  /// 塞进 `@Sendable` 的主线程闭包就是"把非 Sendable 值送过隔离边界"——编译器会拦。
+  /// 这里把契约写在签名上（调用方必须在主线程），而不是靠一次跳板绕过检查。
+  @MainActor
   static func play(ahap: [CHHapticPattern.Key: Any]) {
-    onMain {
-      guard isEnabled else { return }
-      playPattern(ahap)
-    }
+    guard isEnabled else { return }
+    playPattern(ahap)
   }
 
   /// 场景触觉：style/waveform 是用户覆盖档位（null=默认）。映射表与解析
@@ -371,6 +380,7 @@ enum TiebaHaptics {
 
   /// 创建并启动引擎（幂等：已有引擎先停重建，与旧包 createAndStartHapticEngine
   /// 一致）。重建后 pattern 缓存清空、连续播放器按配置恢复。
+  @MainActor
   private static func rebuildEngine() {
     let state = TiebaHapticState.self
     state.engine?.stop(completionHandler: nil)
@@ -386,17 +396,14 @@ enum TiebaHaptics {
     engine.playsHapticsOnly = true
     // 系统打断/引擎复位后 CoreHaptics 要求显式重启：不重启则此后全静音，
     // 直到下次前后台切换（旧包靠 resetHandler 自恢复，保留该行为）。
+    // 回调线程由系统决定：重建碰的是 @MainActor 状态，统一经 onMain 收束。
     engine.resetHandler = {
-      DispatchQueue.main.async {
-        TiebaHaptics.rebuildEngine()
-      }
+      onMain { TiebaHaptics.rebuildEngine() }
     }
     // 引擎被停机（音频打断/系统回收）时也重建：只挂 resetHandler 的话，
     // 停机后播放器 start 会静默失败，此后所有触觉一直哑到下次前后台。
     engine.stoppedHandler = { _ in
-      DispatchQueue.main.async {
-        TiebaHaptics.rebuildEngine()
-      }
+      onMain { TiebaHaptics.rebuildEngine() }
     }
     do {
       try engine.start()
@@ -415,6 +422,7 @@ enum TiebaHaptics {
   }
 
   /// 销毁引擎与其上的全部播放器；continuousConfigs 保留（下次预热时恢复）。
+  @MainActor
   private static func destroyEngineNow() {
     let state = TiebaHapticState.self
     for player in state.patternPlayers.values {
@@ -430,6 +438,7 @@ enum TiebaHaptics {
   }
 
   /// 播放一条 AHAP pattern。播放器按指纹缓存复用（press 这类高频场景）。
+  @MainActor
   private static func playPattern(_ ahap: [CHHapticPattern.Key: Any]) {
     guard let events = ahap[.pattern] as? [[CHHapticPattern.Key: Any]], !events.isEmpty else {
       return
@@ -484,6 +493,7 @@ enum TiebaHaptics {
 
   /// 建一个 30 秒连续底噪播放器（旧包 duration: 30000——CoreHaptics 单位是秒，
   /// 即 8 小时余；点赞蓄力靠 stop 收尾，不靠时长自然结束）。
+  @MainActor
   private static func createContinuousPlayerNow(
     playerId: String,
     intensity: Double,
@@ -518,16 +528,17 @@ enum TiebaHaptics {
   ///（UIFeedbackGenerator.h:21 / UIImpactFeedbackGenerator.h:38），替代形要求绑定
   /// 一个 view（iOS 17.5+）。取前台活跃场景的 keyWindow；无窗口（后台/启动中）没有可
   /// 归属的 UI 上下文，直接不发（<17.5 的经典 init 不需要 host，但门控照旧）。
-  /// assumeIsolated 依据：入口全经 onMain 收束，恒在主线程。
+  /// @MainActor 依据：入口全经 onMain 收束，恒在主线程（不再是"非隔离函数里
+  /// assumeIsolated 假装主线程"）。
+  @MainActor
   private static var feedbackHostView: UIView? {
-    MainActor.assumeIsolated {
-      UIApplication.shared.connectedScenes
-        .compactMap { $0 as? UIWindowScene }
-        .first { $0.activationState == .foregroundActive }?
-        .keyWindow
-    }
+    UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .first { $0.activationState == .foregroundActive }?
+      .keyWindow
   }
 
+  @MainActor
   private static func performImpact(style: String) {
     let feedbackStyle: UIImpactFeedbackGenerator.FeedbackStyle
     switch style {
@@ -549,6 +560,7 @@ enum TiebaHaptics {
     generator.impactOccurred()
   }
 
+  @MainActor
   private static func performNotify(type: String) {
     let feedbackType: UINotificationFeedbackGenerator.FeedbackType
     switch type {
@@ -569,6 +581,7 @@ enum TiebaHaptics {
     generator.notificationOccurred(feedbackType)
   }
 
+  @MainActor
   private static func performSelection() {
     guard let host = feedbackHostView else { return }
     // iOS 17.5+ 绑 view；17.0–17.4 用经典 init()（同样先 prepare 再触发）。

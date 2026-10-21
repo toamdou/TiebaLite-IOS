@@ -239,7 +239,7 @@ final class TiebaBawuTeamViewController: UIViewController {
       "card": hex(palette.base.card),
       "groupFill": hex(palette.groupFill),
       "surfaceSecondary": hex(palette.surfaceSecondary),
-      "textTertiary": hex(palette.base.textTertiary),
+      "textTertiary": hex(TiebaAccessibleColors.metadata),
       "textDisabled": hex(palette.textDisabled),
       "divider": hex(palette.divider),
     ]

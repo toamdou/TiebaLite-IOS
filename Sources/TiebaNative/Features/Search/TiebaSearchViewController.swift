@@ -48,6 +48,9 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private let list = TiebaKindListContentView()
   private let stateView = TiebaStateContentView()
   private let pill = TiebaPhotoBrowserPillView()
+  /// 行页发布驱动：页键换代 / 宽度闸门 / 发布序号守卫 / 缺页自愈都归它。
+  /// 本页行源就是字典（makeRows），直接吃驱动的默认载荷，不必再手写一份发布流程。
+  private lazy var driver = TiebaRowPageDriver(list: list, keyPrefix: "search")
 
   private var threadHits: [TiebaSearchAPI.ThreadHit] = []
   private var forumHits: [TiebaSearchAPI.ForumHit] = []
@@ -77,14 +80,8 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
   private var hasMore = false
   private var isLoading = false
   private var requestSeq = 0
-  private var pageKey = ""
-  /// 缺页自愈重推的节流（与帖子页、列表侧**同一套** TiebaAdaptiveThrottle：连续缺页退避到 2s、
-  /// 静默后回到 0.5s、离屏直接用最大间隔）。改前是硬编码 0.5s 的第二套机制。
-  private var republishThrottle = TiebaAdaptiveThrottle()
-  private var pageSeq = 0
-  private var lastWidth: CGFloat = 0
-  private var needsPublish = false
-  private var needsReveal = false
+  /// 转场期间拿到的行宽（转场结束才交给驱动，见 viewDidLayoutSubviews / viewDidAppear）。
+  private var pendingWidth: CGFloat = 0
   private var suggestions: [String] = []
   /// 服务端联想词（SearchSug），随输入防抖刷新；本地历史前缀匹配在它后面补位。
   private var remoteSuggestions: [String] = []
@@ -111,7 +108,7 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     list.onListEvent = { [weak self] event in self?.handleEvent(event) }
     // 缺页自愈：页记录/度量被别的屏的整页 LRU 挤掉时用同一页键重推（结果仍在
     // threadHits/forumHits/… 里）。不重推的后果是行取不到内容 → 列表静默留白。
-    list.onPageDataMissing = { [weak self] in self?.republishCurrentPage() }
+    list.onPageDataMissing = { [weak self] in self?.driver.republishCurrentPage() }
     segmented.selectedSegmentIndex = Tab.thread.rawValue
     segmented.addTarget(self, action: #selector(handleTabChange), for: .valueChanged)
 
@@ -162,11 +159,12 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
     super.viewDidAppear(animated)
     // 出现动画落定后才做行测量/设页：转场期间 publish 会在推入动画里做整页测量 +
     // 快照 apply，直接表现成搜索栏弹出时掉帧（真机反馈）。
-    if needsPublish, lastWidth > 0 {
-      needsPublish = false
-      let reveal = needsReveal
-      needsReveal = false
-      publish(fresh: false, reveal: reveal)
+    // 转场期间记账的宽度在这里补交给驱动（驱动内部判"宽度真变了才重推"，也会把
+    // 宽度未就位时暂存的那次发布连同 reveal 钩子一起补发）。
+    if pendingWidth > 0 {
+      let width = pendingWidth
+      pendingWidth = 0
+      driver.updateWidth(width)
     }
     // 深链带关键词（tiebalite://search?q=…）：出现后直接出结果，不再抢焦点。
     if !initialKeyword.isEmpty, !hasSearched {
@@ -178,20 +176,16 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
-    // 页键发布保留本页实现（reveal 需要 setPage 完成回调，driver 无该钩子）；
-    // 宽度量化仍走全仓唯一实现。行宽契约 = 列表宽 − 2×horizontalInset（内缩含居中留白）。
-    let width = TiebaLayout.quantize(list.bounds.width - list.horizontalInset * 2)
+    // 行宽契约 = 列表宽 − 2×horizontalInset（内缩含居中留白），量化走全仓唯一实现。
     // 宽度变化（旋转/分屏）必须按新宽度重测重推：行高按精确宽度键控，旧宽度的度量
-    // 会被宽度闸门拒绝（新宽度下只有可见窗口能当场同步补测，其余行等本轮重推落地）。
-    if width != lastWidth, lastWidth > 0 { needsPublish = true }
-    lastWidth = width
+    // 会被宽度闸门拒绝 —— 这条重推由驱动负责（它自己判"量化宽度真变了才重推"）。
+    let width = TiebaLayout.quantize(list.bounds.width - list.horizontalInset * 2)
     // 转场未结束时只记账（见 viewDidAppear）：transitionCoordinator 非 nil 期间
-    // 布局每次变化都会走这里，就地 publish 会把测量压进推入动画。
-    if lastWidth > 0, transitionCoordinator == nil, needsPublish {
-      needsPublish = false
-      let reveal = needsReveal
-      needsReveal = false
-      publish(fresh: false, reveal: reveal)
+    // 布局每次变化都会走这里，就地重推会把整页 TextKit 测量压进推入动画。
+    if transitionCoordinator == nil {
+      driver.updateWidth(width)
+    } else {
+      pendingWidth = width
     }
     list.contentInsetBottom = view.safeAreaInsets.bottom + 16
   }
@@ -519,44 +513,20 @@ final class TiebaSearchViewController: UIViewController, TiebaNativeScreen {
 
   // MARK: - 发布行
 
+  /// 造行 + 发布交给驱动：页键换代、宽度闸门、序号守卫、后台整页测量、换页全在驱动里，
+  /// 本页只提供行源与"新页落地后要不要露出列表"。
   private func publish(fresh: Bool, reveal: Bool = false) {
-    if fresh {
-      pageSeq += 1
-      pageKey = "search-\(activeTab.rawValue)-\(pageSeq)"
+    // reveal 必须等新页真正落到列表之后再做：否则上一 tab 的旧页会多停一帧。
+    // 宽度未就位时驱动会把这次发布连同钩子一起暂存，补发落地时同样会回调它。
+    var onLanded: (@MainActor () -> Void)?
+    if reveal {
+      onLanded = { [weak self] in self?.showList() }
     }
-    guard !pageKey.isEmpty else { return }
-    guard lastWidth > 0 else {
-      needsPublish = true
-      needsReveal = needsReveal || reveal
-      return
-    }
-    let key = pageKey
-    let width = lastWidth
-    let box = RowsBox(rows: makeRows())
-    Task { @MainActor in
-      await Task.detached(priority: .userInitiated) {
-        TiebaKindRowPages.shared.prepareBlocking(pageKey: key, rows: box.rows, containerWidth: width)
-      }.value
-      // 晚到的旧页不得覆盖新页：页键已换代（含切 tab，pageKey 前缀带 tab）就丢弃。
-      guard key == self.pageKey else { return }
-      self.list.setPage(pageKey: key)
-      if reveal { self.showList() }
-    }
-  }
-
-  private struct RowsBox: @unchecked Sendable {
-    let rows: [[String: Any]]
-  }
-
-  /// 同页键重推（缺页自愈出口）。列表侧也有一道节流，这里兜第二道 —— 但**用同一套自适应节流**：
-  /// 连续缺页时退避到 2s、静默后回到 0.5s、页面不可见时直接用最大间隔。
-  /// 改前是硬编码 0.5s：既与列表侧策略不一致（第二套机制），又让「连续缺页」每 0.5s 重推一整页，
-  /// 而且离屏时照样重推一页。
-  private func republishCurrentPage() {
-    guard !pageKey.isEmpty, lastWidth > 0 else { return }
-    let now = ProcessInfo.processInfo.systemUptime
-    guard republishThrottle.shouldPass(now: now, inactive: view.window == nil) else { return }
-    publish(fresh: false)
+    driver.publish(
+      fresh: fresh,
+      onLanded: onLanded,
+      makeRows: { [weak self] in self?.makeRows() ?? [] }
+    )
   }
 
   private func makeRows() -> [[String: Any]] {

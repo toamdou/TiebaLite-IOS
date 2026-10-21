@@ -13,8 +13,8 @@
 //     整页 LRU + 在显页跳过；只用于位置查询、行数与顺序，不含几何。
 //   - 逐行复用：prepare 时**内容键命中**就复用旧模型（点赞/展开重推整页时只有被点的行
 //     需要重测富文本与 TextKit；同一行出现在别的页时也不再重测）。
-//   - 行内容指纹：**行身份**用 TiebaRowDiff.Entry.Identity（TiebaRowFingerprint 的白名单必须
-//     覆盖全部影响渲染的字段，改字段集要 version += 1）。模型自己那份 fingerprint 已删
+//   - 行内容指纹：**行身份**用 TiebaRowDiff.Entry.Identity（其序列化必须覆盖全部影响渲染的
+//     字段，改字段集要 version += 1）。模型自己那份 fingerprint 已删
 //     （R4-3：消费方为零，每行白算一遍整行哈希）。
 //   - 动态字号档变化（UIContentSizeCategory）→ 内容与索引一起作废，由页面重推恢复。
 //
@@ -202,7 +202,7 @@ public nonisolated final class TiebaRowMetrics: @unchecked Sendable {
   /// [精简] 原判据 =「同一页同一宽度的上一份快照里、同下标的行指纹相同」，为此还得把整页
   /// 原始行字典一起缓存成 Page.raws 当比对基准。内容键把这件事降成一次字典查询：不再需要
   /// 页内快照，也不再有「同一行内容换个页就得重测」的重复测量。
-  /// 指纹白名单（TiebaRowFingerprint）覆盖全部渲染输入 ⇒ 同指纹 = 同渲染结果，复用安全；
+  /// 内容身份（TiebaRowDiff.Entry.Identity）覆盖全部渲染输入 ⇒ 同身份 = 同渲染结果，复用安全；
   /// 宽度也在键里 ⇒ 命中必然是同宽测得的那一份。
   private func measureAndIndex(
     pageKey: String,

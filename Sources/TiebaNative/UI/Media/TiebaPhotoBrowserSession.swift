@@ -218,14 +218,19 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     thumbView.backgroundColor = .clear
     thumbView.isUserInteractionEnabled = false
     thumbView.isHidden = true
+    // 10-10：转场起手必须与列表里那张缩略图**完全同形**，圆角也算形的一部分。
+    // 不改的话，放大动画的第一帧是方角图，紧接着落进圆角/方角的查看器，看起来像
+    // "图闪了一下"。取源图视图（或它最近的裁剪祖先）的圆角，随后在 present 里收到 0。
+    let sourceRadius = TiebaPhotoBrowserSession.cornerRadius(at: resolved.frame, in: window)
+    thumbView.layer.cornerRadius = sourceRadius
+    thumbView.layer.cornerCurve = .continuous
     hostView.addSubview(thumbView)
     sourceThumbnailView = thumbView
     // 初始页几何快照：翻回第一页/重算失败时恢复（不退回被点图的矩形）。
     sourceThumbnailInitialFrame = thumbView.frame
   }
 
-  /// 转场源 = 被点图片视图的窗口 frame + 已解码图（免截屏、免下载）。
-  /// 矩形若是卡片/媒体容器（图片视图完整落在其中）→ 连几何一起收敛到图片视图；
+  /// 转场源 = 被点图片视图的窗口 frame + 已解码图（免截屏、免下载）。  /// 矩形若是卡片/媒体容器（图片视图完整落在其中）→ 连几何一起收敛到图片视图；
   /// 若是揭示移位后的目标位（图片视图与矩形只差一个纵向位移）→ 几何保留矩形
   /// （退出飞回才落在已就位处），垫图仍换真图，避免把矩形里的文字截进去。
   /// 都解析不到（未加载/非图片）→ (原矩形, 无图)，调用方矩形本身就是合法几何。
@@ -268,6 +273,21 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
       }
       return -hypot(frame.midX - center.x, frame.midY - center.y)
     }
+  }
+
+  /// 转场起点的圆角（10-10）：找窗口里与该矩形同尺寸的图片视图，再沿父链找**最近一个
+  /// 真的在裁剪且圆角非 0** 的视图 —— 圆角常常挂在容器上（图片视图自己 masksToBounds
+  /// 为 false），只读图片视图本身会漏掉。
+  /// 找不到 / 全为 0 → 0（矩形本来就不是圆角图，方角就是正确起手形）。
+  private static func cornerRadius(at rect: CGRect, in window: UIWindow) -> CGFloat {
+    guard let view = imageView(matching: rect, in: window) else { return 0 }
+    var current: UIView? = view
+    while let candidate = current {
+      let radius = candidate.layer.cornerRadius
+      if candidate.clipsToBounds, radius > 0 { return radius }
+      current = candidate.superview
+    }
+    return 0
   }
 
   /// 遍历窗口层级里可见、有图、尺寸非空的图片视图，交给 score 打分取最大者
@@ -335,8 +355,12 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
 
   // MARK: 相邻页预取
 
-  /// 预取 index ± 1（循环模式下取环绕页）：请求形态必须与展示完全一致
+  /// 预取 index ± 2（循环模式下取环绕页）：请求形态必须与展示完全一致
   /// （同一 URL + 同一处理器），否则内存缓存键不同、预取无效；页码变化重置任务集。
+  ///
+  /// 10-14：窗口由 ±1 扩到 ±2（知识库口径「前后各两张」）。原来的 ±1 在**快速连翻**时
+  /// 不够：一次翻两页（双指/连点）就会撞上没预取的页，出现"白一帧再出图"。
+  /// ±2 的代价是同时在途的降采样请求从 2 条涨到 4 条，仍在 Nuke 的并发上限内。
   private func prefetchNeighbors(of index: Int) {
     guard let browser, items.count > 1 else {
       prefetcher.stopPrefetching()
@@ -344,11 +368,15 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
     }
     let pixelSize = downsamplingPixelSize(for: browser)
     var indexes = Set<Int>()
-    for offset in [-1, 1] {
+    for offset in [-2, -1, 1, 2] {
       let neighbor = (index + offset + items.count) % items.count
       indexes.insert(neighbor)
     }
     indexes.remove(index)
+    // 条目本来就少时别把全部页都预取（等于一次性全解码）。
+    if items.count <= 4 {
+      indexes = indexes.filter { abs($0 - index) <= 1 }
+    }
     // 预取与展示必须同键：处理器由同一个工厂按（item 比例 + 展示框）算，
     // 容器尺寸取与 willDisplay 同一份（browser.view.bounds.size）。
     let containerSize = browser.view.bounds.size

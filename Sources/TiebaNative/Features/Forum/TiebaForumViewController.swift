@@ -7,7 +7,8 @@
 import UIKit
 
 final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
-  var screenTitle: String? { "\(forumName)吧" }
+  private var contentSizeRegistration: UITraitChangeRegistration?
+  var screenTitle: String? { nil }
   var screenRightBarItems: [UIBarButtonItem]? { barItems() }
 
   private let forumName: String
@@ -52,9 +53,13 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   private lazy var driver = TiebaRowPageDriver(list: list, keyPrefix: "forum-\(forumName)")
   private var recordedVisit = false
   private var lastScrollY: CGFloat = 0
+  /// 顶边沿只认一次跨越：到达顶部时给一记克制回弹，后续贴顶帧不再重复起动画。
+  private var wasAtTop = true
   /// C3：iPad 指针高亮（圆形）。实例必须强引用（UIPointerInteraction.delegate 是 weak）。
   private var fabPointer: TiebaPointerInteraction?
   private var fabHidden = false
+  /// touchDown 与 touchDragEnter 共用同一按压入口：同一次按压只发一次触觉。
+  private var fabPressActive = false
   /// 滚动方向门：累积 ΔY > 14pt 才翻转（上游 ListView.swift:1023-1029），见 TiebaScrollDirectionGate。
   private var fabDirectionGate = TiebaScrollDirectionGate()
   private var fabFunction = "refresh"
@@ -76,9 +81,24 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = TiebaChromeTheme.current.background
+    view.backgroundColor = TiebaListAppearance.pageBackground
     applyPalette()
+    contentSizeRegistration = registerForTraitChanges([
+      UITraitPreferredContentSizeCategory.self,
+    ]) { (controller: TiebaForumViewController, _: UITraitCollection) in
+      controller.applyPalette()
+      // headerSpec 里含字号/行高测量，必须随 trait 重建；否则字号放大后
+      // 列表头仍用旧高度，会压到导航栏/关注按钮上。
+      controller.list.headerSpec = controller.headerSpec()
+      controller.list.refreshHeaderForContentSizeChange()
+      controller.stateHeader?.invalidateIntrinsicContentSize()
+      controller.stateHeader?.setNeedsLayout()
+      controller.view.setNeedsLayout()
+      TiebaTypography.invalidateForSystemContentSizeCategoryChange()
+      controller.publish(fresh: true)
+    }
     fabFunction = TiebaPreferenceSnapshot.string("forumFabFunction") ?? "refresh"
+    list.backgroundColor = .clear
     list.isHidden = true
     list.onListEvent = { [weak self] event in self?.handleListEvent(event) }
     list.onScroll = { [weak self] scrollView in self?.handleScroll(scrollView) }
@@ -181,14 +201,30 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   }
 
   private func applyPalette() {
-    list.palette = TiebaChromePalette.listPalette()
+    // 去灰：页面/内容面统一回系统背景，主题色只留给可操作控件与小型状态点。
+    view.backgroundColor = TiebaListAppearance.pageBackground
+    var palette = TiebaChromePalette.listPalette()
+    palette.base.card = TiebaAccessibleColors.elevatedSurface
+    palette.base.chip = .secondarySystemFill
+    palette.base.onChip = TiebaAccessibleColors.metadata
+    list.palette = palette
   }
 
   /// 页面级偏好（原生只读，见 docs/native-migration-plan.md「过渡期共享偏好」）。
   private func applyPreferences() {
     fabFunction = TiebaPreferenceSnapshot.string("forumFabFunction") ?? "refresh"
     let hidesFab = fabFunction == "hide"
+    let wasHidden = fab.isHidden
     fab.isHidden = hidesFab
+    applyFabConfiguration()
+    if hidesFab {
+      fabHidden = true
+      fabPressActive = false
+      setFabPresentation(scale: 0.92, animated: false, spring: true)
+    } else if wasHidden {
+      fabHidden = false
+      setFabPresentation(scale: 1, animated: true, spring: true)
+    }
     list.entranceAnimationEnabled = TiebaPreferenceSnapshot.bool("entranceAnimation", default: true)
   }
 
@@ -1092,6 +1128,19 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   // MARK: - FAB
 
   private func setupFab() {
+    applyFabConfiguration()
+    fab.addAction(UIAction { [weak self] _ in self?.handleFabPress() }, for: .touchUpInside)
+    fab.addTarget(self, action: #selector(fabTouchDown), for: [.touchDown, .touchDragEnter])
+    fab.addTarget(
+      self,
+      action: #selector(fabTouchUp),
+      for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit]
+    )
+    // C3：iPad + 触控板/鼠标悬停时给一圈圆形指针高亮。
+    fabPointer = TiebaPointerInteraction(view: fab, style: .circle(nil))
+  }
+
+  private func applyFabConfiguration() {
     // 原 GlassView（clear 玻璃）的 UIKit 对位：系统玻璃圆钮（iOS 26）；17 退回经典 gray。
     var config: UIButton.Configuration = if #available(iOS 26.0, *) { .glass() } else { .gray() }
     config.cornerStyle = .capsule
@@ -1102,24 +1151,13 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     config.baseForegroundColor = TiebaSimpleRowPalette.default.base.text
     fab.configuration = config
     fab.accessibilityLabel = fabFunction == "back_to_top" ? "回到顶部" : "刷新"
-    fab.addAction(UIAction { [weak self] _ in self?.handleFabPress() }, for: .touchUpInside)
-    fab.addTarget(self, action: #selector(fabTouchDown), for: [.touchDown, .touchDragEnter])
-    fab.addTarget(
-      self,
-      action: #selector(fabTouchUp),
-      for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit]
-    )
-    // C3：iPad + 触控板/鼠标悬停时给一圈圆形指针高亮（改前 0 命中 —— 本仓 UIPointerInteraction
-    // 一处都没有，而 TiebaNavigationShell 用了 .tabSidebar ⇒ iPad 是受支持形态）。
-    fabPointer = TiebaPointerInteraction(view: fab, style: .circle(nil))
+    fab.accessibilityHint = fabFunction == "back_to_top" ? "双击回到列表顶部" : "双击刷新当前分段"
   }
 
   private func handleFabPress() {
-    TiebaSceneHaptics.fire("press")
     switch fabFunction {
     case "back_to_top":
-      fabHidden = false
-      animateFab(translate: 0)
+      revealFabIfHidden()
       list.scrollToTop(animated: true)
     default:
       refreshFromFab()
@@ -1129,69 +1167,107 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
   /// FAB 刷新：回顶 + 重拉当前分段（原实现还伪造 -60 偏移强拉刷新控件，原生不必）。
   private func refreshFromFab() {
     if lastScrollY > 1 { list.scrollToTop(animated: true) }
-    fabHidden = false
-    animateFab(translate: 0)
+    revealFabIfHidden()
+    animateRefreshGlyph()
     isUserRefresh = true
     load(tab: currentTab, page: 1)
   }
 
   @objc private func fabTouchDown() {
-    // [按上游归位] 0.12 → TiebaAnimationDuration.microFeedback（上游 0.12 档，值逐字不变）：
-    // 上游这一档的典型用法就是"按下反馈"。
-    TiebaAnimation.animate(duration: TiebaAnimationDuration.microFeedback) {
-      self.fab.transform = CGAffineTransform(scaleX: 0.85, y: 0.85)
+    guard fabHidden == false else { return }
+    if fabPressActive == false {
+      fabPressActive = true
+      TiebaSceneHaptics.fire("press")
     }
+    setFabPresentation(scale: 0.85, animated: true, spring: false)
   }
 
   @objc private func fabTouchUp() {
-    UIView.animate(
-      withDuration: 0.35,
-      delay: 0,
-      usingSpringWithDamping: 0.6,
-      initialSpringVelocity: 0.4
-    ) {
-      self.fab.transform = .identity
-    }
+    fabPressActive = false
+    guard fabHidden == false else { return }
+    setFabPresentation(scale: 1, animated: true, spring: true)
   }
 
-  /// 位移 + 缩放合并成一次动画（FAB 只在这两处被驱动）。
-  private func animateFab(translate: CGFloat, scale: CGFloat = 1) {
-    UIView.animate(
-      withDuration: 0.35,
-      delay: 0,
-      usingSpringWithDamping: 0.8,
-      initialSpringVelocity: 0.5
-    ) {
-      self.fab.transform = CGAffineTransform(scaleX: scale, y: scale)
-        .translatedBy(x: 0, y: translate)
+  /// FAB 的按压/回弹与显隐共用一个表示层 transform：先读 presentation 当前值，
+  /// 再摘旧 animation 接新动画，所以来回滚动/连按时可中断，不会从 identity 跳一下。
+  private func setFabPresentation(scale: CGFloat, animated: Bool, spring: Bool) {
+    let translation: CGFloat = fabHidden ? 120 : 0
+    let target = CATransform3DConcat(
+      CATransform3DMakeScale(scale, scale, 1),
+      CATransform3DMakeTranslation(0, translation, 0)
+    )
+    let key = "tieba.fab.presentation"
+    guard animated, UIAccessibility.isReduceMotionEnabled == false else {
+      fab.layer.removeAnimation(forKey: key)
+      fab.layer.transform = target
+      return
     }
+    if spring {
+      TiebaInteractiveMotion.springTransform(fab, to: target, key: key)
+      return
+    }
+    let from = fab.layer.presentation()?.transform ?? fab.layer.transform
+    fab.layer.removeAnimation(forKey: key)
+    fab.layer.transform = target
+    let animation = CABasicAnimation(keyPath: "transform")
+    animation.fromValue = NSValue(caTransform3D: from)
+    animation.toValue = NSValue(caTransform3D: target)
+    animation.duration = TiebaAnimationDuration.microFeedback
+    animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+    TiebaAnimationFrameRate.align(animation, to: fab)
+    fab.layer.add(animation, forKey: key)
+  }
+
+  private func revealFabIfHidden() {
+    guard fabHidden else { return }
+    fabHidden = false
+    setFabPresentation(scale: 1, animated: true, spring: true)
+  }
+
+  private func hideFabIfVisible() {
+    guard fabHidden == false else { return }
+    fabHidden = true
+    setFabPresentation(scale: 0.92, animated: true, spring: true)
+  }
+
+  /// 刷新符号转一圈：只在 FAB 刷新入口触发，不改滚动路径；Reduce Motion 下不动。
+  private func animateRefreshGlyph() {
+    guard UIAccessibility.isReduceMotionEnabled == false, let icon = fab.imageView else { return }
+    icon.layer.removeAnimation(forKey: "tieba.fab.refresh")
+    let animation = CABasicAnimation(keyPath: "transform.rotation.z")
+    animation.fromValue = 0
+    animation.toValue = CGFloat.pi * 2
+    animation.duration = TiebaAnimationDuration.largeSlide
+    animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+    TiebaAnimationFrameRate.align(animation, to: icon)
+    icon.layer.add(animation, forKey: "tieba.fab.refresh")
   }
 
   private func handleScroll(_ scrollView: UIScrollView) {
     let y = scrollView.contentOffset.y
     lastScrollY = y
-    if y <= 1, fabHidden {
-      fabHidden = false
-      animateFab(translate: 0)
+    let isAtTop = y <= 1
+    if isAtTop {
+      let wasFabHidden = fabHidden
+      revealFabIfHidden()
+      if wasAtTop == false, wasFabHidden == false, fab.isHidden == false,
+         fab.layer.animation(forKey: "tieba.fab.presentation") == nil {
+        TiebaInteractiveMotion.pulse(fab, from: 0.94)
+      }
+      fabDirectionGate.reset()
     }
-    if y <= 1 { fabDirectionGate.reset() }
-    // [按上游改判据] 改前判**单帧位移** |Δy| > 8 —— 120Hz 下一帧走 8pt 太容易，按钮爱翻。
-    // 改后走上游的累积判据：带符号 ΔY 累加，越过 14.0pt 才翻方向
-    //（submodules/Display/Source/ListView.swift:1023-1029，见 TiebaScrollDirectionGate）。
-    // 手感：悬浮按钮的收放**更稳**（抖动不再触发），一次同向滚动只判一次。
-    guard fabFunction != "hide",
-      let direction = fabDirectionGate.update(contentOffsetY: y) else { return }
+    wasAtTop = isAtTop
+    // 累积方向门：一次同向滚动只翻一次；这里只做 O(1) 状态机，不触发布局/材质创建。
+    guard fabFunction != "hide" else {
+      fabDirectionGate.reset()
+      return
+    }
+    guard let direction = fabDirectionGate.update(contentOffsetY: y) else { return }
     switch direction {
     case .forward:
-      if !fabHidden {
-        fabHidden = true
-        animateFab(translate: 120)
-      }
+      hideFabIfVisible()
     case .backward:
-      if fabHidden {
-        fabHidden = false
-        animateFab(translate: 0)
-      }
+      revealFabIfHidden()
     }
   }
 
@@ -1264,11 +1340,12 @@ final class TiebaForumClassifySheetViewController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .systemGroupedBackground
+    view.backgroundColor = .systemBackground
     title = "选择分类"
     table.dataSource = self
     table.delegate = self
-    table.backgroundColor = .clear
+    table.backgroundColor = .systemBackground
+    table.separatorColor = .separator
     table.register(UITableViewCell.self, forCellReuseIdentifier: "classify")
     table.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(table)
