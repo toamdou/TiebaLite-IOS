@@ -166,6 +166,15 @@ private let isIpad: Bool = {
                 self.update()
             }
         })
+        // 08-07：低电量开关是运行时可变的（用户随时能打开/关闭低电量模式），
+        // 只在 update() 里读一次快照会让这次切换要等到下次动画起停才生效。
+        // 收到变化就重算一次帧率上限——update() 内部会比对 preferredFrameRateRange，
+        // 没变就不写，不会引起额外唤醒。
+        let _ = NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: nil, using: { [weak self] _ in
+            Task { @MainActor in
+                self?.update()
+            }
+        })
     }
 
     private func requestUpdate() {
@@ -180,14 +189,11 @@ private let isIpad: Bool = {
         var hasActiveItems = false
         var maxFramesPerSecond: FramesPerSecond = .fps(30)
         for request in self.requests {
-            if let link = request.link {
+            if let link = request.link, link.isValid, link.isPaused == false {
                 if link.framesPerSecond > maxFramesPerSecond {
                     maxFramesPerSecond = link.framesPerSecond
                 }
-                if link.isValid && !link.isPaused {
                     hasActiveItems = true
-                    break
-                }
             }
         }
         
@@ -219,9 +225,17 @@ private let isIpad: Bool = {
                         frameRateRange = CAFrameRateRange(minimum: 30.0, maximum: 120.0, preferred: 120.0)
                     }
                     
+                    // 08-07 全仓清扫：低电量时整条共享链路统一降到 30FPS 上限。
+                    // 这里只压 `maximum`（不抬 `minimum`）——请求本身就低于 30 的链路
+                    // （.fps(20) 之类）不该被强行拉高；30 只是天花板。
+                    // 本驱动是**唯一**的显示链路（TiebaStatusNode 已并入），所以这一处
+                    // 覆盖全仓所有逐帧动画，不需要每个调用点各写一遍。
+                    if ProcessInfo.processInfo.isLowPowerModeEnabled {
+                        frameRateRange = CAFrameRateRange(minimum: 1.0, maximum: 30.0, preferred: 30.0)
+                    }
+                    
                     if displayLink.preferredFrameRateRange != frameRateRange {
                         displayLink.preferredFrameRateRange = frameRateRange
-                        print("TiebaSharedDisplayLinkDriver: switch to \(frameRateRange)")
                     }
                 }
             }
@@ -325,7 +339,7 @@ private let isIpad: Bool = {
         
         self.startTime = CACurrentMediaTime()
         
-        self.displayLink = TiebaSharedDisplayLinkDriver.shared.add { [weak self] _ in
+        self.displayLink = TiebaSharedDisplayLinkDriver.shared.add(framesPerSecond: .max) { [weak self] _ in
             self?.tick()
         }
         self.displayLink?.isPaused = false

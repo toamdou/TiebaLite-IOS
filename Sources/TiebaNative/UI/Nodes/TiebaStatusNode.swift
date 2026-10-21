@@ -114,8 +114,8 @@ public final class TiebaStatusNode: UIView {
     private var previousSnapshot: TiebaStatusDrawing?
     private var pendingCompletion: (() -> Void)?
 
-    private var displayLink: CADisplayLink?
-    private let linkProxy = TiebaStatusLinkProxy()
+    /// 共享显示链路的句柄（03-13 全仓清扫：不再自建 CADisplayLink）。
+    private var displayLink: TiebaSharedDisplayLinkDriver.Link?
 
     private struct Transition {
         let start: CFTimeInterval
@@ -219,15 +219,18 @@ public final class TiebaStatusNode: UIView {
             displayLink.isPaused = false
             return
         }
-        linkProxy.node = self
-        // CADisplayLink 会**强引用** target；直接 target: self 就是 node ⇄ link 的循环引用，
-        // 页面走了视图也释放不掉（而且 link 还会继续回调一个已经不该活的视图）。
-        // 所以中间加一个只持弱引用的转发对象——这也是 UIKit 里最常见的破环手法。
-        let link = CADisplayLink(target: linkProxy, selector: #selector(TiebaStatusLinkProxy.tick(_:)))
-        // 用 .common 而不是 .default：滚动/手势期间 runloop 会切到 tracking mode，
-        // .default 下动画会"卡住不动"（列表里最常见的"转圈停了"就是这个）。
-        link.add(to: .main, forMode: .common)
-        displayLink = link
+        // 03-13：并入全仓唯一的共享显示链路。
+        //
+        // 过去这里自建 `CADisplayLink(target: linkProxy, …)`，于是「进度环在转 + 任何一个
+        // 弹簧/位移动画」= 两条 CADisplayLink 同时回调，各自驱动一次 CA 事务；
+        // 更要紧的是自建链**拿不到统一治理**——低电量降帧（08-07）、前后台暂停、
+        // 120Hz 上限都只落在共享驱动上，自建的那条永远按屏幕满帧跑。
+        //
+        // 帧语义不变：`.max` 表示「每拍都回调」，与原来满帧等价；
+        // 每拍仍然只做 updateAnimations()（快照按绝对时间算，见 refreshSnapshot）。
+        displayLink = TiebaSharedDisplayLinkDriver.shared.add(framesPerSecond: .max) { [weak self] _ in
+            self?.displayTick()
+        }
     }
 
     private func stopDisplayLink() {
@@ -258,20 +261,5 @@ public final class TiebaStatusNode: UIView {
         // 先旧后新：与上游一致（旧状态淡出、新状态叠在上面的位置）
         previousSnapshot?.draw(in: context, size: bounds.size, foregroundColor: foregroundColor)
         snapshot.draw(in: context, size: bounds.size, foregroundColor: foregroundColor)
-    }
-}
-
-/// CADisplayLink 强引用 target，直接用 self 会与 node 成环；这里只持弱引用转发。
-/// node 先没了的那个 tick 顺手把 link 摘掉，不留空转。
-@MainActor
-private final class TiebaStatusLinkProxy: NSObject {
-    weak var node: TiebaStatusNode?
-
-    @objc func tick(_ link: CADisplayLink) {
-        guard let node = node else {
-            link.invalidate()
-            return
-        }
-        node.displayTick()
     }
 }
