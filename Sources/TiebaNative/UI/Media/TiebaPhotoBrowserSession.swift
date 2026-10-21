@@ -282,12 +282,20 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
   private static func cornerRadius(at rect: CGRect, in window: UIWindow) -> CGFloat {
     guard let view = imageView(matching: rect, in: window) else { return 0 }
     var current: UIView? = view
+    var unclipped: CGFloat = 0
     while let candidate = current {
       let radius = candidate.layer.cornerRadius
-      if candidate.clipsToBounds, radius > 0 { return radius }
+      if radius > 0 {
+        if candidate.clipsToBounds { return radius }
+        // 列表行/回复格的圆角是**烘焙进位图**的：图片视图自己 clipsToBounds = false，
+        // 只留 cornerRadius 给占位底色（见 TiebaPostRowView 的挂图注释）。
+        // 视觉上那张图就是圆角的，所以这里要记下来当兜底 —— 否则转场终点是方角，
+        // 落地那一帧真缩略图的四角才"啪"地补上。
+        if unclipped == 0 { unclipped = radius }
+      }
       current = candidate.superview
     }
-    return 0
+    return unclipped
   }
 
   /// 遍历窗口层级里可见、有图、尺寸非空的图片视图，交给 score 打分取最大者
