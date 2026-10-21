@@ -43,16 +43,36 @@ open class TiebaTextView: UIView {
     private let drawSnapshotLock = NSLock()
     private var drawSnapshot: TiebaTextNodeLayout?
 
+    /// 05-06 原子哨兵：绘制代次。
+    ///
+    /// 快照解决了"读到半新半旧的 layout"，但没解决**时间**问题：快照换掉之后到
+    /// 真正落笔之间还有一段窗口（CA 的异步绘制线程要排队），这段窗口里画出来的
+    /// 是过期内容 —— 表现就是滚动时某一行短暂显示上一屏的文字。
+    ///
+    /// 代次与快照放在同一把锁里成对更新、成对取走：`draw` 进入时拿到
+    /// （快照, 代次），落笔前用 `isCancelled` 再比一次代次；变了就整帧放弃。
+    /// 放弃是安全的 —— 代次只会因为主线程换了 layout 才变，而换 layout 的
+    /// 两条路径（`asyncLayout` 的 apply、`apply(cachedLayout:)`）随后都会
+    /// `setNeedsDisplay()`，新的一帧会补上。
+    private var drawGeneration: UInt64 = 0
+
     private func replaceDrawSnapshot(_ layout: TiebaTextNodeLayout?) {
         self.drawSnapshotLock.lock()
         self.drawSnapshot = layout
+        self.drawGeneration &+= 1
         self.drawSnapshotLock.unlock()
     }
 
-    private func currentDrawSnapshot() -> TiebaTextNodeLayout? {
+    private func currentDrawSnapshotWithGeneration() -> (TiebaTextNodeLayout?, UInt64) {
         self.drawSnapshotLock.lock()
         defer { self.drawSnapshotLock.unlock() }
-        return self.drawSnapshot
+        return (self.drawSnapshot, self.drawGeneration)
+    }
+
+    private func currentDrawGeneration() -> UInt64 {
+        self.drawSnapshotLock.lock()
+        defer { self.drawSnapshotLock.unlock() }
+        return self.drawGeneration
     }
     
     override public init(frame: CGRect) {
@@ -105,7 +125,7 @@ open class TiebaTextView: UIView {
     
     public override func draw(_ rect: CGRect) {
         // 05-06：只读快照，不直接读 cachedLayout —— 本方法可能在 CA 的异步绘制线程上跑。
-        let layout = self.currentDrawSnapshot()
+        let (layout, generation) = self.currentDrawSnapshotWithGeneration()
         
         let context = UIGraphicsGetCurrentContext()!
         
@@ -120,7 +140,18 @@ open class TiebaTextView: UIView {
         context.setAllowsFontSubpixelQuantization(true)
         context.setShouldSubpixelQuantizeFonts(true)
         
-        TiebaTextNode.draw(rect, withParameters: TiebaTextNode.DrawingParameters(cachedLayout: layout, renderContentTypes: .all), isCancelled: { false }, isRasterizing: false)
+        // 05-06：落笔前的代次比对就是"原子 sentinel 取消旧帧"。绘制器本身只在入口
+        // 判一次（TiebaTextNodeRenderer.swift:1132），所以这里给的判据必须自己
+        // 覆盖整段窗口 —— 代次一变，说明主线程已经换了新 layout，这一帧整帧作废。
+        TiebaTextNode.draw(
+            rect,
+            withParameters: TiebaTextNode.DrawingParameters(cachedLayout: layout, renderContentTypes: .all),
+            isCancelled: { [weak self] in
+                guard let self else { return true }
+                return self.currentDrawGeneration() != generation
+            },
+            isRasterizing: false
+        )
     }
     
     public static func asyncLayout(_ maybeView: TiebaTextView?) -> (TiebaTextNodeLayoutArguments) -> (TiebaTextNodeLayout, () -> TiebaTextView) {
