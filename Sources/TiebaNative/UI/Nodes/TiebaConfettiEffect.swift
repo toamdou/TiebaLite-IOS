@@ -43,7 +43,11 @@ private struct TiebaConfettiVector2 {
 }
 
 /// 单颗纸屑。状态直接挂在 layer 上（上游同款设计），省掉一层 id→state 的查表。
-private final class TiebaConfettiParticleLayer: CALayer {
+///
+/// 继承 `TiebaSimpleLayer`：纸屑每帧写 `position`/`transform`，隐式补间必须在**层自己**
+/// 身上关掉。以前靠调用方包 `CATransaction.setDisableActions(true)`，现在从类定义上就是
+/// 关的（见 TiebaSimpleLayer.swift 的文件头），调用点漏包也不会再抖。
+private final class TiebaConfettiParticleLayer: TiebaSimpleLayer {
     let mass: Float
     var velocity: TiebaConfettiVector2
     var angularVelocity: Float

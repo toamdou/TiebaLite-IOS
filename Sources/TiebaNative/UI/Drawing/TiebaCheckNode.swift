@@ -339,7 +339,13 @@ private enum TiebaCheckDrawing {
 // MARK: - 图层
 
 /// 上游 CheckLayer（CheckNode.swift:306-656）。
-final class TiebaCheckLayer: CALayer {
+///
+/// 继承 `TiebaSimpleLayer` 而不是裸 `CALayer`（03-12 全仓清扫补）：本层只走**显式**
+/// CABasicAnimation（`animationProgress` / `rectangleProgress`），但每次写模型值
+/// （`self.rectangleProgress = targetProgress`）都会先被 CA 查一次隐式动作，
+/// 生成一条 0.25s 补间再被紧随其后的 `add(_:forKey:)` 顶掉 —— 白建一条动画，
+/// 且一旦哪次写入顺序变了就会露出 0.25s 的错帧。基类把动作查询直接堵死。
+final class TiebaCheckLayer: TiebaSimpleLayer {
     /// 勾的展开进度。@NSManaged + needsDisplayForKey 是 CoreAnimation 原生的可动画属性写法，
     /// 对应上游 pop 的 POPAnimatableProperty("progress")（见文件头第 4 条）。
     @NSManaged var animationProgress: CGFloat

@@ -155,7 +155,7 @@ enum TiebaMotionSpec {
         ///   · 主轴 `|x| > 2.0 且 2|y| < |x|` → **成立**（这是横向拖，接管）。
         /// 两个条件都要求"主轴至少是交叉轴的 2 倍" —— 45° 附近上下不确定时宁可失败。
         /// 手感：这正是"横滑带不误触竖滚"的关键；只看速度比大小（改前的写法）在斜向拖时会两边抢。
-        /// 调用方：UI/ListKit/TiebaPostRowInline.swift:909-913（语音条的横向拖动定位）。
+        /// 调用方：UI/ListKit/Inline/TiebaAudioPillView.swift:398-406（语音条的横向拖动定位）。
         static let directionLockAxisThreshold: CGFloat = 2.0
         static let directionLockCrossThreshold: CGFloat = 4.0
     }
