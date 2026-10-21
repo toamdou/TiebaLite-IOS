@@ -19,11 +19,9 @@ struct TiebaPostPreferences: Sendable {
   var blockVideo = false
   var imageDarkenWhenNight = false
   var imageLoadType = "smart_origin"
-  /// Issue #5：多图排列方式。`row` = 横滑带（原行为，默认）；`column` = 竖排堆叠。
+  /// Issue #5：多图改网格排布（2 张并排 / 四宫格 / 六宫格，超 6 张第 6 格挂 +N）。
   /// 只影响**帖子页/楼中楼**的多图块（列表卡片的横滑带另有自己的几何口径）。
-  var imageLayout = "row"
-  /// 竖排偏好（派生量，避免各处比较字符串）。
-  var imagesStackVertically: Bool { imageLayout == "column" }
+  var imagesGrid = false
   var dataSaverMode = "high"
   var isNight = false
   var timestampStyle = "relative"
@@ -48,10 +46,8 @@ struct TiebaPostPreferences: Sendable {
     prefs.blockVideo = TiebaPreferenceSnapshot.bool("blockVideo", default: false)
     prefs.imageDarkenWhenNight = TiebaPreferenceSnapshot.bool("imageDarkenWhenNight", default: false)
     prefs.imageLoadType = TiebaPreferenceSnapshot.string("imageLoadType") ?? "smart_origin"
-    // Issue #5：竖排开关是布尔偏好，落盘键 `imageStackVertical`；这里映射到 `imageLayout`，
-    // 为以后加"按图片比例自动"等第三档留出字符串空间（布尔只管开关，不锁死模型）。
-    prefs.imageLayout = TiebaPreferenceSnapshot.bool("imageStackVertical", default: false)
-      ? "column" : "row"
+    // Issue #5：网格开关是布尔偏好，落盘键 `imageGridLayout`。
+    prefs.imagesGrid = TiebaPreferenceSnapshot.bool("imageGridLayout", default: false)
     prefs.dataSaverMode = TiebaPreferenceSnapshot.string("dataSaverMode") ?? "high"
     prefs.timestampStyle = TiebaPreferenceSnapshot.string("timestampStyle") ?? "relative"
     prefs.videoAutoplay = TiebaPreferenceSnapshot.bool("videoAutoplay", default: false)

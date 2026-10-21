@@ -739,13 +739,13 @@ final class TiebaPostRowView: UIView {
       return
     }
     imageScrollView.frame = frame
-    // Issue #5：竖排时这块不再是"横向带"，而是"纵向列"——必须关掉自身滚动，
+    // Issue #5：网格模式下这块不再是"横向带"，而是一张固定格子表——必须关掉自身滚动，
     // 否则在 cell 里上下拖图会先被这个内嵌滚动视图吃掉手势（外层列表不动，
     // 用户以为卡住了）。横排保持可滑。
-    imageScrollView.isScrollEnabled = !plan.imagesVertical
-    // 挂载上限：竖排与固定父楼一样，以**计划里实际排出来的张数**为准
-    //（竖排自己把上限收到 3，见 TiebaPostRowPlan）。
-    let mountedCap = (plan.role == .context || plan.imagesVertical)
+    imageScrollView.isScrollEnabled = !plan.imagesGrid
+    // 挂载上限：网格与固定父楼一样，以**计划里实际排出来的格数**为准
+    //（网格自己把上限收到 6，见 TiebaPostRowPlan）。
+    let mountedCap = (plan.role == .context || plan.imagesGrid)
       ? max(plan.imageItemFrames.count, 1)
       : TiebaPostRowLayout.maxImages
     let shownCount = min(model.images.count, mountedCap)
@@ -823,7 +823,7 @@ final class TiebaPostRowView: UIView {
       }
       view.alpha = model.preferences.isNight && model.preferences.imageDarkenWhenNight ? 0.6 : 1
     }
-    imageScrollView.contentSize = plan.imagesVertical
+    imageScrollView.contentSize = plan.imagesGrid
       ? CGSize(width: frame.width, height: frame.height)
       : CGSize(width: (plan.imageItemFrames.last?.maxX ?? frame.width), height: frame.height)
     // 超出挂载上限时的 +N 角标（末图右下角）；固定父楼只挂 4 格，计数也按 4 格算。

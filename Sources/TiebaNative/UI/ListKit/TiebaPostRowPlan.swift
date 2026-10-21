@@ -26,8 +26,8 @@ struct TiebaPostRowPlanInputs {
   var fontScale: Double
   var images: [TiebaThreadImage]
   var imagesHidden: Bool
-  /// Issue #5：多图竖排（设置里的「图片竖排」）。只改多图块的排布，不改单图。
-  var imagesVertical: Bool
+  /// Issue #5：多图改网格排布（设置里的「多图网格」）。只改多图块的排布，不改单图。
+  var imagesGrid: Bool
   var video: TiebaThreadVideo?
   var videoPlaceholder: TiebaPostMediaPlaceholder?
   var audio: (src: String, duration: Double)?
@@ -77,8 +77,8 @@ struct TiebaPostRowPlan {
   var blockedTipFrame: CGRect?
   var imagesFrame: CGRect?
   var imageItemFrames: [CGRect] = []
-  /// 本行多图块是否为竖排（视图据此关掉横滑）。
-  var imagesVertical = false
+  /// 本行多图块是否为网格（视图据此关掉横滑、按格挂图）。
+  var imagesGrid = false
   var imagePlaceholderFrames: [CGRect] = []
   var videoFrame: CGRect?
   var videoPlaceholderFrame: CGRect?
@@ -548,31 +548,38 @@ struct TiebaPostRowPlan {
         let frame = CGRect(x: contentX, y: y, width: contentW, height: max(height, 1))
         imagesFrame = frame
         imageItemFrames = [CGRect(origin: .zero, size: frame.size)]
-      } else if inputs.imagesVertical {
-        // Issue #5：竖排。每张按自身比例铺满内容宽，高度钳在 [80, 260]：
-        //   · 下限 80 让超宽图（长图横切）不至于压成一条线；
-        //   · 上限 260 是因为竖排会把 N 张的高度**相加**进行高 —— 不封顶时
-        //     9 张长图能顶出 3000pt 的行，单个 cell 就吃掉整屏，列表虚拟化失效。
-        // 张数上限单独收窄到 3（横排是 9）：竖排本来就是"想看大一点"，超过 3 张
-        // 用末图 +N 角标提示进大图查看器更合适，也把行高钉在 ~800pt 以内。
-        var y2: CGFloat = 0
+      } else if inputs.imagesGrid {
+        // Issue #5 网格：2 张并排；3–4 张四宫格（2 列）；5–6 张六宫格（3 列）；
+        // 超过 6 张只排 6 格，第 6 格右下角挂 +N（角标由行视图画，这里只给几何）。
+        //   · 格子恒为正方形：九宫格类排布的阅读预期就是"等大方块"，按各图自身比例
+        //     会排成锯齿状，行高也跟着不可预测（虚拟化最怕这个）。
+        //   · 只排 6 格是刻意收窄：贴吧单贴上限 9 张，7–9 张时 3×3 每格只有 ~110pt，
+        //     图小到看不出内容，还不如 6 格 + "+3" 直接进大图查看器。
+        let cells = min(inputs.images.count, TiebaPostRowLayout.gridMaxCells)
+        let columns = cells <= 2 ? cells : (cells <= 4 ? 2 : 3)
+        let rows = (cells + columns - 1) / columns
+        let spacing = TiebaPostRowLayout.gridSpacing
+        let side = max(
+          (contentW - CGFloat(columns - 1) * spacing) / CGFloat(max(columns, 1)),
+          1
+        )
         var frames: [CGRect] = []
-        for image in inputs.images.prefix(TiebaPostRowLayout.verticalMaxImages) {
-          let height = min(
-            max(contentW / CGFloat(max(image.aspect, 0.01)), TiebaPostRowLayout.verticalImageMinHeight),
-            TiebaPostRowLayout.verticalImageMaxHeight
-          )
-          frames.append(CGRect(x: 0, y: y2, width: contentW, height: height))
-          y2 += height + TiebaPostRowLayout.stripSpacing
+        for index in 0..<cells {
+          frames.append(CGRect(
+            x: CGFloat(index % columns) * (side + spacing),
+            y: CGFloat(index / columns) * (side + spacing),
+            width: side,
+            height: side
+          ))
         }
         imagesFrame = CGRect(
           x: contentX,
           y: y,
           width: contentW,
-          height: max(y2 - TiebaPostRowLayout.stripSpacing, 1)
+          height: max(CGFloat(rows) * side + CGFloat(max(rows - 1, 0)) * spacing, 1)
         )
         imageItemFrames = frames
-        imagesVertical = true
+        imagesGrid = true
       } else {
         var x: CGFloat = 0
         var frames: [CGRect] = []

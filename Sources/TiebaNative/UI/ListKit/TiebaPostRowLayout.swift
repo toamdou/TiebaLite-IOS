@@ -31,10 +31,10 @@ enum TiebaPostRowLayout {
   static let longImageHeight: CGFloat = 300
   static let singleImageMaxHeight: CGFloat = 520
   static let maxImages = 9
-  /// Issue #5 竖排：单张高度区间与张数上限（理由见 TiebaPostRowPlan 的竖排分支）。
-  static let verticalImageMinHeight: CGFloat = 80
-  static let verticalImageMaxHeight: CGFloat = 260
-  static let verticalMaxImages = 3
+  /// Issue #5 网格：最多排 6 格（2 张并排 / 四宫格 / 六宫格）。
+  /// 超过 6 张只排 6 格，第 6 格右下角挂 +N 角标（几何见 TiebaPostRowPlan 的网格分支）。
+  static let gridMaxCells = 6
+  static let gridSpacing: CGFloat = 6
   static let audioHeight: CGFloat = 52
   static let subPostTop: CGFloat = 10
   /// 框内行距的一半（两行之间共 2×gap，与旧版"分隔线上下各一份"同值）。

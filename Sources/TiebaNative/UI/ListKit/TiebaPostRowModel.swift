@@ -304,7 +304,7 @@ final class TiebaPostRowModel: @unchecked Sendable {
       fontScale: Double(preferences.fontScaleClamped),
       images: self.images,
       imagesHidden: self.imagesHidden,
-      imagesVertical: preferences.imagesStackVertically,
+      imagesGrid: preferences.imagesGrid,
       video: self.video,
       videoPlaceholder: self.videoPlaceholder,
       audio: self.audio,
