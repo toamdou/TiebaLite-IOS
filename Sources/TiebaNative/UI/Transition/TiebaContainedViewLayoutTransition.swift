@@ -68,6 +68,59 @@ private func tiebaTransitionIsCGRectValidForLayout(_ rect: CGRect) -> Bool {
     return tiebaTransitionIsCGPositionValidForLayout(rect.origin) && tiebaTransitionIsCGSizeValidForLayout(rect.size)
 }
 
+/// 「这个图层是否已经在目标 frame 上」——比 `layer.frame.equalTo(frame)` 稳的一版。
+///
+/// 为什么不能直接比 `frame`：`frame` 是**派生量**（`position`/`bounds`/`anchorPoint`/`transform`
+/// 算出来的）。一次 `frame = …` 写入再读回来，中间要过一次浮点乘除；分数像素、非整数缩放、
+/// 非 identity 的 anchorPoint 都会让「没变」被读成「变了」。误判的代价是**重启动画**：
+/// 一条已经在跑的位移被从头再来一遍，completion 迟到，栏/浮条的完成回调被吞。
+///
+/// 判据按图层存储量分层：
+///   · 有 transform（非 identity）→ 存储量换算不出唯一 frame，老实退回比 `frame`；
+///   · 无 transform → 由目标 frame 反推 `position`（= origin + anchorPoint × size）与
+///     `bounds`（= size，origin 必须为零），与图层的存储值直接比。
+/// 两条都在 `CATransaction` 之外读，纯值比较，不触发任何隐式动作。
+/// 视图版的同一判据（03-07 全仓清扫时补）。
+///
+/// `view.frame` 的 setter 在 identity transform 下只写两个存储量：`center` 与
+/// `bounds.size`。所以「有没有变」应当直接比这两个值 —— 比 `view.frame != target`
+/// 少一次 `center ± size/2` 的浮点往返，也就不会因为半像素抖动而每帧重设一次 frame。
+///
+/// 重设 frame 的代价不只是赋值本身：它会触发 `setNeedsLayout`，在 `layoutSubviews`
+/// 里做这件事就是**布局循环**（本次扫描在 3 个 cell 与 1 个列表宿主上发现同一写法）。
+func tiebaViewIsAlreadyAtFrame(_ view: UIView, _ frame: CGRect) -> Bool {
+    guard CATransform3DIsIdentity(view.layer.transform) else {
+        return view.frame.equalTo(frame)
+    }
+    guard view.bounds.origin == .zero else {
+        return view.frame.equalTo(frame)
+    }
+    let anchor = view.layer.anchorPoint
+    let expectedCenter = CGPoint(
+        x: frame.origin.x + anchor.x * frame.size.width,
+        y: frame.origin.y + anchor.y * frame.size.height
+    )
+    return view.center == expectedCenter && view.bounds.size == frame.size
+}
+
+func tiebaLayerIsAlreadyAtFrame(_ layer: CALayer, _ frame: CGRect) -> Bool {
+    guard CATransform3DIsIdentity(layer.transform) else {
+        return layer.frame.equalTo(frame)
+    }
+    // bounds.origin 非零时 frame 与 bounds 不再是简单平移关系（滚动视图内容层就是这样），
+    // 反推公式不成立，退回 frame 比较。
+    guard layer.bounds.origin == .zero else {
+        return layer.frame.equalTo(frame)
+    }
+    let anchor = layer.anchorPoint
+    let expectedPosition = CGPoint(
+        x: frame.origin.x + anchor.x * frame.size.width,
+        y: frame.origin.y + anchor.y * frame.size.height
+    )
+    let expectedBounds = CGRect(origin: .zero, size: frame.size)
+    return layer.position == expectedPosition && layer.bounds == expectedBounds
+}
+
 // [移植] 改动 4：上游是 extension CGRect { var center }（internal）。这里改名并收成文件私有：
 // 本仓 UI/Components、UI/Nodes 等目录同样在移植 Display，同模块再声明一个 CGRect.center
 // 就是重复定义（整个 app 构建不过）。
@@ -136,12 +189,44 @@ public extension TiebaContainedViewLayoutTransitionCurve {
                 return [.curveEaseInOut]
             case .easeIn:
                 return [.curveEaseIn]
-            case .spring:
-                return UIView.AnimationOptions(rawValue: 7 << 16)
-            case .customSpring:
-                return UIView.AnimationOptions(rawValue: 7 << 16)
+            case .spring, .customSpring:
+                // 03-04 全仓清扫：这里原来是 `UIView.AnimationOptions(rawValue: 7 << 16)`。
+                // 7 是**未公开**的 UIViewAnimationCurve 取值，靠 UIKit 内部把它当弹簧曲线解释。
+                // 本仓铁律不依赖未公开值（同一条已在 TiebaAnimationCurve.spring 上执行过，
+                // 这里当时漏了 —— 同一个判据在同一仓里出现两种写法，正是本轮要清的）。
+                // 改为走公开的 `usingSpringWithDamping:` 重载，参数见 springDampingRatio。
+                return []
             case .custom:
                 return []
+        }
+    }
+
+    /// 是否需要走弹簧 API（`.spring` / `.customSpring`）。
+    ///
+    /// `UIView.animate(…usingSpringWithDamping:…)` 的阻尼是**阻尼比**（0…1），
+    /// 而本枚举的 `.customSpring` 带的是物理量（mass/stiffness/damping）。
+    /// 换算：ζ = c / (2·√(k·m))，正是弹簧阻尼比的定义。
+    var usesSpringAnimation: Bool {
+        switch self {
+            case .spring, .customSpring: return true
+            case .linear, .easeInOut, .easeIn, .custom: return false
+        }
+    }
+
+    var springDampingRatio: CGFloat {
+        switch self {
+            case .spring:
+                // 与 TiebaAnimationCurve.spring 的 0.82 对齐：两处曲线语义必须一致，
+                // 否则「同一次转场里栏和内容用不同回弹」是肉眼可见的错位。
+                return 0.82
+            case let .customSpring(mass, stiffness, damping, _):
+                let denominator = 2 * (mass * stiffness).squareRoot()
+                guard denominator > 0 else { return 0.82 }
+                // 钳到 (0, 1]：>1 过阻尼在 UIView 的 API 里没有对应表达，
+                // 0 会退化成无限振荡。
+                return min(max(damping / denominator, 0.01), 1.0)
+            case .linear, .easeInOut, .easeIn, .custom:
+                return 1.0
         }
     }
 }
@@ -236,7 +321,10 @@ public extension TiebaContainedViewLayoutTransition {
     
     
     func updateFrameAdditive(layer: CALayer, frame: CGRect, force: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        if layer.frame.equalTo(frame) && !force {
+        // 03-07：改用存储量比较。这里是**加法动画**的入口，判错一次的代价比普通位移更大：
+        // additive 的 from 值取的是当前模型值，若把「没变」误判成「变了」，就会在已有的
+        // 加法动画之上再叠一条，位移量被算两遍（观感是"甩出去一截又弹回来"）。
+        if tiebaLayerIsAlreadyAtFrame(layer, frame) && !force {
             completion?(true)
         } else {
             switch self {
@@ -255,7 +343,7 @@ public extension TiebaContainedViewLayoutTransition {
     
     
     func updateFrameAdditive(view: UIView, frame: CGRect, force: Bool = false, completion: ((Bool) -> Void)? = nil) {
-        if view.frame.equalTo(frame) && !force {
+        if tiebaLayerIsAlreadyAtFrame(view.layer, frame) && !force {
             completion?(true)
         } else {
             switch self {
@@ -441,7 +529,7 @@ public extension TiebaContainedViewLayoutTransition {
             return
         }
         
-        if view.frame.equalTo(frame) && !force {
+        if tiebaLayerIsAlreadyAtFrame(view.layer, frame) && !force {
             completion?(true)
         } else {
             switch self {
@@ -468,7 +556,7 @@ public extension TiebaContainedViewLayoutTransition {
     }
 
     func updateFrame(layer: CALayer, frame: CGRect, beginWithCurrentState: Bool = false, delay: Double = 0.0, completion: ((Bool) -> Void)? = nil) {
-        if layer.frame.equalTo(frame) {
+        if tiebaLayerIsAlreadyAtFrame(layer, frame) {
             completion?(true)
         } else {
             switch self {
@@ -847,9 +935,21 @@ public extension TiebaContainedViewLayoutTransition {
             if allowUserInteraction {
                 options.insert(.allowUserInteraction)
             }
-            UIView.animate(withDuration: duration, delay: delay, options: options, animations: {
-                f()
-            }, completion: completion)
+            if curve.usesSpringAnimation {
+                UIView.animate(
+                    withDuration: duration,
+                    delay: delay,
+                    usingSpringWithDamping: curve.springDampingRatio,
+                    initialSpringVelocity: 0,
+                    options: options,
+                    animations: { f() },
+                    completion: completion
+                )
+            } else {
+                UIView.animate(withDuration: duration, delay: delay, options: options, animations: {
+                    f()
+                }, completion: completion)
+            }
         }
     }
 }

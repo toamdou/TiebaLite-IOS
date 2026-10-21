@@ -322,7 +322,7 @@ public final class TiebaAnimatedCountLabel: UIView {
                     label.layer.animateScale(from: 0.1, to: 1.0, duration: 0.2, delay: shiftDelay)
                     label.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2, delay: shiftDelay)
                 }
-            } else if label.frame != segmentFrame {
+            } else if !tiebaViewIsAlreadyAtFrame(label, segmentFrame) {
                 transition.updateFrameAdditive(label, frame: segmentFrame)
             }
             currentOffset.x += calculated.width * spacingFactor

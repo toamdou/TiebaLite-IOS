@@ -27,16 +27,25 @@ enum TiebaAnimationCurve {
     case easeIn
     case easeOut
     case linear
+    /// 系统弹簧（`.spring` 走 `usingSpringWithDamping:` 分支，不是 bezier 控制点）。
+    case spring
 
     /// 与 UIView.AnimationOptions 的曲线位一一对应；`.easeInOut` 对应空集 = UIKit 默认。
+    ///
+    /// `.spring` 也返回空集：弹簧的观感由 `usingSpringWithDamping:` 决定，塞任何曲线位
+    /// 都会把它拽回 bezier 路径 —— 详见 `TiebaAnimation.animate` 里的分支。
     var options: UIView.AnimationOptions {
         switch self {
             case .easeInOut: return []
             case .easeIn: return .curveEaseIn
             case .easeOut: return .curveEaseOut
             case .linear: return .curveLinear
+            case .spring: return []
         }
     }
+
+    /// 是否走弹簧分支。调用方一般不用判，`animate` 内部已经分流。
+    var isSpring: Bool { self == .spring }
 }
 
 /// 时长分层表（全 App 一份）。
@@ -84,6 +93,10 @@ enum TiebaAnimationDuration {
     static let modalAppear: TimeInterval = 0.4
     /// 有质量的弹入（配合弹簧曲线的整块动作）。
     static let springMass: TimeInterval = 0.5
+
+    /// 弹簧默认阻尼比。0.82 是「有回弹但不过冲」的一档：面板/浮条这类有质量的位移
+    /// 用 1.0 会显得发死，用 0.6 会晃得轻浮。
+    static let springDamping: CGFloat = 0.82
 }
 
 @MainActor
@@ -98,6 +111,24 @@ enum TiebaAnimation {
         animations: @escaping () -> Void,
         completion: ((Bool) -> Void)? = nil
     ) {
+        // 弹簧走独立分支：`usingSpringWithDamping:` 是 UIKit 内部那条弹簧解算路径，
+        // 与把曲线位塞进 options 的 bezier 路径不是一回事。
+        //
+        // 为什么不用知识库里的 `7 << 16`（03-04）：那是个未公开的 options rawValue，
+        // 上游自己也标注「对应关系未验证」。本仓铁律是不碰未公开行为，所以这里只调
+        // **公开**弹簧 API —— 曲线族相同（都是 UIKit 的系统弹簧），只是阻尼由我们给。
+        if curve.isSpring {
+            UIView.animate(
+                withDuration: duration,
+                delay: delay,
+                usingSpringWithDamping: TiebaAnimationDuration.springDamping,
+                initialSpringVelocity: 0,
+                options: options,
+                animations: animations,
+                completion: completion
+            )
+            return
+        }
         UIView.animate(
             withDuration: duration,
             delay: delay,
