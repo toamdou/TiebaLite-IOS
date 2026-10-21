@@ -7,8 +7,11 @@
 // 改动清单：
 //  1) [改名] TextView → TiebaTextView（铁律 6：公开类型加 Tieba 前缀，避免与系统/本仓重名）；
 //     对 TextNode.calculateLayout / TextNode.draw / TextNode.DrawingParameters 的引用同步改为 TiebaTextNode.*。
-//  2) [Swift 6] 类本身不加标注：UIView 在 SDK 里已是 @MainActor，子类自动继承隔离，cachedLayout 的读写与
-//     draw(_:) 都在主线程，正是 UIKit 的约定。asyncLayout 作为类的静态成员因此也是 MainActor 隔离的，
+//  2) [Swift 6] 类本身不加标注：UIView 在 SDK 里已是 @MainActor，子类自动继承隔离。但**不要**
+//     因此假设 draw(_:) 一定在主线程：调用方设了 layer.drawsAsynchronously 时 CA 会在后台
+//     线程调它（TiebaPostRowView 就是这么做的）。所以 draw 读的是 drawSnapshotLock 保护的
+//     不可变快照，而不是直接读 cachedLayout —— 详见 cachedLayout 的 didSet 与 draw 里的注释。
+//     asyncLayout 作为类的静态成员因此是 MainActor 隔离的，
 //     返回的 apply 闭包是非 Sendable 闭包、随上下文继承 MainActor 隔离，直接在主线程 apply（上游 ASDK 里这步
 //     发生在后台排版完成后回主线程，语义等价）。未使用 @preconcurrency / @unchecked Sendable / assumeIsolated。
 //  3) [删除 ASDK 生命周期] 上游 TextView 没有 didLoad 等 ASDK 回调；draw(_:) 里 UIGraphicsGetCurrentContext() 直接可用，
@@ -22,7 +25,35 @@ import Foundation
 import UIKit
 
 open class TiebaTextView: UIView {
-    public internal(set) var cachedLayout: TiebaTextNodeLayout?
+    public internal(set) var cachedLayout: TiebaTextNodeLayout? {
+        didSet { self.replaceDrawSnapshot(cachedLayout) }
+    }
+
+    /// 异步绘制快照（05-06）。
+    ///
+    /// `draw(_:)` 并不总在主线程：调用方一旦设了 `layer.drawsAsynchronously = true`
+    /// （`TiebaPostRowView.init` 就是这么做的），CoreAnimation 会把 `drawInContext:`
+    /// 放到自己的后台线程执行，而 `cachedLayout` 只在主线程改。两边直接共享同一个
+    /// 存储属性就是数据竞争 —— 后台侧可能读到"新的 size + 旧的 framesetter"这种
+    /// 半新半旧的状态（画残影），更糟的是 class 引用的读写在两个线程上同时发生会
+    /// 打引用计数（偶发崩溃，且栈落在 CoreText 里，极难定位）。
+    ///
+    /// 所以：写侧（主线程）换 layout 时在同一把锁内换快照，读侧（可能是后台）在
+    /// 锁内拷一份引用出来再用，与写入彻底解耦。快照本身是不可变对象，拷引用即可。
+    private let drawSnapshotLock = NSLock()
+    private var drawSnapshot: TiebaTextNodeLayout?
+
+    private func replaceDrawSnapshot(_ layout: TiebaTextNodeLayout?) {
+        self.drawSnapshotLock.lock()
+        self.drawSnapshot = layout
+        self.drawSnapshotLock.unlock()
+    }
+
+    private func currentDrawSnapshot() -> TiebaTextNodeLayout? {
+        self.drawSnapshotLock.lock()
+        defer { self.drawSnapshotLock.unlock() }
+        return self.drawSnapshot
+    }
     
     override public init(frame: CGRect) {
         super.init(frame: frame)
@@ -73,7 +104,8 @@ open class TiebaTextView: UIView {
     }
     
     public override func draw(_ rect: CGRect) {
-        let layout = self.cachedLayout
+        // 05-06：只读快照，不直接读 cachedLayout —— 本方法可能在 CA 的异步绘制线程上跑。
+        let layout = self.currentDrawSnapshot()
         
         let context = UIGraphicsGetCurrentContext()!
         

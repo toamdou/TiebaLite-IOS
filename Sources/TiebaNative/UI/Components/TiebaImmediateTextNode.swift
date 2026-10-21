@@ -63,6 +63,13 @@ open class TiebaImmediateTextNode: TiebaTextView {
     
     public var constrainedSize: CGSize?
     
+    /// 贴入模型测量期保存的 layout；调用方负责先确认文本/宽度/行数完全一致。
+    open func apply(cachedLayout layout: TiebaTextNodeLayout) {
+        cachedLayout = layout
+        trailingLineWidth = layout.numberOfLines > 1 ? layout.trailingLineWidth : nil
+        setNeedsDisplay()
+    }
+
     open func updateLayout(_ constrainedSize: CGSize) -> CGSize {
         self.constrainedSize = constrainedSize
         
