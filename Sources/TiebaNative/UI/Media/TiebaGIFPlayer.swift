@@ -284,6 +284,206 @@ actor TiebaGIFDecoder {
     }
 }
 
+// MARK: - 同图多实例的帧共享（08-08）
+
+/// 同一条 GIF 在多个播放器里出现时，**解码一次、位图共享**（08-08）。
+///
+/// 场景：同一个表情被转贴多次、查看器与底下列表行同时挂同一张动图、帖子里的图与
+/// 楼层引用图相同。改动前每个播放器各有自己的 `NSCache` 与在途标记，同一帧会被
+/// 解 N 次、内存里留 N 份同一位图 —— 而 GIF 帧位图正是峰值内存的大头（查看器单帧
+/// 603KB）。
+///
+/// 设计要点：
+/// - 键 = `调用方身份（URL）+ 目标像素尺寸 + contentMode`。三者任一不同就不能共享：
+///   重采样后的位图尺寸/裁切方式都不一样，混用会画出错误的像素。
+/// - **引用计数**：最后一个使用者 release 时才丢弃整份缓存。中途某个播放器 recycle
+///   不影响别人（否则列表里划走一行，同屏另一行的同一张图会突然跳帧重解）。
+/// - 在途标记也放在这里：两个播放器同时要第 3 帧时只排一次解码，另一个下一拍直接
+///   命中缓存（代价是"最多晚一帧"，换来的是不重复烧 CPU）。
+/// - 条目上限 6：共享池是"顺带省下来的内存"，不是缓存层。超过就丢最久未用的那份，
+///   被丢的播放器下次取帧会重新解码，行为与改动前一致。
+@MainActor
+final class TiebaGIFFrameShare {
+    static let shared = TiebaGIFFrameShare()
+
+    /// 一份共享帧池。引用计数归零即从表里摘除（位图随之释放）。
+    final class Frames {
+        let cache = NSCache<NSNumber, UIImage>()
+        /// 在途解码的帧号（跨实例去重）。
+        var inFlight: Set<Int> = []
+        /// 使用者数量（每个播放器 +1）。
+        var refCount = 0
+
+        fileprivate init(countLimit: Int) {
+            self.cache.countLimit = max(1, countLimit)
+        }
+    }
+
+    /// 最近使用顺序（尾部最新）。条目很少（≤ 6），数组足够，不必上 LRU 链表。
+    private var order: [String] = []
+    private var entries: [String: Frames] = [:]
+    private let maxEntries = 6
+
+    private init() {}
+
+    /// 取一份共享帧池（没有就建）。调用方必须与 `release(_:)` 成对。
+    func acquire(key: String, countLimit: Int) -> Frames {
+        if let existing = entries[key] {
+            existing.refCount += 1
+            // 缓冲窗取两者较大值：同一张图在查看器（窗 8）与列表（窗 4）里都出现时，
+            // 按小的那个设会让查看器频繁重解。
+            existing.cache.countLimit = max(existing.cache.countLimit, countLimit)
+            touch(key)
+            return existing
+        }
+        let made = Frames(countLimit: countLimit)
+        made.refCount = 1
+        entries[key] = made
+        order.append(key)
+        trimIfNeeded()
+        return made
+    }
+
+    /// 归还一份。计数归零才真正丢弃（位图一起释放）。
+    func release(key: String) {
+        guard let entry = entries[key] else { return }
+        entry.refCount -= 1
+        guard entry.refCount <= 0 else { return }
+        entries.removeValue(forKey: key)
+        order.removeAll { $0 == key }
+    }
+
+    /// 内存告警：清掉所有共享位图，但**保留条目与引用计数** ——
+    /// 在屏的播放器下一拍会重新解码（观感是"跳一帧"），条目没了反而会丢在途标记。
+    func purgeAllCaches() {
+        for entry in entries.values {
+            entry.cache.removeAllObjects()
+            entry.inFlight.removeAll()
+        }
+    }
+
+    private func touch(_ key: String) {
+        order.removeAll { $0 == key }
+        order.append(key)
+    }
+
+    private func trimIfNeeded() {
+        while order.count > maxEntries, let oldest = order.first {
+            order.removeFirst()
+            entries.removeValue(forKey: oldest)
+        }
+    }
+}
+
+// MARK: - 全局暂停原因（进程级）
+
+/// 播放暂停的**原因**。不是一个 Bool：查看器打开时 pause(.modalOverlay)、同一时刻内存告警又
+/// pause(.memoryPressure)，之后查看器关闭 resume(.modalOverlay) —— 若只有一个 Bool，
+/// 第二个原因还生效着就被提前恢复了（GIF 在内存告警里继续解码）。
+/// 所以原因成对增删，只有集合空了才真的恢复。
+enum TiebaGIFPauseReason: Hashable {
+    /// 模态覆盖：图片查看器 / 弹出菜单 / 输入面板。
+    /// 为什么必须有这一条：查看器是 present 出来的，底下的列表**仍在 window 内且没被隐藏**，
+    /// `tiebaIsVisibleInWindow` 求交为真 —— 只靠离屏判定根本发现不了"被模态盖住"。
+    case modalOverlay
+    /// 内存告警（播放器自己订阅，见 TiebaGIFPauseGate.installMemoryWarningObserver）。
+    case memoryPressure
+    /// 低电量模式（由外部接线，本文件不订阅电量通知）。
+    case lowPower
+    /// 离屏：等价于 `TiebaGIFPlayer.isOnScreen == false`，由播放器自己在 tick 里登记/解除，
+    /// **只作"为什么没在播"的说明，不参与停表判定** —— 离屏时表必须继续转，否则再也没有
+    /// 回屏的检测点（见 TiebaGIFPlayer.tick ①）。
+    case offscreen
+}
+
+/// 进程级「暂停原因」集合（主线程隔离）。
+///
+/// 为什么做成全局而不是每个播放器一份：查看器开/关、内存告警是**进程级**事件，
+/// 调用方（查看器、列表）不该知道此刻有多少个播放器活着；而播放器自己会按 livePlayers 登记
+/// 被动响应。这样"模态盖住"这件事只需要一处 pause/resume，不会出现"某个入口忘了通知"。
+@MainActor
+final class TiebaGIFPauseGate {
+    static let shared = TiebaGIFPauseGate()
+
+    /// 当前生效的原因（`.offscreen` 也会被登记，便于统一查询"为什么没在播"）。
+    private var reasons: Set<TiebaGIFPauseReason> = []
+    /// 内存告警的自动恢复（见 pauseForMemoryPressure）。
+    private var memoryPressureResumeTask: Task<Void, Never>?
+
+    private init() {
+        self.installMemoryWarningObserver()
+    }
+
+    /// 是否处于**硬暂停**（需要停表）。
+    ///
+    /// `.offscreen` 不算：它是播放器从 `isOnScreen` 推出来的软暂停，一旦据此停表就再也没人
+    /// 发现视图回到屏幕上了（cell 复用时 apply() 会早退，不会有人重新装表）。
+    var isPaused: Bool {
+        return self.reasons.contains { $0 != .offscreen }
+    }
+
+    /// 当前生效的原因（自检/测试用）。
+    var activeReasons: Set<TiebaGIFPauseReason> {
+        return self.reasons
+    }
+
+    /// 增一个原因（幂等：重复 pause 不会让计数变 2，也不会重复通知）。
+    func pause(_ reason: TiebaGIFPauseReason) {
+        guard self.reasons.insert(reason).inserted else { return }
+        self.notifyPlayers()
+    }
+
+    /// 减一个原因（幂等：没加过就什么都不做）。
+    func resume(_ reason: TiebaGIFPauseReason) {
+        guard self.reasons.remove(reason) != nil else { return }
+        self.notifyPlayers()
+    }
+
+    func contains(_ reason: TiebaGIFPauseReason) -> Bool {
+        return self.reasons.contains(reason)
+    }
+
+    private func notifyPlayers() {
+        // 复用 TiebaGIFPlayer.livePlayers 这份弱登记，不另开一张观察者表
+        //（两份登记必然有一份忘了注销）。
+        TiebaGIFPlayer.pauseReasonsDidChange()
+    }
+
+    // MARK: 内存告警
+
+    /// 内存告警 → 先硬暂停一拍，再自动恢复。
+    ///
+    /// 为什么要自动恢复：内存告警是瞬时事件，若 pause 后没人 resume，全部 GIF 会永久停住。
+    /// 停 1 秒的作用是让这一波告警里**不要立刻**再排新的解码（帧缓存已被
+    /// purgeFrameCachesForMemoryWarning 清空，在屏的播放器下一拍就会重解）。
+    ///
+    /// 为什么用 `Task { @MainActor }` 接管回调：block 是 @Sendable 的 nonisolated 闭包，
+    /// 直接改隔离状态过不了检查；TiebaGIFPauseGate 是 @MainActor（因此 Sendable），
+    /// 捕获 self 不需要 nonisolated(unsafe)（与 TiebaDisplayLinkAnimator 里的写法一致）。
+    private func installMemoryWarningObserver() {
+        let _ = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: nil,
+            using: { [weak self] _ in
+                Task { @MainActor in
+                    self?.pauseForMemoryPressure()
+                }
+            }
+        )
+    }
+
+    private func pauseForMemoryPressure() {
+        self.pause(.memoryPressure)
+        self.memoryPressureResumeTask?.cancel()
+        self.memoryPressureResumeTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.resume(.memoryPressure)
+        }
+    }
+}
+
 // MARK: - 播放器
 
 @MainActor
@@ -291,7 +491,17 @@ final class TiebaGIFPlayer {
     /// 帧缓存。用 NSCache 而不是字典：内存压力下系统会自己丢对象（我们不用手写 LRU），
     /// 且它是线程安全的（后台解好的帧仍由主 actor 存进来，缓存本身不参与隔离假设）。
     /// countLimit 就是"缓冲窗" —— 见 play(...) 的参数说明。
-    private let frames = NSCache<NSNumber, UIImage>()
+    ///
+    /// 08-08：给了 `identity` 时用共享池（同图多实例共用一份位图与在途标记），
+    /// 没给就是这里这份私有缓存。对播放逻辑两者完全等价 —— `frames` 这个计算属性
+    /// 让所有读写点不用关心到底用的是哪一份。
+    private let privateFrames = NSCache<NSNumber, UIImage>()
+    private var sharedFrames: TiebaGIFFrameShare.Frames?
+    private var shareKey: String?
+
+    private var frames: NSCache<NSNumber, UIImage> {
+        return self.sharedFrames?.cache ?? self.privateFrames
+    }
 
     /// 后台解码器（解析 + 逐帧解码都在它那里）。
     private var decoder: TiebaGIFDecoder?
@@ -311,6 +521,22 @@ final class TiebaGIFPlayer {
     /// 时间累加器：跨 display link 帧累加，凑够当前帧的时延才翻页（理由见 tick(duration:)）。
     private var accumulatedTime: Double = 0
     private var completedLoops = 0
+
+    // MARK: 低电量降帧（08-07）
+
+    /// 这份 GIF 的帧间隔是否「值得跳帧」。平均间隔 < 0.03s（> 33fps）的 GIF 本身帧率就高，
+    /// 跳一半会明显卡顿，所以不跳 —— 知识库里也标注了这一点（30fps 对 0.02s 短帧偏慢）。
+    /// 帧表解析回来时结算一次，之后每拍只读这个布尔。
+    private var lowPowerFrameSkipEligible = false
+    /// 跳帧的奇偶计数。只决定「这一拍要不要上屏」，**不参与**累加器 —— 时间线不变。
+    private var lowPowerTickParity = 0
+    /// 连续解码失败次数（08-17 熔断）。任何一次成功解码即清零。
+    private var failedFrameDecodes = 0
+    /// 连续失败到这个数就判定"这张图解不出来"，停表并释放帧缓存。
+    private static let failedDecodeFuse = 3
+    /// 有限次数已经播完（tick 里因 loopCount 达标停表）。停表后**任何 resume 都不能把它重新拉起**，
+    /// 否则"播完停住"的 GIF 会因为一次查看器开关又从头动起来。
+    private var didFinishPlayback = false
 
     /// 在途解码的帧号（同一帧不排两次队）。
     private var inFlightFrames: Set<Int> = []
@@ -356,6 +582,9 @@ final class TiebaGIFPlayer {
     /// 它们回到屏幕时会走正常加载路径重建（reuse → apply → 探测结果命中会话缓存 →
     /// Nuke 缓存命中 → play）。
     static func purgeFrameCachesForMemoryWarning() {
+        // 08-08：共享池先整份清掉。它可能被多个实例引用，只清单个播放器的私有缓存
+        // 根本碰不到那批位图（在屏实例的 `frames` 指向的是共享池）。
+        TiebaGIFFrameShare.shared.purgeAllCaches()
         for box in livePlayers {
             guard let player = box.player else { continue }
             if player.imageView?.window == nil {
@@ -367,8 +596,16 @@ final class TiebaGIFPlayer {
     }
 
     /// 释放帧缓存（不动 CGImageSource / 帧表 / display link）：离屏与内存告警共用。
+    ///
+    /// 共享池（08-08）下**只清自己的在途标记**，不清位图：同一张图可能还有别的实例
+    /// 正在屏上播（列表里划走一行，不该让另一行的同一张图跳帧重解）。位图的内存由
+    /// 共享池自己的引用计数与内存告警负责。私有缓存照旧整份清掉。
     func purgeFrameCache() {
-        self.frames.removeAllObjects()
+        if let sharedFrames {
+            sharedFrames.inFlight.removeAll(keepingCapacity: true)
+        } else {
+            self.privateFrames.removeAllObjects()
+        }
         self.cachedFrameCountStorage = 0
         self.inFlightFrames.removeAll(keepingCapacity: true)
         self.frameGeneration &+= 1
@@ -393,6 +630,8 @@ final class TiebaGIFPlayer {
     ///   是那种"很久以后才发现"的 bug。注意这里**不再**顺手做 CGImageSource 解析：
     ///   解析与逐帧解码都在 TiebaGIFDecoder（后台），解析失败就不起表（屏幕上仍是调用方
     ///   贴好的静态首帧，与"判否"的观感一致）。
+    /// - parameter identity: 这张图的**稳定身份**（调用方用 URL 字符串）。给值时同图多实例
+    ///   共享解码结果与在途标记（08-08）；nil 表示各播各的（私有缓存）。
     @discardableResult
     func play(
         data: Data,
@@ -402,7 +641,8 @@ final class TiebaGIFPlayer {
         frameBufferSize: Int = 8,
         /// 调用方已经解码好的首帧（查看器的 `container.image`）。传它就**不必再解一遍第 0 帧**
         /// —— 大 GIF 的首帧解码+重采样实测 4~45ms（42-*），全是白做。
-        firstFrame: UIImage? = nil
+        firstFrame: UIImage? = nil,
+        identity: String? = nil
     ) -> Bool {
         self.recycle()
 
@@ -422,7 +662,19 @@ final class TiebaGIFPlayer {
         // shouldResizeFrames 的语义（保留 Gifu 的名字）：目标尺寸有效才缩放。
         // 无效尺寸（还没布局）时直接给原帧 —— 否则会把帧缩成 0×0 给出一张空图。
         self.shouldResizeFrames = targetSize.width > 1 && targetSize.height > 1
-        self.frames.countLimit = max(1, frameBufferSize)
+        // 08-08：同图多实例共享帧池。键里必须带尺寸与 contentMode —— 重采样后的位图
+        // 尺寸/裁切方式都不同，混用会画出错误的像素。私有路径下 countLimit 照旧由这里设。
+        if let identity {
+            let key = TiebaGIFPlayer.shareKey(
+                identity: identity, targetSize: targetSize, contentMode: contentMode
+            )
+            self.shareKey = key
+            self.sharedFrames = TiebaGIFFrameShare.shared.acquire(
+                key: key, countLimit: max(1, frameBufferSize)
+            )
+        } else {
+            self.privateFrames.countLimit = max(1, frameBufferSize)
+        }
         self.frameIndex = 0
         self.accumulatedTime = 0
         self.completedLoops = 0
@@ -430,6 +682,7 @@ final class TiebaGIFPlayer {
         self.delays = []
         self.loopCount = 0
         self.didPurgeWhileOffscreen = false
+        self.didFinishPlayback = false
 
         // 先同步上首帧：调用方传进来的 imageView 可能还是空白的，
         // 等第一个 display link 回调（最多 16ms）再出图会闪一下白。
@@ -451,6 +704,8 @@ final class TiebaGIFPlayer {
             self.framesTotal = metadata.frameCount
             self.delays = metadata.delays
             self.loopCount = metadata.loopCount
+            self.lowPowerFrameSkipEligible = Self.isFrameSkipWorthwhile(delays: metadata.delays)
+            self.lowPowerTickParity = 0
             guard metadata.frameCount > 1 else {
                 // 单帧 GIF：没有动画可播（屏幕上已是调用方贴好的那一帧），不要白开一条表。
                 return
@@ -467,8 +722,39 @@ final class TiebaGIFPlayer {
     /// 用 60fps 请求：GIF 常见 15~24fps，低于 60 的刷新率会让短时延帧（20~33ms）被量化到 33ms 以上。
     private func startLink() {
         guard self.link == nil else { return }
+        // 全局硬暂停期间不起表：否则刚装上就被 tick 第一行摘掉，白转一拍（且每次都得重排解码）。
+        guard !TiebaGIFPauseGate.shared.isPaused else { return }
         self.link = TiebaSharedDisplayLinkDriver.shared.add(framesPerSecond: .fps(60)) { [weak self] duration in
             self?.tick(duration: Double(duration))
+        }
+    }
+
+    /// 全局暂停原因变化（pause/resume 后由 TiebaGIFPauseGate 回调所有存活播放器）。
+    ///
+    /// 这是**恢复的唯一入口**：暂停时表已被摘掉，没有任何回调会再自己醒过来，
+    /// 所以 resume 必须显式把表装回去。与离屏复位的分工：
+    ///   · 硬暂停（非 .offscreen）→ 这里停表/起表；
+    ///   · 离屏（.offscreen）→ 表始终不停，复位在 tick 里（`didPurgeWhileOffscreen = false`），
+    ///     因为 tick 是唯一的回屏检测点。两套状态各管一段，互不覆盖。
+    private func applyPauseState() {
+        if TiebaGIFPauseGate.shared.isPaused {
+            self.stop()
+            return
+        }
+        // 帧表没就位（解析中）/ 单帧 / 已播完：没有可恢复的东西（帧表就位时 play() 自己会起表）。
+        guard !self.didFinishPlayback,
+              self.framesTotal > 1,
+              self.delays.count == self.framesTotal
+        else {
+            return
+        }
+        self.startLink()
+    }
+
+    /// 所有存活播放器重新结算「表该不该转」（由 TiebaGIFPauseGate 调用）。
+    static func pauseReasonsDidChange() {
+        for box in self.livePlayers {
+            box.player?.applyPauseState()
         }
     }
 
@@ -488,7 +774,9 @@ final class TiebaGIFPlayer {
     ///   ① NSCache（位图本体）② CGImageSource（还握着压缩后的原始字节）③ display link（停表，不再持有 self）。
     func recycle() {
         self.stop()
-        self.frames.removeAllObjects()
+        // 08-08：先归还共享池（只减引用计数，不清位图 —— 同屏另一个实例可能还在播）。
+        self.releaseShare()
+        self.privateFrames.removeAllObjects()
         self.cachedFrameCountStorage = 0
         self.decoder = nil
         self.imageView = nil
@@ -502,12 +790,40 @@ final class TiebaGIFPlayer {
         self.frameIndex = 0
         self.accumulatedTime = 0
         self.completedLoops = 0
+        self.didFinishPlayback = false
+        self.lowPowerFrameSkipEligible = false
+        self.lowPowerTickParity = 0
+        self.failedFrameDecodes = 0
     }
 
     isolated deinit {
         // [移植] Swift 6：link 是 MainActor 隔离的非 Sendable 句柄，nonisolated deinit 读不到，
         // 用 isolated deinit（SE-0371，本仓工具链支持）让 deinit 跑在主 actor 上。
         self.link?.invalidate()
+        // 08-08：播放器没了但没走 recycle()（视图被直接丢弃）时，共享池的引用计数也必须还回去，
+        // 否则那份帧位图永远留在池里。
+        self.releaseShare()
+    }
+
+    /// 共享池键（08-08）：身份 + 目标像素尺寸 + contentMode。取整到像素：
+    /// 亚像素级的尺寸抖动不该把同一张图拆成两份缓存。
+    private static func shareKey(
+        identity: String,
+        targetSize: CGSize,
+        contentMode: UIView.ContentMode
+    ) -> String {
+        let width = Int(targetSize.width.rounded())
+        let height = Int(targetSize.height.rounded())
+        return "\(identity)#\(width)x\(height)#\(contentMode.rawValue)"
+    }
+
+    /// 归还共享帧池（08-08）。**不清缓存**：同屏可能还有别的实例在用同一份位图，
+    /// 位图什么时候真释放由共享池的引用计数决定。
+    private func releaseShare() {
+        guard let shareKey else { return }
+        TiebaGIFFrameShare.shared.release(key: shareKey)
+        self.shareKey = nil
+        self.sharedFrames = nil
     }
 
     // MARK: 推进
@@ -556,7 +872,24 @@ final class TiebaGIFPlayer {
         guard didAdvance else {
             return
         }
+        // ② 低电量降帧：只**少上屏一半**，不动时间线。
+        //    `accumulatedTime` 上面已经照常累加、`frameIndex` 也照常推进，所以动画总时长不变；
+        //    跳掉的只是「这一拍不贴图」，下一拍贴的是更新的一帧。等价 frameSkip = 2（≈30fps）。
+        //    为什么不在累加器上跳：那样每两拍才加一次 duration，动画会整体放慢一半。
+        if self.lowPowerFrameSkipEligible, ProcessInfo.processInfo.isLowPowerModeEnabled {
+            self.lowPowerTickParity &+= 1
+            if self.lowPowerTickParity % 2 == 1 {
+                return
+            }
+        }
         self.presentFrame(at: self.frameIndex)
+    }
+
+    /// 平均帧间隔 ≥ 0.03s 才值得跳帧。纯静态判据，帧表就位时算一次。
+    private static func isFrameSkipWorthwhile(delays: [Double]) -> Bool {
+        guard !delays.isEmpty else { return false }
+        let average = delays.reduce(0, +) / Double(delays.count)
+        return average >= 0.03
     }
 
     /// 上屏第 index 帧。主线程**只做两件事**：命中缓存就贴图；没命中就交给后台解，
@@ -578,22 +911,47 @@ final class TiebaGIFPlayer {
             return
         }
         let key = NSNumber(value: index)
-        guard self.frames.object(forKey: key) == nil,
-              self.inFlightFrames.insert(index).inserted
-        else {
+        guard self.frames.object(forKey: key) == nil else {
             return
         }
+        // 在途去重（08-08）：共享池下标记是跨实例的 —— 同一张图的两个实例同时要第 3 帧，
+        // 只排一次解码；另一个下一拍从共享缓存命中（最多晚一帧，不重复烧 CPU）。
+        let sharedFrames = self.sharedFrames
+        if let sharedFrames {
+            guard sharedFrames.inFlight.insert(index).inserted else { return }
+        } else {
+            guard self.inFlightFrames.insert(index).inserted else { return }
+        }
         let generation = self.frameGeneration
-        Task { [weak self] in
+        Task { [weak self, sharedFrames] in
             let image = await decoder.frame(at: index)
+            // 在途标记必须在**所有**出口清掉，且要在代次判定之前：漏清会让那一帧
+            // 永远排不进来（下一拍 insert 失败 → 再也不会请求解码 → 画面卡住）。
+            if let sharedFrames {
+                sharedFrames.inFlight.remove(index)
+            }
             guard let self, self.frameGeneration == generation else {
-                // 期间 recycle()/离屏清空/内存告警清空过 → 结果作废（inFlight 也已一并清掉）。
+                // 期间 recycle()/离屏清空/内存告警清空过 → 结果作废。
                 return
             }
             self.inFlightFrames.remove(index)
-            guard self.decoder === decoder, let image else {
+            guard self.decoder === decoder else {
                 return
             }
+            guard let image else {
+                // 解码失败熔断（08-17）：坏帧（截断文件、尺寸退化、解码器拒绝）如果只是
+                // "return 掉"，下一拍 presentFrame 会立刻把同一帧再排一次 —— 一秒钟 60 次
+                // 后台解码全部失败，CPU 白烧，画面还停在上一帧（用户看到的是"卡住的动图"）。
+                // 连续失败到阈值就停表 + 释放帧缓存，把它当成静态图。
+                self.failedFrameDecodes += 1
+                if self.failedFrameDecodes >= Self.failedDecodeFuse {
+                    self.didFinishPlayback = true
+                    self.stop()
+                    self.purgeFrameCache()
+                }
+                return
+            }
+            self.failedFrameDecodes = 0
             self.frames.setObject(image, forKey: key)
             self.cachedFrameCountStorage += 1
             // 解好的正好是该显示的那一帧（期间可能已翻页）→ 立刻上屏，不必等下一拍。
