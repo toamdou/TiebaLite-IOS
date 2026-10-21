@@ -62,6 +62,15 @@ public final class TiebaFeedScrollGate: Sendable {
     return RunLoop.main.currentMode == .tracking
   }
 
+  /// 仅「手指按住拖动」中（**不含**惯性滑行）。
+  ///
+  /// 预烘闸门用它而不是 `isScrolling`：拖动期主线程在跑手势/吸合/上拉判定，预热让位；
+  /// 惯性期正是新行涌进来、最需要提前量的窗口，必须放行。旧代码用 `isScrolling` 把两者
+  /// 一起挡掉，等于「最该预热的时候不预热」。
+  public var isDragging: Bool {
+    state.withLock { $0.dragging }
+  }
+
   /// 判据 ②：从某个视图往上找宿主 UIScrollView 读实时状态。
   /// 只读两个属性、最多几层 superview，纳秒级；由画布在**未命中缓存**那一刻调一次。
   @MainActor
@@ -77,10 +86,16 @@ public final class TiebaFeedScrollGate: Sendable {
     return false
   }
 
-  /// 后台并发上限：滚动中 1（对应 ASDK 的 --maxThreads），静止放开到 CPU-1（至少 2）。
+  /// 后台并发上限：滚动中 2（按核数，≥4 核才给 2，否则仍 1），静止放开到 CPU-1（至少 2）。
+  ///
+  /// 为什么滚动期不是 1：甩动一屏 6 张卡，单卡烘制 3-5ms，串行要 20-30ms 才能填满，
+  /// 而一帧只有 16ms —— 期间是**没有旧图可留**的空卡。给 2 路仍然远低于 CPU-1，
+  /// 主线程该拿的时间没被抢走（ASDK 自己也只是「--maxThreads」，不是砍到 1）。
   public var limit: Int {
     if state.withLock({ $0.paused }) { return 1 }
-    if isScrolling { return 1 }
+    if isScrolling {
+      return ProcessInfo.processInfo.activeProcessorCount >= 4 ? 2 : 1
+    }
     return max(ProcessInfo.processInfo.activeProcessorCount - 1, 2)
   }
 }

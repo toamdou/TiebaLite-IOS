@@ -43,6 +43,7 @@ public final class TiebaFeedBitmapStore {
   public var maxEntryBytes = 8 * 1024 * 1024
 
   private var entries: [Entry] = []
+  private var prewarmInFlight: Set<TiebaFeedBitmapKey> = []
   private var useClock: UInt64 = 0
 
   /// 命中 / 未命中（验收判据 2）。invalidate() 不清零 —— 主题切换不该抹掉统计。
@@ -84,6 +85,12 @@ public final class TiebaFeedBitmapStore {
   /// 静默查询（不计命中率）：预取路径用，别把预热算成用户命中。
   public func isCached(_ key: TiebaFeedBitmapKey) -> Bool {
     entries.contains { $0.model.value != nil && $0.key == key }
+  }
+
+  /// 静默查询（含在途预热）：列表用它在构建 runs/Job 之前短路，
+  /// 避免同一行被 UIKit 的预取回调反复重建输入。
+  public func isCachedOrPending(_ key: TiebaFeedBitmapKey) -> Bool {
+    prewarmInFlight.contains(key) || isCached(key)
   }
 
   // MARK: - 存入
@@ -128,16 +135,26 @@ public final class TiebaFeedBitmapStore {
   /// 应在 UICollectionView 的 prefetchItemsAt（TiebaKindListView.prefetchItemsAt）旁边并行调用。
   /// job.epoch 必须是 0（纯预取、不发生取消，报告 §5.5）。
   public func prewarm(_ job: TiebaFeedBitmapJob, traits: UITraitCollection, model: AnyObject) {
-    guard job.epoch == 0, !isCached(job.key), totalBytes < byteBudget else { return }
+    guard job.epoch == 0,
+      // 只挡「手指按住拖动」，惯性期放行（04-11）：旧判据 `isScrolling == false` 把
+      // 惯性期也挡了，而甩动恰恰全靠惯性期 —— 结果预烘永远发生在「已经看见」之后。
+      TiebaFeedScrollGate.shared.isDragging == false,
+      isCachedOrPending(job.key) == false,
+      totalBytes < byteBudget
+    else { return }
+    prewarmInFlight.insert(job.key)
+    let key = job.key
     let token = TiebaFeedBitmapModelToken(model)
     TiebaFeedBitmapBaker.shared.submit(
       job,
       traits: traits,
       epochProbe: { 0 }
     ) { [weak self] result in
-      guard let result else { return }
       Task { @MainActor in
-        self?.insert(result, model: token.model)
+        self?.prewarmInFlight.remove(key)
+        if let result {
+          self?.insert(result, model: token.model)
+        }
       }
     }
   }
