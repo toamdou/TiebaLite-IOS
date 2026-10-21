@@ -12,8 +12,9 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     ("default", "默认"), ("dark", "暗夜"), ("blue_dark", "暗夜蓝"),
     ("grey_dark", "暗夜灰"), ("amoled_dark", "纯黑"),
   ]
-  /// 字号偏好的行 id（与偏好键同名；正文/界面两级 + 跟随开关）。
+  /// 字号偏好的行 id（与偏好键同名；正文、帖子标题、界面三档 + 跟随开关）。
   private static let bodySizeRow = TiebaTypography.bodySizeKey
+  private static let titleSizeRow = TiebaTypography.titleSizeKey
   private static let uiSizeRow = TiebaTypography.uiSizeKey
   private static let followsRow = TiebaTypography.followsBodyKey
 
@@ -21,7 +22,8 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
   private static let preferenceKeys = [
     "lightTheme", "darkTheme", "customPrimaryColor", "followSystemDarkMode", "darkMode",
     "toolbarPrimaryColor", "statusBarFontDark", "entranceAnimation",
-    TiebaTypography.bodySizeKey, TiebaTypography.uiSizeKey, TiebaTypography.followsBodyKey,
+    TiebaTypography.bodySizeKey, TiebaTypography.titleSizeKey,
+    TiebaTypography.uiSizeKey, TiebaTypography.followsBodyKey,
     TiebaListAppearance.key,
     // 旧键仍观察：本页的正文滑杆会把倍率镜像写回它（兼容未改造的读取方）。
     TiebaTypography.legacyScaleKey,
@@ -50,10 +52,17 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     }
     // 滑杆实时示例的字体**由本页给**：表单层不认识字号体系（正文级/界面级），
     // 示例字号 = "滑杆当前值这么多 pt"——拖动中逐帧现算，不等落库。
-    form.slidePreviewFont = { _, value in
+    form.slidePreviewFont = { id, value in
       // 示例字号 = 滑杆当前值这么多 pt：size 已经是要显示的字号，scale 再乘一遍就成了二次增长
       //（24 档会显示约 33.9pt、12 档约 8.5pt，只有默认档 17pt 碰巧正确）。
-      TiebaSimpleText.scaledFont(size: CGFloat(value), weight: .regular, scale: 1)
+      // 标题行必须复用真实主贴标题的同一入口：titleFont(scale:) 的 base 22 /
+      // medium / UIFontMetrics 文本档都与 TiebaPostRowModel 一致，拖动预览不会
+      // 在系统大字号下和进帖后的大标题产生偏差。其余滑杆保持通用 regular 示例。
+      if id == Self.titleSizeRow {
+        return TiebaPostRowLayout.titleFont(
+          scale: CGFloat(value / TiebaTypography.titleReferenceSize))
+      }
+      return TiebaSimpleText.scaledFont(size: CGFloat(value), weight: .regular, scale: 1)
     }
     // 「深色模式」行在跟随系统时 = 当前外观档：系统深浅切换要重算行值。
     styleRegistration = registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
@@ -80,9 +89,12 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     let followsBody = typography.followsBody
     showsUIFontSliderRow = !followsBody
     let bodyValue = TiebaPreferences.numberLiteral(typography.bodySize)
+    let titleValue = TiebaPreferences.numberLiteral(typography.titleSize)
     let uiValue = TiebaPreferences.numberLiteral(typography.uiSize)
     let minSize = TiebaTypography.sizeRange.lowerBound
     let maxSize = TiebaTypography.sizeRange.upperBound
+    let titleMinSize = TiebaTypography.titleSizeRange.lowerBound
+    let titleMaxSize = TiebaTypography.titleSizeRange.upperBound
     let step = TiebaTypography.sizeStep
 
     var themeRows = [
@@ -174,13 +186,16 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
       ),
       TiebaFormSection(
         title: "阅读字号",
-        footer: "滑杆左右拖动 = 无级调节，下方示例实时跟随。正文字号管帖子卡片与帖内正文/回复/楼中楼；界面字号管其余全部界面（导航栏、按钮、设置页、列表标题、时间与徽章）。",
+        footer: "滑杆左右拖动 = 无级调节，下方示例实时跟随。正文字号管帖子卡片与帖内正文/回复/楼中楼；帖子标题字号只影响进入帖子后主贴卡片顶端的标题；界面字号管其余全部界面（导航栏、按钮、设置页、列表标题、时间与徽章）。",
         rows: uiFontRows(
           bodyValue: bodyValue,
+          titleValue: titleValue,
           uiValue: uiValue,
           followsBody: followsBody,
           minSize: minSize,
           maxSize: maxSize,
+          titleMinSize: titleMinSize,
+          titleMaxSize: titleMaxSize,
           step: step
         )
       ),
@@ -215,16 +230,20 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     )
   }
 
-  /// 「阅读字号」分组的行：正文滑杆 + 界面滑杆 + 跟随开关。
+  /// 「阅读字号」分组的行：正文滑杆 + 帖子标题滑杆 + 界面滑杆 + 跟随开关。
   ///
-  /// 顺序按用户口径：两个调节部分在前，按钮在后；开关**打开时界面字号滑杆
-  /// 收起**（收起/展开走 TiebaFormListView.setHidden 的插入/删除动画，不是瞬切）。
+  /// 顺序按用户口径：调节滑杆在前，按钮在后。跟随开关只会收起**界面字号滑杆**
+  ///（收起/展开走 TiebaFormListView.setHidden 的插入/删除动画，不是瞬切）；
+  /// 帖子标题滑杆**始终显示**，因为它不属于界面字号体系。
   private func uiFontRows(
     bodyValue: String,
+    titleValue: String,
     uiValue: String,
     followsBody: Bool,
     minSize: Double,
     maxSize: Double,
+    titleMinSize: Double,
+    titleMaxSize: Double,
     step: Double
   ) -> [TiebaFormRow] {
     var rows = [
@@ -244,6 +263,21 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
         defaultValue: TiebaTypography.defaultBodySize
       )
     ]
+    // 标题字号与正文完全独立：range/default/落盘键都走 TiebaTypography.title*。
+    // 这一行**永远不隐藏**——「界面字号跟随正文字号」只控制下面的 uiSizeRow。
+    rows.append(TiebaFormRow(
+      id: Self.titleSizeRow,
+      kind: .slider,
+      title: "帖子标题字号",
+      icon: "textformat",
+      value: titleValue,
+      minValue: titleMinSize,
+      maxValue: titleMaxSize,
+      step: step,
+      previewText: "标题示例：进入帖子后主贴卡片顶端的大标题。",
+      // 「重置」目标 = 独立标题档默认 22pt，不是正文字号的 17pt。
+      defaultValue: TiebaTypography.defaultTitleSize
+    ))
     // 这一行**恒在 sections 里**：显隐交给 TiebaFormListView.setHidden 做数据源级
     // 增删（这样才有插入/删除的高度动画）。跟随打开时它在重建后立刻被收起。
     rows.append(TiebaFormRow(
@@ -311,9 +345,10 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
         id: "statusBarFontDark",
         value: TiebaPreferences.bool("statusBarFontDark", default: false) ? "1" : "0")
     }
-    // 两级字号：快照读的是已迁移的值（旧 fontScale 倍率由 TiebaTypography 换算）。
+    // 正文字号 / 标题字号 / 界面字号三档快照（旧 fontScale 倍率已由 TiebaTypography 换算）。
     let typography = TiebaTypography.snapshot()
     form.setValue(id: Self.bodySizeRow, value: TiebaPreferences.numberLiteral(typography.bodySize))
+    form.setValue(id: Self.titleSizeRow, value: TiebaPreferences.numberLiteral(typography.titleSize))
     if !typography.followsBody {
       form.setValue(id: Self.uiSizeRow, value: TiebaPreferences.numberLiteral(typography.uiSize))
     }
@@ -434,16 +469,19 @@ final class TiebaThemeSettingsViewController: TiebaFormPageController {
     pendingSlide = nil
     lastSlideWriteAt = CFAbsoluteTimeGetCurrent()
     // 无级但落盘值量化到 0.1pt：避免 17.030000000000001 这种脏值进 KV。
-    let size = TiebaTypography.quantize(pending.value)
+    // 标题必须走独立的 14…34 量化——用正文的 quantize 会把它静默钳到 24。
     switch pending.id {
     case Self.bodySizeRow:
+      let size = TiebaTypography.quantize(pending.value)
       _ = write(Self.bodySizeRow, number: size)
       // 兼容镜像：旧键 fontScale（倍率）同步写回，尚未改造的读取方仍拿到正确字号。
       // 它也是老用户设置的迁移来源（TiebaTypography.readBodySize）。
       _ = TiebaPreferences.set(
         TiebaTypography.legacyScaleKey, number: size / TiebaTypography.referenceSize)
+    case Self.titleSizeRow:
+      _ = write(Self.titleSizeRow, number: TiebaTypography.quantizeTitleSize(pending.value))
     case Self.uiSizeRow:
-      _ = write(Self.uiSizeRow, number: size)
+      _ = write(Self.uiSizeRow, number: TiebaTypography.quantize(pending.value))
     default:
       break
     }

@@ -24,6 +24,7 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
     "homePageShowHistoryForum", "forumListSingle", "startTab", "incognitoMode",
     "useBuiltInBrowser",
     "navBarDoubleTapToTop", "tabBarMinimizeEnabled", "defaultSortType", "hideMedia",
+    "imageStackVertical",
     "showBothUsername", "showShortcutInThread", "forumFabFunction", "timestampStyle",
     "showIpLocation", "showLevelBadge", "showLevelTitle", "hideBlockedContent", "blockVideo",
     "filterAdThreads", "collectSeeLz", "collectDescSort",
@@ -54,6 +55,7 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
     setFlag("navBarDoubleTapToTop", default: true)
     setFlag("tabBarMinimizeEnabled", default: true)
     setFlag("hideMedia", default: false)
+    setFlag("imageStackVertical", default: false)
     setFlag("showBothUsername", default: false)
     setFlag("showShortcutInThread", default: true)
     setFlag("showIpLocation", default: true)
@@ -146,6 +148,9 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
             options: options(Self.sortTypes)
           ),
           toggle("hideMedia", "隐藏媒体内容", "photo.on.rectangle.angled", default: false),
+          toggle(
+            "imageStackVertical", "帖子图片竖排", "rectangle.grid.1x2", default: false,
+            subtitle: "开启后帖子与回复里的多图改为上下堆叠（最多 3 张，其余用 +N 角标）"),
         ]
       ),
       TiebaFormSection(

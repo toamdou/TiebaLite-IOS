@@ -90,8 +90,10 @@ enum TiebaPostRowText {
     isSubPost: Bool = false
   ) -> (build: TiebaPostTextBuild, images: [TiebaThreadImage]) {
     let scale = preferences.fontScaleClamped
-    let fontSize = (isSubPost ? 14 : 15) * scale
-    let lineHeight = (isSubPost ? 20 : 22) * scale
+    // 长文阅读正文按 iOS 默认 body 语义靠拢：主贴/楼层 17pt/25pt，
+    // 楼中楼 15pt/22pt；应用内正文字号滑杆仍在此基准上独立缩放。
+    let fontSize = (isSubPost ? 15 : 17) * scale
+    let lineHeight = (isSubPost ? 23 : 26) * scale
     let paragraph = NSMutableParagraphStyle()
     paragraph.minimumLineHeight = lineHeight
     paragraph.maximumLineHeight = lineHeight
@@ -99,7 +101,7 @@ enum TiebaPostRowText {
     // 楼层正文按字换行（截断交给行高的最大行数）。
     paragraph.lineBreakMode = isSubPost ? .byTruncatingTail : .byWordWrapping
     let base: [NSAttributedString.Key: Any] = [
-      .font: UIFont.systemFont(ofSize: fontSize, weight: .medium),
+      .font: UIFont.systemFont(ofSize: fontSize, weight: .regular),
       .foregroundColor: palette.text,
       .paragraphStyle: paragraph,
     ]
@@ -352,14 +354,14 @@ private final class TiebaEmoticonRunDelegate {
   ///   - maxLines: 0 = 不限行（主贴正文）；2 = 楼中楼预览两行截断（truncationType = .end，与 UILabel 的 byTruncatingTail 同口径）。
   ///   - lineSpacing: TextNode 的行距因子，由目标行高反推（见 TiebaTextLineMetrics），测量与绘制必须同一值。
   /// 约束高度给 .greatestFiniteMagnitude：行数由 maximumNumberOfLines 决定，不能由「量出来的高度」反过来限制排版。
-  static func measureBody(
+  static func measureBodyLayout(
     _ attributed: NSAttributedString,
     width: CGFloat,
     maxLines: Int,
     lineSpacing: CGFloat
-  ) -> CGFloat {
-    guard attributed.length > 0, width > 0 else { return 0 }
-    let layout = TiebaTextNode.calculateLayout(
+  ) -> TiebaTextNodeLayout? {
+    guard attributed.length > 0, width > 0 else { return nil }
+    return TiebaTextNode.calculateLayout(
       attributedString: attributed,
       minimumNumberOfLines: 0,
       maximumNumberOfLines: maxLines,
@@ -379,7 +381,20 @@ private final class TiebaEmoticonRunDelegate {
       displayEmbeddedItemsUnderSpoilers: false,
       customTruncationToken: nil
     )
-    return layout.size.height
+  }
+
+  static func measureBody(
+    _ attributed: NSAttributedString,
+    width: CGFloat,
+    maxLines: Int,
+    lineSpacing: CGFloat
+  ) -> CGFloat {
+    measureBodyLayout(
+      attributed,
+      width: width,
+      maxLines: maxLines,
+      lineSpacing: lineSpacing
+    )?.size.height ?? 0
   }
 
   // MARK: 块媒体 / 展示 URL

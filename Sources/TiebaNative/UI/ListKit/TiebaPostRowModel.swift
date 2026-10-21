@@ -13,6 +13,33 @@ struct TiebaPostMediaPlaceholder: Sendable {
   var text: String
 }
 
+// MARK: - 帖子页内容身份
+
+/// 楼层在两次发布之间的稳定身份：用帖子内容指纹再走 TiebaRowDiff 的跨进程混合器，
+/// 不依赖 Swift Hasher（每进程随机种子）。纯追加时前缀 identity 不变，列表才能复用
+/// 帧高缓存并让 diffable 只处理增量。
+enum TiebaPostRowIdentity {
+  nonisolated static func make(
+    _ post: TiebaThreadPost,
+    fingerprint: String? = nil
+  ) -> TiebaRowDiff.Entry.Identity {
+    let content = fingerprint ?? postFingerprint(post)
+    let value = TiebaRowDiff.fingerprint(of: [
+      "id": post.id,
+      "content": content,
+    ])
+    return TiebaRowDiff.Entry.Identity(fingerprint: value, ordinal: 0)
+  }
+
+  private nonisolated static func postFingerprint(_ post: TiebaThreadPost) -> String {
+    var images = ""
+    for image in post.images {
+      images += "|\(image.src)|\(image.bigSrc)|\(image.originSrc)|\(image.width)|\(image.height)"
+    }
+    return "\(post.id)|\(post.floor)|\(post.authorId)|\(post.displayName)|\(post.agreeNum)|\(post.isAgree)|\(post.subPostNum)|\(post.plainText)|\(images)"
+  }
+}
+
 // MARK: - 行模型
 
 final class TiebaPostRowModel: @unchecked Sendable {
@@ -246,12 +273,15 @@ final class TiebaPostRowModel: @unchecked Sendable {
       preferences: preferences
     )
     self.likeText = post.agreeNum > 0 ? TiebaForumFormat.count(post.agreeNum) : ""
+    // 标题字体/行高走独立的 preferences.titleScale；正文 build/plan 仍只读
+    // fontScaleClamped。这样标题字号滑杆不会改正文/回复/楼中楼的测量。
+    let titleScale = preferences.titleScaleClamped
     self.titleText =
       isMain && !title.isEmpty
       ? TiebaSimpleText.makeAttributed(
         text: title,
-        font: TiebaPostRowLayout.titleFont,
-        lineHeight: TiebaPostRowLayout.titleLineHeight,
+        font: TiebaPostRowLayout.titleFont(scale: titleScale),
+        lineHeight: TiebaPostRowLayout.titleLineHeight(scale: titleScale),
         truncating: TiebaPostRowLayout.titleLineLimit > 0
       )
       : nil
@@ -274,6 +304,7 @@ final class TiebaPostRowModel: @unchecked Sendable {
       fontScale: Double(preferences.fontScaleClamped),
       images: self.images,
       imagesHidden: self.imagesHidden,
+      imagesVertical: preferences.imagesStackVertically,
       video: self.video,
       videoPlaceholder: self.videoPlaceholder,
       audio: self.audio,

@@ -1,6 +1,8 @@
-// 帖子行视图（thread/[id] 原生页：主贴卡 + 回复卡）与其内嵌媒体。
+// 帖子行视图（thread/[id] 的 hero + conversation 回复，以及楼中楼固定父卡）与其内嵌媒体。
 //
-// 行高由 TiebaPostRowMetrics 预先算好，本视图只按 model.plan 摆 frame（测多少画多少）。
+// 同一个视图按 plan.role 呈现三种阅读语义：hero 编辑式主贴、context 固定上下文摘要、
+// reply 头像列 + body 列 + 线程竖线。行高仍由 TiebaPostRowMetrics 预先算好，
+// 本视图只按 model.plan 摆 frame（测多少画多少），不在滚动中做实时布局/材质。
 // 交互自管（点赞/菜单/头像/楼中楼/图片），只把语义动作经 onEvent 外传；
 // 视频/语音的互斥与离屏暂停由 TiebaThreadMediaCoordinator 收敛（原 mediaBusStore）。
 import AVFoundation
@@ -8,6 +10,41 @@ import AVKit
 import UIKit
 import Nuke
 import NukeExtensions
+
+/// Forum/Thread 阅读面共用的无障碍色与 surface token。
+/// 元信息/次级图标不使用 tertiaryLabel（白底约 1.7:1）：默认 62% label，
+/// Increase Contrast 提到 82%，两种都满足 4.5:1（小字）与 3:1（图标）。
+enum TiebaAccessibleColors {
+  static let surfaceRadius: CGFloat = TiebaDesignSystem.Radius.card
+
+  static let metadata: UIColor = UIColor { traits in
+    let alpha: CGFloat = traits.accessibilityContrast == .high
+      ? 0.88
+      : (traits.userInterfaceStyle == .dark ? 0.60 : 0.55)
+    return UIColor.label.resolvedColor(with: traits).withAlphaComponent(alpha)
+  }
+
+  static let icon: UIColor = metadata
+
+  /// 楼中楼预览的内嵌面：只比页面高一层，不画边、不画线。
+  static let nestedSurface: UIColor = UIColor { traits in
+    if traits.userInterfaceStyle == .dark {
+      return UIColor.white.withAlphaComponent(traits.accessibilityContrast == .high ? 0.10 : 0.055)
+    }
+    return UIColor(red: 0.968, green: 0.968, blue: 0.976, alpha: 1)
+  }
+
+  /// 亮色 = white；暗色 = elevated secondary（Increase Contrast 再上提一档），
+  /// 不靠黑底+黑阴影或灰描边制造边界。
+  static let elevatedSurface: UIColor = UIColor { traits in
+    guard traits.userInterfaceStyle == .dark else {
+      return UIColor.systemBackground.resolvedColor(with: traits)
+    }
+    return traits.accessibilityContrast == .high
+      ? UIColor.tertiarySystemBackground.resolvedColor(with: traits)
+      : UIColor.secondarySystemBackground.resolvedColor(with: traits)
+  }
+}
 
 // MARK: - 帖子卡视图
 final class TiebaPostRowView: UIView {
@@ -20,18 +57,18 @@ final class TiebaPostRowView: UIView {
   private var assignedText: NSAttributedString?
 
   private let cardView = UIView()
-  /// 行底**通栏**发际线（扁平档的行间分隔；卡片档整条收起，见 TiebaListAppearance）。
-  private let rowHairline = UIView()
   private var avatarView: TiebaForumAvatarView?
   private let titleLabel = UILabel()
   private let nameLabel = UILabel()
   private let metaLabel = UILabel()
   private let levelLabel = UILabel()
   private let lzLabel = UILabel()
+  private let floorLabel = UILabel()
+  private let hotLabel = UILabel()
   private let likeIcon = UIImageView()
   private let likeLabel = UILabel()
   private let menuButton = UIButton(type: .system)
-  private let avatarControl = UIControl()
+  private let avatarControl = TiebaPostHitControl(frame: .zero)
   private let likeControl = UIControl()
   // [显示] 正文 = TextNode 渲染（移植自上游 Display/Source/TextNode.swift 的排版/绘制路径）：
   // 行高/行距/截断/配色全部由 plan 的行距因子 + TextNode 排版决定，逐项与系统排版对拍（见 27 号文档）。
@@ -74,11 +111,20 @@ final class TiebaPostRowView: UIView {
   private let subPostsMoreLabel = UILabel()
   private let toolbarView = UIView()
   private let toolbarReplyLabel = UILabel()
-  private let seeLzButton = UIButton(type: .system)
-  private let sortButton = UIButton(type: .system)
+  private let seeLzButton = TiebaPostPillButton(type: .system)
+  private let sortButton = TiebaPostPillButton(type: .system)
 
   private var model: TiebaPostRowModel?
   private var palette: TiebaFeedRowPalette = .default
+  /// 上一次真正贴上的互动态：只在状态变化时放飞一只弹簧，首屏/重复 apply 不播。
+  private var observedIsAgree: Bool?
+  private var observedLikeText = ""
+  private var observedToolbarSeeLz: Bool?
+  private var observedToolbarSort: TiebaThreadSort?
+  /// iPad 指针悬停：只挂在交互控件上，不改变触摸/滚动；强引用交给行视图持有。
+  private var pointerInteractions: [TiebaPointerInteraction] = []
+  /// 头像视图会按主贴/回复尺寸重建，悬停对象必须跟着更新 customInteractionView。
+  private var avatarPointerInteraction: TiebaPointerInteraction?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -86,12 +132,8 @@ final class TiebaPostRowView: UIView {
     backgroundColor = .clear
     clipsToBounds = true
     buildSubviews()
-    // 加在最后 = 画在最上层：行底那条线要压在卡面之上（它落在卡面 16pt 内边距的
-    // 空白里，不与内容重叠，压上来只是保证任何情况下都不会被卡面盖掉）。
-    rowHairline.isHidden = true
-    // 裸 UIView 默认吃触摸：发际线叠在卡之上，不关掉会吞掉行底 1px 带上的长按。
-    rowHairline.isUserInteractionEnabled = false
-    addSubview(rowHairline)
+    // 正文 layout 已是不可变快照；绘制移到后台，主线程只贴 layer.contents。
+    textNode.layer.drawsAsynchronously = true
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -114,60 +156,117 @@ final class TiebaPostRowView: UIView {
     // 就是一次完整排版（TextNode 的 CoreText 排版），是这行最贵的一笔；主题色变
     // 走 applyPalette 另一条路。换行/换模型/reuse 都会让 token 失配。
     if appliedModel === model { return }
+    let previousIsAgree = observedIsAgree
+    let previousLikeText = observedLikeText
     appliedModel = model
+    let oldRole = self.model?.plan.role
+    let paletteChanged = self.palette != model.palette
     self.model = model
-    self.palette = model.palette
-    applyPalette(model.palette)
+    if paletteChanged || oldRole != model.plan.role {
+      self.palette = model.palette
+      applyPalette(model.palette)
+    }
     let plan = model.plan
+    // hero 的柔和 elevation 需要越过行边界一点点；回复仍严格裁切，避免线程串层。
+    clipsToBounds = plan.role != .hero
 
     // 进帖转场的目标端配对（只有主贴卡带 id）：首包落地后这张卡接替占位卡，
     // 没有它的话"返回上一级"的缩回动画就找不到目标（见 TiebaHeroTransition）。
     TiebaHeroTransition.mark(cardView, threadId: model.heroThreadId ?? "")
     cardView.frame = plan.cardFrame
-    cardView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
-    cardView.layer.cornerCurve = .continuous
-    // 卡面底色 / 描边**由外观档给**：扁平档没有独立卡面（底色 = 页面底色、不描边），
-    // 行与行靠下面的 rowHairline 分隔。这里不写 if —— 绘制期不加外观分支（49 号 §1）。
-    cardView.backgroundColor = TiebaListAppearance.rowSurface(card: model.palette.card)
-    cardView.layer.borderWidth = TiebaListAppearance.rowBorderWidth(
-      scale: traitCollection.displayScale)
-    cardView.layer.borderColor =
-      TiebaListAppearance.rowBorderColor(card: model.palette.borderCard)?.cgColor
-    layoutRowHairline(plan)
-
+    applyPostRowSurface()
+    let isHotReply = plan.role == .reply && model.isLz == false && model.post.agreeNum >= 20
     avatarControl.frame = plan.avatarFrame
     titleLabel.isHidden = plan.titleFrame == nil
     if let titleFrame = plan.titleFrame {
       titleLabel.frame = titleFrame
-      titleLabel.attributedText = model.titleText
+      // 行高与 plan 测量同源；AX 下 titleFont.lineHeight 会随 Dynamic Type 增长，
+      // 不能继续用固定的 28pt titleLineHeight 去压多行标题。
+      titleLabel.attributedText = model.titleText.map { titleText in
+        TiebaSimpleText.makeAttributed(
+          text: titleText.string,
+          font: TiebaPostRowLayout.titleFont,
+          lineHeight: plan.titleLineHeight > 0
+            ? plan.titleLineHeight
+            : TiebaPostRowLayout.titleLineHeight,
+          truncating: false
+        )
+      }
       titleLabel.textColor = model.palette.text
     } else {
       titleLabel.attributedText = nil
     }
     configureAvatar(model: model, frame: plan.avatarFrame)
+    avatarControl.isAccessibilityElement = true
+    avatarControl.accessibilityLabel = "查看\(model.nameText)的头像"
+    avatarControl.accessibilityTraits = .button
     nameLabel.frame = plan.nameFrame
+    nameLabel.font = plan.role == .hero
+      ? TiebaPostRowLayout.nameFontMain
+      : TiebaPostRowLayout.nameFont
+    metaLabel.font = TiebaPostRowLayout.metaFont
+    blockedTipLabel.font = TiebaSimpleText.bodyFont(size: 12, weight: .regular)
+    levelLabel.font = TiebaPostRowLayout.badgeFont
+    lzLabel.font = TiebaPostRowLayout.lzFont
+    floorLabel.font = TiebaPostRowLayout.lzFont
+    hotLabel.font = TiebaPostRowLayout.lzFont
+    likeLabel.font = TiebaPostRowLayout.actionFont
+    nameLabel.numberOfLines = plan.nameMaxLines
+    nameLabel.lineBreakMode = plan.nameMaxLines == 0
+      ? .byWordWrapping
+      : .byTruncatingTail
     nameLabel.text = model.nameText
     nameLabel.textColor = model.palette.text
     if model.preferences.showBothUsername, !model.post.authorName.isEmpty, model.post.authorName != model.nameText {
       nameLabel.text = "\(model.nameText) @\(model.post.authorName)"
     }
     metaLabel.frame = plan.metaFrame
-    metaLabel.text = model.metaText
-    metaLabel.textColor = model.palette.textTertiary
+    var displayedMeta = model.metaText
+    if plan.role == .reply, model.post.floor > 0 {
+      // floor 已经是独立浅色胶囊；从轻量 meta 中去重，信息不变但层级更干净。
+      let floorToken = "\(model.post.floor)楼"
+      displayedMeta = displayedMeta
+        .replacingOccurrences(of: " · \(floorToken)", with: "")
+        .replacingOccurrences(of: "\(floorToken) · ", with: "")
+      if displayedMeta == floorToken { displayedMeta = "" }
+    }
+    metaLabel.text = displayedMeta
+    metaLabel.numberOfLines = plan.metaMaxLines
+    metaLabel.lineBreakMode = plan.metaMaxLines == 0
+      ? .byWordWrapping
+      : .byTruncatingTail
+    metaLabel.isHidden = plan.metaFrame.height <= 0
+    metaLabel.textColor = TiebaAccessibleColors.metadata
 
     levelLabel.isHidden = plan.levelFrame == nil
-    if let frame = plan.levelFrame, let color = model.levelColor {
+    if let frame = plan.levelFrame {
       levelLabel.frame = frame
       // 文案由 plan 决定（头衔放不下时它已退成「Lv.N」）。
       levelLabel.text = plan.levelRenderText ?? model.levelText
-      levelLabel.textColor = color
-      levelLabel.backgroundColor = color.withAlphaComponent(0.25)
+      // 等级不再使用彩虹色；所有等级徽标统一为中性小 chip，只保留楼主为品牌蓝强调。
+      levelLabel.textColor = model.palette.text
+      levelLabel.backgroundColor = .tertiarySystemFill
     }
     lzLabel.isHidden = plan.lzFrame == nil
     if let frame = plan.lzFrame {
       lzLabel.frame = frame
       lzLabel.textColor = model.palette.primary
       lzLabel.backgroundColor = model.palette.primary.withAlphaComponent(0.10)
+    }
+    floorLabel.isHidden = plan.floorFrame == nil
+    if let frame = plan.floorFrame {
+      floorLabel.frame = frame
+      floorLabel.text = "\(model.post.floor)楼"
+      floorLabel.textColor = model.palette.text
+      floorLabel.backgroundColor = .tertiarySystemFill
+      floorLabel.accessibilityLabel = "第\(model.post.floor)楼"
+    }
+    hotLabel.isHidden = plan.hotFrame == nil
+    if let frame = plan.hotFrame {
+      hotLabel.frame = frame
+      hotLabel.textColor = model.palette.text
+      hotLabel.backgroundColor = .tertiarySystemFill
+      hotLabel.accessibilityLabel = "高赞回复"
     }
 
     likeIcon.frame = plan.likeIconFrame
@@ -177,27 +276,57 @@ final class TiebaPostRowView: UIView {
       pointSize: 18,
       weight: .regular
     )
-    likeIcon.tintColor = model.post.isAgree ? model.palette.liked : model.palette.textTertiary
+    // 高赞回复用主色而非更淡的 tertiary 提示"这条值得先读"，只在未点赞时生效。
+    let quietActionColor = isHotReply ? model.palette.primary : TiebaAccessibleColors.icon
+    likeIcon.tintColor = model.post.isAgree ? model.palette.liked : quietActionColor
     likeControl.frame = plan.likeFrame
     likeLabel.isHidden = plan.likeCountFrame == nil
     if let frame = plan.likeCountFrame {
       likeLabel.frame = frame
       likeLabel.text = model.likeText
-      likeLabel.textColor = model.post.isAgree ? model.palette.liked : model.palette.textTertiary
+      // 小号操作文字始终走 ≥4.5:1 的 metadata；点赞状态由 heart.fill 与 accessibility 传达。
+      likeLabel.textColor = TiebaAccessibleColors.metadata
     }
+    likeControl.isAccessibilityElement = true
+    likeControl.accessibilityLabel = model.post.isAgree ? "取消点赞" : "点赞"
+    likeControl.accessibilityHint = model.post.isAgree ? "双击取消点赞" : "双击点赞"
+    likeControl.accessibilityValue = model.likeText.isEmpty ? nil : model.likeText
+    likeControl.accessibilityTraits = model.post.isAgree ? [.button, .selected] : .button
     menuButton.frame = plan.menuFrame
     menuButton.setImage(TiebaSymbols.image("ellipsis", pointSize: 18, weight: .bold), for: .normal)
-    menuButton.tintColor = model.palette.textTertiary
+    menuButton.tintColor = TiebaAccessibleColors.icon
+    menuButton.accessibilityHint = "复制、分享或复制链接"
+
+    let likeStateChanged = previousIsAgree != nil && previousIsAgree != model.post.isAgree
+    let likeCountChanged = previousIsAgree != nil && previousLikeText != model.likeText
+    observedIsAgree = model.post.isAgree
+    observedLikeText = model.likeText
+    if window != nil, likeStateChanged || likeCountChanged {
+      TiebaInteractiveMotion.pulse(likeIcon, from: likeStateChanged ? 0.82 : 0.92)
+      if likeCountChanged, likeLabel.isHidden == false {
+        TiebaInteractiveMotion.pulse(likeLabel, from: 0.92)
+      }
+    }
 
     textNode.isHidden = plan.textFrame == nil
     if let frame = plan.textFrame {
       textNode.frame = frame
       assignedText = model.contentText
       textNode.lineSpacing = plan.contentLineSpacing
+      textNode.maximumNumberOfLines = plan.contentMaxLines
       textNode.attributedText = model.contentText
-      // 约束高度不参与行数判定：行数只看 maximumNumberOfLines（0 = 不限行），与 measureBody 同口径 ——
-      // 若把「量出来的高度」当约束传进去，末行会被判成最后一行而给正文加上省略号。
-      _ = textNode.updateLayout(CGSize(width: frame.width, height: .greatestFiniteMagnitude))
+      // 测量期已有一份完整 CoreText layout：宽度/文本一致就只贴结果，滚动中不再重排。
+      if let layout = model.plan.contentLayout,
+        abs(layout.constrainedSize.width - frame.width) < 0.5,
+        let text = model.contentText,
+        layout.attributedString?.isEqual(to: text) == true
+      {
+        textNode.apply(cachedLayout: layout)
+      } else {
+        // 兜底：宽度变化或表情升级后文本变了，才重新排版。
+        // 约束高度不参与行数判定：行数只看 maximumNumberOfLines（0 = 不限行），与 measureBody 同口径。
+        _ = textNode.updateLayout(CGSize(width: frame.width, height: .greatestFiniteMagnitude))
+      }
       installTextAccessibility()
     } else {
       assignedText = nil
@@ -238,28 +367,44 @@ final class TiebaPostRowView: UIView {
     // 换主题由 UITextView 时代的 textColor/linkTextAttributes 改为「随模型重建」，语义不变。
     avatarView?.backgroundColor = palette.avatarFallback
     blockedTipView.backgroundColor = .systemFill
-    blockedTipLabel.textColor = palette.textSecondary
-    blockedTipIcon.tintColor = palette.textSecondary
+    blockedTipLabel.textColor = TiebaAccessibleColors.metadata
+    blockedTipIcon.tintColor = TiebaAccessibleColors.icon
     imageBadge.textColor = .white
     // 与 buildSubviews 里的规范值同源（黑 55%；改前这里是 45%，会把新规范覆盖回旧值）。
     imageBadge.backgroundColor = UIColor.black.withAlphaComponent(0.55)
-    subPostsBox.backgroundColor = TiebaListAppearance.subPostBoxBackground
-    rowHairline.backgroundColor = palette.separator
+    // 楼中楼预览是正文内的次级容器：只用低面积系统 fill 分层，
+    // 不画深色描边、不叠阴影/材质。
+    subPostsBox.backgroundColor = TiebaAccessibleColors.nestedSurface
+    subPostsBox.layer.borderWidth = 0
+    subPostsBox.layer.borderColor = UIColor.clear.cgColor
+    floorLabel.textColor = palette.text
+    floorLabel.backgroundColor = .tertiarySystemFill
+    hotLabel.textColor = palette.text
+    hotLabel.backgroundColor = .tertiarySystemFill
+    applyPostRowSurface()
     // 楼中楼正文颜色同样烘在 attributed 里（palette.text），与主贴正文一致。
     subPostsMoreLabel.textColor = palette.primary
-    // 底色 = 主题 surfaceSecondary（原 JS replyToolbar 的 colors.surfaceSecondary，
-    // 浅色下与页面底色同值）：只靠 hairline 描边成卡，不用 .systemFill —— 那块灰
-    // 在浅色下是一整条"脏底"（用户实证）。
-    toolbarView.backgroundColor = TiebaListAppearance.rowSurface(
-      card: TiebaSimpleRowPalette.default.surfaceSecondary)
-    toolbarView.layer.borderColor =
-      TiebaListAppearance.rowBorderColor(card: palette.borderCard)?.cgColor
+    // hero masthead 不是卡：底色透明，只用 typography 分组。
+    toolbarView.backgroundColor = .clear
+    toolbarView.layer.borderWidth = 0
+    toolbarView.layer.borderColor = UIColor.clear.cgColor
     toolbarReplyLabel.textColor = palette.text
     seeLzButton.tintColor = palette.primary
     sortButton.tintColor = palette.primary
-    updateToolbarPills()
+    updateToolbarPills(observeState: false)
     videoView?.applyPalette(palette)
     audioView?.applyPalette(palette)
+  }
+
+  /// 帖子内部固定扁平：主贴、父楼摘要、楼层回复共用同一条纯内容表面。
+  /// 首次配置和换主题都走这里，避免两份 role switch 漂移。
+  private func applyPostRowSurface() {
+    cardView.backgroundColor = .clear
+    cardView.layer.cornerRadius = 0
+    cardView.layer.borderWidth = 0
+    cardView.layer.borderColor = UIColor.clear.cgColor
+    cardView.layer.shadowOpacity = 0
+    cardView.layer.shadowPath = nil
   }
 
   func prepareForReuse() {
@@ -268,10 +413,27 @@ final class TiebaPostRowView: UIView {
     TiebaEntrance.cancel(on: self)
     model = nil
     appliedModel = nil
+    observedIsAgree = nil
+    observedLikeText = ""
+    observedToolbarSeeLz = nil
+    observedToolbarSort = nil
+    let pressControls: [UIControl] = [menuButton, likeControl, subPostsControl, seeLzButton, sortButton]
+    for control in pressControls {
+      TiebaInteractiveMotion.reset(control)
+    }
+    TiebaInteractiveMotion.reset(subPostsBox)
+    TiebaInteractiveMotion.reset(likeIcon)
+    TiebaInteractiveMotion.reset(likeLabel)
+    floorLabel.isHidden = true
+    hotLabel.isHidden = true
+    cardView.layer.shadowOpacity = 0
+    cardView.layer.shadowPath = nil
     imageScrollView.contentOffset = .zero
     assignedText = nil
     gifProbeGenerations.removeAll(keepingCapacity: true)
     titleLabel.attributedText = nil
+    textNode.maximumNumberOfLines = 0
+    textNode.layer.drawsAsynchronously = true
     textNode.attributedText = nil
     textSelectionNode?.cancelSelection()
     clearLinkHighlight()
@@ -301,10 +463,30 @@ final class TiebaPostRowView: UIView {
     self.hideGifBadges()
   }
 
-  /// 首屏入场：参数与其余三族共用 TiebaEntrance（原各抄一份时位移是 10pt、
-  /// 级联钳到 1.2s，与 JS EntranceRow 的 12pt/min(index,9) 不一致）。
+  /// 首屏入场：hero 与 conversation 回复用同一套 timing/key，但 hero 位移更大、
+  /// 时长更从容；模型值始终是终态，复用复位仍按 TiebaEntrance.animationKey 清理。
   func playEntrance(index: Int) {
-    TiebaEntrance.play(on: self, index: index)
+    TiebaEntrance.cancel(on: self)
+    layer.opacity = 1
+    layer.transform = CATransform3DIdentity
+    guard UIAccessibility.isReduceMotionEnabled == false, let model else { return }
+    let isHero = model.plan.role == .hero
+    let opacity = CABasicAnimation(keyPath: "opacity")
+    opacity.fromValue = 0
+    opacity.toValue = 1
+    let translation = CABasicAnimation(keyPath: "transform.translation.y")
+    translation.fromValue = isHero ? 16 : 8
+    translation.toValue = 0
+    let group = CAAnimationGroup()
+    group.animations = [opacity, translation]
+    group.duration = isHero
+      ? TiebaAnimationDuration.largeSlide
+      : TiebaAnimationDuration.tapFeedback
+    group.beginTime = CACurrentMediaTime() + TiebaEntrance.delay(forIndex: index)
+    group.fillMode = .backwards
+    group.timingFunction = CAMediaTimingFunction(name: .easeOut)
+    TiebaAnimationFrameRate.align(group, to: self)
+    layer.add(group, forKey: TiebaEntrance.animationKey)
   }
 
   // MARK: 子视图装配
@@ -315,16 +497,17 @@ final class TiebaPostRowView: UIView {
     // 段落样式里（makeAttributed），这里只管行数与颜色（颜色现取色板，与占位卡同款）。
     titleLabel.numberOfLines = TiebaPostRowLayout.titleLineLimit
     titleLabel.isHidden = true
+    titleLabel.accessibilityTraits = .header
     addSubview(titleLabel)
     addSubview(avatarControl)
     avatarControl.addTarget(self, action: #selector(handleAvatar), for: .touchUpInside)
     nameLabel.numberOfLines = 1
     nameLabel.font = TiebaPostRowLayout.nameFont
     addSubview(nameLabel)
-    metaLabel.numberOfLines = 1
+    metaLabel.numberOfLines = 2
     metaLabel.font = TiebaPostRowLayout.metaFont
     addSubview(metaLabel)
-    for label in [levelLabel, lzLabel] {
+    for label in [levelLabel, lzLabel, floorLabel, hotLabel] {
       label.textAlignment = .center
       label.layer.cornerRadius = 4
       label.layer.cornerCurve = .continuous
@@ -334,8 +517,15 @@ final class TiebaPostRowView: UIView {
     levelLabel.font = TiebaPostRowLayout.badgeFont
     lzLabel.font = TiebaPostRowLayout.lzFont
     lzLabel.text = "楼主"
+    floorLabel.font = TiebaPostRowLayout.lzFont
+    floorLabel.isHidden = true
+    hotLabel.font = TiebaPostRowLayout.lzFont
+    hotLabel.text = "高赞"
+    hotLabel.isHidden = true
     addSubview(likeIcon)
+    likeIcon.isAccessibilityElement = false
     likeLabel.font = TiebaPostRowLayout.actionFont
+    likeLabel.isAccessibilityElement = false
     addSubview(likeLabel)
     addSubview(likeControl)
     likeControl.addTarget(self, action: #selector(handleAgree), for: .touchUpInside)
@@ -442,6 +632,10 @@ final class TiebaPostRowView: UIView {
     // GIF 角标样式（用户口径：无底纯白字 + 阴影，不要胶囊底）已收进 makeGifBadge()，见文件内。
 
     subPostsControl.addTarget(self, action: #selector(handleSubPosts), for: .touchUpInside)
+    subPostsControl.isAccessibilityElement = true
+    subPostsControl.accessibilityLabel = "查看楼中楼"
+    subPostsControl.accessibilityHint = "打开这段对话"
+    subPostsControl.accessibilityTraits = .button
     // 楼中楼预览框：整段收进一个浅底圆角矩形（取代旧版"逐条上方一条分隔线 +
     // 块顶一条 hairline"）。非交互：只垫在文字下面，点按仍归 subPostsControl。
     subPostsBox.isUserInteractionEnabled = false
@@ -467,22 +661,55 @@ final class TiebaPostRowView: UIView {
     addSubview(toolbarView)
     toolbarView.isHidden = true
     toolbarReplyLabel.font = TiebaPostRowLayout.replyCountFont
+    toolbarReplyLabel.accessibilityTraits = .header
+    toolbarReplyLabel.numberOfLines = 0
     // 标签与药丸挂在**行视图**上：plan 的 toolbarTextFrame/toolbarSeeLzFrame/
     // toolbarSortFrame 都是行坐标，挂进 toolbarView 会再叠一次 toolbarFrame 的
     // 偏移（整条只剩空底，用户实证"只看楼主那一行显示不出来"）。
     addSubview(toolbarReplyLabel)
     seeLzButton.titleLabel?.font = TiebaPostRowLayout.pillFont
-    seeLzButton.layer.cornerRadius = 15
     seeLzButton.layer.cornerCurve = .continuous
     seeLzButton.addTarget(self, action: #selector(handleToggleSeeLz), for: .touchUpInside)
     sortButton.titleLabel?.font = TiebaPostRowLayout.pillFont
-    sortButton.layer.cornerRadius = 15
     sortButton.layer.cornerCurve = .continuous
     // 排序药丸 = 菜单按钮：点一下弹三档直接选，不再"点好几次"循环（菜单在
     // updateToolbarPills 里按当前档位重建）。
     sortButton.showsMenuAsPrimaryAction = true
     addSubview(seeLzButton)
     addSubview(sortButton)
+    installPressFeedback()
+    installPointerInteractions()
+  }
+
+  private func installPointerInteractions() {
+    pointerInteractions.append(TiebaPointerInteraction(
+      view: likeControl,
+      customInteractionView: likeIcon,
+      style: .circle(nil)
+    ))
+    pointerInteractions.append(TiebaPointerInteraction(
+      view: subPostsControl,
+      customInteractionView: subPostsBox,
+      style: .default
+    ))
+    let hoverControls: [UIView] = [menuButton, seeLzButton, sortButton]
+    for control in hoverControls {
+      pointerInteractions.append(TiebaPointerInteraction(view: control, style: .default))
+    }
+  }
+
+  /// 行内可点击件统一“按下 0.94、松手弹簧收口”。只挂 UIControl 触摸事件，
+  /// 不参与滚动路径，也不在 apply/layout 里创建动画。
+  private func installPressFeedback() {
+    let controls: [UIControl] = [likeControl, subPostsControl, menuButton, seeLzButton, sortButton]
+    for control in controls {
+      control.addTarget(self, action: #selector(handlePressDown(_:)), for: [.touchDown, .touchDragEnter])
+      control.addTarget(
+        self,
+        action: #selector(handlePressUp(_:)),
+        for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit]
+      )
+    }
   }
 
   /// 头像尺寸随行角色变化（主贴 40 / 回复 36）：TiebaForumAvatarView 的边长在
@@ -493,6 +720,11 @@ final class TiebaPostRowView: UIView {
       let view = TiebaForumAvatarView(size: frame.width)
       insertSubview(view, belowSubview: avatarControl)
       avatarView = view
+      avatarPointerInteraction = TiebaPointerInteraction(
+        view: avatarControl,
+        customInteractionView: view,
+        style: .circle(nil)
+      )
     }
     avatarView?.backgroundColor = model.palette.avatarFallback
     avatarView?.frame = frame
@@ -507,7 +739,22 @@ final class TiebaPostRowView: UIView {
       return
     }
     imageScrollView.frame = frame
-    let shownCount = min(model.images.count, TiebaPostRowLayout.maxImages)
+    // Issue #5：竖排时这块不再是"横向带"，而是"纵向列"——必须关掉自身滚动，
+    // 否则在 cell 里上下拖图会先被这个内嵌滚动视图吃掉手势（外层列表不动，
+    // 用户以为卡住了）。横排保持可滑。
+    imageScrollView.isScrollEnabled = !plan.imagesVertical
+    // 挂载上限：竖排与固定父楼一样，以**计划里实际排出来的张数**为准
+    //（竖排自己把上限收到 3，见 TiebaPostRowPlan）。
+    let mountedCap = (plan.role == .context || plan.imagesVertical)
+      ? max(plan.imageItemFrames.count, 1)
+      : TiebaPostRowLayout.maxImages
+    let shownCount = min(model.images.count, mountedCap)
+    while imageViews.count > shownCount {
+      let view = imageViews.removeLast()
+      cancelRequest(for: view)
+      view.prepareForGIFReuse()
+      view.removeFromSuperview()
+    }
     while imageViews.count < shownCount {
       let view = TiebaGIFImageView()
       view.contentMode = .scaleAspectFill
@@ -576,13 +823,12 @@ final class TiebaPostRowView: UIView {
       }
       view.alpha = model.preferences.isNight && model.preferences.imageDarkenWhenNight ? 0.6 : 1
     }
-    imageScrollView.contentSize = CGSize(
-      width: (plan.imageItemFrames.last?.maxX ?? frame.width),
-      height: frame.height
-    )
-    // 超出挂载上限时的 +N 角标（末图右下角）。
-    if model.images.count > TiebaPostRowLayout.maxImages, let lastFrame = plan.imageItemFrames.last {
-      imageBadge.text = "+\(model.images.count - TiebaPostRowLayout.maxImages)"
+    imageScrollView.contentSize = plan.imagesVertical
+      ? CGSize(width: frame.width, height: frame.height)
+      : CGSize(width: (plan.imageItemFrames.last?.maxX ?? frame.width), height: frame.height)
+    // 超出挂载上限时的 +N 角标（末图右下角）；固定父楼只挂 4 格，计数也按 4 格算。
+    if model.images.count > mountedCap, let lastFrame = plan.imageItemFrames.last {
+      imageBadge.text = "+\(model.images.count - mountedCap)"
       imageBadge.isHidden = false
       if imageBadge.superview == nil { imageScrollView.addSubview(imageBadge) }
       imageBadge.frame = CGRect(x: lastFrame.maxX - 40, y: lastFrame.maxY - 32, width: 32, height: 22)
@@ -645,17 +891,19 @@ final class TiebaPostRowView: UIView {
     }
   }
 
-  /// GIF 角标样式：无底纯白字 + 阴影（用户口径，原 0.55 黑胶囊已否）。
+  /// GIF 角标：白字 + 细黑描边，不再使用行内 shadow（本任务只允许 hero/context/chrome 有 elevation）。
   private func makeGifBadge() -> UILabel {
     let badge = UILabel()
-    badge.text = "GIF"
-    badge.font = .systemFont(ofSize: 11, weight: .semibold)
-    badge.textColor = .white
+    badge.attributedText = NSAttributedString(
+      string: "GIF",
+      attributes: [
+        .font: UIFont.systemFont(ofSize: 11, weight: .semibold),
+        .foregroundColor: UIColor.white,
+        .strokeColor: UIColor.black.withAlphaComponent(0.55),
+        .strokeWidth: -2,
+      ]
+    )
     badge.textAlignment = .center
-    badge.layer.shadowColor = UIColor.black.cgColor
-    badge.layer.shadowOpacity = 0.8
-    badge.layer.shadowRadius = 1.5
-    badge.layer.shadowOffset = CGSize(width: 0, height: 0.5)
     badge.isHidden = true
     return badge
   }
@@ -734,19 +982,10 @@ final class TiebaPostRowView: UIView {
     }
   }
 
-  /// 行底通栏发际线：只有扁平档有 frame（卡片档 plan 里就是 nil ⇒ 整条收起）。
-  private func layoutRowHairline(_ plan: TiebaPostRowPlan) {
-    guard let frame = plan.rowHairlineFrame else {
-      rowHairline.isHidden = true
-      return
-    }
-    rowHairline.isHidden = false
-    rowHairline.frame = frame
-  }
-
   private func layoutSubPosts(model: TiebaPostRowModel, plan: TiebaPostRowPlan) {
     guard let frame = plan.subPostsFrame else {
       subPostsControl.frame = .zero
+      subPostsControl.accessibilityValue = nil
       subPostsBox.isHidden = true
       for node in subPostTextNodes { node.isHidden = true }
       subPostsMoreLabel.isHidden = true
@@ -755,6 +994,9 @@ final class TiebaPostRowView: UIView {
     subPostsBox.isHidden = false
     subPostsBox.frame = plan.subPostsBoxFrame ?? .zero
     subPostsControl.frame = frame
+    subPostsControl.accessibilityLabel = "查看楼中楼，共\(model.post.subPostNum)条"
+    subPostsControl.accessibilityValue = nil
+    subPostsControl.accessibilityHint = "打开这段对话"
     for (index, text) in subPostTextNodes.enumerated() {
       let hasPost = index < model.post.subPosts.count
       text.isHidden = !hasPost
@@ -767,6 +1009,7 @@ final class TiebaPostRowView: UIView {
         _ = text.updateLayout(CGSize(width: frame.width, height: .greatestFiniteMagnitude))
       }
     }
+    subPostsMoreLabel.font = TiebaPostRowLayout.moreFont
     subPostsMoreLabel.isHidden = plan.subPostsMoreFrame == nil
     if let moreFrame = plan.subPostsMoreFrame {
       subPostsMoreLabel.frame = moreFrame
@@ -790,14 +1033,17 @@ final class TiebaPostRowView: UIView {
     toolbarReplyLabel.isHidden = false
     seeLzButton.isHidden = false
     sortButton.isHidden = false
+    toolbarReplyLabel.font = TiebaPostRowLayout.replyCountFont
+    seeLzButton.titleLabel?.font = TiebaPostRowLayout.pillFont
+    sortButton.titleLabel?.font = TiebaPostRowLayout.pillFont
     toolbarView.frame = frame
-    toolbarView.layer.cornerRadius = TiebaPostRowLayout.cardRadius
+    // hero 底部改为“conversation masthead”：无纸卡、无第二套玻璃，只保留
+    // 大号回复计数 + 两枚轻量筛选胶囊；行底的克制 hairline 已完成分组。
+    toolbarView.backgroundColor = .clear
+    toolbarView.layer.cornerRadius = 0
     toolbarView.layer.cornerCurve = .continuous
-    // glassCard 的 hairline 描边：浅色下工具栏底色贴近页面底色，没有描边整条看不出来。
-    // （扁平档没有卡面 ⇒ 描边宽 0，见 TiebaListAppearance.rowBorderWidth。）
-    toolbarView.layer.borderWidth = TiebaListAppearance.rowBorderWidth(
-      scale: traitCollection.displayScale)
-    toolbarView.layer.borderColor = model.palette.borderCard.cgColor
+    toolbarView.layer.borderWidth = 0
+    toolbarView.layer.borderColor = UIColor.clear.cgColor
     if let textFrame = plan.toolbarTextFrame {
       toolbarReplyLabel.frame = textFrame
       let reply = TiebaForumFormat.count(toolbar.replyNum)
@@ -806,10 +1052,11 @@ final class TiebaPostRowView: UIView {
         pageLabel: toolbar.pageLabel,
         palette: model.palette
       )
+      toolbarReplyLabel.accessibilityLabel = "全部回复，共\(toolbar.replyNum)条"
     }
     if let lzFrame = plan.toolbarSeeLzFrame { seeLzButton.frame = lzFrame }
     if let sortFrame = plan.toolbarSortFrame { sortButton.frame = sortFrame }
-    updateToolbarPills()
+    updateToolbarPills(animateSelection: true)
   }
 
   /// 只重贴工具栏（翻页页码变化）：正文/图片/行高都没变，走这条就不用重排一次
@@ -819,12 +1066,21 @@ final class TiebaPostRowView: UIView {
     layoutToolbar(model: model, plan: model.plan)
   }
 
-  private func updateToolbarPills() {
+  private func updateToolbarPills(
+    animateSelection: Bool = false,
+    observeState: Bool = true
+  ) {
     guard let toolbar = model?.toolbar else { return }
+    let previousSeeLz = observeState ? observedToolbarSeeLz : nil
+    let previousSort = observeState ? observedToolbarSort : nil
+    if observeState {
+      observedToolbarSeeLz = toolbar.seeLz
+      observedToolbarSort = toolbar.sort
+    }
     configurePill(seeLzButton, title: "只看楼主", selected: toolbar.seeLz, palette: palette)
     // 排序药丸：离开默认档（热门）才加亮，箭头表明点开是三档菜单。
     let selected = toolbar.sort != .hot
-    let color = selected ? UIColor.white : palette.textSecondary
+    let color = selected ? palette.primary : TiebaAccessibleColors.metadata
     let chevron = UIImage(
       systemName: "chevron.down",
       withConfiguration: TiebaPostRowLayout.pillChevronConfig
@@ -837,12 +1093,37 @@ final class TiebaPostRowView: UIView {
         self?.onEvent?(.selectSort(option))
       }
     })
+    seeLzButton.accessibilityLabel = "只看楼主"
+    seeLzButton.accessibilityValue = toolbar.seeLz ? "已开启" : "已关闭"
+    seeLzButton.accessibilityTraits = toolbar.seeLz ? [.button, .selected] : .button
+    sortButton.accessibilityLabel = "回复排序"
+    sortButton.accessibilityValue = toolbar.sort.title
+    sortButton.accessibilityHint = "打开热门、正序、倒序菜单"
+    guard animateSelection, window != nil else { return }
+    if let previousSeeLz, previousSeeLz != toolbar.seeLz {
+      TiebaInteractiveMotion.pulse(seeLzButton, from: 0.94)
+    }
+    if let previousSort, previousSort != toolbar.sort {
+      TiebaInteractiveMotion.pulse(sortButton, from: 0.94)
+    }
   }
 
   private func configurePill(_ button: UIButton, title: String, selected: Bool, palette: TiebaFeedRowPalette) {
     button.setTitle(title, for: .normal)
-    button.setTitleColor(selected ? .white : palette.textSecondary, for: .normal)
-    button.backgroundColor = selected ? palette.primary : .systemFill
+    let titleColor = selected ? palette.primary : TiebaAccessibleColors.metadata
+    button.setTitleColor(titleColor, for: .normal)
+    button.setTitleColor(titleColor, for: .highlighted)
+    button.layer.borderWidth = 0
+    button.layer.borderColor = UIColor.clear.cgColor
+    let background = selected
+      ? palette.primary.withAlphaComponent(0.10)
+      : UIColor.quaternarySystemFill
+    if let pill = button as? TiebaPostPillButton {
+      button.backgroundColor = .clear
+      pill.setPill(background: background)
+    } else {
+      button.backgroundColor = background
+    }
   }
 
   private func loadEmoticonsIfNeeded(model: TiebaPostRowModel) {
@@ -874,6 +1155,21 @@ final class TiebaPostRowView: UIView {
   }
 
   // MARK: 交互
+
+  private func pressFeedbackView(for control: UIControl) -> UIView {
+    // 透明 UIControl 本体不可见：反馈落在真正可见的图标/预览上。
+    if control === subPostsControl { return subPostsBox }
+    if control === likeControl { return likeIcon }
+    return control
+  }
+
+  @objc private func handlePressDown(_ control: UIControl) {
+    TiebaInteractiveMotion.press(pressFeedbackView(for: control), pressed: true)
+  }
+
+  @objc private func handlePressUp(_ control: UIControl) {
+    TiebaInteractiveMotion.press(pressFeedbackView(for: control), pressed: false)
+  }
 
   @objc private func handleAvatar() {
     TiebaSceneHaptics.fire("press")
@@ -928,7 +1224,6 @@ final class TiebaPostRowView: UIView {
 
   @objc private func handleMenu() {
     TiebaSceneHaptics.fire("sheet-present")
-    guard let model else { return }
     let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
     sheet.addAction(UIAlertAction(title: "复制内容", style: .default) { [weak self] _ in
       self?.onEvent?(.copyContent)
@@ -939,11 +1234,6 @@ final class TiebaPostRowView: UIView {
     sheet.addAction(UIAlertAction(title: "复制链接", style: .default) { [weak self] _ in
       self?.onEvent?(.copyLink)
     })
-    if model.canDelete {
-      sheet.addAction(UIAlertAction(title: "删除", style: .destructive) { [weak self] _ in
-        self?.onEvent?(.delete)
-      })
-    }
     sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
     guard let presenter = TiebaViewHosts.viewController(for: self) else { return }
     if let popover = sheet.popoverPresentationController {
@@ -958,22 +1248,89 @@ final class TiebaPostRowView: UIView {
 
   private static func toolbarReplyText(count: String, pageLabel: String?, palette: TiebaFeedRowPalette) -> NSAttributedString {
     let result = NSMutableAttributedString(
-      string: "回复 \(count)",
+      string: "全部回复",
       attributes: [
         .font: TiebaPostRowLayout.replyCountFont,
         .foregroundColor: palette.text,
       ]
     )
-    if let pageLabel, !pageLabel.isEmpty {
+    result.append(NSAttributedString(
+      string: " · \(count)",
+      attributes: [
+        .font: TiebaPostRowLayout.replyCountFont,
+        .foregroundColor: palette.primary,
+      ]
+    ))
+    if let pageLabel, pageLabel.isEmpty == false {
       result.append(NSAttributedString(
         string: " · \(pageLabel)",
         attributes: [
-          .font: TiebaSimpleText.bodyFont(size: 12, weight: .medium),
-          .foregroundColor: palette.textTertiary,
+          .font: TiebaPostRowLayout.metaFont,
+          .foregroundColor: TiebaAccessibleColors.metadata,
         ]
       ))
     }
     return result
+  }
+}
+
+/// 视觉可小于 44 的阅读行控件（头像等）：命中框扩到 44×44，布局帧不变。
+final class TiebaPostHitControl: UIControl {
+  var minimumHitSide: CGFloat = 44
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+  }
+
+  required init?(coder: NSCoder) {
+    super.init(coder: coder)
+  }
+
+  var hitFrame: CGRect {
+    let dx = max((minimumHitSide - bounds.width) / 2, 0)
+    let dy = max((minimumHitSide - bounds.height) / 2, 0)
+    return bounds.insetBy(dx: -dx, dy: -dy)
+  }
+
+  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+    hitFrame.contains(point)
+  }
+}
+
+/// 工具栏胶囊：frame 是 ≥44pt 的命中框，内部 pill 保持 30pt 视觉高度。
+final class TiebaPostPillButton: UIButton {
+  private let pill = UIView()
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    pill.isUserInteractionEnabled = false
+    pill.layer.cornerCurve = .continuous
+    insertSubview(pill, at: 0)
+  }
+
+  convenience init(type: UIButton.ButtonType) {
+    self.init(frame: .zero)
+  }
+
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) is not supported")
+  }
+
+  func setPill(background: UIColor) {
+    pill.backgroundColor = background
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    let fontLine = titleLabel?.font.lineHeight ?? 16
+    let visualHeight = min(bounds.height, max(30, ceil(fontLine) + 10))
+    pill.frame = CGRect(
+      x: 0,
+      y: (bounds.height - visualHeight) / 2,
+      width: bounds.width,
+      height: visualHeight
+    )
+    pill.layer.cornerRadius = visualHeight / 2
   }
 }
 

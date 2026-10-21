@@ -8,22 +8,21 @@
 // TiebaRowPageDriver.publish 每次发布算一份（存 lastRowDiff），**只算不接**：列表的
 // 唯一入口仍是 setPage(pageKey:)，差量还没有消费方（接法见 Driver.lastRowDiff 的注释）。
 //
-// ── 为什么指纹是**整行**，而不是 TiebaRowFingerprint 的渲染字段白名单 ──
-//   TiebaRowPageDriver 是通用列表页共用的（feed / simple / post 三族，见
-//   TiebaKindRowPage），而 TiebaRowFingerprint 的白名单只覆盖 **feed** 行的渲染输入。
-//   message / userProfile / 搜索历史这类 simple 行的键名（id / text / value / …）基本不在
-//   白名单里 —— 那一页的每一行都会算出**同一个**指纹，"有一行变了"于是会被误判成
-//   "只是追加"：页键不换 ⇒ 列表不重建 ⇒ 画面停在旧内容上。可见行为被改坏，而且不报错。
+// ── 判据：**整行**规范序列化，不是"渲染字段白名单" ──
+//   TiebaRowPageDriver 是通用列表页共用的（feed / simple / post 三族，见 TiebaKindRowPage）。
+//   曾经有一套只覆盖 **feed** 行渲染输入的字段白名单（TiebaRowFingerprint，已删除：生产调用
+//   点为 0），它不能拿来这里用 —— message / userProfile / 搜索历史这类 simple 行的键名
+//   （id / text / value / …）基本不在白名单里，那一页的每一行都会算出**同一个**指纹，
+//   "有一行变了"于是会被误判成"只是追加"：页键不换 ⇒ 列表不重建 ⇒ 画面停在旧内容上。
+//   可见行为被改坏，而且不报错。
 //   所以这里对整行做**规范序列化**求哈希（判据与旧的"整页 NSDictionary 深比较"等价：
 //   同样的"逐字段相同"），代价从"每行一次 ObjC 桥接递归比较"降到"每行一次纯算术混合"，
 //   且旧行指纹可随 lastRows 缓存，不必每次重算（这是相对旧 isAppend 的真正便宜处）。
-//   将来 TiebaRowFingerprint 的白名单覆盖到 simple 行后，可以换成它 —— 但要连同
-//   "指纹只覆盖渲染输入 ⇒ 时间文案等键不算变化"这个语义变化一起评估（那会改变页键决策）。
 //
-// ── 混合器复用 ──
-//   直接复用 TiebaRowFingerprint.Mixer（已审计的跨进程稳定混合：FNV-1a + splitmix64 收尾，
-//   字符串走 vendored persistentHashValue），本文件只加自己的值域分隔 + 版本号，不重抄一遍
-//   哈希算法。
+// ── 混合器 ──
+//   本文件自带 Mixer（跨进程稳定混合：FNV-1a + splitmix64 收尾，字符串走 vendored
+//   persistentHashValue），并叠自己的值域分隔 + 版本号。**不要**改用 String.hashValue /
+//   Hasher（每进程随机种子，两次启动两个数）。
 //
 // ── 并发 ──
 //   纯函数、无共享状态（只有 let 常量）⇒ nonisolated，主线程（发布路径）直接调用。
@@ -41,7 +40,8 @@
 //   再由行视图按 (插入 / 删除 / 更新) 给元素补过渡，而不是引入 ComponentFlow。
 
 import Foundation
-// [收敛] 原 import 上游 Support 模块 —— 见 TiebaRowFingerprint.swift 同处说明。
+// [收敛] 原 import 上游 Support 模块 —— MergeLists / PersistentStringHash 已移入本模块
+// （Sources/TiebaNative/Core/ 下），不再需要跨模块 import。
 
 /// 行内容指纹 + 行差量（删除 / 插入 / 更新三元组）。
 public nonisolated enum TiebaRowDiff {
@@ -53,6 +53,56 @@ public nonisolated enum TiebaRowDiff {
 
   /// 值域分隔：本文件的指纹与别的指纹（共用同一套 Mixer）切开，两家算法各自演进也不会撞。
   private static let domain: UInt64 = 0x5449_4542_4152_4F57  // "TIEBAROW"
+
+  // MARK: - 混合器
+
+  /// 64 位滚动混合器。纯算术（&^ / &*），**无 Hashable / Hasher / 随机种子**，
+  /// 故跨进程、跨设备、跨架构（arm64 / x86_64）逐位一致。
+  struct Mixer: Sendable {
+    /// FNV-1a 64 的 offset basis。
+    private var state: UInt64
+
+    init(seed: UInt64 = 0xCBF2_9CE4_8422_2325) {
+      state = seed
+    }
+
+    /// 混入一个字（键名域分隔与值都走这里）。
+    @inline(__always)
+    mutating func mix(_ value: UInt64) {
+      state = (state ^ value) &* 0x0000_0100_0000_01B3 // FNV-1a 64 素数
+    }
+
+    /// 字符串：**必须**走 vendored `persistentHashValue`（跨进程稳定）。
+    /// 它只保 56 位（127·h+b 且高 8 位被掩掉），比理想的 64 位哈希更易撞 —— 对"行身份"
+    /// 够用：外面还叠了 FNV 一层 + 逐字段键名域分隔。
+    @inline(__always)
+    mutating func mix(_ text: String) {
+      mix(text.persistentHashValue)
+    }
+
+    @inline(__always)
+    mutating func mix(_ number: Int64) {
+      mix(UInt64(bitPattern: number))
+    }
+
+    /// 浮点：按 IEEE-754 位型混（**不用 description** —— 那受 locale / 精度格式影响）。
+    @inline(__always)
+    mutating func mix(_ number: Double) {
+      mix(number.bitPattern)
+    }
+
+    /// 收尾雪崩（splitmix64 的 finalizer 常量）。多项式乘法是线性的，不雪崩的话
+    /// 高位差异传不到低位，截断/取模使用时会系统性撞。
+    var value: UInt64 {
+      var z = state
+      z ^= z >> 33
+      z = z &* 0xFF51_AFD7_ED55_8CCD
+      z ^= z >> 33
+      z = z &* 0xC4CE_B9FE_1A85_EC53
+      z ^= z >> 33
+      return z
+    }
+  }
 
   // MARK: - 行指纹
 
@@ -67,7 +117,7 @@ public nonisolated enum TiebaRowDiff {
   ///   - 缺键 ≠ NSNull、1 ≠ "1"、数组顺序敏感、字典键序不敏感 ⇒ 与旧判据一致。
   /// 唯一的方向性差异是哈希碰撞（不同内容同指纹 → 判成"没变"）：64 位下可忽略。
   public static func fingerprint(of row: [String: Any]) -> UInt64 {
-    var mixer = TiebaRowFingerprint.Mixer()
+    var mixer = Mixer()
     mixer.mix(domain)
     mixer.mix(version)
     // 字号世代（TiebaTypography.generation）：字号一变，**每一行**的指纹都变 ⇒
@@ -76,7 +126,7 @@ public nonisolated enum TiebaRowDiff {
     // 解法：不逐个缓存去清（清漏一处就是静默旧档），而是让"字体变了"直接等于
     // "这一行是另一行内容"。世代只在字号真的变化时 +1，稳态下是常量，不影响
     // 跨页/跨屏复用命中率。
-    mixer.mix(TiebaTypography.generation)
+    mixer.mix(TiebaTypography.textGeneration)
     // 外观档世代（TiebaListAppearance.generation）：卡片 ↔ 扁平切换会改**每一行**的
     // 边距/圆角/底色 ⇒ 行几何全变，旧测量必须整体失配重测。与字号世代同一个槽位、
     // 同一条理由（见 TiebaListAppearance 文件头）：让"换档"直接等于"这是另一行内容"。
@@ -99,7 +149,7 @@ public nonisolated enum TiebaRowDiff {
 
   /// 字典：键**排序**后逐项混。Swift 字典的迭代序取决于插入历史与每进程哈希种子，
   /// 不排序 = 同一份内容可能算出两个指纹（"没变"被判成"变了" → 无谓整页重载）。
-  private static func mixDictionary(_ dict: [String: Any], into mixer: inout TiebaRowFingerprint.Mixer) {
+  private static func mixDictionary(_ dict: [String: Any], into mixer: inout Mixer) {
     mixer.mix(Tag.dictionary)
     mixer.mix(UInt64(dict.count))
     var keys = Array(dict.keys)
@@ -110,7 +160,7 @@ public nonisolated enum TiebaRowDiff {
     }
   }
 
-  private static func mixValue(_ value: Any?, into mixer: inout TiebaRowFingerprint.Mixer) {
+  private static func mixValue(_ value: Any?, into mixer: inout Mixer) {
     guard let value else {
       mixer.mix(Tag.absent)
       return
@@ -317,7 +367,7 @@ public nonisolated enum TiebaRowDiff {
     )
   }
 
-  // MARK: - 自检（与 TiebaRowFingerprint 同纪律：**不挂在启动路径上**）
+  // MARK: - 自检（**不挂在启动路径上**：调用点只有测试目标 / 调试期手动跑）
 
   /// 自检：返回 nil = 全过；否则是失败描述（多条以 " | " 连接）。
   /// 调用点：测试目标，或调试期手动 `_ = TiebaRowDiff.selfCheck()`。
@@ -335,7 +385,7 @@ public nonisolated enum TiebaRowDiff {
     expect(fingerprint(of: row) == fingerprint(of: reordered), "字典插入顺序影响了指纹")
     expect(fingerprint(of: row) == entries(for: [[:], row])[1].fingerprint, "同内容在不同位置指纹不同")
 
-    // ② 敏感性：simple 行的键（不在 TiebaRowFingerprint 白名单里）改一个必须变
+    // ② 敏感性：simple 行的键（任何"渲染字段白名单"都覆盖不到）改一个必须变
     for key in ["kind", "id", "title", "value", "count"] {
       var mutated = row
       mutated[key] = "改过了"

@@ -25,12 +25,16 @@ enum TiebaPostRowLayout {
   static let levelGap: CGFloat = 6
   static let actionGap: CGFloat = 12
   static let mediaGap: CGFloat = 12
-  static let imageRadius: CGFloat = 10
+  static let imageRadius: CGFloat = TiebaDesignSystem.Radius.card
   static let stripHeight: CGFloat = 160
   static let stripSpacing: CGFloat = 6
   static let longImageHeight: CGFloat = 300
   static let singleImageMaxHeight: CGFloat = 520
   static let maxImages = 9
+  /// Issue #5 竖排：单张高度区间与张数上限（理由见 TiebaPostRowPlan 的竖排分支）。
+  static let verticalImageMinHeight: CGFloat = 80
+  static let verticalImageMaxHeight: CGFloat = 260
+  static let verticalMaxImages = 3
   static let audioHeight: CGFloat = 52
   static let subPostTop: CGFloat = 10
   /// 框内行距的一半（两行之间共 2×gap，与旧版"分隔线上下各一份"同值）。
@@ -38,31 +42,56 @@ enum TiebaPostRowLayout {
   /// 楼中楼预览框：内容列到框边的距离，以及框的圆角。框把预览整段收进一个浅底
   /// 圆角矩形（取代旧版"逐条上方一条分隔线 + 块顶一条 hairline"）。
   static let subPostBoxPadding: CGFloat = 10
-  static let subPostBoxRadius: CGFloat = 8
+  static let subPostBoxRadius: CGFloat = TiebaDesignSystem.Radius.inset
   /// 主贴回复工具栏（ThreadHeader.replyToolbar：paddingVertical 12×2 + 药丸 30）。
   static let toolbarHeight: CGFloat = 54
+  /// 工具栏独立圆角：比外层卡小一档，避免“卡中卡”看起来像同层组件。
+  static let toolbarRadius: CGFloat = 14
+  /// 1px 设备的真实发际线（8pt 屏 = 1/3，2x/3x 都由 trait 给，不读 UIScreen.main）。
+  static func hairline(_ displayScale: CGFloat) -> CGFloat {
+    1 / max(displayScale, 1)
+  }
 
-  // ── 帖子卡字体（**正文级**）──
+  // ── 帖子卡字体（正文级 + 标题独立档）──
   // 用户口径 2026-10-06：「点进去帖子之后」的正文/回复/楼中楼都吃正文字号；
   // 而卡内作者名/时间/徽标/操作栏同属这张卡，跟着正文级一起缩放才不会出现
   // "字大了但名字还是小字"的断层。入口统一走 TiebaSimpleText.bodyFont。
+  //
+  // 2026 标题字号需求：主贴标题是**独立档**，只从 Snapshot.titleScale 缩放，
+  // 不再读 bodyScale。默认 22pt（titleScale = 1）、行高 28pt；14…34pt 滑杆
+  // 只改标题，正文/回复/楼中楼的 fontSize/lineHeight 仍只读 fontScale。
   static var nameFont: UIFont { TiebaSimpleText.bodyFont(size: 15, weight: .semibold) }
   static var nameFontMain: UIFont { TiebaSimpleText.bodyFont(size: 16, weight: .semibold) }
-  /// 主贴卡标题（仅主贴行）：与已知主贴占位卡 knownTitle 逐项同尺（17pt/22pt/3 行），
-  /// 首包落地换卡时标题原地接管，下面的作者行/正文不位移。
-  static var titleFont: UIFont { TiebaSimpleText.bodyFont(size: 17, weight: .medium) }
-  /// 标题行盒（基准 22pt）。**必须随正文字号缩放**：行高不跟着字长，字一大
-  /// 多行标题就会互相压（本仓"字号调了行高没调"的老坑，见 45-字号体系）。
-  static var titleLineHeight: CGFloat { ceil(22 * TiebaTypography.bodyScale()) }
+
+  /// 主贴标题字体。与已知主贴占位卡 knownTitle 共用同一函数，首包落地换卡时
+  /// 标题字号/行盒原地接管；首参 scale 来自 TiebaPostPreferences.titleScaleClamped。
+  static func titleFont(scale: CGFloat) -> UIFont {
+    TiebaSimpleText.scaledFont(
+      size: CGFloat(TiebaTypography.titleReferenceSize),
+      weight: .medium,
+      scale: max(scale, 0.1)
+    )
+  }
+  /// 读全局快照的便捷入口（占位卡等没有 TiebaPostPreferences 的调用点）。
+  static var titleFont: UIFont { titleFont(scale: TiebaTypography.titleScale()) }
+
+  /// 标题行盒基准：默认 22pt 字对应 28pt 行高。**只乘 titleScale** —— 行高不
+  /// 跟着字长会让大字多行标题互相压；但乘错成 bodyScale 又会让正文滑杆越权。
+  static let titleLineHeightBase: CGFloat = 28
+  static func titleLineHeight(scale: CGFloat) -> CGFloat {
+    ceil(titleLineHeightBase * max(scale, 0.1))
+  }
+  static var titleLineHeight: CGFloat { titleLineHeight(scale: TiebaTypography.titleScale()) }
   /// 正文摘要行盒（基准 22pt，与 TiebaPostRowPlan 的 22×textScale 同源）。
-  static var abstractLineHeight: CGFloat { ceil(22 * TiebaTypography.bodyScale()) }
+  /// 注意：这是**正文级**，标题字号滑杆不能影响它。
+  static var abstractLineHeight: CGFloat { ceil(26 * TiebaTypography.bodyScale()) }
   /// 标题**不限行**（0 = 不截断）：用户 2026-09-17 报"长标题被截断、显示不全"。
   /// 占位卡（TiebaThreadKnownPostView）的行数必须与这里一致，换卡才不跳。
   static let titleLineLimit = 0
-  static var metaFont: UIFont { TiebaSimpleText.bodyFont(size: 12, weight: .regular) }
+  static var metaFont: UIFont { TiebaSimpleText.bodyFont(size: 13, weight: .regular) }
   static var badgeFont: UIFont { TiebaSimpleText.bodyFont(size: 11, weight: .bold) }
   static var lzFont: UIFont { TiebaSimpleText.bodyFont(size: 11, weight: .semibold) }
-  static var actionFont: UIFont { TiebaSimpleText.bodyFont(size: 12, weight: .medium) }
+  static var actionFont: UIFont { TiebaSimpleText.bodyFont(size: 13, weight: .medium) }
   static var moreFont: UIFont { TiebaSimpleText.bodyFont(size: 13, weight: .semibold) }
   static var pillFont: UIFont { TiebaSimpleText.bodyFont(size: 13, weight: .semibold) }
   /// 排序药丸尾部那个向下箭头（点开 = 热门/正序/倒序三档菜单）。
@@ -74,12 +103,12 @@ enum TiebaPostRowLayout {
   /// 楼中楼名字的字体。**必须与正文同一个 pointSize**（正文是 14×应用倍率的 systemFont）：
   /// 名字现在并进同一条富文本，字号不一致时 20pt 行盒里首行基线又会对不上。
   static func subPostNameFont(_ scale: Double) -> UIFont {
-    UIFont.systemFont(ofSize: 14 * scale, weight: .semibold)
+    UIFont.systemFont(ofSize: 15 * scale, weight: .semibold)
   }
   static var replyCountFont: UIFont { TiebaSimpleText.bodyFont(size: 15, weight: .semibold) }
 
   /// 楼中楼预览的行盒高度（与 buildContent(isSubPost:) 的 20×scale 同值）。
-  static func subPostLineHeight(_ scale: Double) -> CGFloat { ceil(20 * scale) }
+  static func subPostLineHeight(_ scale: Double) -> CGFloat { ceil(23 * scale) }
 
   /// 名字标签必须与正文文本框共用同一行盒，否则正文首行会掉到名字右下角。
   static func subPostNameParagraph(_ scale: Double) -> NSParagraphStyle {
