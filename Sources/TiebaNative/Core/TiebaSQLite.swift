@@ -34,6 +34,7 @@
 // serialized 线程模式（FULLMUTEX）。
 import Foundation
 import SQLite3
+import os
 
 enum TiebaSQLiteError: LocalizedError {
   case databaseUnavailable(String)
@@ -68,11 +69,13 @@ private enum SQLiteBindValue: Sendable {
   case text(String)
   case integer(Int64)
   case double(Double)
+  case blob(Data)
 
   /// 与旧 bindLocked 逐行等价：缺 "v" / NSNull / 既非 String 又非 NSNumber → NULL。
   /// 参数顺序 = 数组顺序（下标即绑定位置）。
   static func from(_ raw: Any?) -> SQLiteBindValue {
     guard let raw, !(raw is NSNull) else { return .null }
+    if let data = raw as? Data { return .blob(data) }
     if let text = raw as? String { return .text(text) }
     if let number = raw as? NSNumber {
       // JS 里所有数字都是 Double；整数值（时间戳毫秒）绑 int64，其余绑 double，
@@ -92,34 +95,130 @@ private enum SQLiteColumnValue: Sendable {
   case null
   case text(String)
   case real(Double)
+  case blob(Data)
 
   var anyValue: Any {
     switch self {
     case .null: return NSNull()
     case .text(let value): return value
     case .real(let value): return value
+    case .blob(let value): return value
     }
   }
 }
 
 // 共享 SQLite 原语（TiebaSQLite 与 TiebaKvStore 各自手写了一份 → 收敛到这里）
 //
-// 两条连接打开的是同一个库文件（见文件头），开库参数/open 失败收尾/bind/列读取
-// /错误文案必须逐字一致，否则同一故障在两条路径上表现不同。调用方仍各自持有
-// NSLock 串行化自己连接上的语句执行。
+// 两条连接打开的是同一个库文件（见文件头）：open 失败收尾 / bind / 列读取 /
+// 错误文案共用这一份实现。开库 PRAGMA 分成两组，由 open(path:profile:) **一处**
+// 给出——两组参数刻意不同（用途不同，见 Profile 的注释），但来源只有一个，
+// 不会出现"改了一条忘另一条"导致同一故障在两条路径上表现不同。
+// 调用方仍各自持有锁串行化自己连接上的语句执行。
 enum TiebaSQLiteCoreError: LocalizedError {
-  case open(String)
+  /// `systemErrno` 取自失败的句柄（`sqlite3_system_errno`，**关句柄之前**读）。
+  /// 打开阀门要用它区分「删库能修」与「删库也没用」—— 见 `TiebaSQLiteOpenValve`。
+  case open(detail: String, systemErrno: Int32)
 
   var detail: String {
     switch self {
-    case .open(let detail): return detail
+    case .open(let detail, _): return detail
+    }
+  }
+
+  var systemErrno: Int32 {
+    switch self {
+    case .open(_, let systemErrno): return systemErrno
     }
   }
 
   var errorDescription: String? { detail }
 }
 
+/// 打开失败的「计数阀门」。
+///
+/// 问题：一次打不开 ≠ 库坏了。锁屏数据保护、瞬时锁竞争、句柄耗尽都会让
+/// `sqlite3_open_v2` 失败，而旧实现把 `openFailure` 记成永久状态（`openFailure != nil`
+/// 之后整进程直接返回 nil），于是「屏幕锁着的那一瞬间碰了一次 KV」会让偏好与账号
+/// 元数据**整个进程不可用**。
+///
+/// 修法（对齐上游 `SqliteValueBox` 的三段式）：
+///   ① **按 errno 过滤**：删库也修不好的错误（权限、句柄/内存/磁盘耗尽、被信号打断）
+///      不计数 —— 计数只该记「文件本身可能坏了」这一类；
+///   ② **连续失败计数落盘**（`<db>-open-failures`，原子写）：跨进程也生效，
+///      一次成功打开即清零；
+///   ③ 达到阈值才**删库重建**，并且删主库时必须连 `-wal` / `-shm` 一起删
+///      —— 只删主库会让新连接配上旧 WAL 索引。
+///
+/// 所有权：只有库的 owner（`TiebaKvStore`）可以调 `recordFailureAndShouldWipe` /
+/// `removeDatabaseFiles`。非 owner 连接（`TiebaSQLite` 的迁移/历史表）只把 errno
+/// 往上抛，不碰文件。
+enum TiebaSQLiteOpenValve {
+  /// 连续失败到这个数才判定「库真坏了」。
+  static let wipeThreshold = 3
+
+  private static func markerPath(_ dbPath: String) -> String {
+    dbPath + "-open-failures"
+  }
+
+  /// 删文件修不了的 errno 不计数。与上游 `shouldCountOpenFailure` 同一张表。
+  static func shouldCount(systemErrno: Int32) -> Bool {
+    switch systemErrno {
+    case EPERM, EACCES, EMFILE, ENFILE, ENOMEM, ENOSPC, EAGAIN, EINTR:
+      return false
+    default:
+      // 0 = 拿不到 errno（SQLite 自己的错误，不是系统调用失败）→ 计。
+      return true
+    }
+  }
+
+  static func consecutiveFailures(_ dbPath: String) -> Int {
+    guard let text = try? String(contentsOfFile: markerPath(dbPath), encoding: .utf8) else {
+      return 0
+    }
+    return Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+  }
+
+  /// 一次成功即清零。
+  static func clear(_ dbPath: String) {
+    try? FileManager.default.removeItem(atPath: markerPath(dbPath))
+  }
+
+  /// 记一次失败，并回答「是否该重建」。**只允许 owner 调用。**
+  static func recordFailureAndShouldWipe(_ dbPath: String, systemErrno: Int32) -> Bool {
+    guard shouldCount(systemErrno: systemErrno) else { return false }
+    let failures = consecutiveFailures(dbPath) + 1
+    try? Data(String(failures).utf8).write(
+      to: URL(fileURLWithPath: markerPath(dbPath)),
+      options: .atomic
+    )
+    return failures >= wipeThreshold
+  }
+
+  /// 主库必须与 `-wal` / `-shm` / 计数文件一起删。
+  static func removeDatabaseFiles(_ dbPath: String) {
+    for suffix in ["", "-wal", "-shm", "-open-failures"] {
+      try? FileManager.default.removeItem(atPath: dbPath + suffix)
+    }
+  }
+}
+
 enum TiebaSQLiteCore {
+  /// 开库档位。两条连接打开同一个库文件，但用途不同，PRAGMA 组因此不同；
+  /// 具体语句集中在 open 里的 applyPragmas，调用方只选档位、不写 PRAGMA。
+  enum Profile {
+    /// 同步 KV（TiebaKvStore）。在 JS 线程被同步调用、只跑单条语句的短事务，
+    /// 存的多是偏好/账号元数据/可重建的缓存 —— 所以 `synchronous=NORMAL`
+    /// （WAL 的标准搭配）：app 崩溃仍一致，只有掉电可能丢最后一笔提交，
+    /// 省掉每次 COMMIT 的 fsync。这与"JS 线程上等 fsync"的代价直接相关。
+    case keyValueStore
+    /// 关系表连接（search_history / visit_history）与迁移连接。历史记录是用户
+    /// 可见且删了就没了的数据，schema 变更更不能半途而废 —— 所以**不降档**，
+    /// 保持 SQLite 默认的 `synchronous=FULL`，宁可每次提交多一次 fsync。
+    /// 这两类写入都不在 JS 线程的同步热路径上（关系表走 AsyncFunction 队列，
+    /// 迁移在 utility 队列），多一次 fsync 不会卡 UI。
+    case relational
+  }
+
   /// SQLITE_TRANSIENT：让 SQLite 复制绑定值（Swift 侧临时 C 串不能传 STATIC）。
   /// 用函数而不是 static let 常量：@convention(c) 函数指针不是 Sendable，
   /// 存成全局量要 nonisolated(unsafe) 才能过编译；每次现算一个常量字面量既没有
@@ -128,9 +227,14 @@ enum TiebaSQLiteCore {
     unsafeBitCast(-1, to: sqlite3_destructor_type.self)
   }
 
-  /// 打开一条连接：建目录 + open_v2(FULLMUTEX) + busy_timeout(1s)。
-  /// 失败时关闭半开句柄并抛错误（详情给调用方包成各自门面的错误类型）。
-  static func open(path: String) throws -> OpaquePointer {
+  /// 打开一条连接：建目录 + open_v2(FULLMUTEX) + busy_timeout(1s) + 该档位的
+  /// PRAGMA 组。失败时关闭半开句柄并抛错误（详情给调用方包成各自门面的错误类型）。
+  ///
+  /// 不含 `journal_mode = WAL`：它是库文件级属性、切换时要拿库文件锁，
+  /// 由各调用方在自己的初始化流程里设（TiebaKvStore.enableWALLocked /
+  /// TiebaSQLite.openLocked），时机跟着各自的建表/导入顺序走。这里不设，
+  /// 也不塞进任何事务——事务里切 journal_mode 会直接失败。
+  static func open(path: String, profile: Profile) throws -> OpaquePointer {
     try FileManager.default.createDirectory(
       at: URL(fileURLWithPath: path).deletingLastPathComponent(),
       withIntermediateDirectories: true
@@ -139,13 +243,59 @@ enum TiebaSQLiteCore {
     let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
     guard sqlite3_open_v2(path, &handle, flags, nil) == SQLITE_OK, let handle else {
       let detail = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "unknown"
+      // errno 必须在关句柄**之前**读：`sqlite3_system_errno` 读的是句柄上记的
+      // 最近一次系统调用错误，`sqlite3_close_v2` 之后句柄失效、读到的是垃圾。
+      let systemErrno = handle.map { sqlite3_system_errno($0) } ?? 0
       if let handle { sqlite3_close_v2(handle) }
-      throw TiebaSQLiteCoreError.open(detail)
+      throw TiebaSQLiteCoreError.open(detail: detail, systemErrno: systemErrno)
     }
     // 与另一条连接撞锁时等待而不是立刻失败；上限 1s：极端情况下对方的同步
     // 事务可能正占着 JS 线程，等太久等于把 UI 卡住。
     sqlite3_busy_timeout(handle, 1000)
+    applyPragmas(handle, profile: profile)
+    // schema 升级不在 open 热路径同步执行：新 IPA 覆盖安装后先让 UI/登录态 KV
+    // 原样打开旧库，迁移由 TiebaDatabaseSchema.startBackgroundMigration() 在
+    // utility 队列完成。缓存表在迁移完成前自动 miss，登录/关注列表不受阻塞。
+    // 已升级过的库只做一次 PRAGMA user_version 点查，让二级启动立刻可用缓存。
+    if URL(fileURLWithPath: path).lastPathComponent == TiebaDatabaseSchema.mainDatabaseName {
+      TiebaDatabaseSchema.markCacheSchemaReadyIfCurrent(handle: handle)
+    }
     return handle
+  }
+
+  /// 开库 PRAGMA 组（两条连接唯一的来源）。
+  ///
+  /// 全部 best-effort：PRAGMA 失败不该让连接不可用（回滚日志模式下靠
+  /// busy_timeout 也能跑），与改动前一致。
+  private static func applyPragmas(_ db: OpaquePointer, profile: Profile) {
+    switch profile {
+    case .keyValueStore:
+      // 唯一降档的地方。理由见 Profile.keyValueStore：KV 在 JS 线程同步调用，
+      // 每次 COMMIT 都 fsync 会直接变成掉帧。
+      _ = executeScript(db, "PRAGMA synchronous = NORMAL;")
+    case .relational:
+      // 刻意不写 synchronous：保持 SQLite 默认（FULL）。写一行 FULL 只是把
+      // 默认值抄一遍，反而会在未来默认值变化时造成"以为显式声明过"的误解。
+      break
+    }
+    // 临时表与排序中间结果放内存：这两条连接的临时数据都很小，落盘只多一次
+    // I/O，还会把临时文件写进备份/清理要扫的目录。
+    _ = executeScript(db, "PRAGMA temp_store = MEMORY;")
+    switch profile {
+    case .keyValueStore:
+      // 页缓存按 KiB 显式给出（负数 = KiB）。默认值随 SQLite 编译选项漂移，
+      // 写死让"KV 常驻多少内存"可预期：KV 是点查为主的热路径，给 8 MiB。
+      _ = executeScript(db, "PRAGMA cache_size = -8000;")
+    case .relational:
+      // 关系表查询是范围扫（history 列表），2 MiB（SQLite 的默认值）够用；
+      // 与 KV 同库同进程，总内存要留出余量。
+      _ = executeScript(db, "PRAGMA cache_size = -2000;")
+    }
+    // 关掉 mmap：同一个文件上两条连接若映射档位不同，页的可见性就依赖各自的
+    // 映射状态，出现"另一条连接刚提交的数据本连接读不到"这类难复现的问题；
+    // 另外 mmap 页在 iOS 上算进进程内存且不受 cache_size 约束，被系统回收时
+    // 也无法按缓存逐出。全关 = 两条连接走同一套 read() 路径。
+    _ = executeScript(db, "PRAGMA mmap_size = 0;")
   }
 
   static func errorMessage(_ db: OpaquePointer) -> String {
@@ -180,12 +330,380 @@ enum TiebaSQLiteCore {
     sqlite3_bind_int64(statement, index, Int64(value))
   }
 
+  /// 多语句脚本执行（sqlite3_exec）。返回 nil 表示成功，否则是 SQLite 错误文本。
+  /// 迁移与 schema bootstrap 使用；SQL 均来自本文件静态常量或整数版本号拼接。
+  static func executeScript(_ db: OpaquePointer, _ sql: String) -> String? {
+    var errorPointer: UnsafeMutablePointer<CChar>?
+    let status = sqlite3_exec(db, sql, nil, nil, &errorPointer)
+    if status == SQLITE_OK { return nil }
+    let detail = errorPointer.map { String(cString: $0) } ?? errorMessage(db)
+    if let errorPointer { sqlite3_free(errorPointer) }
+    return detail
+  }
+
   /// NULL → nil；用 column_bytes 而不是 cString，避免值里出现 NUL 时被截断。
   static func columnString(_ statement: OpaquePointer, _ index: Int32) -> String? {
     guard sqlite3_column_type(statement, index) != SQLITE_NULL,
           let bytes = sqlite3_column_text(statement, index) else { return nil }
     let count = Int(sqlite3_column_bytes(statement, index))
     return String(decoding: UnsafeBufferPointer(start: bytes, count: count), as: UTF8.self)
+  }
+}
+
+enum TiebaDatabaseMigrationError: LocalizedError {
+  case unknownVersion(Int)
+  case failed(version: Int, detail: String)
+
+  var errorDescription: String? {
+    switch self {
+    case .unknownVersion(let version):
+      return "Unknown database schema migration version: \(version)"
+    case .failed(let version, let detail):
+      return "Database migration v\(version) failed: \(detail)"
+    }
+  }
+}
+
+/// 统一 SQLite schema 版本与迁移注册表。
+///
+/// 规则：
+/// - PRAGMA user_version 是唯一版本号，所有连接（KV / 关系表 / 页面缓存）共享；
+/// - 迁移只能追加、必须幂等；新版本只允许在事务成功后才推进 user_version；
+/// - 首次从旧版本升级前用 sqlite3_backup 做一致性备份（WAL 中的已提交页也包含）；
+/// - 备份失败不阻断纯 append-only DDL，但会记录 error；迁移失败则 ROLLBACK 并抛错，
+///   旧表/旧数据保持原样，下次启动重试。
+enum TiebaDatabaseSchema {
+  static let currentVersion = 3
+  static let mainDatabaseName = TiebaSQLite.mainDatabase
+  static let pageCacheTable = "tieba_page_cache"
+  static let forumAvatarTable = "tieba_forum_avatar_cache"
+
+  private static let migrationGate = TiebaMutex<Bool>(false)
+  private static let migrationLaunchGate = TiebaMutex<Bool>(false)
+  /// 新缓存表可用性：迁移完成前所有 page cache/avatar table 调用直接 miss。
+  /// 登录态 KV/关注缓存走旧表，不需要等这个标记，所以升级不会挡住首屏内容。
+  private static let cacheSchemaReady = TiebaMutex<Bool>(false)
+  private static let log = Logger(subsystem: "com.tiebalite.app", category: "sqlite-migration")
+
+  static var isCacheSchemaReady: Bool {
+    cacheSchemaReady.withLock { $0 }
+  }
+
+  /// 已是最新版本时无需等后台迁移；open 路径只付一次 PRAGMA 点查。
+  static func markCacheSchemaReadyIfCurrent(handle db: OpaquePointer) {
+    guard let version = try? userVersion(db), version >= currentVersion else { return }
+    cacheSchemaReady.withLock { $0 = true }
+  }
+
+  private static var mainDatabasePath: String {
+    FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("SQLite", isDirectory: true)
+      .appendingPathComponent(mainDatabaseName)
+      .path
+  }
+
+  /// 覆盖安装后的数据库升级入口：调用即返回，迁移在 utility 队列执行。
+  /// 不把迁移放进 open()，避免首个 KV 读（登录态/关注列表）被 DDL/备份阻塞。
+  static func startBackgroundMigration() {
+    let shouldStart = migrationLaunchGate.withLock { started -> Bool in
+      guard started == false else { return false }
+      started = true
+      return true
+    }
+    guard shouldStart else { return }
+    Task.detached(priority: .utility) {
+      let path = mainDatabasePath
+      // 重试上限仍是 3 次；间隔指数退避（250ms 起、翻倍、封顶 8s）并加 ±20% 抖动。
+      // 抖动不是装饰：KV 连接与这条迁移连接打的是同一个库文件，固定间隔会让
+      // "撞锁 → 同时重试 → 再次撞锁"变成共振，退避+抖动把两次尝试错开。
+      // 取消检查放在每轮开头；sleep 用 `try await` 让 CancellationError 正常
+      // 传播（以前是 `try?`，连取消一起吞掉，任务被取消后还会继续睡、继续开库）。
+      var attempt = 0
+      var delayMilliseconds = 250.0
+      while attempt < 3 {
+        if Task.isCancelled { return }
+        do {
+          // 迁移连接与关系表连接同档（耐久优先）：它要写 schema 与 user_version，
+          // 不值得为省 fsync 冒"改了一半"的风险；也不在 JS 同步热路径上。
+          let handle = try TiebaSQLiteCore.open(path: path, profile: .relational)
+          defer { sqlite3_close_v2(handle) }
+          sqlite3_busy_timeout(handle, 3000)
+          _ = TiebaSQLiteCore.executeScript(handle, "PRAGMA journal_mode = WAL;")
+          try migrateIfNeeded(handle: handle, path: path)
+          cacheSchemaReady.withLock { $0 = true }
+          log.notice("database schema ready at v\(currentVersion, privacy: .public)")
+          return
+        } catch {
+          attempt += 1
+          if attempt >= 3 {
+            log.error("background schema migration failed after retries: \(error.localizedDescription, privacy: .public)")
+            return
+          }
+          let jittered = delayMilliseconds * Double.random(in: 0.8...1.2)
+          try await Task.sleep(for: .milliseconds(jittered))
+          delayMilliseconds = min(delayMilliseconds * 2, 8000)
+        }
+      }
+    }
+  }
+
+  static let visitHistoryColumns: [(name: String, definition: String)] = [
+    ("type", "TEXT NOT NULL DEFAULT ''"),
+    ("thread_id", "TEXT NOT NULL DEFAULT ''"),
+    ("forum_id", "TEXT NOT NULL DEFAULT ''"),
+    ("forum_name", "TEXT NOT NULL DEFAULT ''"),
+    ("avatar", "TEXT NOT NULL DEFAULT ''"),
+    ("title", "TEXT NOT NULL DEFAULT ''"),
+    ("author_name", "TEXT NOT NULL DEFAULT ''"),
+    ("author_portrait", "TEXT NOT NULL DEFAULT ''"),
+    ("timestamp", "INTEGER NOT NULL DEFAULT 0"),
+  ]
+
+  static func migrateIfNeeded(handle db: OpaquePointer, path: String) throws {
+    try migrationGate.withLock { _ in
+      let fromVersion = try userVersion(db)
+      guard fromVersion < currentVersion else { return }
+      if try hasUserTables(db) {
+        do {
+          try backupBeforeMigration(db: db, path: path, fromVersion: fromVersion)
+        } catch {
+          log.error("database backup before migration failed: \(error.localizedDescription, privacy: .public)")
+        }
+      }
+
+      if let failure = TiebaSQLiteCore.executeScript(db, "BEGIN IMMEDIATE;") {
+        throw TiebaDatabaseMigrationError.failed(version: fromVersion, detail: failure)
+      }
+      var version = fromVersion
+      do {
+        while version < currentVersion {
+          let next = version + 1
+          try applyMigration(version: next, db: db)
+          if let failure = TiebaSQLiteCore.executeScript(db, "PRAGMA user_version = \(next);") {
+            throw TiebaDatabaseMigrationError.failed(version: next, detail: failure)
+          }
+          version = next
+        }
+        if let failure = TiebaSQLiteCore.executeScript(db, "COMMIT;") {
+          throw TiebaDatabaseMigrationError.failed(version: currentVersion, detail: failure)
+        }
+        log.notice("database migrated from v\(fromVersion, privacy: .public) to v\(currentVersion, privacy: .public)")
+      } catch {
+        _ = TiebaSQLiteCore.executeScript(db, "ROLLBACK;")
+        if let migrationError = error as? TiebaDatabaseMigrationError {
+          throw migrationError
+        }
+        throw TiebaDatabaseMigrationError.failed(
+          version: version + 1,
+          detail: error.localizedDescription
+        )
+      }
+    }
+  }
+
+  private static func applyMigration(version: Int, db: OpaquePointer) throws {
+    switch version {
+    case 1:
+      try migrateBaseline(db)
+    case 2:
+      try migratePageCache(db)
+    case 3:
+      try migrateForumAvatarCache(db)
+    default:
+      throw TiebaDatabaseMigrationError.unknownVersion(version)
+    }
+  }
+
+  private static func migrateBaseline(_ db: OpaquePointer) throws {
+    let sql = """
+      CREATE TABLE IF NOT EXISTS kv (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS search_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        forum_id TEXT NOT NULL DEFAULT '',
+        keyword TEXT NOT NULL,
+        timestamp INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_search_history_scope_time
+        ON search_history(forum_id, timestamp DESC, id DESC);
+      CREATE TABLE IF NOT EXISTS visit_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        thread_id TEXT NOT NULL DEFAULT '',
+        forum_id TEXT NOT NULL DEFAULT '',
+        forum_name TEXT NOT NULL DEFAULT '',
+        avatar TEXT NOT NULL DEFAULT '',
+        title TEXT NOT NULL DEFAULT '',
+        author_name TEXT NOT NULL DEFAULT '',
+        author_portrait TEXT NOT NULL DEFAULT '',
+        timestamp INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_visit_history_type_time
+        ON visit_history(type, timestamp DESC, id DESC);
+      """
+    try execute(db, sql, version: 1)
+    try ensureColumns(db, table: "visit_history", columns: visitHistoryColumns, version: 1)
+  }
+
+  private static func migratePageCache(_ db: OpaquePointer) throws {
+    let sql = """
+      CREATE TABLE IF NOT EXISTS \(pageCacheTable) (
+        cache_key TEXT PRIMARY KEY NOT NULL,
+        kind TEXT NOT NULL,
+        account_key TEXT NOT NULL,
+        page_key TEXT NOT NULL,
+        payload BLOB NOT NULL,
+        fetched_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        last_access_at INTEGER NOT NULL,
+        byte_count INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_tieba_page_cache_scope_fresh
+        ON \(pageCacheTable)(page_key, account_key, fetched_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_tieba_page_cache_account_kind_access
+        ON \(pageCacheTable)(account_key, kind, last_access_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_tieba_page_cache_expiry
+        ON \(pageCacheTable)(expires_at);
+      """
+    try execute(db, sql, version: 2)
+  }
+
+  private static func migrateForumAvatarCache(_ db: OpaquePointer) throws {
+    let sql = """
+      CREATE TABLE IF NOT EXISTS \(forumAvatarTable) (
+        cache_key TEXT PRIMARY KEY NOT NULL,
+        avatar TEXT NOT NULL,
+        fetched_at INTEGER NOT NULL,
+        last_access_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_tieba_forum_avatar_access
+        ON \(forumAvatarTable)(last_access_at DESC);
+      """
+    try execute(db, sql, version: 3)
+  }
+
+  private static func execute(_ db: OpaquePointer, _ sql: String, version: Int) throws {
+    if let failure = TiebaSQLiteCore.executeScript(db, sql) {
+      throw TiebaDatabaseMigrationError.failed(version: version, detail: failure)
+    }
+  }
+
+  private static func ensureColumns(
+    _ db: OpaquePointer,
+    table: String,
+    columns: [(name: String, definition: String)],
+    version: Int
+  ) throws {
+    let existing = Set(try columnNames(db, table: table))
+    for column in columns where existing.contains(column.name) == false {
+      try execute(
+        db,
+        "ALTER TABLE \(table) ADD COLUMN \(column.name) \(column.definition);",
+        version: version
+      )
+    }
+  }
+
+  private static func columnNames(_ db: OpaquePointer, table: String) throws -> [String] {
+    guard let statement = TiebaSQLiteCore.prepare(db, "PRAGMA table_info(\(table));") else {
+      throw TiebaDatabaseMigrationError.failed(version: currentVersion, detail: TiebaSQLiteCore.errorMessage(db))
+    }
+    defer { sqlite3_finalize(statement) }
+    var names: [String] = []
+    while true {
+      let step = sqlite3_step(statement)
+      if step == SQLITE_ROW {
+        if let text = TiebaSQLiteCore.columnString(statement, 1) {
+          names.append(text)
+        }
+      } else if step == SQLITE_DONE {
+        return names
+      } else {
+        throw TiebaDatabaseMigrationError.failed(version: currentVersion, detail: TiebaSQLiteCore.errorMessage(db))
+      }
+    }
+  }
+
+  private static func userVersion(_ db: OpaquePointer) throws -> Int {
+    guard let statement = TiebaSQLiteCore.prepare(db, "PRAGMA user_version;") else {
+      throw TiebaDatabaseMigrationError.failed(version: 0, detail: TiebaSQLiteCore.errorMessage(db))
+    }
+    defer { sqlite3_finalize(statement) }
+    guard sqlite3_step(statement) == SQLITE_ROW else {
+      throw TiebaDatabaseMigrationError.failed(version: 0, detail: TiebaSQLiteCore.errorMessage(db))
+    }
+    return Int(sqlite3_column_int64(statement, 0))
+  }
+
+  private static func hasUserTables(_ db: OpaquePointer) throws -> Bool {
+    guard let statement = TiebaSQLiteCore.prepare(
+      db,
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' LIMIT 1;"
+    ) else {
+      throw TiebaDatabaseMigrationError.failed(version: currentVersion, detail: TiebaSQLiteCore.errorMessage(db))
+    }
+    defer { sqlite3_finalize(statement) }
+    return sqlite3_step(statement) == SQLITE_ROW
+  }
+
+  /// 用户显式“清除全部数据”时删除迁移备份（备份同样包含登录/历史等用户数据）。
+  static func removeMigrationBackups(forDatabasePath path: String) {
+    let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
+      .appendingPathComponent("Backups", isDirectory: true)
+    guard let files = try? FileManager.default.contentsOfDirectory(
+      at: directory,
+      includingPropertiesForKeys: nil
+    ) else { return }
+    for file in files where file.lastPathComponent.hasPrefix("tiebalite-before-v") {
+      try? FileManager.default.removeItem(at: file)
+    }
+  }
+
+  private static func backupBeforeMigration(
+    db: OpaquePointer,
+    path: String,
+    fromVersion: Int
+  ) throws {
+    let sourceURL = URL(fileURLWithPath: path)
+    let backupDirectory = sourceURL.deletingLastPathComponent()
+      .appendingPathComponent("Backups", isDirectory: true)
+    try FileManager.default.createDirectory(at: backupDirectory, withIntermediateDirectories: true)
+    let destinationURL = backupDirectory
+      .appendingPathComponent("tiebalite-before-v\(currentVersion)-from-v\(fromVersion).db")
+    if FileManager.default.fileExists(atPath: destinationURL.path) {
+      try FileManager.default.removeItem(at: destinationURL)
+    }
+
+    var destination: OpaquePointer?
+    let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
+    guard sqlite3_open_v2(destinationURL.path, &destination, flags, nil) == SQLITE_OK,
+          let destination else {
+      if let destination { sqlite3_close_v2(destination) }
+      throw TiebaDatabaseMigrationError.failed(
+        version: fromVersion,
+        detail: "backup open failed: \(TiebaSQLiteCore.errorMessage(db))"
+      )
+    }
+    defer { sqlite3_close_v2(destination) }
+    guard let backup = sqlite3_backup_init(destination, "main", db, "main") else {
+      throw TiebaDatabaseMigrationError.failed(
+        version: fromVersion,
+        detail: "backup init failed: \(TiebaSQLiteCore.errorMessage(destination))"
+      )
+    }
+    let step = sqlite3_backup_step(backup, -1)
+    let finish = sqlite3_backup_finish(backup)
+    guard step == SQLITE_DONE, finish == SQLITE_OK else {
+      throw TiebaDatabaseMigrationError.failed(
+        version: fromVersion,
+        detail: "backup step=\(step) finish=\(finish)"
+      )
+    }
+    log.notice(
+      "database migration backup: \(destinationURL.lastPathComponent, privacy: .public)"
+    )
   }
 }
 
@@ -384,8 +902,18 @@ final class TiebaSQLite: Sendable {
     try connections.withLock { table in
       guard let connection = table[database], connection.transactionDepth > 0 else { return }
       connection.transactionDepth = 0
-      // ROLLBACK 自己失败没有恢复手段（事务已不可信），原始错误照抛。
-      try execLocked(connection.handle, sql: "ROLLBACK;")
+      do {
+        try execLocked(connection.handle, sql: "ROLLBACK;")
+      } catch {
+        // ROLLBACK 自己失败 ⇒ 这个事务状态已不可信。若把连接留在表里，下一次
+        // `BEGIN IMMEDIATE` 会永久报 "cannot start a transaction within a transaction"，
+        // 而那个报错与真因无关（调用方看到的是"事务里还能再开事务"）。
+        // 摘掉连接并关闭：sqlite3_close_v2 会替我们回滚未完成事务，下次访问重开一个
+        // 干净连接。原始 ROLLBACK 错误照抛，不吞。
+        table.removeValue(forKey: database)
+        sqlite3_close_v2(connection.handle)
+        throw error
+      }
     }
   }
 
@@ -420,13 +948,17 @@ final class TiebaSQLite: Sendable {
   private func openLocked(_ database: String) throws -> TiebaSQLiteConnection {
     let handle: OpaquePointer
     do {
-      handle = try TiebaSQLiteCore.open(path: databaseURL(named: database).path)
+      handle = try TiebaSQLiteCore.open(
+        path: databaseURL(named: database).path,
+        profile: .relational
+      )
     } catch let error as TiebaSQLiteCoreError {
       throw TiebaSQLiteError.databaseUnavailable(error.detail)
     }
     let connection = TiebaSQLiteConnection(handle: handle)
-    // WAL：两条连接读写同库时读不阻塞写。单条 PRAGMA，失败不阻断
-    //（回滚日志模式下靠 busy_timeout 也能跑）——与 TiebaKvStore 同款。
+    // WAL：两条连接读写同库时读不阻塞写。必须排在下面的 schema 自愈之前——
+    // journal_mode 是库文件级属性，已有写事务时再切换会失败，而建表就是写。
+    // 失败不阻断（回滚日志模式下靠 busy_timeout 也能跑）——与 TiebaKvStore 同款。
     try? execLocked(handle, sql: "PRAGMA journal_mode = WAL;")
     // 统一库自愈：缺表建表（老库只有 kv）、旧表缺列补列。失败不注册连接，
     // 下次调用重试而不是拿一条 schema 不完整的连接继续跑查询。
@@ -443,17 +975,7 @@ final class TiebaSQLite: Sendable {
 
   /// 旧库缺失列补齐（ALTER 只加不删；NOT NULL 必须带默认值 SQLite 才收）。
   /// 覆盖 v1 起全部业务列：老 unified 库只差 author_portrait，更老的库可能差更多。
-  private static let visitHistoryColumns: [(name: String, definition: String)] = [
-    ("type", "TEXT NOT NULL DEFAULT ''"),
-    ("thread_id", "TEXT NOT NULL DEFAULT ''"),
-    ("forum_id", "TEXT NOT NULL DEFAULT ''"),
-    ("forum_name", "TEXT NOT NULL DEFAULT ''"),
-    ("avatar", "TEXT NOT NULL DEFAULT ''"),
-    ("title", "TEXT NOT NULL DEFAULT ''"),
-    ("author_name", "TEXT NOT NULL DEFAULT ''"),
-    ("author_portrait", "TEXT NOT NULL DEFAULT ''"),
-    ("timestamp", "INTEGER NOT NULL DEFAULT 0"),
-  ]
+  private static let visitHistoryColumns = TiebaDatabaseSchema.visitHistoryColumns
 
   /// 建表/补列（幂等）。表名/列名全部来自本文件常量，无注入面。
   private func ensureRelationalSchemaLocked(_ db: OpaquePointer) throws {
@@ -531,6 +1053,16 @@ final class TiebaSQLite: Sendable {
         sqlite3_bind_int64(statement, index, number)
       case .double(let number):
         sqlite3_bind_double(statement, index, number)
+      case .blob(let data):
+        data.withUnsafeBytes { raw in
+          _ = sqlite3_bind_blob(
+            statement,
+            index,
+            raw.baseAddress,
+            Int32(raw.count),
+            TiebaSQLiteCore.transient()
+          )
+        }
       }
     }
   }
@@ -549,6 +1081,15 @@ final class TiebaSQLite: Sendable {
         // 旧实现里 columnString 返回 nil 会装箱成 NSNull，这里保持同一语义。
         if let text = TiebaSQLiteCore.columnString(statement, index) {
           row[name] = .text(text)
+        } else {
+          row[name] = .null
+        }
+      case SQLITE_BLOB:
+        let count = Int(sqlite3_column_bytes(statement, index))
+        if count == 0 {
+          row[name] = .blob(Data())
+        } else if let bytes = sqlite3_column_blob(statement, index) {
+          row[name] = .blob(Data(bytes: bytes, count: count))
         } else {
           row[name] = .null
         }

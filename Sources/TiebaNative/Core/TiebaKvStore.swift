@@ -68,6 +68,9 @@ enum TiebaKvError: LocalizedError {
   case databaseUnavailable(String)
   case statementFailed(String)
   case invalidBatchEntry
+  /// 事务失败**且**回滚也失败：连接已作废（下次调用重开），两个原因都带出来
+  /// ——original 是调用方要处理的业务错误，rollback 是排查用的现场信息。
+  case transactionRollbackFailed(original: String, rollback: String)
 
   var errorDescription: String? {
     switch self {
@@ -77,6 +80,9 @@ enum TiebaKvError: LocalizedError {
       return "KV statement failed: \(detail)"
     case .invalidBatchEntry:
       return "kvBatchWrite entries must be { key: string, value: string | null }"
+    case .transactionRollbackFailed(let original, let rollback):
+      return "KV transaction failed (\(original)) and ROLLBACK failed (\(rollback)); "
+        + "connection discarded, next call reopens"
     }
   }
 }
@@ -127,6 +133,39 @@ final class TiebaKvStore: @unchecked Sendable {
   /// 打开失败的描述：命中后本进程不再重试（避免每次 kv 调用都撞一次磁盘错误），
   /// 但也不吞——写操作会把它抛给 JS。
   private var openFailure: String?
+
+  /// 单键读写的三条语句缓存（11-06）。
+  ///
+  /// 为什么要缓存：`get`/`set`/`remove` 是最热的一条路径（读遍布启动链路：
+  /// clientId / uid / 账号列表 / 偏好），原来每次调用都是
+  /// `prepare → step → finalize`，让 SQLite 对同一句常量 SQL 反复做词法/语法
+  /// 分析与查询计划编译。这三条语句的文本与参数个数都是固定的，天然可复用。
+  ///
+  /// 为什么必须和连接同生共死：`sqlite3_stmt` 内嵌指向连接对象，连接一关
+  /// 语句就是野指针（use-after-free），而 `sqlite3_close_v2` 在有未 finalize
+  /// 的语句时会"假成功"——把关闭推迟，句柄其实还活着。所以缓存只在连接
+  /// 建立成功后填充，且**任何**关闭连接的路径都必须先 `invalidate()`；
+  /// 关闭入口已收敛到 `closeConnectionLocked(_:)` 一处。
+  private struct StatementCache {
+    var select: OpaquePointer?
+    var upsert: OpaquePointer?
+    var delete: OpaquePointer?
+
+    /// 逐条 finalize 并清空。幂等。
+    mutating func invalidate() {
+      if let select { sqlite3_finalize(select) }
+      if let upsert { sqlite3_finalize(upsert) }
+      if let delete { sqlite3_finalize(delete) }
+      select = nil
+      upsert = nil
+      delete = nil
+    }
+  }
+
+  /// 缓存语句所属的连接。与 `statementCache` 配对：句柄一变（重开/重建/作废）
+  /// 就必须整批 finalize 重建，否则缓存里挂的是上一条连接的语句。
+  private var statementCacheOwner: OpaquePointer?
+  private var statementCache = StatementCache()
 
   /// 旧 MMKV 导入状态（见文件头）。idle → running → done / failed 单向流转；
   /// failed 本进程不重试（下次启动再来），但 lookup 会如实报 unavailable。
@@ -189,8 +228,7 @@ final class TiebaKvStore: @unchecked Sendable {
   func set(key: String, value: String) throws {
     lock.lock()
     defer { lock.unlock() }
-    let db = try openOrThrowLocked()
-    waitForLegacyImportLocked()
+    let db = try writableHandleLocked()
     try upsertLocked(db, key: key, value: value)
   }
 
@@ -198,8 +236,7 @@ final class TiebaKvStore: @unchecked Sendable {
   func remove(key: String) throws {
     lock.lock()
     defer { lock.unlock() }
-    let db = try openOrThrowLocked()
-    waitForLegacyImportLocked()
+    let db = try writableHandleLocked()
     try deleteLocked(db, key: key)
   }
 
@@ -259,8 +296,7 @@ final class TiebaKvStore: @unchecked Sendable {
   func batchWrite(_ writes: [(key: String, value: String?)]) throws {
     lock.lock()
     defer { lock.unlock() }
-    let db = try openOrThrowLocked()
-    waitForLegacyImportLocked()
+    let db = try writableHandleLocked()
     try inTransactionLocked(db) {
       for write in writes {
         if let value = write.value {
@@ -280,9 +316,8 @@ final class TiebaKvStore: @unchecked Sendable {
   func clear(prefix: String?, preserveKeys: [String]) throws {
     lock.lock()
     defer { lock.unlock() }
-    let db = try openOrThrowLocked()
-    // 等待导入完成再清：否则后台导入会把清掉的数据又写回来（清空复活）。
-    waitForLegacyImportLocked()
+    // 先等导入完成再清：否则后台导入会把清掉的数据又写回来（清空复活）。
+    let db = try writableHandleLocked()
     // 去重 + 过滤空串：key NOT IN 列表里有重复不影响语义，但绑定参数少一点好。
     var preserved = Set(preserveKeys.filter { !$0.isEmpty })
     preserved.formUnion(Self.internalMarkerKeys)
@@ -308,6 +343,18 @@ final class TiebaKvStore: @unchecked Sendable {
     }
     guard sqlite3_step(statement) == SQLITE_DONE else {
       throw TiebaKvError.statementFailed(TiebaSQLiteCore.errorMessage(db))
+    }
+    // “清除全部数据”还必须清掉同库里的派生缓存；否则页面缓存/吧头像表会在
+    // 用户明确清数据后继续提供旧内容（账号隔离挡不住同一账号的旧页面）。
+    // 前缀清理（例如只清设置页偏好）不碰这些表。
+    if prefix == nil {
+      for table in [TiebaDatabaseSchema.pageCacheTable, TiebaDatabaseSchema.forumAvatarTable] {
+        if let failure = TiebaSQLiteCore.execute(db, "DELETE FROM \(table);", bind: { _ in }) {
+          // 派生缓存可重建，不能因为清缓存失败让主 KV 的“清除全部数据”半途报错。
+          Self.log.error("derive cache clear failed for \(table, privacy: .public): \(failure, privacy: .public)")
+        }
+      }
+      TiebaDatabaseSchema.removeMigrationBackups(forDatabasePath: databaseURL.path)
     }
   }
 
@@ -335,32 +382,78 @@ final class TiebaKvStore: @unchecked Sendable {
   private func openLocked() -> OpaquePointer? {
     if let database { return database }
     if openFailure != nil { return nil }
+    var failureErrno: Int32 = 0
     do {
-      let handle = try TiebaSQLiteCore.open(path: databaseURL.path)
-      database = handle
-      // 表结构与 unifiedDb.ts 的 createSchemaAsync 逐字一致（同一张表，两边
-      // 谁先建都得到同一形状；列/约束不同会在这里暴露成 SQL 错误而不是静默分歧）。
-      if let failure = TiebaSQLiteCore.execute(handle, """
-        CREATE TABLE IF NOT EXISTS kv (
-          key TEXT PRIMARY KEY NOT NULL,
-          value TEXT NOT NULL
-        );
-        """, bind: { _ in }) {
-        throw TiebaKvError.statementFailed(failure)
-      }
-      enableWALLocked(handle)
-      scheduleLegacyImportLocked(handle)
-      return handle
+      let handle = try TiebaSQLiteCore.open(path: databaseURL.path, profile: .keyValueStore)
+      if let opened = finishOpenLocked(handle) { return opened }
+      // 建表失败 = 文件层面已经不对（malformed / 半截 schema）。errno 取不到，按 0 计数：
+      // `shouldCount(0)` 为真，这是有意为之 —— 这类失败删库确实能修。
+      failureErrno = 0
     } catch {
       if let handle = database {
-        sqlite3_close_v2(handle)
         database = nil
+        closeConnectionLocked(handle)
       }
+      failureErrno = (error as? TiebaSQLiteCoreError)?.systemErrno ?? 0
       let detail = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
-      Self.log.error("kv open failed: \(detail, privacy: .public)")
+      Self.log.error("kv open failed (errno \(failureErrno, privacy: .public)): \(detail, privacy: .public)")
+      openFailure = detail
+    }
+    // 11-02：连续失败达阈值才删库重建，而且**只重建一次**（再失败就老实记 openFailure，
+    // 交给下次启动）。锁屏/瞬时锁竞争这类错误在 shouldCount 里已被过滤，不会走到这里。
+    if TiebaSQLiteOpenValve.recordFailureAndShouldWipe(
+      databaseURL.path,
+      systemErrno: failureErrno
+    ) {
+      Self.log.error(
+        "kv open failed \(TiebaSQLiteOpenValve.wipeThreshold, privacy: .public) times in a row; rebuilding database"
+      )
+      openFailure = nil
+      if let rebuilt = rebuildLocked() { return rebuilt }
+    }
+    return nil
+  }
+
+  /// 删库重建（owner 专属，只由 `openLocked` 在阈值达成时调用一次）。
+  ///
+  /// 删主库必须连 `-wal` / `-shm` 一起删：只删主库会让新连接配上旧 WAL 索引，
+  /// 打开"成功"但读出来是垃圾（比打不开更难查）。
+  private func rebuildLocked() -> OpaquePointer? {
+    TiebaSQLiteOpenValve.removeDatabaseFiles(databaseURL.path)
+    do {
+      let handle = try TiebaSQLiteCore.open(path: databaseURL.path, profile: .keyValueStore)
+      return finishOpenLocked(handle)
+    } catch {
+      let detail = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+      Self.log.error("kv rebuild failed: \(detail, privacy: .public)")
       openFailure = detail
       return nil
     }
+  }
+
+  /// 打开成功后的公共收尾：建表 → WAL → 清零失败计数 → 调度旧数据导入。
+  /// 返回 nil 表示建表失败（此时已关句柄、已记 openFailure）。
+  private func finishOpenLocked(_ handle: OpaquePointer) -> OpaquePointer? {
+    database = handle
+    // 表结构与 unifiedDb.ts 的 createSchemaAsync 逐字一致（同一张表，两边
+    // 谁先建都得到同一形状；列/约束不同会在这里暴露成 SQL 错误而不是静默分歧）。
+    if let failure = TiebaSQLiteCore.execute(handle, """
+      CREATE TABLE IF NOT EXISTS kv (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL
+      );
+      """, bind: { _ in }) {
+      database = nil
+      closeConnectionLocked(handle)
+      Self.log.error("kv schema failed: \(failure, privacy: .public)")
+      openFailure = failure
+      return nil
+    }
+    enableWALLocked(handle)
+    // 一次成功即清零连续失败计数（上游 clearOpenFailures 同款）。
+    TiebaSQLiteOpenValve.clear(databaseURL.path)
+    scheduleLegacyImportLocked(handle)
+    return handle
   }
 
   private func openOrThrowLocked() throws -> OpaquePointer {
@@ -370,11 +463,24 @@ final class TiebaKvStore: @unchecked Sendable {
     return db
   }
 
+  /// 写路径的公共前置：打开（首次打开会调度旧 MMKV 导入）→ 等导入落库 →
+  /// **重新取**句柄。
+  ///
+  /// 重新取这一步不是多余的：等导入要放锁，而导入事务回滚失败会作废连接
+  /// （见 inTransactionLocked），等待前拿到的指针此刻已经失效。重取时若连接
+  /// 已被摘除，openOrThrowLocked 会重开一条。调用方须已持 lock。
+  private func writableHandleLocked() throws -> OpaquePointer {
+    _ = try openOrThrowLocked()
+    waitForLegacyImportLocked()
+    return try openOrThrowLocked()
+  }
+
   /// WAL：两条连接读写同一库时读不阻塞写。单条 PRAGMA，失败只记日志——
   /// 回滚日志模式下靠 busy_timeout 也能跑，只是写-写撞车时表现为等待。
-  /// synchronous=NORMAL 是 WAL 的标准搭配（缺省 FULL 让每次 COMMIT 都 fsync
-  /// WAL）：app 崩溃仍一致（WAL 未 checkpoint 的数据可恢复），只有掉电可能丢
-  /// 最后一笔——kv 里全是可重建的缓存/快照/偏好，这个代价换掉每次提交的 fsync。
+  /// 排在下面 scheduleLegacyImportLocked 之前：导入是写事务，journal_mode
+  /// 切不动的时机就是在写事务里。
+  /// `synchronous=NORMAL`（WAL 的标准搭配）**不在这里设**：它随开库档位由
+  /// TiebaSQLiteCore.open(profile: .keyValueStore) 一处给出，见那边的 Profile 注释。
   private func enableWALLocked(_ db: OpaquePointer) {
     var statement: OpaquePointer?
     guard sqlite3_prepare_v2(db, "PRAGMA journal_mode = WAL;", -1, &statement, nil) == SQLITE_OK,
@@ -385,11 +491,6 @@ final class TiebaKvStore: @unchecked Sendable {
       if mode.lowercased() != "wal" {
         Self.log.notice("journal_mode=\(mode, privacy: .public) (WAL 未生效，并发写可能等待)")
       }
-    }
-    let syncStatement: OpaquePointer? = TiebaSQLiteCore.prepare(db, "PRAGMA synchronous = NORMAL;")
-    if let syncStatement {
-      defer { sqlite3_finalize(syncStatement) }
-      _ = sqlite3_step(syncStatement)
     }
   }
 
@@ -419,9 +520,10 @@ final class TiebaKvStore: @unchecked Sendable {
       self.lock.withLock {
         if let entries {
           if let failure = self.applyLegacyEntriesLocked(entries) {
-            // 事务已回滚（数据与标记都没落），保持旧文件原样，下次启动重试。
+            // 事务没提交（数据与标记都没落），保持旧文件原样，下次启动重试。
+            // failure 里已区分"回滚成功"与"回滚也失败、连接已作废"。
             self.legacyImportState = .failed
-            Self.log.error("legacy mmkv import failed, rolled back: \(failure, privacy: .public)")
+            Self.log.error("legacy mmkv import failed: \(failure, privacy: .public)")
           } else {
             Self.log.notice("imported \(entries.count, privacy: .public) legacy mmkv entries into kv table")
             self.legacyImportState = .done
@@ -438,7 +540,7 @@ final class TiebaKvStore: @unchecked Sendable {
 
   /// 顺序敏感：MMKV 是 append-only 日志，同一个键可能先写后删（或反过来），
   /// 按文件顺序 apply 才与它的内存字典一致（后写覆盖先写）。调用方须已持 lock。
-  /// 返回 nil = 成功；否则为回滚后的错误描述。
+  /// 返回 nil = 成功；否则是失败描述（回滚失败时还带连接已作废的说明）。
   private func applyLegacyEntriesLocked(_ entries: [(key: String, value: String?)]) -> String? {
     guard let db = database else { return "database closed before import" }
     do {
@@ -474,6 +576,8 @@ final class TiebaKvStore: @unchecked Sendable {
 
   /// 导入未完成时写操作必须等待（见文件头）。调用方须已持 lock；等待期间
   /// 释放锁让后台导入跑完（DispatchGroup 一旦清空，后续 wait 立即返回）。
+  /// ⚠️ 等待期间连接可能被作废（见 inTransactionLocked），所以返回之后不能
+  /// 再用等待前拿到的句柄 —— 用 writableHandleLocked()，别直接调这里。
   private func waitForLegacyImportLocked() {
     while legacyImportState == .running {
       lock.unlock()
@@ -521,6 +625,36 @@ final class TiebaKvStore: @unchecked Sendable {
 
   // MARK: - SQLite 原语（调用方须已持有 lock）
 
+  /// 单键读写的固定 SQL（11-06 的语句缓存只认这三条：文本与参数个数都不变）。
+  private static let selectKeySQL = "SELECT value FROM kv WHERE key = ?1;"
+  private static let upsertKeySQL = "INSERT OR REPLACE INTO kv (key, value) VALUES (?1, ?2);"
+  private static let deleteKeySQL = "DELETE FROM kv WHERE key = ?1;"
+
+  /// 取一条缓存语句（首次用到才 prepare）。调用方须已持 lock，且 `db` 是当前连接。
+  /// prepare 失败返回 nil（不缓存失败，下次重试）。
+  private func cachedStatementLocked(
+    _ db: OpaquePointer,
+    slot: WritableKeyPath<StatementCache, OpaquePointer?>,
+    sql: String
+  ) -> OpaquePointer? {
+    if statementCacheOwner != db {
+      // 换了连接（重开 / 删库重建 / 作废后重连）：旧语句全部指向已关闭的连接。
+      statementCache.invalidate()
+      statementCacheOwner = db
+    }
+    if let cached = statementCache[keyPath: slot] { return cached }
+    guard let statement = TiebaSQLiteCore.prepare(db, sql) else { return nil }
+    statementCache[keyPath: slot] = statement
+    return statement
+  }
+
+  /// 复用语句的收尾：`reset` 复位到可再次 step，`clear_bindings` 清掉上一轮绑定的
+  /// 参数（不 clear 的话，某轮少绑一个参数就会静默沿用上一次的值）。
+  private static func recycle(_ statement: OpaquePointer) {
+    sqlite3_reset(statement)
+    sqlite3_clear_bindings(statement)
+  }
+
   /// 单键读取的结果：行不在 / 值可解 / **行在但值解不开**。
   /// 第三态只给 lookup 用（见下）；get 只关心「能不能给出值」。
   private enum KeyReadOutcome {
@@ -532,12 +666,19 @@ final class TiebaKvStore: @unchecked Sendable {
   /// 单键读取。区分「确证没有这一行」与「这一行读不出来」——压缩值（\u{01}gz: 前缀）
   /// 解不开时若报成前者，破坏性调用方会把坏行当空数据写回（丢的是用户数据）。
   private func readKeyLocked(_ db: OpaquePointer, key: String) -> KeyReadOutcome {
-    guard let statement = TiebaSQLiteCore.prepare(db, "SELECT value FROM kv WHERE key = ?1;") else {
+    guard let statement = cachedStatementLocked(db, slot: \.select, sql: Self.selectKeySQL) else {
       return .unreadable("prepare failed: \(TiebaSQLiteCore.errorMessage(db))")
     }
-    defer { sqlite3_finalize(statement) }
+    defer { Self.recycle(statement) }
     TiebaSQLiteCore.bind(statement, 1, key)
-    guard sqlite3_step(statement) == SQLITE_ROW else { return .missing }
+    // step 的三种结果必须分开：SQLITE_DONE 才是"确证没有这一行"，
+    // 其余（BUSY / IOERR / 语句被破坏）是"读不出来"。原来一律当 missing，
+    // 正好踩中本文件反复强调的那条线：破坏性调用方会把故障当空数据写回。
+    let step = sqlite3_step(statement)
+    if step == SQLITE_DONE { return .missing }
+    guard step == SQLITE_ROW else {
+      return .unreadable("step failed: \(TiebaSQLiteCore.errorMessage(db))")
+    }
     guard let raw = TiebaSQLiteCore.columnString(statement, 0) else {
       return .unreadable("value column is not text")
     }
@@ -569,28 +710,35 @@ final class TiebaKvStore: @unchecked Sendable {
   }
 
   private func upsertLocked(_ db: OpaquePointer, key: String, value: String) throws {
-    let failure = TiebaSQLiteCore.execute(
-      db,
-      "INSERT OR REPLACE INTO kv (key, value) VALUES (?1, ?2);",
-      bind: { statement in
-        TiebaSQLiteCore.bind(statement, 1, key)
-        TiebaSQLiteCore.bind(statement, 2, Self.encodeValue(value))
-      }
-    )
-    if let failure { throw TiebaKvError.statementFailed(failure) }
+    guard let statement = cachedStatementLocked(db, slot: \.upsert, sql: Self.upsertKeySQL) else {
+      throw TiebaKvError.statementFailed(TiebaSQLiteCore.errorMessage(db))
+    }
+    defer { Self.recycle(statement) }
+    TiebaSQLiteCore.bind(statement, 1, key)
+    TiebaSQLiteCore.bind(statement, 2, Self.encodeValue(value))
+    guard sqlite3_step(statement) == SQLITE_DONE else {
+      throw TiebaKvError.statementFailed(TiebaSQLiteCore.errorMessage(db))
+    }
   }
 
   private func deleteLocked(_ db: OpaquePointer, key: String) throws {
-    let failure = TiebaSQLiteCore.execute(
-      db,
-      "DELETE FROM kv WHERE key = ?1;",
-      bind: { statement in TiebaSQLiteCore.bind(statement, 1, key) }
-    )
-    if let failure { throw TiebaKvError.statementFailed(failure) }
+    guard let statement = cachedStatementLocked(db, slot: \.delete, sql: Self.deleteKeySQL) else {
+      throw TiebaKvError.statementFailed(TiebaSQLiteCore.errorMessage(db))
+    }
+    defer { Self.recycle(statement) }
+    TiebaSQLiteCore.bind(statement, 1, key)
+    guard sqlite3_step(statement) == SQLITE_DONE else {
+      throw TiebaKvError.statementFailed(TiebaSQLiteCore.errorMessage(db))
+    }
   }
 
   /// BEGIN IMMEDIATE：立刻拿写锁（与 expo-sqlite 的写事务排队而不是等 COMMIT
   /// 时才失败），失败回滚后把原始错误抛出去。
+  ///
+  /// ROLLBACK 也失败时**不能**把错误一丢了之：连接很可能仍停在事务里，下一次
+  /// BEGIN IMMEDIATE 会永久报 "cannot start a transaction within a transaction"，
+  /// 进程内所有 KV 写全部作废，而报错文案指向 BEGIN、与真因（回滚失败）无关。
+  /// 所以这条连接直接作废（关闭 = 由 SQLite 自己回滚未完成的事务），下次调用重开。
   private func inTransactionLocked(_ db: OpaquePointer, _ work: () throws -> Void) throws {
     if let failure = TiebaSQLiteCore.execute(db, "BEGIN IMMEDIATE;", bind: { _ in }) {
       throw TiebaKvError.statementFailed(failure)
@@ -601,9 +749,38 @@ final class TiebaKvStore: @unchecked Sendable {
         throw TiebaKvError.statementFailed(failure)
       }
     } catch {
-      _ = TiebaSQLiteCore.execute(db, "ROLLBACK;", bind: { _ in })
-      throw error
+      guard let rollbackFailure = TiebaSQLiteCore.execute(db, "ROLLBACK;", bind: { _ in }) else {
+        // 回滚成功：事务状态已收敛，连接可以继续用，原始错误原样抛出。
+        throw error
+      }
+      // 注意：这里在调用方的 lock 内，而 lock 是 NSLock（不可重入），
+      // 所以摘连接只能是"就地改字段"，不能再取同一把锁。
+      discardConnectionLocked(db)
+      Self.log.error(
+        "kv transaction rollback failed, connection discarded: \(rollbackFailure, privacy: .public)"
+      )
+      let original = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+      throw TiebaKvError.transactionRollbackFailed(original: original, rollback: rollbackFailure)
     }
+  }
+
+  /// 关闭连接的唯一入口（11-06）：先 finalize 缓存的语句，再关句柄。
+  /// 顺序不能反 —— 语句句柄内嵌指向连接对象，连接先关就是 use-after-free；
+  /// 而且 `sqlite3_close_v2` 遇到未 finalize 的语句不会报错，只是把关闭推迟，
+  /// 句柄继续存活（漏关也看不出来）。所有关闭路径都必须走这里。
+  private func closeConnectionLocked(_ db: OpaquePointer) {
+    statementCache.invalidate()
+    statementCacheOwner = nil
+    sqlite3_close_v2(db)
+  }
+
+  /// 作废连接：关闭句柄并清空字段，下次 openLocked() 重开。
+  /// 刻意**不**写 openFailure —— 这不是"库打不开"，下次调用必须允许重试。
+  /// 调用方须已持 lock；句柄不匹配时什么都不做（防御重复作废）。
+  private func discardConnectionLocked(_ db: OpaquePointer) {
+    guard database == db else { return }
+    database = nil
+    closeConnectionLocked(db)
   }
 }
 
