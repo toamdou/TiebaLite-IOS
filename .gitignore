@@ -56,3 +56,7 @@ docs/texture/
 *.swiftdoc
 *.swiftsourceinfo
 *.abi.json
+
+# 第三方付费报告原文（tgtricks 11 章抽取文本，仅作本地对照依据）：体积大且非本仓版权，
+# 不入库。由它派生出的分析（coverage-matrix / audit-221 / sweep-report / gaps-*）正常跟踪。
+docs/tgtricks/ios-uikit/
