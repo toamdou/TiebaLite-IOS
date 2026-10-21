@@ -86,13 +86,17 @@ struct TiebaTransitionKeyframes: Sendable {
   /// - Parameters:
   ///   - suckDurationFraction: 上游 0.9 —— 前 90% 的时间完成「吸入」，最后 10% 收尾。
   ///   - finalInsideDistance: 上游 8.0 —— 终点再往目标内部进 8pt（是「被吸进去」，不是停在表面）。
+  ///   - sizeEasing: 尺寸单独一条缓动（03-11）。默认 `nil` = 与位置同一条（旧行为）。
+  ///     传 `easeInEaseOut` 时尺寸**滞后于**位移：卡片先飞过去、再「长/缩」到位，
+  ///     纵深更像被吸进去。上游 `CombinedTransition` 就是把 frame 拆成四条各自配曲线的。
   static func make(
     sourceRect: CGRect,
     targetRect: CGRect,
     count: Int = 12,
     easing: TiebaBakedEasing = .easeOutStrong,
     suckDurationFraction: CGFloat = 0.9,
-    finalInsideDistance: CGFloat = 8.0
+    finalInsideDistance: CGFloat = 8.0,
+    sizeEasing: TiebaBakedEasing? = nil
   ) -> TiebaTransitionKeyframes {
     let count = max(count, 2)
     let sourceCenter = CGPoint(x: sourceRect.midX, y: sourceRect.midY)
@@ -101,14 +105,18 @@ struct TiebaTransitionKeyframes: Sendable {
       width: max(targetRect.width - finalInsideDistance * 2, 1),
       height: max(targetRect.height - finalInsideDistance * 2, 1)
     )
+    // 两条进度表：位置用 `easing`，尺寸用 `sizeEasing`（缺省时同一条，逐值相等）。
+    let positionProgress = easing.progress(count: count)
+    let sizeProgress = (sizeEasing ?? easing).progress(count: count)
     var sizes: [CGSize] = []
     var positions: [CGPoint] = []
     var radii: [CGFloat] = []
-    for eased in easing.progress(count: count) {
-      let travel = min(eased / max(suckDurationFraction, 0.01), 1)
+    for index in 0 ..< count {
+      let travel = min(positionProgress[index] / max(suckDurationFraction, 0.01), 1)
+      let sizeTravel = min(sizeProgress[index] / max(suckDurationFraction, 0.01), 1)
       let size = CGSize(
-        width: sourceRect.width + (finalSize.width - sourceRect.width) * travel,
-        height: sourceRect.height + (finalSize.height - sourceRect.height) * travel
+        width: sourceRect.width + (finalSize.width - sourceRect.width) * sizeTravel,
+        height: sourceRect.height + (finalSize.height - sourceRect.height) * sizeTravel
       )
       // A6：圆角按「圆」取最短边的一半，再走本仓既有的等比钳制（不留第二套算法）。
       let clamped = TiebaRoundedRectGeometry.clampedCornerRadii(
@@ -200,7 +208,14 @@ final class TiebaFlightTransition {
       targetRect.width >= 1, targetRect.height >= 1
     else { return nil }
     self.sourceView = source
-    self.keyframes = TiebaTransitionKeyframes.make(sourceRect: sourceRect, targetRect: targetRect)
+    // 位置走 `easeOutStrong`（起手快、末段收），尺寸走 `easeInEaseOut`（起手慢、后段才追上来）。
+    // 结果是卡片「先飞过去、再长到位」，而不是一路等比放大 —— 后者看着像缩放动画，
+    // 前者才像被目标吸进去（03-11）。
+    self.keyframes = TiebaTransitionKeyframes.make(
+      sourceRect: sourceRect,
+      targetRect: targetRect,
+      sizeEasing: .easeInEaseOut
+    )
     self.duration = max(duration, 0.05)
     host.frame = window.bounds
     host.autoresizingMask = [.flexibleWidth, .flexibleHeight]

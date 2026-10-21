@@ -20,10 +20,15 @@ enum TiebaHeroTransition {
   /// 避开 useOptimizedSnapshot；cascade 让卡内块状子视图依次入场。
   static func mark(_ view: UIView?, threadId: String) {
     guard let view else { return }
-    view.hero.id = cardID(threadId: threadId)
-    view.hero.modifiers = [
-      .useNormalSnapshot, spring, .cascade(delta: 0.02, direction: .topToBottom),
-    ]
+    guard let id = cardID(threadId: threadId) else {
+      // 普通回复没有 heroThreadId：不要为它分配 modifier 数组或保留旧配对。
+      view.hero.id = nil
+      view.hero.modifiers = nil
+      return
+    }
+    // 一次转场只动卡片和首图两层；不再用 cascade 给整棵子视图树各建一条 spring。
+    view.hero.id = id
+    view.hero.modifiers = [.useNormalSnapshot, spring]
   }
 
   /// 首图：源与目标共用（嵌套配对无双影——Hero 取快照前会把参与视图 alpha 归零）。
