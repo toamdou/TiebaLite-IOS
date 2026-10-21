@@ -145,7 +145,7 @@ final class TiebaUserSocialViewController: UIViewController {
 
   private func publish(fresh: Bool) {
     list.footerState = hasMore ? .more : .none
-    driver.publish(fresh: fresh) { [weak self] in
+    driver.publish(fresh: fresh) { [weak self] () -> [[String: Any]] in
       guard let self else { return [] }
       return users.isEmpty ? emptyRows() : users.map(row)
     }

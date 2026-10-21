@@ -328,7 +328,7 @@ final class TiebaUserProfileViewController: UIViewController, TiebaNativeScreen 
     // 吧 tab 的列表有 10pt 左右内缩：先落内缩再量宽（行宽契约 = 宽 − 2×内缩）。
     list.horizontalInset = activeTab == "forums" ? 10 : 0
     driver.updateWidth(list.bounds.width - list.horizontalInset * 2)
-    driver.publish(fresh: fresh) { [weak self] in
+    driver.publish(fresh: fresh) { [weak self] () -> [[String: Any]] in
       guard let self else { return [] }
       return rows.isEmpty ? emptyRows() : rows
     }

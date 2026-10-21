@@ -238,7 +238,9 @@ final class TiebaMessageListViewController: UIViewController {
   // MARK: - 发布
 
   private func publish(fresh: Bool) {
-    driver.publish(fresh: fresh) { [weak self] in
+    // 多语句闭包不参与返回类型推断：`publish` 现在是泛型载荷，必须显式写出行字典类型，
+    // 否则 Row 会被推成 `Any`（编译不过）。
+    driver.publish(fresh: fresh) { [weak self] () -> [[String: Any]] in
       guard let self else { return [] }
       return visibleItems.map { TiebaMessageAPI.row(for: $0, palette: palette) }
     }
