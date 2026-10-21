@@ -429,8 +429,7 @@ enum TiebaSearchAPI {
     )
     guard (200..<300).contains(response.status) else { throw TiebaForumAPIError.http(response.status) }
     captureBaiduId(response.setCookies)
-    guard let data = response.body.data(using: .utf8),
-      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    guard let object = try? JSONSerialization.jsonObject(with: response.bodyData) as? [String: Any]
     else { throw TiebaForumAPIError.invalidResponse }
     return object
   }
