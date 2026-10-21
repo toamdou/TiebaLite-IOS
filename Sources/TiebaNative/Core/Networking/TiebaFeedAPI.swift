@@ -86,10 +86,11 @@ enum TiebaFeedAPI {
       request.data = body
       return request
     }
-    let decoded = try TiebaSwiftProto.decode(
+    let decodedObject = try await TiebaSwiftProto.decodeOffMainThread(
       messagePath: "tieba.personalized.PersonalizedResponse",
       bytes: data
     )
+    let decoded = decodedObject.value
     try TiebaViewModelMapper.assertProtoSuccess(decoded)
     let items = TiebaViewModelMapper.mapResponse(
       mapper: "feedThreadList",
@@ -112,10 +113,11 @@ enum TiebaFeedAPI {
       request.data = body
       return request
     }
-    let decoded = try TiebaSwiftProto.decode(
+    let decodedObject = try await TiebaSwiftProto.decodeOffMainThread(
       messagePath: "tieba.userLike.UserLikeResponse",
       bytes: data
     )
+    let decoded = decodedObject.value
     try TiebaViewModelMapper.assertProtoSuccess(decoded)
     let mapped = TiebaViewModelMapper.mapResponse(
       mapper: "userLike",
@@ -145,10 +147,11 @@ enum TiebaFeedAPI {
       request.data = body
       return request
     }
-    let decoded = try TiebaSwiftProto.decode(
+    let decodedObject = try await TiebaSwiftProto.decodeOffMainThread(
       messagePath: "tieba.hotThreadList.HotThreadListResponse",
       bytes: data
     )
+    let decoded = decodedObject.value
     try TiebaViewModelMapper.assertProtoSuccess(decoded)
     guard let root = decoded["data"] as? [String: Any] else { return Hot() }
 
@@ -213,8 +216,10 @@ enum TiebaFeedAPI {
   // 冷启动会先闪一份几个月前的列表。现在写入侧接回来了（页面 page=1 成功后写），
   // 并且带时间戳——过期就不采用，宁可走骨架也不给用户看陈年内容。
 
-  /// 快照可采用的时效：30 分钟。超过就当作没有（列表页首屏用骨架，网络回来即替换）。
-  private static let snapshotMaxAge: TimeInterval = 30 * 60
+  /// 快照可采用上限：24 小时。Explore 首屏逻辑是“先 publish 快照 + 立即网络
+  /// reload”，所以 stale 只影响首帧、不会被当成最终数据；原先 30 分钟会让
+  /// 冷启动更常见地闪骨架。
+  private static let snapshotMaxAge: TimeInterval = 24 * 60 * 60
   /// 快照条数上限（与旧 JS 一致）：序列化体积 ~40KB，避免 KV 常驻膨胀。
   private static let snapshotMaxItems = 25
 
@@ -236,7 +241,16 @@ enum TiebaFeedAPI {
     // 新快照又会被判成过期。TiebaMonotonicTime 以本次开机时刻为锚，重启后仍连续，
     // 正是给这种"持久化下来的间隔"用的（同机同钟，历史值由 Date 写成也照常可比）。
     guard ts > 0, TiebaMonotonicTime.now * 1000 - ts <= snapshotMaxAge * 1000 else { return [] }
-    return list.filter { ($0["threadInfo"] as? [String: Any])?["id"] is String }
+    let visible = list.filter { ($0["threadInfo"] as? [String: Any])?["id"] is String }
+    // seed 行马上会被 ListKit publish；先异步发起首图 raw-data 预取。Nuke 会先查
+    // DataCache 并与展示请求的无处理器依赖合并，已有数据不会重复下载。
+    let imageURLs = firstImageURLs(in: visible, limit: 6)
+    if imageURLs.isEmpty == false {
+      Task.detached(priority: .utility) {
+        TiebaNuke.prefetchFirstImageData(urls: imageURLs)
+      }
+    }
+    return visible
   }
 
   /// 写快照（页面 page=1 成功后调用；失败静默——快照是加速手段，不影响主流程）。
@@ -255,10 +269,38 @@ enum TiebaFeedAPI {
     else { return }
     let key = snapshotKey(segment: segment, uid: TiebaBackgroundSnapshot.shared.uid)
     let legacyKey = snapshotKey
+    let cacheScope = TiebaPageCache.scope(kind: .feed, pageKey: segment)
+    // 只抽 URL（Sendable），真正的 Nuke 磁盘预取在 worker 上发起；首图是否已在
+    // Nuke DataCache 由 Nuke 自己判断，URL/处理器参数不改写，不会绕开展示键。
+    let firstImageURLs = firstImageURLs(in: items, limit: 6)
     Task.detached(priority: .utility) {
       try? TiebaKvStore.shared.set(key: key, value: text)
       try? TiebaKvStore.shared.remove(key: legacyKey)
+      // 新表同步落一份 account-scoped 原始 JSON：冷启动 KV 同步 seed 保持兼容，
+      // 新调用方可用 TiebaPageCache 的异步读/LRU 预算路径。
+      TiebaPageCache.shared.store(
+        scope: cacheScope,
+        payload: data,
+        ttl: TiebaPageCacheKind.feed.freshTTL
+      )
+      TiebaNuke.prefetchFirstImageData(urls: firstImageURLs)
     }
+  }
+
+  /// 快照行=feedThreadList 容器（threadInfo.mediaList），按帖子取第一张图片的
+  /// 展示档 src（取不到退 smallSrc），转 secureURL 后交给 Nuke raw-data 预取。
+  private static func firstImageURLs(in items: [[String: Any]], limit: Int) -> [URL] {
+    var urls: [URL] = []
+    for item in items.prefix(limit) {
+      guard let thread = item["threadInfo"] as? [String: Any],
+            let mediaList = thread["mediaList"] as? [[String: Any]],
+            let media = mediaList.first(where: { ($0["type"] as? String) == "image" })
+      else { continue }
+      let raw = (media["src"] as? String) ?? (media["smallSrc"] as? String) ?? ""
+      guard raw.isEmpty == false, let url = TiebaRowDict.sanitizedURL(raw) else { continue }
+      urls.append(url)
+    }
+    return urls
   }
 }
 

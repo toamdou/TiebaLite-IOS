@@ -54,6 +54,10 @@ struct TiebaForumSignResult {
 
 enum TiebaForumFeedAPI {
   /// 吧帖子列表。sortType：-1 = 吧默认列表（热门/精品），0 = 按回复，1 = 按发帖（最新）。
+  ///
+  /// 持久缓存 + SWR：同一进程内每个 pageKey 第一次调用先给缓存（最多 24 小时），
+  /// 过期则在后台 revalidate；同进程后续刷新/重进直接走网络，避免下拉刷新被
+  /// 缓存挡住。网络成功写原始 protobuf Data，失败回退最近缓存。
   static func page(
     forumName: String,
     page: Int,
@@ -61,8 +65,119 @@ enum TiebaForumFeedAPI {
     isGood: Bool,
     classifyId: String?
   ) async throws -> TiebaForumFeedPage {
+    let scope = cacheScope(
+      forumName: forumName,
+      page: page,
+      sortType: sortType,
+      isGood: isGood,
+      classifyId: classifyId
+    )
+    if TiebaPageCache.shared.takeInitialSeed(scope: scope),
+       let entry = await TiebaPageCache.shared.load(
+         scope: scope,
+         maxStale: TiebaPageCacheKind.forum.maxStale
+       ),
+       TiebaPageCache.isScopeCurrent(scope),
+       let cached = try? await decodePageData(entry.payload, page: page, forumName: forumName) {
+      if entry.isFresh() == false {
+        scheduleRevalidate(
+          scope: scope,
+          forumName: forumName,
+          page: page,
+          sortType: sortType,
+          isGood: isGood,
+          classifyId: classifyId
+        )
+      }
+      return cached
+    }
+
+    do {
+      let data = try await fetchRawPageData(
+        forumName: forumName,
+        page: page,
+        sortType: sortType,
+        isGood: isGood,
+        classifyId: classifyId
+      )
+      let result = try await decodePageData(data, page: page, forumName: forumName)
+      if TiebaPageCache.isScopeCurrent(scope) {
+        TiebaPageCache.shared.storeInBackground(
+          scope: scope,
+          payload: data,
+          ttl: TiebaPageCacheKind.forum.freshTTL
+        )
+      }
+      return result
+    } catch {
+      if TiebaPageCache.isScopeCurrent(scope),
+         TiebaPageCache.shouldFallbackToCache(error),
+         let entry = await TiebaPageCache.shared.load(
+           scope: scope,
+           maxStale: TiebaPageCacheKind.forum.maxStale
+         ),
+         let cached = try? await decodePageData(entry.payload, page: page, forumName: forumName) {
+        return cached
+      }
+      throw error
+    }
+  }
+
+  private static func cacheScope(
+    forumName: String,
+    page: Int,
+    sortType: Int,
+    isGood: Bool,
+    classifyId: String?
+  ) -> TiebaPageCacheScope {
+    let pageKey = [
+      forumName,
+      String(page),
+      String(sortType),
+      isGood ? "good" : "all",
+      classifyId ?? "",
+    ].joined(separator: "\u{1F}")
+    return TiebaPageCache.scope(kind: .forum, pageKey: pageKey)
+  }
+
+  private static func scheduleRevalidate(
+    scope: TiebaPageCacheScope,
+    forumName: String,
+    page: Int,
+    sortType: Int,
+    isGood: Bool,
+    classifyId: String?
+  ) {
+    guard TiebaPageCache.shared.beginRevalidation(scope: scope) else { return }
+    Task.detached(priority: .utility) {
+      defer { TiebaPageCache.shared.endRevalidation(scope: scope) }
+      guard TiebaPageCache.isScopeCurrent(scope),
+            let data = try? await fetchRawPageData(
+        forumName: forumName,
+        page: page,
+        sortType: sortType,
+        isGood: isGood,
+        classifyId: classifyId
+      ) else { return }
+      guard TiebaPageCache.isScopeCurrent(scope),
+            (try? await decodePageData(data, page: page, forumName: forumName)) != nil else { return }
+      TiebaPageCache.shared.store(
+        scope: scope,
+        payload: data,
+        ttl: TiebaPageCacheKind.forum.freshTTL
+      )
+    }
+  }
+
+  private static func fetchRawPageData(
+    forumName: String,
+    page: Int,
+    sortType: Int,
+    isGood: Bool,
+    classifyId: String?
+  ) async throws -> Data {
     let encodedKw = urlEncoded(forumName)
-    let data = try await TiebaForumAPI.protoPost(
+    return try await TiebaForumAPI.protoPost(
       path: "/c/f/frs/page",
       cmd: "301001&format=protobuf",
       extraHeaders: ["forum_name": encodedKw],
@@ -98,34 +213,53 @@ enum TiebaForumFeedAPI {
       wrapper.data = request
       return wrapper
     }
-    let decoded = try TiebaSwiftProto.decode(messagePath: "tieba.frsPage.FrsPageResponse", bytes: data)
-    try TiebaViewModelMapper.assertProtoSuccess(decoded)
-    // 空 data 与 JS `if (!data) throw` 同语义（mapResponse 返回 nil）。
-    guard let mapped = TiebaViewModelMapper.mapResponse(
-      mapper: "frsPage",
-      decoded: decoded,
-      options: ["page": Double(page), "forumName": forumName]
-    ) as? [String: Any] else { throw TiebaForumAPIError.invalidResponse }
+  }
 
-    var result = TiebaForumFeedPage()
-    result.threads = mapped["threads"] as? [[String: Any]] ?? []
-    result.hasMore = TiebaSimpleRowParser.bool(mapped["hasMore"]) ?? false
-    if let raw = mapped["forum"] as? [String: Any] {
-      var card = card(from: raw)
-      applyFollowedCacheFallback(
-        to: &card,
-        rawIsLike: mapped["rawIsLike"],
-        rawUserLevel: mapped["rawUserLevel"]
+  private struct PageCacheBox: @unchecked Sendable {
+    let page: TiebaForumFeedPage
+  }
+
+  private static func decodePageData(
+    _ data: Data,
+    page: Int,
+    forumName: String
+  ) async throws -> TiebaForumFeedPage {
+    let started = DispatchTime.now().uptimeNanoseconds
+    let box = try await Task.detached(priority: .userInitiated) { () throws -> PageCacheBox in
+      let decoded = try TiebaSwiftProto.decode(
+        messagePath: "tieba.frsPage.FrsPageResponse",
+        bytes: data
       )
-      result.card = card
-    }
-    result.classifies = (mapped["goodClassify"] as? [[String: Any]] ?? []).compactMap { item in
-      let id = TiebaSimpleRowParser.string(item["classId"]) ?? ""
-      let name = TiebaSimpleRowParser.string(item["className"]) ?? ""
-      guard !id.isEmpty, !name.isEmpty else { return nil }
-      return TiebaForumClassify(id: id, name: name)
-    }
-    return result
+      try TiebaViewModelMapper.assertProtoSuccess(decoded)
+      // 空 data 与 JS `if (!data) throw` 同语义（mapResponse 返回 nil）。
+      guard let mapped = TiebaViewModelMapper.mapResponse(
+        mapper: "frsPage",
+        decoded: decoded,
+        options: ["page": Double(page), "forumName": forumName]
+      ) as? [String: Any] else { throw TiebaForumAPIError.invalidResponse }
+
+      var result = TiebaForumFeedPage()
+      result.threads = mapped["threads"] as? [[String: Any]] ?? []
+      result.hasMore = TiebaSimpleRowParser.bool(mapped["hasMore"]) ?? false
+      if let raw = mapped["forum"] as? [String: Any] {
+        var card = card(from: raw)
+        applyFollowedCacheFallback(
+          to: &card,
+          rawIsLike: mapped["rawIsLike"],
+          rawUserLevel: mapped["rawUserLevel"]
+        )
+        result.card = card
+      }
+      result.classifies = (mapped["goodClassify"] as? [[String: Any]] ?? []).compactMap { item in
+        let id = TiebaSimpleRowParser.string(item["classId"]) ?? ""
+        let name = TiebaSimpleRowParser.string(item["className"]) ?? ""
+        guard id.isEmpty == false, name.isEmpty == false else { return nil }
+        return TiebaForumClassify(id: id, name: name)
+      }
+      return PageCacheBox(page: result)
+    }.value
+    TiebaPageCache.debugDidDecode(kind: .forum, pageKey: forumName, started: started)
+    return box.page
   }
 
   // MARK: - 关注 / 取消关注
