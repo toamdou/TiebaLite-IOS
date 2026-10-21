@@ -37,9 +37,9 @@ nonisolated enum TiebaListAppearance {
     }
   }
 
-  /// 默认档。2026-10-08 用户要求关注页/帖子页扁平化 ⇒ 默认**扁平**；
-  /// 想回退到改造前的观感，设置 → 个性化 → 设计风格 切「卡片」即可（无需改代码）。
-  static let defaultStyle: Style = .flat
+  /// 默认档：动态/吧页等信息流使用分层卡片；帖子内部（楼层/楼中楼）由
+  /// TiebaPostRowPlan 固定走扁平行，不受这个全局档位影响。
+  static let defaultStyle: Style = .card
 
   private struct State {
     var style: Style?
@@ -82,13 +82,13 @@ nonisolated enum TiebaListAppearance {
   // 已知主贴占位卡）**只读**这一组，不在绘制期加分支 —— 换档 = 换输入常量。
 
   /// 行左右的卡片边距（扁平 = 0，通栏）。
-  static var cardMarginH: CGFloat { isFlat ? 0 : 10 }
-  /// 行上下的卡片边距（扁平 = 0：行与行之间只靠发际线分隔）。
-  static var cardMarginV: CGFloat { isFlat ? 0 : 4 }
+  static var cardMarginH: CGFloat { isFlat ? 0 : TiebaDesignSystem.Space.m }
+  /// 行上下的卡片边距（扁平 = 0：行与行之间只靠发丝线分隔）。
+  static var cardMarginV: CGFloat { isFlat ? 0 : 12 }
   /// 行内容的内边距（两档一致：内容边距不变，变的只是"卡面"有没有）。
   static let cardPadding: CGFloat = 16
   /// 行底圆角（扁平 = 0）。
-  static var cardRadius: CGFloat { isFlat ? 0 : 16 }
+  static var cardRadius: CGFloat { isFlat ? 0 : TiebaDesignSystem.Radius.card }
 
   /// 页面底色：扁平亮色 = systemBackground = **纯白**（用户明确"不要深灰"）；
   /// 深色/纯黑档由系统语义色与主题自动跟随，不在这里另开一套颜色。

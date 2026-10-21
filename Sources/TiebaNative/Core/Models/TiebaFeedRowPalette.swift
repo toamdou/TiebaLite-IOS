@@ -24,17 +24,34 @@ public nonisolated struct TiebaFeedRowPalette: @unchecked Sendable, Equatable {
         ? UIColor.white.withAlphaComponent(0.08)
         : UIColor.black.withAlphaComponent(0.06)
     },
-    text: .label,
-    textSecondary: .secondaryLabel,
-    textTertiary: .tertiaryLabel,
-    primary: Self.adaptive(light: 0x2563EB, dark: 0x60A5FA),
+    text: UIColor { traits in
+      traits.userInterfaceStyle == .dark
+        ? UIColor(white: 0.92, alpha: 1)
+        : UIColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
+    },
+    // 小字号元信息/操作文字：系统 secondaryLabel 在白底约 3.44:1、tertiaryLabel
+    // 约 1.72:1，低于 HIG 4.5:1。这里保留主/次层级，但把亮度拉到可读范围；
+    // Increase Contrast 直接回到 label。图标也复用同一可读档（≥3:1）。
+    textSecondary: UIColor { traits in
+      let base = UIColor.label.resolvedColor(with: traits)
+      return traits.accessibilityContrast == .high ? base : base.withAlphaComponent(0.60)
+    },
+    textTertiary: UIColor { traits in
+      let base = UIColor.label.resolvedColor(with: traits)
+      return traits.accessibilityContrast == .high ? base : base.withAlphaComponent(0.55)
+    },
+    primary: Self.adaptive(light: 0x0A6CFF, dark: 0x64A8FF),
     // 吧名徽章走 UIKit 原生语义填充：强调色留给可点控件，徽章用
     // secondarySystemFill + secondaryLabel（浅深色自适应，不与主色抢眼）。
     chip: .secondarySystemFill,
-    onChip: .secondaryLabel,
+    onChip: UIColor { traits in
+      let base = UIColor.label.resolvedColor(with: traits)
+      return traits.accessibilityContrast == .high ? base : base.withAlphaComponent(0.60)
+    },
     separator: .separator,
-    liked: Self.adaptive(light: 0xFF2D55, dark: 0xFF375F),
-    warning: .systemOrange,
+    // 小字号点赞/精品也是信息，不是装饰：亮色用更深红/橙，暗色保留高亮红/橙。
+    liked: Self.adaptive(light: 0xD70036, dark: 0xFF375F),
+    warning: Self.adaptive(light: 0xA65300, dark: 0xFFC466),
     placeholder: UIColor { traits in
       traits.userInterfaceStyle == .dark
         ? UIColor.white.withAlphaComponent(0.06)

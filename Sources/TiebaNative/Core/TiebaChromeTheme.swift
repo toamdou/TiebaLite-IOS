@@ -23,7 +23,7 @@ public struct TiebaChromeTheme: Sendable {
   public var dark: Bool
 
   public static let `default` = TiebaChromeTheme(
-    tint: .label,
+    tint: UIColor(red: 0x0A / 255, green: 0x6C / 255, blue: 1, alpha: 1),
     navTint: .label,
     background: .systemBackground,
     dark: false
