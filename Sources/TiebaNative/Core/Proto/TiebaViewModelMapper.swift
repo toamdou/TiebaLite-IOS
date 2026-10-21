@@ -266,9 +266,10 @@ public enum TiebaViewModelMapper {
 
     let userMap = prebuiltUserMap
       ?? buildUserMap(userList, keyOf: { u in coalesce(u["id"], u["uid"], u["user_id"]) })
-    let authorId = str(coalesce(rd["authorId"], rd["author_id"], dict(rd["author"])?["id"], ""))
+    // raw.author 只 bridge 一次：authorId 与 author 复用同一个字典视图。
     // raw.author 可能是"存在但为空对象 {}"（proto3 解码产物）：有键才用内嵌。
     let rawAuthor = nonEmptyDict(rd["author"])
+    let authorId = str(coalesce(rd["authorId"], rd["author_id"], rawAuthor?["id"], ""))
     let author = rawAuthor ?? userMap[authorId] ?? [:]
     let forumDict = dict(forum) ?? [:]
     let forumInfo = dict(coalesce(rd["forumInfo"], rd["forum_info"]))
@@ -297,7 +298,8 @@ public enum TiebaViewModelMapper {
 
     var out: [String: Any] = [:]
     out["id"] = str(coalesce(rd["id"], rd["threadId"], rd["thread_id"], ""))
-    out["isAd"] = isAdThread(rd)
+    // rd 已是 [String: Any]，不再走 isAdThread(raw) 的二次 bridge。
+    out["isAd"] = isNullish(coalesce(rd["alaInfo"], rd["ala_info"])) == false
     // ⚠️ **不能拿 id 兜 threadId**：回复类推荐卡的 id(1) 是**回复 pid**、threadId(2) 才是帖子本体
     //（见下面 postId 的注释）。原来的 coalesce 里带了 rd["id"]，于是"回复卡没有 threadId 字段"时
     // threadId 被填成 pid → 点卡导航按 pid 请求帖子 → 服务端回"帖子不存在"→ 前端显示
@@ -336,14 +338,16 @@ public enum TiebaViewModelMapper {
       || mediaList.contains { ($0["type"] as? String) == "video" }
     out["mediaList"] = mediaList
     out["abstract"] = abstract
+    // agree 子对象只 bridge 一次，参与两组字段兜底。
+    let agree = dict(rd["agree"])
     out["zanNum"] = jsNumberOrNull(number(coalesce(
       rd["agreeNum"], rd["agree_num"],
-      dict(rd["agree"])?["agreeNum"], dict(rd["agree"])?["agree_num"],
+      agree?["agreeNum"], agree?["agree_num"],
       0
     )))
     out["shareNum"] = jsNumberOrNull(number(coalesce(rd["shareNum"], rd["share_num"], 0)))
     out["hasAgree"] = strictOne(coalesce(
-      dict(rd["agree"])?["hasAgree"], dict(rd["agree"])?["has_agree"],
+      agree?["hasAgree"], agree?["has_agree"],
       rd["hasAgree"], rd["has_agree"], 0
     ))
     out["isShareThread"] = strictOne(coalesce(rd["isShareThread"], rd["is_share_thread"], 0))

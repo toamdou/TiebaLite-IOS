@@ -1,5 +1,10 @@
 import Foundation
 import SwiftProtobuf
+#if DEBUG
+import os
+private let tiebaProtoPerfLog = Logger(subsystem: "com.tiebalite.app", category: "proto-perf")
+private let tiebaProtoSignposter = OSSignposter(subsystem: "com.tiebalite.app", category: "proto-perf")
+#endif
 
 /// SwiftProtobuf 完全替换层（2026-08-29）：
 /// - wire 解码全部走 protoc 生成的强类型代码（tbclient 权威 schema，
@@ -10,6 +15,20 @@ import SwiftProtobuf
 ///   逐形状一致（数字），映射层零改动。（enum 归一化已随死分支删除，见下。）
 /// - 2026-09-13：encodeJSON/renameKeysIn（JSON → wire，含键名规整）删除——全仓
 ///   0 调用方，请求方向一律用生成类型直接构造。
+/// 跨 actor 移交 proto 解码结果的显式所有权容器。
+///
+/// [String: Any] 不是 Sendable，但这里的所有权契约很窄：字典只在 detached
+/// 闭包里创建、返回后不再被解码器访问并由调用方独占消费；不把字典再丢回
+/// 其他并发任务写。用 @unchecked 明确承接这一条，而不是把整个模型都标成
+/// unchecked Sendable。
+struct TiebaDecodedProtoObject: @unchecked Sendable {
+  let value: [String: Any]
+
+  init(value: [String: Any]) {
+    self.value = value
+  }
+}
+
 enum TiebaSwiftProto {
   /// wire bytes → proto3 JSON bytes
   private typealias DecodeJSON = (Data) throws -> Data
@@ -64,8 +83,34 @@ enum TiebaSwiftProto {
     "tieba.topicList.TopicListResponse": entry(Tieba_TopicList_TopicListResponse.self),
   ]
 
+  /// 后台执行 wire 解码 + JSON 归一化，避免调用方恰好位于 MainActor 时
+  /// 把 protobuf 解析压在滚动/布局线程上。返回值的所有权契约见
+  /// TiebaDecodedProtoObject；重活完全在 detached task 内完成。
+  static func decodeOffMainThread(
+    messagePath: String,
+    bytes: Data
+  ) async throws -> TiebaDecodedProtoObject {
+    try await Task.detached(priority: .userInitiated) {
+      TiebaDecodedProtoObject(value: try decode(messagePath: messagePath, bytes: bytes))
+    }.value
+  }
+
   /// wire bytes → 归一化后的字典（int64→Number、enum 名→值，对齐旧解码器输出形状）
   static func decode(messagePath: String, bytes: Data) throws -> [String: Any] {
+#if DEBUG
+    let started = DispatchTime.now().uptimeNanoseconds
+    let signpostID = tiebaProtoSignposter.makeSignpostID()
+    let interval = tiebaProtoSignposter.beginInterval("TiebaProtoDecode", id: signpostID)
+    defer {
+      tiebaProtoSignposter.endInterval("TiebaProtoDecode", interval)
+      let elapsedMs = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
+      if elapsedMs >= 80 {
+        tiebaProtoPerfLog.debug(
+          "slow proto decode path=\(messagePath, privacy: .public) ms=\(elapsedMs, privacy: .public)"
+        )
+      }
+    }
+#endif
     guard let decode = entries[messagePath] else {
       throw TiebaProtoError.messageNotFound(messagePath)
     }
