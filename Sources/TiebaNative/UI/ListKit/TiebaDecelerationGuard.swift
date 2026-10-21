@@ -21,13 +21,14 @@ enum TiebaDecelerationGuard {
   ///
   /// 上游实现逐字保留；`point` 使用**宿主视图坐标系**。
   static func isDeceleratingScrollView(at point: CGPoint, in view: UIView) -> Bool {
-    if view.bounds.contains(point), let scrollView = view as? UIScrollView, scrollView.isDecelerating {
-      return true
-    }
-    for subview in view.subviews {
-      if isDeceleratingScrollView(at: view.convert(point, to: subview), in: subview) {
+    // UIKit 的 hitTest 已经维护了带剪枝的命中链；沿 superview 上溯只走深链，
+    // 不再从 window 开始 DFS 整棵包含上千节点的视图树。
+    var node = view.hitTest(point, with: nil)
+    while let current = node {
+      if let scrollView = current as? UIScrollView, scrollView.isDecelerating {
         return true
       }
+      node = current.superview
     }
     return false
   }

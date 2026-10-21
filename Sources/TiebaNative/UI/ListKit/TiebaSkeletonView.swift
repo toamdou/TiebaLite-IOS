@@ -70,27 +70,95 @@ private enum TiebaSkeletonMetrics {
 
 // MARK: - 骨块（高光扫过）
 
-/// 骨架占位块。高光扫过 = 每个骨块自带一条斜向白带横掠而过：动画走 `locations`
-/// （比例坐标，与骨块尺寸无关，旋转/换变体不必重启动画），全程在渲染服务器侧，
-/// 主线程零参与。不可见 / Reduce Motion / 进后台时整组停掉（见 TiebaSkeletonList）。
+/// 骨架占位块。高光扫过 = 一条斜向光带横掠而过。
 ///
-/// 光带是 sublayer，只有 `masksToBounds` 能把它裁进圆角（含连续曲率）——本文件唯一
+/// 【04-21 改造】原来每个骨块自建一条 `CAGradientLayer` 并动画 `locations`。
+/// `locations` **不是纯合成属性** —— 每一拍都要在渲染服务器上重新栅格化该渐变层。
+/// 一格骨架 6-8 个骨块、7 格 ≈ 40-55 条无限动画同时重绘，恰好压在首屏最忙的几百毫秒。
+///
+/// 现在：
+///   ① 渐变**位图化**：`sweepImage(for:)` 按解析后的高光色生成一次并静态缓存（同色共享同一张
+///      `CGImage`），光带层只做 `contents = 这张图`；
+///   ② 扫光改动画 `position.x`（纯合成属性，纹理坐标映射，CPU 零重绘）；
+///   ③ 斜向观感靠 `transform` 旋转（也是合成阶段的事），不是靠渐变控制点。
+///
+/// 光带仍是 sublayer，只有 `masksToBounds` 能把它裁进圆角（含连续曲率）——本文件唯一
 /// 裁切点。骨块是纯色小块、无位图内容，且骨架只在首屏加载期可见，代价可忽略。
 final class TiebaSkeletonBoneView: UIView {
-  /// 光带：clear → 高光 → clear；起点/终点落在骨块之外，末段停在画外 = 两次之间的间隔。
-  private let shimmer = CAGradientLayer()
+  /// 光带层：`contents` 是共享渐变位图，扫光靠动画 `position.x`。
+  private let shimmer = CALayer()
   private var isShimmering = false
   private var shimmerDelay: CFTimeInterval = 0
   private var shimmerHighlight: UIColor = .white
+
+  // MARK: 共享渐变位图
+
+  /// 按解析后的颜色缓存。键 = RGBA 打包值（动态色已 `resolvedColor`，这里只处理具体色）。
+  private static var sweepImageCache: [UInt32: CGImage] = [:]
+
+  /// 生成一条横向「透明 → 高光 → 透明」的 1px 高渐变图。
+  ///
+  /// 宽度固定 64：光带层会把它拉伸到 2× 骨块宽（见 `layoutSubviews`），
+  /// 所以图本身不需要按骨块尺寸生成 —— 同一张图全 App 通用。
+  private static func sweepImage(for color: UIColor) -> CGImage? {
+    var red: CGFloat = 0
+    var green: CGFloat = 0
+    var blue: CGFloat = 0
+    var alpha: CGFloat = 0
+    guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return nil }
+    let key =
+      (UInt32((red * 255).rounded()) << 24) | (UInt32((green * 255).rounded()) << 16)
+      | (UInt32((blue * 255).rounded()) << 8) | UInt32((alpha * 255).rounded())
+    if let cached = sweepImageCache[key] { return cached }
+
+    let width = 64
+    let height = 1
+    guard
+      let context = CGContext(
+        data: nil,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: width * 4,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+      )
+    else { return nil }
+    // 五档：透明 → 透明 → 高光 → 透明 → 透明。中间那档窄，扫过去才是一条带，不是一片雾。
+    let colors = [
+      UIColor.clear.cgColor,
+      UIColor.clear.cgColor,
+      color.cgColor,
+      UIColor.clear.cgColor,
+      UIColor.clear.cgColor,
+    ] as CFArray
+    let locations: [CGFloat] = [0, 0.42, 0.5, 0.58, 1]
+    guard
+      let gradient = CGGradient(
+        colorsSpace: CGColorSpaceCreateDeviceRGB(),
+        colors: colors,
+        locations: locations
+      )
+    else { return nil }
+    context.drawLinearGradient(
+      gradient,
+      start: CGPoint(x: 0, y: 0),
+      end: CGPoint(x: width, y: 0),
+      options: []
+    )
+    guard let image = context.makeImage() else { return nil }
+    sweepImageCache[key] = image
+    return image
+  }
 
   init(radius: CGFloat) {
     super.init(frame: .zero)
     layer.cornerRadius = radius
     layer.cornerCurve = .continuous
     layer.masksToBounds = true
-    shimmer.startPoint = CGPoint(x: 0, y: 0)
-    shimmer.endPoint = CGPoint(x: 1, y: 0.55) // 斜向扫过
-    shimmer.locations = [-0.6, -0.44, -0.28]
+    shimmer.contentsGravity = .resize
+    // 斜向扫过：旋转 -18°。旋转是合成阶段的事，不会让纹理重新栅格化。
+    shimmer.transform = CATransform3DMakeRotation(-0.32, 0, 0, 1)
     layer.addSublayer(shimmer)
   }
 
@@ -99,21 +167,26 @@ final class TiebaSkeletonBoneView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    shimmer.frame = bounds
+    // 光带比骨块宽一倍：渐变图里的高光核心只占 16%，拉伸后 ≈ 骨块宽的 32%（与改造前同宽）。
+    // 高度溢出 2.2 倍：旋转后仍能盖满四角，不会在上下边缘露出缺口。
+    let bandWidth = max(bounds.width * 2, 32)
+    let bandHeight = max(bounds.height * 2.2, 8)
+    shimmer.bounds = CGRect(x: 0, y: 0, width: bandWidth, height: bandHeight)
+    shimmer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+    // 尺寸变了，扫光的起止点也得跟着重算（旋转/换变体会走到这里）。
+    if isShimmering {
+      startSweep()
+    }
   }
 
-  /// 高光色（动态色：CGColor 不随外观走，trait 变化时由调用方重解析）。
+  /// 高光色（动态色：CGImage 不随外观走，trait 变化时由调用方重解析）。
   func setShimmerHighlight(_ color: UIColor) {
     shimmerHighlight = color
     refreshShimmerColors()
   }
 
   func refreshShimmerColors() {
-    shimmer.colors = [
-      UIColor.clear.cgColor,
-      shimmerHighlight.resolvedColor(with: traitCollection).cgColor,
-      UIColor.clear.cgColor,
-    ]
+    shimmer.contents = Self.sweepImage(for: shimmerHighlight.resolvedColor(with: traitCollection))
   }
 
   /// 可见才扫。delay 用于让相邻骨架格错开一点，看着像一道光波往下走。
@@ -121,23 +194,29 @@ final class TiebaSkeletonBoneView: UIView {
     guard on != isShimmering || (on && delay != shimmerDelay) else { return }
     isShimmering = on
     shimmerDelay = delay
-    shimmer.removeAnimation(forKey: "shimmer")
+    shimmer.removeAnimation(forKey: "sweep")
     guard on else { return }
-    let sweep = CAKeyframeAnimation(keyPath: "locations")
-    sweep.values = [
-      [-0.6, -0.44, -0.28] as [NSNumber],
-      [1.28, 1.44, 1.6] as [NSNumber],
-      [1.28, 1.44, 1.6] as [NSNumber],
-    ]
+    if shimmer.contents == nil {
+      refreshShimmerColors()
+    }
+    startSweep()
+  }
+
+  /// 纯合成扫光：`position.x` 从骨块左外侧走到右外侧，末段停住形成两次之间的间隔。
+  private func startSweep() {
+    shimmer.removeAnimation(forKey: "sweep")
+    let band = shimmer.bounds.width
+    let start = -band / 2
+    let end = bounds.width + band / 2
+    let sweep = CAKeyframeAnimation(keyPath: "position.x")
+    // 三档值 + keyTimes：0 → 0.78 走完全程，0.78 → 1 停在画外（两次扫光之间的静默期）。
+    sweep.values = [start, end, end]
     sweep.keyTimes = [0, 0.78, 1]
     sweep.duration = 1.6
     sweep.repeatCount = .infinity
-    sweep.timingFunctions = [
-      CAMediaTimingFunction(name: .easeInEaseOut),
-      CAMediaTimingFunction(name: .linear),
-    ]
-    sweep.beginTime = CACurrentMediaTime() + delay
-    shimmer.add(sweep, forKey: "shimmer")
+    sweep.timingFunctions = [CAMediaTimingFunction(name: .easeInEaseOut)]
+    sweep.beginTime = CACurrentMediaTime() + shimmerDelay
+    shimmer.add(sweep, forKey: "sweep")
   }
 }
 
