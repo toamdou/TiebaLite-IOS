@@ -34,7 +34,10 @@ enum TiebaPageCacheKind: String, Sendable {
   /// 网络失败/首屏 seed 时仍可展示的上限；超过即视为无缓存。
   var maxStale: TimeInterval {
     switch self {
-    case .feed, .forum, .thread, .user: return 24 * 60 * 60
+    case .feed, .forum, .user: return 24 * 60 * 60
+    // 帖子页内容变得快（热帖几分钟就翻几层），旧页拿出来读反而误导；
+    // 6 小时足够覆盖"当天回头再看一眼"，又不会长期占着缓存表。
+    case .thread: return 6 * 60 * 60
     }
   }
 }

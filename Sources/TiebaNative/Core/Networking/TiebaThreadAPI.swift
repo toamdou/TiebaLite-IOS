@@ -151,15 +151,20 @@ struct TiebaThreadFloorPage: Sendable {
 // MARK: - 数据访问
 
 enum TiebaThreadAPI {
-  /// 帖子页：进程内每个 pageKey 首次调用优先读持久缓存（SWR），后续刷新直接
-  /// 走网络；成功写原始 protobuf Data，失败回退最近缓存。缓存键含当前账号、
-  /// thread/page/postId/seeLz/sort，切号或换排序不会串数据。
+  /// 帖子页：优先读持久缓存（SWR），成功写原始 protobuf Data，失败回退最近缓存。
+  /// 缓存键含当前账号、thread/page/postId/seeLz/sort，切号或换排序不会串数据。
+  ///
+  /// `preferCache` 默认 true —— **每次进帖都该先拿缓存**。旧实现在这里有个
+  /// 「本进程同一 scope 只 seed 一次」的闸门，导致退出再进（同一 threadId ⇒ 同一
+  /// scope）第二次直接短路走网络，用户看到的就是「再进一次反而不能秒开」。
+  /// 只有用户主动下拉刷新才传 false（他要的就是最新内容，不能被缓存挡住）。
   static func page(
     threadId: String,
     page: Int,
     postId: String?,
     seeLz: Bool,
-    sort: TiebaThreadSort
+    sort: TiebaThreadSort,
+    preferCache: Bool = true
   ) async throws -> TiebaThreadPage {
     guard threadId.isEmpty == false else { throw TiebaForumAPIError.invalidURL }
     let scope = cacheScope(
@@ -169,7 +174,7 @@ enum TiebaThreadAPI {
       seeLz: seeLz,
       sort: sort
     )
-    if TiebaPageCache.shared.takeInitialSeed(scope: scope),
+    if preferCache,
        let entry = await TiebaPageCache.shared.load(
          scope: scope,
          maxStale: TiebaPageCacheKind.thread.maxStale

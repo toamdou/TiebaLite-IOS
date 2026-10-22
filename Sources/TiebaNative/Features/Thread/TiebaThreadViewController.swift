@@ -242,7 +242,10 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           page: 1,
           postId: self.postId,
           seeLz: self.seeLz,
-          sort: self.sort
+          sort: self.sort,
+          // 首次进入 / 返回本页：先拿缓存，命中即出内容（SWR 再后台补新）。
+          // 只有下拉刷新才绕过缓存。
+          preferCache: !self.isUserRefresh
         )
         self.apply(page, replacing: true, generation: generation)
         if generation == self.loadGeneration, self.isUserRefresh {
@@ -282,7 +285,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           page: 1,
           postId: nil,
           seeLz: self.seeLz,
-          sort: self.sort
+          sort: self.sort,
+          // 换排序/只看楼主是用户显式动作，他要的是按新档位重新拉一遍，不吃缓存。
+          preferCache: false
         )
         self.apply(page, replacing: true, generation: generation, keepMain: true)
         if generation == self.loadGeneration { self.pill.hide() }
@@ -312,7 +317,8 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
           page: self.currentPage + 1,
           postId: nil,
           seeLz: self.seeLz,
-          sort: self.sort
+          sort: self.sort,
+          preferCache: !self.isUserRefresh
         )
         guard generation == self.loadGeneration else { return }
         self.apply(page, replacing: false, generation: generation)
