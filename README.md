@@ -5,7 +5,7 @@
 **第三方百度贴吧 iOS 客户端** ；最低 iOS 17
 
 [![Build iOS Unsigned IPA](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml/badge.svg)](https://github.com/toamdou/TiebaLite-IOS/actions/workflows/build-ipa.yml)
-![Version](https://img.shields.io/badge/version-2.1.1-208AEF)
+![Version](https://img.shields.io/badge/version-2.1.3-208AEF)
 ![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-208AEF)
 ![License](https://img.shields.io/badge/License-GPLv3-blue.svg)
 ![Stack](https://img.shields.io/badge/Swift%206%20%C2%B7%20UIKit-native-blue)
