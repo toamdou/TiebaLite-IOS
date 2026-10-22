@@ -347,9 +347,15 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
       backdropBlur.frame = backdrop.bounds
       backdropBlur.autoresizingMask = [.flexibleWidth, .flexibleHeight]
       backdropBlur.blurRadius = 0.0
+      // 半径 0 时 TiebaBlurView 会把源图**原样**以 aspectFill 铺满整屏 ——
+      // 进场第 0 帧屏上就已经是一张满屏大图，把下面「缩略图放大」那 0.25s 完全盖住，
+      // 用户看到的就是"先缩略图、然后瞬间变大图"。所以从 alpha 0 起，和模糊一起补间：
+      // 起始帧是纯黑底（列表照样被挡住），源图的色晕在放大过程中才慢慢渗出来。
+      backdropBlur.alpha = 0
       backdrop.addSubview(backdropBlur)
       UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseInOut]) {
         backdropBlur.blurRadius = 18.0
+        backdropBlur.alpha = 1
       }
     }
     browser.view.insertSubview(backdrop, at: 0)

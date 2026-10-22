@@ -91,9 +91,19 @@ open class JXZoomPresentAnimator: NSObject, UIViewControllerAnimatedTransitionin
             if !completed {
                 toVC.delegate?.photoBrowser(toVC, setThumbnailHidden: false, at: toVC.pageIndex)
                 toView.removeFromSuperview()
+                zoomView.removeFromSuperview()
+                ctx.completeTransition(false)
+                return
             }
-            zoomView.removeFromSuperview()
-            ctx.completeTransition(completed)
+            // 落地这一步是**换视图**：临时图（缩略图，aspectFill）换成真图（aspectFit）。
+            // 直接 remove 会在同一帧里把内容换掉，看着像"闪一下"；这里 0.12s 交叉淡出，
+            // 让内容替换发生在两帧之间而不是一帧之内。
+            UIView.animate(withDuration: 0.12, delay: 0, options: [.curveEaseOut]) {
+                zoomView.alpha = 0
+            } completion: { _ in
+                zoomView.removeFromSuperview()
+                ctx.completeTransition(true)
+            }
         }
     }
     

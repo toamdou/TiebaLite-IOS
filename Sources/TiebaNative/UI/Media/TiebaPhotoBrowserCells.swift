@@ -165,6 +165,12 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     fullTask?.cancel()
     stopGIFPlayback()
     imageView.image = nil
+    // 大图还没到，但接口给了真实宽高：先把几何摆成"它最终会占的矩形"，
+    // 进入转场才能拿到正确终点（否则只能按缩略图长宽比猜，落地再跳一下）。
+    contentSizeHint = item.width > 0 && item.height > 0
+      ? CGSize(width: item.width, height: item.height)
+      : nil
+    adjustImageViewFrame()
     scrollView.setZoomScale(scrollView.minimumZoomScale, animated: false)
     // 旧查看器缩放域 1~5、双击 3x（parts.tsx useZoomGesture maxScale:5 /
     // doubleTapConfig defaultScale:3）；框架默认上限 3.0，这里对齐旧值。

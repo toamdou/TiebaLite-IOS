@@ -229,6 +229,15 @@ open class JXZoomImageCell: UICollectionViewCell, UIScrollViewDelegate, JXPhotoB
         return (scrollSize.width > 0 && scrollSize.height > 0) ? scrollSize : cellSize
     }
 
+    /// 图片还没到时的**已知内容尺寸**（接口下发的宽高）。
+    ///
+    /// 进入转场要拿「大图最终会落在哪个矩形」当终点。没有它时图片是异步到的、
+    /// `imageView.bounds == .zero`，转场器只能拿**缩略图的长宽比**去猜终点 ——
+    /// 于是动画停在一个不对的矩形上，落地那一帧真图再跳到正确矩形（用户看到的
+    /// "先缩略图大小、然后瞬间变成大图大小"）。给了 hint 之后终点就是真矩形，
+    /// 落地只剩内容替换、没有几何跳变。
+    open var contentSizeHint: CGSize?
+
     /// 根据图片实际尺寸，更新基础内容尺寸。
     /// 根据 isShortEdgeFit 状态选择缩放方式：
     /// - false: scaleAspectFit（长边铺满容器，短边等比例缩放，居中展示）
@@ -236,16 +245,22 @@ open class JXZoomImageCell: UICollectionViewCell, UIScrollViewDelegate, JXPhotoB
     open func adjustImageViewFrame() {
         let containerSize = effectiveContentSize
         guard containerSize.width > 0, containerSize.height > 0 else { return }
-        
-        guard let image = imageView.image, image.size.width > 0, image.size.height > 0 else {
-            // 图片未加载时不再先铺满容器，避免先拉伸后收缩的闪动
+
+        let imageSize: CGSize
+        if let image = imageView.image, image.size.width > 0, image.size.height > 0 {
+            imageSize = image.size
+        } else if let hint = contentSizeHint, hint.width > 0, hint.height > 0 {
+            // 图片未到但知道真实比例：按它摆位（内容仍是空的，几何先对）。
+            imageSize = hint
+        } else {
+            // 连比例都不知道时不再先铺满容器，避免先拉伸后收缩的闪动
             zoomContentView.frame = .zero
             imageView.frame = .zero
             scrollView.contentSize = .zero
             return
         }
 
-        let contentSize = baseContentSize(for: containerSize, imageSize: image.size)
+        let contentSize = baseContentSize(for: containerSize, imageSize: imageSize)
         zoomContentView.frame = CGRect(origin: .zero, size: contentSize)
         imageView.frame = zoomContentView.bounds
         scrollView.contentSize = contentSize
