@@ -605,6 +605,12 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
       TiebaClipboard.setString(post.plainText.isEmpty ? "[图片/视频/音频]" : post.plainText)
       TiebaSceneHaptics.fire("action-success")
       pill.showResult(success: true, text: "已复制")
+    case .copyTitle:
+      let title = (thread?.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      guard title.isEmpty == false else { return }
+      TiebaClipboard.setString(title)
+      TiebaSceneHaptics.fire("action-success")
+      pill.showResult(success: true, text: "已复制标题")
     case .share:
       share(post: post)
     case .copyLink:

@@ -570,6 +570,8 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
       toggleAgree(post, objType: 2)
     case .copyContent:
       copyContent(post)
+    case .copyTitle:
+      copyTitle()
     case .share:
       share(post: post)
     case .copyLink:
@@ -607,6 +609,8 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
       toggleAgree(post, objType: 1)
     case .copyContent:
       copyContent(post)
+    case .copyTitle:
+      copyTitle()
     case .share:
       share(post: post)
     case .copyLink:
@@ -627,6 +631,15 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     TiebaClipboard.setString(post.plainText.isEmpty ? "[图片/视频/音频]" : post.plainText)
     TiebaSceneHaptics.fire("action-success")
     pill.showResult(success: true, text: "已复制")
+  }
+
+  /// 本页没有标题块（父楼是 context 角色、不画标题），标题取自进页时带的 threadTitle。
+  private func copyTitle() {
+    let title = threadTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard title.isEmpty == false else { return }
+    TiebaClipboard.setString(title)
+    TiebaSceneHaptics.fire("action-success")
+    pill.showResult(success: true, text: "已复制标题")
   }
 
   // MARK: - 动作

@@ -18,6 +18,8 @@ enum TiebaPostRowEvent: Sendable {
   /// 排序档位选择（药丸弹菜单，直接选热门/正序/倒序，不再循环）。
   case selectSort(TiebaThreadSort)
   case copyContent
+  /// 复制主贴标题（长按标题弹的菜单项）。
+  case copyTitle
   case share
   case copyLink
   case delete

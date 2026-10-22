@@ -335,6 +335,9 @@ public final class TiebaTextSelectionNode: UIView {
                 ($0.lowerBound, $0.upperBound)
             }
             self.updateSelection(range: resultRange, animateIn: true)
+            // 长按进选择必须有触感：这是「操作已生效」的唯一即时反馈，
+            // 菜单要等下一帧才弹出来，中间那一下没有震动会让人以为没按到。
+            TiebaSceneHaptics.fire("long-press")
             self.displayMenu()
             self.recognizer?.isSelecting = true
             self.updateIsActive(true)

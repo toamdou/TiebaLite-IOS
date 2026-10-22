@@ -86,6 +86,9 @@ final class TiebaPostRowView: UIView {
   private var linkPressRecognizer: UILongPressGestureRecognizer?
   private var selectionMenu: UIMenu?
   private var selectionMenuInteraction: UIEditMenuInteraction?
+  /// 主贴标题的长按菜单（标题是 UILabel，不走正文的 TextNode 选择层，单独挂一套）。
+  private var titleMenu: UIMenu?
+  private var titleMenuInteraction: UIEditMenuInteraction?
   private let blockedTipView = UIView()
   private let blockedTipLabel = UILabel()
   private let blockedTipIcon = UIImageView()
@@ -502,6 +505,19 @@ final class TiebaPostRowView: UIView {
     titleLabel.numberOfLines = TiebaPostRowLayout.titleLineLimit
     titleLabel.isHidden = true
     titleLabel.accessibilityTraits = .header
+    // 标题是 UILabel（不是 TextNode），默认 isUserInteractionEnabled = false，
+    // 于是「长按标题复制」完全打不到。这里给它挂一套自己的编辑菜单交互：
+    // 长按出「复制标题」，与正文的选词菜单同观感、同触感。
+    titleLabel.isUserInteractionEnabled = true
+    let titlePress = UILongPressGestureRecognizer(
+      target: self,
+      action: #selector(handleTitleLongPress(_:))
+    )
+    titlePress.minimumPressDuration = 0.35
+    titleLabel.addGestureRecognizer(titlePress)
+    let titleMenuInteraction = UIEditMenuInteraction(delegate: self)
+    titleLabel.addInteraction(titleMenuInteraction)
+    self.titleMenuInteraction = titleMenuInteraction
     addSubview(titleLabel)
     addSubview(avatarControl)
     avatarControl.addTarget(self, action: #selector(handleAvatar), for: .touchUpInside)
@@ -1231,6 +1247,25 @@ final class TiebaPostRowView: UIView {
     return visible
   }
 
+  /// 长按标题：出「复制标题」菜单（标题是 UILabel，走不了正文那套选择层）。
+  @objc private func handleTitleLongPress(_ recognizer: UILongPressGestureRecognizer) {
+    guard recognizer.state == .began else { return }
+    let text = titleLabel.attributedText?.string ?? titleLabel.text ?? ""
+    guard text.isEmpty == false else { return }
+    TiebaSceneHaptics.fire("long-press")
+    titleMenu = UIMenu(children: [
+      UIAction(title: "复制标题", image: UIImage(systemName: "doc.on.doc")) { [weak self] _ in
+        self?.onEvent?(.copyTitle)
+      }
+    ])
+    titleMenuInteraction?.presentEditMenu(
+      with: UIEditMenuConfiguration(
+        identifier: nil,
+        sourcePoint: recognizer.location(in: titleLabel)
+      )
+    )
+  }
+
   @objc private func handleMenu() {
     TiebaSceneHaptics.fire("sheet-present")
     let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
@@ -1522,7 +1557,18 @@ extension TiebaPostRowView: @MainActor UIEditMenuInteractionDelegate {
     menuFor configuration: UIEditMenuConfiguration,
     suggestedActions: [UIMenuElement]
   ) -> UIMenu? {
-    selectionMenu ?? UIMenu(children: suggestedActions)
+    // 标题的交互与正文选择层共用本代理，靠 interaction 区分菜单来源。
+    if interaction === titleMenuInteraction { return titleMenu }
+    return selectionMenu ?? UIMenu(children: suggestedActions)
+  }
+
+  func editMenuInteraction(
+    _ interaction: UIEditMenuInteraction,
+    willDismissMenuFor configuration: UIEditMenuConfiguration,
+    animator: any UIEditMenuInteractionAnimating
+  ) {
+    // 菜单收掉就把缓存的那份 UIMenu 放掉：它捕获的是行事件，留着等于替旧行续命。
+    if interaction === titleMenuInteraction { titleMenu = nil }
   }
 }
 //
