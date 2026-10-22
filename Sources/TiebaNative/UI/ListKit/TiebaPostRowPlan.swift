@@ -105,15 +105,20 @@ struct TiebaPostRowPlan {
     // 测量可能在后台队列：不读 UIApplication；用行字体实际 pointSize 判断是否进入
     // accessibility 级大字号（AX1 起 nameFont≈25pt；常规极大档仍 <20pt 左右）。
     let isAX = TiebaPostRowLayout.nameFont.pointSize >= 20
-    let avatarSide = inputs.isMain ? TiebaPostRowLayout.avatarSideMain : TiebaPostRowLayout.avatarSide
+    // 上下文（楼中楼页的父楼）与回复同尺：40pt 主贴头像会让父楼的昵称/正文
+    // 比下面的楼中楼整体右移 18pt，两段内容对不齐。
+    let avatarSide = (inputs.isMain && role != .context)
+      ? TiebaPostRowLayout.avatarSideMain
+      : TiebaPostRowLayout.avatarSide
     // 卡片档下回复也是一张独立白卡；扁平档保留通栏行 + 更大底部留白。
     // 帖子页内部固定扁平：动态页可以用卡片，但楼层/楼中楼不再卡片化。
     let isCardAppearance = false
-    let replyInset: CGFloat = isCardAppearance ? TiebaPostRowLayout.cardMarginH : 16
+    // 扁平档的边距常量下沉到 TiebaPostRowLayout：骨架屏与已知主贴占位卡要读同一份，
+    // 各写各的就会在首包落地时横移（用户实证"卡片突然变扁平"）。
+    let replyInset: CGFloat = isCardAppearance ? TiebaPostRowLayout.cardMarginH : TiebaPostRowLayout.replyInset
     // 帖子页内部固定扁平：主贴不再做悬浮卡面，正文和媒体统一从 16pt 页边距起排。
     let heroInset: CGFloat = 0
     let heroPadding: CGFloat = 16
-    let contextPadding: CGFloat = 20
     let cardW: CGFloat
     let contentX: CGFloat
     let contentW: CGFloat
@@ -123,9 +128,11 @@ struct TiebaPostRowPlan {
       contentX = heroPadding
       contentW = max(cardW - heroPadding * 2, 0)
     case .context:
+      // 上下文与回复共用同一条内容列（头像 16pt、正文 64pt）：父楼和楼中楼列表
+      // 是同一段阅读流，左边不对齐看起来就像父楼整块右偏。
       cardW = width
-      contentX = contextPadding
-      contentW = max(width - contextPadding * 2, 0)
+      contentX = replyInset + avatarSide + 12
+      contentW = max(width - replyInset - contentX, 0)
     case .reply:
       // 回复：头像列固定在左，作者/正文/媒体共用 body 列。
       if isCardAppearance {
@@ -139,7 +146,7 @@ struct TiebaPostRowPlan {
         contentW = max(width - replyInset - contentX, 0)
       }
     }
-    let avatarX: CGFloat = if isReply {
+    let avatarX: CGFloat = if isReply || isContext {
       isCardAppearance ? TiebaPostRowLayout.cardMarginH + TiebaPostRowLayout.cardPadding : replyInset
     } else {
       contentX
@@ -165,10 +172,10 @@ struct TiebaPostRowPlan {
       topPadding = 16
     case .context:
       cardTop = 0
-      topPadding = 18
+      topPadding = TiebaPostRowLayout.replyTopPadding
     case .reply:
       cardTop = isCardAppearance ? TiebaPostRowLayout.cardMarginV : 0
-      topPadding = isCardAppearance ? TiebaPostRowLayout.cardPadding : 14
+      topPadding = isCardAppearance ? TiebaPostRowLayout.cardPadding : TiebaPostRowLayout.replyTopPadding
     }
     var y = cardTop + topPadding
 
@@ -205,7 +212,9 @@ struct TiebaPostRowPlan {
     // 非 AX 保留紧凑横排；任何 badge 放不下就整体下移一行，不再消失或压在昵称上。
     avatarFrame = CGRect(x: avatarX, y: y, width: avatarSide, height: avatarSide)
     let nameFont = inputs.isMain ? TiebaPostRowLayout.nameFontMain : TiebaPostRowLayout.nameFont
-    let nameX = isReply ? contentX : contentX + avatarSide + TiebaPostRowLayout.avatarGap
+    let nameX = (isReply || isContext)
+      ? contentX
+      : contentX + avatarSide + TiebaPostRowLayout.avatarGap
 
     let actionFont = TiebaPostRowLayout.actionFont
     let likeText = inputs.likeText
@@ -687,8 +696,8 @@ struct TiebaPostRowPlan {
     let cardBottomPadding: CGFloat
     switch role {
     case .hero: cardBottomPadding = 18
-    case .context: cardBottomPadding = 18
-    case .reply: cardBottomPadding = isCardAppearance ? TiebaPostRowLayout.cardPadding : 20
+    case .context: cardBottomPadding = TiebaPostRowLayout.replyBottomPadding
+    case .reply: cardBottomPadding = isCardAppearance ? TiebaPostRowLayout.cardPadding : TiebaPostRowLayout.replyBottomPadding
     }
     let cardBottom = y + cardBottomPadding
     cardFrame = CGRect(

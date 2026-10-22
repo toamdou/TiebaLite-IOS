@@ -27,15 +27,14 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
   private let parentHost = UIView()
   private let parentSurface = UIView()
   private let parentRow = TiebaPostRowView()
-  private let groupHeaderView = UIView()
-  private let contextCountLabel = UILabel()
   private let emptySurface = UIView()
   private let conversationEmptyView = UIContentUnavailableView(configuration: .empty())
   private var parentModel: TiebaPostRowModel?
   private var parentHeightConstraint: NSLayoutConstraint?
   private var parentLeadingConstraint: NSLayoutConstraint?
   private var parentTrailingConstraint: NSLayoutConstraint?
-  private var groupHeaderHeightConstraint: NSLayoutConstraint?
+  /// 父楼当前的上移量（= 列表滚动量，钳在 0…父楼高）。见 updateParentHeaderOffset。
+  private var lastParentTravel: CGFloat = 0
   private var emptyLeadingConstraint: NSLayoutConstraint?
   private var emptyTrailingConstraint: NSLayoutConstraint?
 
@@ -96,33 +95,19 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     }
     parentSurface.addSubview(parentRow)
 
-    groupHeaderView.translatesAutoresizingMaskIntoConstraints = false
-    groupHeaderView.backgroundColor = .systemBackground
-    parentHost.addSubview(groupHeaderView)
-
-    contextCountLabel.font = TiebaPostRowLayout.replyCountFont
-    contextCountLabel.textColor = TiebaAccessibleColors.metadata
-    contextCountLabel.numberOfLines = 1
-    contextCountLabel.accessibilityTraits = [.header, .staticText]
-    contextCountLabel.translatesAutoresizingMaskIntoConstraints = false
-    groupHeaderView.addSubview(contextCountLabel)
-
-    let height = parentHost.heightAnchor.constraint(
-      equalToConstant: groupHeaderHeight + 28
-    )
+    let height = parentHost.heightAnchor.constraint(equalToConstant: 0)
+    // 父楼与下面的楼中楼共用同一条内容列：外边距 0，头像由行自己的 16pt 内白给。
     let leading = parentSurface.leadingAnchor.constraint(
       equalTo: parentHost.leadingAnchor,
-      constant: 12
+      constant: 0
     )
     let trailing = parentSurface.trailingAnchor.constraint(
       equalTo: parentHost.trailingAnchor,
-      constant: -12
+      constant: 0
     )
     parentHeightConstraint = height
     parentLeadingConstraint = leading
     parentTrailingConstraint = trailing
-    let headerHeight = groupHeaderView.heightAnchor.constraint(equalToConstant: groupHeaderHeight)
-    groupHeaderHeightConstraint = headerHeight
     NSLayoutConstraint.activate([
       topBackdrop.topAnchor.constraint(equalTo: view.topAnchor),
       topBackdrop.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -139,14 +124,6 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
       parentRow.trailingAnchor.constraint(equalTo: parentSurface.trailingAnchor),
       parentRow.topAnchor.constraint(equalTo: parentSurface.topAnchor),
       parentRow.bottomAnchor.constraint(equalTo: parentSurface.bottomAnchor),
-      groupHeaderView.topAnchor.constraint(equalTo: parentSurface.bottomAnchor, constant: 12),
-      groupHeaderView.leadingAnchor.constraint(equalTo: parentHost.leadingAnchor),
-      groupHeaderView.trailingAnchor.constraint(equalTo: parentHost.trailingAnchor),
-      headerHeight,
-      groupHeaderView.bottomAnchor.constraint(equalTo: parentHost.bottomAnchor, constant: -8),
-      contextCountLabel.leadingAnchor.constraint(equalTo: parentSurface.leadingAnchor, constant: 20),
-      contextCountLabel.trailingAnchor.constraint(equalTo: parentSurface.trailingAnchor, constant: -20),
-      contextCountLabel.centerYAnchor.constraint(equalTo: groupHeaderView.centerYAnchor),
     ])
 
     emptySurface.translatesAutoresizingMaskIntoConstraints = false
@@ -206,21 +183,20 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
       conversationEmptyView.topAnchor.constraint(equalTo: emptySurface.topAnchor),
       conversationEmptyView.bottomAnchor.constraint(equalTo: emptySurface.bottomAnchor),
     ])
+    // 状态栏那块底色必须压在最上：父楼会随滚动上移，不挡住它就会从
+    // 半透明导航栏下面穿出来。
+    view.bringSubviewToFront(topBackdrop)
     // 固定父楼/空态/浮条都是阅读层；toast 必须始终在最上。
     view.bringSubviewToFront(pill)
   }
 
-  /// 组头（「全部 N 条回复」）的固定行高：与 `contextCountLabel` 的行盒同一口径，
-  /// 只多 6pt 上下呼吸。父楼高度约束按它算，字号档位变化后摘要不会被裁。
-  private var groupHeaderHeight: CGFloat {
-    ceil(TiebaPostRowLayout.replyCountFont.lineHeight) + 6
-  }
-
   /// 父楼摘要落地：`nil` = 没有父楼（藏宿主并把高度压到 0）。
   ///
-  /// 高度 = 8(上留白) + 父楼行高 + 12(间隙) + 组头高 + 8(下留白)，与
-  /// `installParentContext` 里那串约束一一对应；只改约束常量、不重建视图，
-  /// 所以点赞/主题切换都不会重绑父楼行。
+  /// 高度 = 8(上留白) + 父楼行高 + 8(下留白)，与 `installParentContext` 里的
+  /// 约束一一对应；只改约束常量、不重建视图，所以点赞/主题切换都不会重绑父楼行。
+  ///
+  /// 这里不再有「全部 N 条回复」组头：用户已经在这一页里了，那句话是纯噪声
+  ///（页标题已经写着「第 N 楼」，条数在分页里自然会看得到）。
   private func applyParentContext(model: TiebaPostRowModel?) {
     parentModel = model
     guard let model else {
@@ -230,18 +206,21 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     }
     parentHost.isHidden = false
     parentRow.apply(model: model)
-    parentHeightConstraint?.constant = model.measuredHeight + groupHeaderHeight + 28
-    updateGroupHeader(total: max(floorPost?.subPostNum ?? 0, subPosts.count))
+    parentHeightConstraint?.constant = model.measuredHeight + 16
+    // 高度变了要按新高度重新钳一次上移量：点赞/换字号会让父楼长高，
+    // 此时如果已经滚走，直接 isHidden=false 会把父楼"弹"回屏幕。
+    applyParentHeaderOffset()
   }
 
-  /// 组头文案：服务端回吐的 `subPostNum` 与本地已收条数取大者——
-  /// 分页没走完时 `subPostNum` 才是真实总数，走完了两者一致。
-  private func updateGroupHeader(total: Int) {
-    let text = total > 0 ? "全部 \(total) 条回复" : "暂无回复"
-    if contextCountLabel.text != text {
-      contextCountLabel.text = text
-    }
-    contextCountLabel.accessibilityLabel = text
+  /// 按 lastParentTravel 落一次父楼位移与显隐（高度变化后也要重算）。
+  private func applyParentHeaderOffset() {
+    guard parentModel != nil else { return }
+    let height = parentHeightConstraint?.constant ?? 0
+    guard height > 0 else { return }
+    let travel = min(lastParentTravel, height)
+    parentHost.transform = CGAffineTransform(translationX: 0, y: -travel)
+    // 完全滑出后藏起来：列表回弹时父楼不该在内容上再露一条边。
+    parentHost.isHidden = travel >= height - 0.5
   }
 
   /// 有父楼但没有楼中楼：父楼摘要继续钉在顶部，只有 conversation 区换空态。
@@ -278,12 +257,8 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     parentSurface.layer.borderColor = UIColor.clear.cgColor
     parentSurface.layer.shadowOpacity = 0
     parentSurface.layer.shadowPath = nil
-    groupHeaderView.backgroundColor = .systemBackground
     emptySurface.backgroundColor = .clear
     emptySurface.layer.borderColor = UIColor.clear.cgColor
-    if parentModel != nil {
-      updateGroupHeader(total: max(floorPost?.subPostNum ?? 0, subPosts.count))
-    }
   }
 
   // MARK: - 生命周期
@@ -296,6 +271,9 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     configureSharedList()
     // conversation 行自带克制 hairline；关闭 list 的卡片档行距缝隙，避免双分隔。
     list.separatorHeight = 0
+    list.onScroll = { [weak self] scrollView in
+      self?.updateParentHeaderOffset(scrollView)
+    }
     reload()
   }
 
@@ -303,14 +281,31 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
   override func applyInsets() {
     applyBaseInsets()
     let contextHeight = parentModel == nil ? 0 : (parentHeightConstraint?.constant ?? 0)
-    list.contentInsetTop = view.safeAreaInsets.top
-      + (contextHeight > 0 ? contextHeight + 8 : 0)
+    // 顶部让出父楼那一块（父楼随后会随滚动一起滑走，见 updateParentHeaderOffset）。
+    list.contentInsetTop = view.safeAreaInsets.top + contextHeight
     list.contentInsetBottom = view.safeAreaInsets.bottom + 24
-    let inset = list.horizontalInset + 12
+    // 父楼与列表同一内容列：不再额外收 12pt（收窄会让父楼比下面的楼中楼窄一圈、
+    // 头像/正文整体右偏 12pt —— 用户报的"严重右偏"就是这个）。
+    let inset = list.horizontalInset
     parentLeadingConstraint?.constant = inset
     parentTrailingConstraint?.constant = -inset
     emptyLeadingConstraint?.constant = inset
     emptyTrailingConstraint?.constant = -inset
+  }
+
+  /// 顶部父楼随列表一起滚走。
+  ///
+  /// 父楼仍是"列表之外的固定视图"（不进行排布，分页/命中索引都不用动），
+  /// 但每帧按滚动量整体上移，位移与内容顶严格同步 —— 观感与"父楼是列表第一行"
+  /// 完全一致：用户要求它滑出屏幕，而不是常显。
+  private func updateParentHeaderOffset(_ scrollView: UIScrollView) {
+    guard parentModel != nil else { return }
+    let height = parentHeightConstraint?.constant ?? 0
+    guard height > 0 else { return }
+    let travel = min(max(scrollView.contentOffset.y + scrollView.contentInset.top, 0), height)
+    guard abs(travel - lastParentTravel) > 0.5 else { return }
+    lastParentTravel = travel
+    applyParentHeaderOffset()
   }
 
   override func viewDidLayoutSubviews() {
