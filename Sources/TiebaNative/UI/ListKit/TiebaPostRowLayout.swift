@@ -20,6 +20,12 @@ enum TiebaPostRowLayout {
   static let avatarSide: CGFloat = 36
   static let avatarSideMain: CGFloat = 40
   static let avatarGap: CGFloat = 10
+  /// 帖子页内部固定扁平（见 TiebaPostRowPlan 的 `isCardAppearance = false`）。
+  /// 楼层行没有卡面，这三项就是它**唯一**的边距来源：骨架屏、已知主贴占位卡
+  /// 都必须读这里，否则首包落地会横移/换形状。
+  static let replyInset: CGFloat = 16
+  static let replyTopPadding: CGFloat = 14
+  static let replyBottomPadding: CGFloat = 20
   static let nameRowGap: CGFloat = 3
   static let authorBottom: CGFloat = 12
   static let levelGap: CGFloat = 6
