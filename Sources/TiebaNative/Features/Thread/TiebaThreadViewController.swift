@@ -190,7 +190,9 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   override func applyBaseInsets() {
     super.applyBaseInsets()
     guard knownPostView != nil else { return }
-    skeletonView.contentInsets.top = view.safeAreaInsets.top + TiebaPostRowLayout.cardMarginV
+    // 楼层行是扁平的（无卡面上边距），骨架顶部只让出安全区；
+    // 以前再加一份 cardMarginV(12)，落地时整页会往上跳 12pt。
+    skeletonView.contentInsets.top = view.safeAreaInsets.top
   }
 
   /// 列表自带 refreshControl 且 contentInsetAdjustmentBehavior = .never：顶部内白自补。

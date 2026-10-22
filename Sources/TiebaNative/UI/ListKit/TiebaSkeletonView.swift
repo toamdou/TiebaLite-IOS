@@ -167,13 +167,29 @@ final class TiebaSkeletonBoneView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
+    guard bounds.width > 0, bounds.height > 0 else { return }
     // 光带比骨块宽一倍：渐变图里的高光核心只占 16%，拉伸后 ≈ 骨块宽的 32%（与改造前同宽）。
     // 高度溢出 2.2 倍：旋转后仍能盖满四角，不会在上下边缘露出缺口。
     let bandWidth = max(bounds.width * 2, 32)
     let bandHeight = max(bounds.height * 2.2, 8)
+    let sizeChanged =
+      abs(shimmer.bounds.width - bandWidth) > 0.5
+      || abs(shimmer.bounds.height - bandHeight) > 0.5
+    // 尺寸没变就别碰图层：首屏会走多趟布局（安全区内白、media 高度约束），
+    // 以前每趟都 remove+add 一次无限动画 ⇒ 每趟都从起点重扫，肉眼看到的就是
+    // "扫光一顿一顿"。只有尺寸真的变了才重算起止点。
+    guard sizeChanged || !isShimmering else { return }
+    CATransaction.begin()
+    // 裸 CALayer 改 bounds/position 会带 0.25s 隐式动画，和 position.x 的关键帧
+    // 同时作用在同一属性族上会互相拉扯 —— 显式关掉。
+    CATransaction.setDisableActions(true)
     shimmer.bounds = CGRect(x: 0, y: 0, width: bandWidth, height: bandHeight)
-    shimmer.position = CGPoint(x: bounds.midX, y: bounds.midY)
-    // 尺寸变了，扫光的起止点也得跟着重算（旋转/换变体会走到这里）。
+    // 扫光中 x 由关键帧驱动，这里只对齐 y，别把动画位置写回去。
+    shimmer.position = CGPoint(
+      x: isShimmering ? shimmer.position.x : bounds.midX,
+      y: bounds.midY
+    )
+    CATransaction.commit()
     if isShimmering {
       startSweep()
     }
@@ -461,28 +477,32 @@ final class TiebaSkeletonCellView: UIView {
   // MARK: post（PostCard 同形）
 
   private func buildPost() {
-    // 评审 H8：帖子骨架卡必须用**帖子**那一族的几何（TiebaPostRowLayout），不能借信息流族的常量。
-    // 改前症状：真实楼层卡是 marginH 10 / radius 16（用户反馈"与屏幕两边距离太大"从 16 收到 10），
-    // 骨架却用 feed 族的 16 / 20 ⇒ ① 有快照进帖时，页头里已加载的主贴占位卡（正确用 10）与下方
-    // 5 条骨架行（16）同屏左右边缘不齐；② 无快照/深链进帖时首包落地整块卡每边横移 6pt、圆角收窄。
-    // 改后行为：同一常量源，骨架与真实楼层卡边缘、圆角严丝合缝，落地不再横移。
-    let surface = makeSurface(radius: TiebaPostRowLayout.cardRadius)
-    addSubview(surface)
+    // 帖子页的楼层行在 TiebaPostRowPlan 里是**固定扁平**（`isCardAppearance = false`）：
+    // 通栏、无卡面、无描边、无圆角，内容左内白 16、上 14、下 20，且回复行**没有**
+    // 底部操作条（点赞/更多在作者行内）。
+    //
+    // 骨架以前读 TiebaPostRowLayout.cardMarginH / cardRadius —— 那两个是「外观档」
+    // 的转发，卡片档下是 16 / 14 —— 于是骨架是卡片、首包落地是扁平：整块横移 16pt、
+    // 圆角消失、每格还多出 26pt 高。用户看到的就是"卡片突然变成扁平化"。
+    // 现在骨架直接照抄扁平的几何，落地只换内容不换形状。
+    let container = UIView()
+    container.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(container)
     let inner = UIView()
     inner.translatesAutoresizingMaskIntoConstraints = false
-    surface.addSubview(inner)
+    container.addSubview(inner)
     NSLayoutConstraint.activate([
-      surface.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TiebaPostRowLayout.cardMarginH),
-      surface.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -TiebaPostRowLayout.cardMarginH),
-      surface.topAnchor.constraint(equalTo: topAnchor, constant: TiebaPostRowLayout.cardMarginV),
-      surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -TiebaPostRowLayout.cardMarginV),
-      inner.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: TiebaSkeletonMetrics.postPadding),
-      inner.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -TiebaSkeletonMetrics.postPadding),
-      inner.topAnchor.constraint(equalTo: surface.topAnchor, constant: TiebaSkeletonMetrics.postPadding),
-      inner.bottomAnchor.constraint(equalTo: surface.bottomAnchor, constant: -TiebaSkeletonMetrics.postPadding),
+      container.leadingAnchor.constraint(equalTo: leadingAnchor),
+      container.trailingAnchor.constraint(equalTo: trailingAnchor),
+      container.topAnchor.constraint(equalTo: topAnchor),
+      container.bottomAnchor.constraint(equalTo: bottomAnchor),
+      inner.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: TiebaPostRowLayout.replyInset),
+      inner.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -TiebaPostRowLayout.replyInset),
+      inner.topAnchor.constraint(equalTo: container.topAnchor, constant: TiebaPostRowLayout.replyTopPadding),
+      inner.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -TiebaPostRowLayout.replyBottomPadding),
     ])
 
-    let avatar = makeBlock(radius: TiebaSkeletonMetrics.postAvatar / 2)
+    let avatar = makeBlock(radius: TiebaPostRowLayout.avatarSide / 2)
     let nickBar = makeBar(height: 12, width: 110)
     for view in [avatar, nickBar] {
       inner.addSubview(view)
@@ -490,9 +510,9 @@ final class TiebaSkeletonCellView: UIView {
     NSLayoutConstraint.activate([
       avatar.leadingAnchor.constraint(equalTo: inner.leadingAnchor),
       avatar.topAnchor.constraint(equalTo: inner.topAnchor),
-      avatar.widthAnchor.constraint(equalToConstant: TiebaSkeletonMetrics.postAvatar),
-      avatar.heightAnchor.constraint(equalToConstant: TiebaSkeletonMetrics.postAvatar),
-      nickBar.leadingAnchor.constraint(equalTo: avatar.trailingAnchor, constant: TiebaFeedRowLayout.avatarGap),
+      avatar.widthAnchor.constraint(equalToConstant: TiebaPostRowLayout.avatarSide),
+      avatar.heightAnchor.constraint(equalToConstant: TiebaPostRowLayout.avatarSide),
+      nickBar.leadingAnchor.constraint(equalTo: avatar.trailingAnchor, constant: TiebaPostRowLayout.avatarGap),
       nickBar.centerYAnchor.constraint(equalTo: avatar.centerYAnchor),
     ])
 
@@ -504,29 +524,23 @@ final class TiebaSkeletonCellView: UIView {
     inner.addSubview(body)
     let body1 = makeBar(height: 14)
     let body2 = makeBar(height: 14)
-    let body3 = makeBar(height: 14)
-    for bar in [body1, body2, body3] {
+    for bar in [body1, body2] {
       body.addArrangedSubview(bar)
     }
     body1.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
-    body2.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
-    body3.widthAnchor.constraint(equalTo: body.widthAnchor, multiplier: 0.64).isActive = true
-    let actionBar = makeBar(height: 10)
-    inner.addSubview(actionBar)
-    actionBar.widthAnchor.constraint(equalTo: inner.widthAnchor, multiplier: 0.42).isActive = true
+    body2.widthAnchor.constraint(equalTo: body.widthAnchor, multiplier: 0.64).isActive = true
     NSLayoutConstraint.activate([
-      body.leadingAnchor.constraint(equalTo: inner.leadingAnchor),
+      // 正文列与真实行同源：头像列右边 12pt 起。
+      body.leadingAnchor.constraint(
+        equalTo: inner.leadingAnchor,
+        constant: TiebaPostRowLayout.avatarSide + 12
+      ),
       body.trailingAnchor.constraint(equalTo: inner.trailingAnchor),
       body.topAnchor.constraint(
         equalTo: avatar.bottomAnchor,
         constant: TiebaSkeletonMetrics.postHeaderBottom
       ),
-      actionBar.leadingAnchor.constraint(equalTo: inner.leadingAnchor),
-      actionBar.topAnchor.constraint(
-        equalTo: body.bottomAnchor,
-        constant: TiebaSkeletonMetrics.postActionTop
-      ),
-      actionBar.bottomAnchor.constraint(equalTo: inner.bottomAnchor),
+      body.bottomAnchor.constraint(equalTo: inner.bottomAnchor),
     ])
   }
 

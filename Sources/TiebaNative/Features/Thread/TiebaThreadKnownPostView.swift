@@ -82,15 +82,14 @@ final class TiebaThreadKnownPostView: UIView {
     if snapshot.imageURL != nil {
       TiebaHeroTransition.markImage(imageView, threadId: snapshot.id)
     }
-    // 与真实 Hero 共用同一套 surface token：12pt 页边距、24pt 圆角、无边框，
-    // 避免首包从占位卡切到真实 Hero 时横向收放或圆角跳变。
-    card.layer.cornerRadius = TiebaAccessibleColors.surfaceRadius
+    // 与真实 Hero 同一套几何：帖子页内部固定扁平（TiebaPostRowPlan 的
+    // `isCardAppearance = false`）—— 通栏、无圆角、无描边、无投影，内容左 16。
+    // 以前这里按「卡片」做（12pt 外距 + 24pt 圆角 + 投影），首包落地换成扁平 Hero 时
+    // 整块会横向撑开、圆角消失、投影消失 —— 用户说的"卡片突然变扁平"就是这一步。
+    card.layer.cornerRadius = 0
     card.layer.cornerCurve = .continuous
     card.layer.borderWidth = 0
-    card.layer.shadowColor = UIColor.black.cgColor
-    card.layer.shadowOpacity = 0.08
-    card.layer.shadowRadius = 16
-    card.layer.shadowOffset = CGSize(width: 0, height: 6)
+    card.layer.shadowOpacity = 0
     card.translatesAutoresizingMaskIntoConstraints = false
     addSubview(card)
 
@@ -100,10 +99,10 @@ final class TiebaThreadKnownPostView: UIView {
     stack.spacing = 18 // 与真实 Hero 的 title/author/body 呼吸一致
     stack.isLayoutMarginsRelativeArrangement = true
     stack.directionalLayoutMargins = NSDirectionalEdgeInsets(
-      top: 22,
-      leading: 20,
-      bottom: 22,
-      trailing: 20
+      top: 16,
+      leading: 16,
+      bottom: 18,
+      trailing: 16
     )
     // 占位卡挂在全屏列表顶部，顶部留白由 contentInset.top 承担，不让栈再吃
     // 安全区边距（否则测量/布局两趟差一份安全区高，卡片会被撑开一片空白）。
@@ -206,12 +205,12 @@ final class TiebaThreadKnownPostView: UIView {
     }
 
     NSLayoutConstraint.activate([
-      // 左右边距与真实 Hero 同源：统一 12pt 外距。
-      card.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-      card.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+      // 与真实 Hero 同源：通栏（左右 0），内容边距由 stack 的 16 承担。
+      card.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 0),
+      card.trailingAnchor.constraint(equalTo: trailingAnchor, constant: 0),
       card.topAnchor.constraint(equalTo: topAnchor),
-      // 底部 12 = SkeletonList 的 paddingTop（JS 两个块之间的间距）。
-      card.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+      // 底部留白 = 骨架首格的上内白，两块之间的间距才不会突然变。
+      card.bottomAnchor.constraint(equalTo: bottomAnchor, constant: 0),
       stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
       stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
       stack.topAnchor.constraint(equalTo: card.topAnchor),
