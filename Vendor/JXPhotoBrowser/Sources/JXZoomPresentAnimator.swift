@@ -96,9 +96,10 @@ open class JXZoomPresentAnimator: NSObject, UIViewControllerAnimatedTransitionin
                 return
             }
             // 落地这一步是**换视图**：临时图（缩略图，aspectFill）换成真图（aspectFit）。
-            // 直接 remove 会在同一帧里把内容换掉，看着像"闪一下"；这里 0.12s 交叉淡出，
-            // 让内容替换发生在两帧之间而不是一帧之内。
-            UIView.animate(withDuration: 0.12, delay: 0, options: [.curveEaseOut]) {
+            // 直接 remove 会在同一帧里把内容换掉，看着像"闪一下"；这里 0.18s 交叉淡出，
+            // 让内容替换发生在两帧之间而不是一帧之内。0.12s 太快：缩略图与大图是两张
+            // 不同分辨率的位图，淡出窗口太短时人眼仍读成"突然变清晰"。
+            UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseOut]) {
                 zoomView.alpha = 0
             } completion: { _ in
                 zoomView.removeFromSuperview()

@@ -151,7 +151,13 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
 
   // MARK: 配置 / 加载
 
-  func configure(item: TiebaPhotoItem, index: Int, targetPixelSize: CGSize, containerSize: CGSize) {
+  func configure(
+    item: TiebaPhotoItem,
+    index: Int,
+    targetPixelSize: CGSize,
+    containerSize: CGSize,
+    seedImage: UIImage? = nil
+  ) {
     guard appliedURL != item.url else { return }
     appliedURL = item.url
     hasOrigin = item.originUrl != nil
@@ -164,7 +170,9 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     thumbTask?.cancel()
     fullTask?.cancel()
     stopGIFPlayback()
-    imageView.image = nil
+    // seedImage = 转场起手那张位图（缩放动画结束时屏幕上就是它）。先垫上，
+    // 落地那一帧与动画最后一帧逐像素一致：不会出现"落进黑底、过一会才冒出来"。
+    imageView.image = seedImage
     // 大图还没到，但接口给了真实宽高：先把几何摆成"它最终会占的矩形"，
     // 进入转场才能拿到正确终点（否则只能按缩略图长宽比猜，落地再跳一下）。
     contentSizeHint = item.width > 0 && item.height > 0
@@ -178,6 +186,18 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     doubleTapZoomScale = 3
     wantsLongFit = item.isLongImage(in: containerSize)
     spinner.stopAnimating()
+
+    // 展示档已在内存缓存里（二次进入 / 预取命中）：直接把清晰图当首帧。
+    // 这一格就是转场终点，落地时它已经是最终那张位图 —— 放大动画结束时不会再
+    // "缩略图突然换成大图"。缓存未命中才走下面的两级加载。
+    let displayRequest = TiebaPhotoBrowserImageLoader.request(
+      item,
+      pixelSize: targetPixelSize,
+      containerSize: containerSize
+    )
+    if let cached = TiebaNuke.pipeline.cache[displayRequest] {
+      apply(container: cached, isThumb: false, isGif: false, generation: generation)
+    }
 
     if let thumbRequest = TiebaPhotoBrowserImageLoader.thumbRequest(item.thumbUrl, pixelSize: targetPixelSize) {
       thumbTask = Task { [weak self] in
@@ -370,12 +390,30 @@ final class TiebaPhotoBrowserImageCell: JXZoomImageCell {
     // 首帧静态底走正常赋值（触发一次 JX 布局，长图 fit 依赖首帧尺寸）；
     // 随后的动画帧由 TiebaGIFPlayer 逐帧写入 imageView，播放期间由
     // suppressImageChangeForAnimation 挡住每帧一次的布局重算。
-    imageView.image = container.image
+    //
+    // 垫图 → 大图这一下是**换一张位图**（分辨率、有时连比例都不同）。硬赋值就是
+    // 用户看到的"缩略图放大后突然变成完整大图"：转场刚落地还在看图，半帧之内
+    // 整张内容被替换。改成 0.22s 交叉淡入，替换发生在两帧之间而不是一帧之内。
+    // 不套动画的四种情形：垫图本身 / 之前是空的（没什么可淡）/ 同一实例 /
+    // Reduce Motion / 动图（紧接着就由播放器逐帧写图，淡入没有意义且会和帧写抢图）。
+    let isAnimated = isGif || TiebaNuke.isGIFContainer(container)
+    if isThumb || isAnimated || imageView.image == nil || imageView.image === container.image
+      || UIAccessibility.isReduceMotionEnabled {
+      imageView.image = container.image
+    } else {
+      UIView.transition(
+        with: imageView,
+        duration: 0.22,
+        options: [.transitionCrossDissolve, .allowUserInteraction, .beginFromCurrentState]
+      ) {
+        self.imageView.image = container.image
+      }
+    }
     if isThumb { return }
     fullImageReady = true
     spinner.stopAnimating()
     // [修复] 不再只看 isGif 标志：字节嗅探才是权威判定（服务端对 GIF 无元数据标记）。
-    if (isGif || TiebaNuke.isGIFContainer(container)), let data = container.data {
+    if isAnimated, let data = container.data {
       startGIFPlayback(data: data, identity: gifIdentity)
     }
     // 大图落位后再套长图阅读模式（需要真实像素比例算 fit-width）。

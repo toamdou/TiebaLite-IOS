@@ -459,7 +459,10 @@ final class TiebaPhotoBrowserSession: NSObject, @preconcurrency JXPhotoBrowserDe
       item: displayItem(at: index),
       index: index,
       targetPixelSize: downsamplingPixelSize(for: browser),
-      containerSize: browser.view.bounds.size
+      containerSize: browser.view.bounds.size,
+      // 初始页：把转场起手那张位图当首帧垫上（缩放动画结束时屏幕上就是它），
+      // 落地那一帧与动画最后一帧同源，不会先黑一下再冒出来。其余页正常两级加载。
+      seedImage: index == initialIndex ? sourceThumbnailView?.image : nil
     )
   }
 
