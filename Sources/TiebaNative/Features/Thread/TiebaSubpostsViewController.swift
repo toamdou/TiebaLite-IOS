@@ -118,6 +118,11 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
       parentHost.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       height,
       parentSurface.topAnchor.constraint(equalTo: parentHost.topAnchor, constant: 8),
+      // 下留白必须显式钉住：删掉组头后，原本靠 groupHeaderView 串到 host.bottom 的
+      // 那条链没了，parentSurface 的高度就变成欠约束 —— Auto Layout 会解析成 0，
+      // parentRow 跟着 0 高，行内 clipsToBounds 把内容整块裁掉，只剩 host 的白底
+      // （用户报的"父楼纯白没有内容"）。高度口径 = 8 + 行高 + 8，与 applyParentContext 一致。
+      parentSurface.bottomAnchor.constraint(equalTo: parentHost.bottomAnchor, constant: -8),
       leading,
       trailing,
       parentRow.leadingAnchor.constraint(equalTo: parentSurface.leadingAnchor),
