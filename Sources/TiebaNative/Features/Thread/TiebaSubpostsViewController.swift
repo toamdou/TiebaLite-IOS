@@ -744,8 +744,14 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
   private func share(post: TiebaThreadPost) {
     TiebaSceneHaptics.fire("press")
     let url = threadURL(postId: post.id)
-    let content = threadTitle.isEmpty ? url : "\(threadTitle)\n\(url)"
-    TiebaShareSheet.present(text: content, from: presenterViewController)
+    // 分享文案 = 标题 + 吧名 + 链接（与帖子页同一口径）。
+    var lines: [String] = []
+    let title = threadTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    if title.isEmpty == false { lines.append(title) }
+    let forum = forumName.trimmingCharacters(in: .whitespacesAndNewlines)
+    if forum.isEmpty == false { lines.append("\(forum)吧") }
+    lines.append(url)
+    TiebaShareSheet.present(text: lines.joined(separator: "\n"), from: presenterViewController)
   }
 
   private func threadURL(postId: String) -> String {

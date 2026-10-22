@@ -888,8 +888,15 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private func share(post: TiebaThreadPost?) {
     TiebaSceneHaptics.fire("press")
     let url = post.map { buildThreadUrl(postId: $0.id) } ?? buildThreadUrl(postId: nil)
-    let content = thread?.title.isEmpty == false ? "\(thread?.title ?? "")\n\(url)" : url
-    TiebaShareSheet.present(text: content, from: presenterViewController)
+    // 分享文案 = 标题 + 吧名 + 链接。吧名对收件人是有用信息（判断这是哪个吧的帖子），
+    // 贴在标题下面一行，和吧页分享的「XX吧\n链接」同构。
+    let forumName = thread?.forumName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let title = thread?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    var lines: [String] = []
+    if title.isEmpty == false { lines.append(title) }
+    if forumName.isEmpty == false { lines.append("\(forumName)吧") }
+    lines.append(url)
+    TiebaShareSheet.present(text: lines.joined(separator: "\n"), from: presenterViewController)
   }
 
   private func copyLink(postId: String?) {
