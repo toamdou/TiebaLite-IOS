@@ -82,6 +82,11 @@ extension TiebaFeedRowView {
       singleMediaView.frame = mediaFrame
       stripScrollView.frame = mediaFrame
       stripScrollView.contentSize = CGSize(width: plan.mediaContentWidth, height: mediaFrame.height)
+      // 网格是不可滚的固定格子表：内容偏移必须归零，否则从横滑带切过来时会带着
+      // 上一次的偏移，看着像整块被裁掉一截。
+      if model.mediaIsGrid, stripScrollView.contentOffset != .zero {
+        stripScrollView.contentOffset = .zero
+      }
       if !stripScrollView.isHidden {
         stripCountLabel.frame = CGRect(
           x: mediaFrame.maxX - 8 - stripCountLabel.bounds.width,
@@ -187,7 +192,7 @@ extension TiebaFeedRowView {
     guard let mediaFrame = model.plan.mediaFrame,
           mediaFrame.width > 1, mediaFrame.height > 1,
           mediaFrame.contains(point) else { return nil }
-    guard model.mediaIsStrip else { return (0, mediaFrame) }
+    guard model.mediaIsStrip || model.mediaIsGrid else { return (0, mediaFrame) }
 
     for candidate in stripVisibleFrames(mediaFrame: mediaFrame) where candidate.rect.contains(point) {
       return (candidate.index, candidate.rect)
@@ -203,7 +208,7 @@ extension TiebaFeedRowView {
     guard let mediaFrame = model.plan.mediaFrame,
           mediaFrame.width > 1, mediaFrame.height > 1 else { return nil }
     // 单图：整格即目标（与 mediaHit 的 (0, mediaFrame) 同源）。
-    guard model.mediaIsStrip else { return index == 0 ? mediaFrame : nil }
+    guard model.mediaIsStrip || model.mediaIsGrid else { return index == 0 ? mediaFrame : nil }
     return stripVisibleFrames(mediaFrame: mediaFrame).first { $0.index == index }?.rect
   }
 
@@ -231,7 +236,7 @@ extension TiebaFeedRowView {
   public func mediaImage(at index: Int) -> UIImage? {
     guard let model, !model.isTopBanner, model.showsMedia,
           model.media.indices.contains(index) else { return nil }
-    guard model.mediaIsStrip else {
+    guard model.mediaIsStrip || model.mediaIsGrid else {
       return index == 0 ? singleMediaView.transitionSourceImage : nil
     }
     guard stripItems.indices.contains(index) else { return nil }

@@ -314,6 +314,8 @@ enum TiebaFeedRowBuilder {
     var timestampStyle = "relative"
     var closeMenuOptions: [String] = ["block", "copy-title"]
     var imageContextMenu = false
+    /// Issue #5：多图走网格（设置 → 习惯设置 → 多图网格）。
+    var imageGridLayout = false
     /// 卡片长按菜单（分享帖子/复制帖子内容/不感兴趣/屏蔽作者）开关。
     /// 缺省关：四个动作都由页面执行，只有接线了的页面才该打开（见 TiebaFeedRowModel）。
     var cardContextMenu = false
@@ -328,6 +330,13 @@ enum TiebaFeedRowBuilder {
         fontScale: TiebaTypography.snapshot().bodyScale,
         timestampStyle: TiebaPreferenceSnapshot.string("timestampStyle") ?? "relative"
       )
+      .withImageGrid(TiebaPreferenceSnapshot.bool("imageGridLayout", default: false))
+    }
+
+    func withImageGrid(_ enabled: Bool) -> Options {
+      var copy = self
+      copy.imageGridLayout = enabled
+      return copy
     }
   }
 
@@ -349,6 +358,7 @@ enum TiebaFeedRowBuilder {
     row["timestampStyle"] = options.timestampStyle
     row["closeMenuOptions"] = options.closeMenuOptions
     row["imageContextMenu"] = options.imageContextMenu
+    row["imageGridLayout"] = options.imageGridLayout
     row["cardContextMenu"] = options.cardContextMenu
     row["showForumPill"] = true
     return row

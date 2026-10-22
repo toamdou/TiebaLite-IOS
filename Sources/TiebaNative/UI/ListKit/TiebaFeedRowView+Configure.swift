@@ -322,25 +322,36 @@ extension TiebaFeedRowView {
       self?.onMediaOpen?(index)
     }
 
-    if model.mediaIsStrip {
-      let shown = min(model.media.count, TiebaFeedRowLayout.maxImagesPerRow)
+    if model.mediaIsStrip || model.mediaIsGrid {
+      // 网格与横滑带共用同一组 item 视图（几何都由 plan.mediaItemFrames 给），
+      // 区别只有三处：挂几格、要不要滚、"1/N" 角标还是 "+N"。
+      let shown = model.mediaIsGrid
+        ? min(model.media.count, TiebaPostRowLayout.gridMaxCells)
+        : min(model.media.count, TiebaFeedRowLayout.maxImagesPerRow)
       ensureStripItems(count: shown)
       stripTotalCount = model.media.count
       if !isSameRow {
         stripActiveIndex = 0
       }
       stripScrollView.isHidden = false
-      stripCountLabel.text = "\(min(stripActiveIndex + 1, model.media.count))/\(model.media.count)"
-      stripCountLabel.isHidden = false
-      let countSize = stripCountLabel.sizeThatFits(
-        CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-      )
-      stripCountLabel.bounds = CGRect(
-        x: 0,
-        y: 0,
-        width: countSize.width + 14,
-        height: max(countSize.height, 16)
-      )
+      stripScrollView.isScrollEnabled = model.mediaIsGrid == false
+      if model.mediaIsGrid {
+        // 网格是固定格子表：没有"第几张"的概念，只留末格的 +N。
+        stripCountLabel.isHidden = true
+      } else {
+        stripCountLabel.text = "\(min(stripActiveIndex + 1, model.media.count))/\(model.media.count)"
+        stripCountLabel.isHidden = false
+        let countSize = stripCountLabel.sizeThatFits(
+          CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        )
+        stripCountLabel.bounds = CGRect(
+          x: 0,
+          y: 0,
+          width: countSize.width + 14,
+          height: max(countSize.height, 16)
+        )
+      }
+      let cellRadius: CGFloat = model.mediaIsGrid ? TiebaPostRowLayout.imageRadius : 0
       for (index, item) in stripItems.enumerated() {
         guard index < shown else {
           item.isHidden = true
@@ -353,7 +364,7 @@ extension TiebaFeedRowView {
           media: media,
           isVideoPoster: false,
           remainingCount: index == shown - 1 ? model.media.count - shown : 0,
-          cornerRadius: 0,
+          cornerRadius: cellRadius,
           contentMode: .scaleAspectFill,
           imageContextMenu: model.showsImageContextMenu,
           contextMenuIndex: index,

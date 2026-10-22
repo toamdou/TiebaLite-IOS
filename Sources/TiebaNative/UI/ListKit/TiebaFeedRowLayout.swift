@@ -24,6 +24,10 @@ nonisolated struct TiebaFeedRowBlocks {
   let bodyHeight: CGFloat
   let mediaHeight: CGFloat?
   let mediaIsStrip: Bool
+  /// Issue #5：多图走网格（2 张并排 / 四宫格 / 六宫格）而不是横滑带。
+  let mediaIsGrid: Bool
+  /// 网格要排的格数（含被 +N 折叠的，最多 6）；非网格为 0。
+  let mediaGridCells: Int
   /// 图片带每张图的显示宽（stripHeight × w/h，最多 maxImagesPerRow 张）。
   let mediaItemWidths: [CGFloat]
   let quoteHeight: CGFloat?
@@ -329,6 +333,26 @@ nonisolated enum TiebaFeedRowLayout {
     return min(max(base, stripHeightMin), stripHeightMax).rounded()
   }
 
+  /// Issue #5 网格几何（动态页/吧页/帖子页同一套口径，见 TiebaPostRowPlan 的网格分支）：
+  /// 2 张并排 / 3–4 张四宫格 / 5 张以上六宫格，最多排 6 格，第 6 格挂 +N。
+  /// 格子恒为正方形：九宫格类排布的阅读预期是等大方块，按各图自身比例会排成锯齿。
+  ///
+  /// 高度与每格 frame 必须由**同一个函数**算出来（测量在后台、布局在主线程），
+  /// 各算各的就会出现「行高比内容矮 1pt」这类只在特定宽度复现的裂缝。
+  static func gridMetrics(
+    forCount count: Int,
+    columnWidth: CGFloat
+  ) -> (columns: Int, rows: Int, side: CGFloat, height: CGFloat) {
+    let cells = min(max(count, 1), TiebaPostRowLayout.gridMaxCells)
+    let columns = cells <= 2 ? cells : (cells <= 4 ? 2 : 3)
+    let rows = (cells + columns - 1) / columns
+    let spacing = TiebaPostRowLayout.gridSpacing
+    let width = columnWidth > 0 ? columnWidth : 300
+    let side = max((width - CGFloat(columns - 1) * spacing) / CGFloat(columns), 1)
+    let height = max(CGFloat(rows) * side + CGFloat(max(rows - 1, 0)) * spacing, 1)
+    return (columns, rows, side, height)
+  }
+
   /// 段落属性串（正文/摘要/引用/名字/时间…全行走这一个入口）。
   ///
   /// ⚠️ **段落的 lineBreakMode 必须是 .byWordWrapping，不能写 .byTruncatingTail**
@@ -551,7 +575,27 @@ nonisolated enum TiebaFeedRowLayout {
     var mediaContentWidth: CGFloat = 0
     if let mediaHeight = blocks.mediaHeight {
       let y = nextChildY()
-      if blocks.mediaIsStrip {
+      if blocks.mediaIsGrid {
+        // Issue #5 网格：整块收进正文列（与单图同左界），格子在块内坐标里排。
+        // 高度与格子尺寸都由 gridMetrics 算，和模型测量同源。
+        let metrics = TiebaFeedRowLayout.gridMetrics(
+          forCount: blocks.mediaGridCells,
+          columnWidth: contentW
+        )
+        mediaFrame = CGRect(x: contentX, y: y, width: contentW, height: mediaHeight)
+        let spacing = TiebaPostRowLayout.gridSpacing
+        for index in 0..<blocks.mediaGridCells {
+          mediaItemFrames.append(
+            CGRect(
+              x: CGFloat(index % metrics.columns) * (metrics.side + spacing),
+              y: CGFloat(index / metrics.columns) * (metrics.side + spacing),
+              width: metrics.side,
+              height: metrics.side
+            )
+          )
+        }
+        mediaContentWidth = contentW
+      } else if blocks.mediaIsStrip {
         // 多图带：视口贴卡片左右边（可滑入头像列空白区，卡片 overflow 裁切）；
         // 内容左内边距 = leadInset，首图与文本列左界对齐。
         mediaFrame = CGRect(x: cardX, y: y, width: cardW, height: mediaHeight)

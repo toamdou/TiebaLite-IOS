@@ -743,6 +743,11 @@ final class TiebaPostRowView: UIView {
     // 否则在 cell 里上下拖图会先被这个内嵌滚动视图吃掉手势（外层列表不动，
     // 用户以为卡住了）。横排保持可滑。
     imageScrollView.isScrollEnabled = !plan.imagesGrid
+    // 网格是不可滚的固定格子表：内容偏移必须归零，否则从横排切过来会带着
+    // 上一次的偏移，看着像整块被裁掉一截。
+    if plan.imagesGrid, imageScrollView.contentOffset != .zero {
+      imageScrollView.contentOffset = .zero
+    }
     // 挂载上限：网格与固定父楼一样，以**计划里实际排出来的格数**为准
     //（网格自己把上限收到 6，见 TiebaPostRowPlan）。
     let mountedCap = (plan.role == .context || plan.imagesGrid)

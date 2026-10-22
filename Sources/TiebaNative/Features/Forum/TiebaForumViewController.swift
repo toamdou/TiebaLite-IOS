@@ -466,24 +466,27 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     // 版本串里的字号 = **正文级当前倍率**（新两级体系）。不能再读旧键 fontScale：
     // 新体系只写 bodyFontSize，旧键不跟着动，版本串不变 ⇒ 行缓存把旧字号的整页行
     // 原样吐回来，用户拖完滑杆回吧页"没反应"。
-    let version = "\(rowInputsVersion)|\(TiebaBlockStore.changeVersion)|\(TiebaPreferenceSnapshot.bool("hideMedia", default: false))|\(TiebaPreferenceSnapshot.bool("showIpLocation", default: true))|\(TiebaTypography.snapshot().bodyScale)"
+    // Issue #5：网格开关必须进版本串。只把键塞进行字典、不更新版本串的话，
+    // 切完开关回来版本串没变 ⇒ 命中旧 rowCache ⇒ 整页行原样吐回（"设置开了没反应"）。
+    let version = "\(rowInputsVersion)|\(TiebaBlockStore.changeVersion)|\(TiebaPreferenceSnapshot.bool("hideMedia", default: false))|\(TiebaPreferenceSnapshot.bool("showIpLocation", default: true))|\(TiebaPreferenceSnapshot.bool("imageGridLayout", default: false))|\(TiebaTypography.snapshot().bodyScale)"
     if let cached = rowCache, cached.version == version { return cached.rows }
     let hideMedia = TiebaPreferenceSnapshot.bool("hideMedia", default: false)
     let showIp = TiebaPreferenceSnapshot.bool("showIpLocation", default: true)
+    let imageGrid = TiebaPreferenceSnapshot.bool("imageGridLayout", default: false)
     let fontScale = TiebaTypography.snapshot().bodyScale
     let blockFilter = TiebaPostBlockFilter.load()
     let timeType = semantics(currentTab).timeType
     var rows: [[String: Any]] = []
     for thread in pinnedThreads() {
       if let row = row(thread, timeType: "last", hideMedia: hideMedia, showIp: showIp,
-                       fontScale: fontScale, blockFilter: blockFilter) {
+                       fontScale: fontScale, imageGrid: imageGrid, blockFilter: blockFilter) {
         rows.append(row)
       }
     }
     for thread in buckets[currentTab] {
       guard TiebaSimpleRowParser.bool(thread["isTop"]) != true else { continue }
       if let row = row(thread, timeType: timeType, hideMedia: hideMedia, showIp: showIp,
-                       fontScale: fontScale, blockFilter: blockFilter) {
+                       fontScale: fontScale, imageGrid: imageGrid, blockFilter: blockFilter) {
         rows.append(row)
       }
     }
@@ -498,6 +501,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     hideMedia: Bool,
     showIp: Bool,
     fontScale: Double,
+    imageGrid: Bool,
     blockFilter: TiebaPostBlockFilter
   ) -> [String: Any]? {
     let text = "\(TiebaSimpleRowParser.string(thread["title"]) ?? "") \(TiebaSimpleRowParser.string(thread["abstract"]) ?? "")"
@@ -519,6 +523,7 @@ final class TiebaForumViewController: UIViewController, TiebaNativeScreen {
     // 卡片长按菜单（分享帖子/复制帖子内容/不感兴趣/屏蔽作者）：接线在本页
     // handleMenuAction，与行字典开关同生同灭（见 TiebaFeedRowModel）。
     row["cardContextMenu"] = true
+    row["imageGridLayout"] = imageGrid
     return row
   }
 

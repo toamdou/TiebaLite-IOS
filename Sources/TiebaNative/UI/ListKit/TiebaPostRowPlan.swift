@@ -499,7 +499,8 @@ struct TiebaPostRowPlan {
     }
 
     // ── 图片块（固定父楼只留一条紧凑上下文缩略带；hero / 回复沿用原媒体节奏）──
-    if isContext, inputs.images.isEmpty == false {
+    // 开了多图网格时父楼也走网格：设置是全局口径，唯独父楼还是横排会很割裂。
+    if isContext, inputs.images.isEmpty == false, inputs.imagesGrid == false {
       flushGap()
       let side: CGFloat = 64
       let spacing: CGFloat = 6

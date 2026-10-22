@@ -79,6 +79,11 @@ class TiebaPostListPageController: UIViewController {
   /// 一并改掉，也不能因界面字号变化误重推。
   private var publishedTitleGeneration: UInt64 = .max
 
+  /// 上一次推页时的「多图网格」开关（`imageGridLayout`）。nil = 还没推过。
+  /// 网格会改多图块的几何（横滑带 ↔ 六宫格，行高完全不同），而模型复用判据只比
+  /// 内容指纹与宽度，看不见它 —— 不自己记一份，从设置页开了开关回来整页还是横排。
+  private var publishedImageGrid: Bool?
+
   // MARK: - 子类差异（覆写）
 
   var skeletonVariant: TiebaSkeletonVariant { .row }
@@ -115,10 +120,14 @@ class TiebaPostListPageController: UIViewController {
     let firstAppearance = publishedAppearanceGeneration == .max
     publishedAppearanceGeneration = appearanceGeneration
 
-    // 首次出现只登记世代；返回本页时若外观/正文字号/标题字号任一生效值变化，
-    // 抛弃上一轮模型复用并按新测量链整页重推。
+    // 首次出现只登记世代；返回本页时若外观/正文字号/标题字号/多图网格任一生效值
+    // 变化，抛弃上一轮模型复用并按新测量链整页重推。
+    let imageGrid = TiebaPreferenceSnapshot.bool("imageGridLayout", default: false)
+    let gridChanged = publishedImageGrid != nil && publishedImageGrid != imageGrid
+    publishedImageGrid = imageGrid
     if (firstAppearance == false && appearanceChanged)
       || (firstTypographyAppearance == false && typographyChanged)
+      || gridChanged
     {
       discardReuseMemoForAppearance()
       publish(fresh: true)

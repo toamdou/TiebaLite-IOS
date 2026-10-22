@@ -91,6 +91,8 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
   /// 多图带的统一行高（160…340 钳制），仅多图时有值。
   public let stripHeight: CGFloat?
   public let mediaIsStrip: Bool
+  /// Issue #5：多图网格（2 张并排 / 四宫格 / 六宫格），与横滑带互斥。
+  public let mediaIsGrid: Bool
   public let showsVideoPoster: Bool
   public let showsMedia: Bool
 
@@ -314,13 +316,23 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
     let media = hideMedia ? [] : parsedMedia
     let poster = hideMedia ? nil : videoPosterURL
 
-    let mediaIsStrip = media.count >= 2
+    // Issue #5：设置里开了「多图网格」就把横滑带换成网格。
+    // 开关随行字典下发（`imageGridLayout`）—— 行字典有整页缓存，调用方必须把
+    // 这个键写进版本串，否则切完开关旧页会原样吐回来（用户实测"设置开了没反应"）。
+    let mediaIsGrid = media.count >= 2 && TiebaRowDict.bool(raw["imageGridLayout"]) == true
+    let mediaIsStrip = media.count >= 2 && mediaIsGrid == false
     // MultiImageStrip 先 slice(0, MAX_IMAGES_PER_ROW) 再算行高与单图宽：行高基准
     // 只取挂载上限内的图（第 10 张起只影响 +N 角标）。
     let shownMedia = Array(media.prefix(TiebaFeedRowLayout.maxImagesPerRow))
     var singleMediaHeight: CGFloat?
     var stripHeight: CGFloat?
-    if mediaIsStrip {
+    var gridHeight: CGFloat?
+    var gridCells = 0
+    if mediaIsGrid {
+      let metrics = TiebaFeedRowLayout.gridMetrics(forCount: media.count, columnWidth: textWidth)
+      gridCells = min(media.count, TiebaPostRowLayout.gridMaxCells)
+      gridHeight = metrics.height
+    } else if mediaIsStrip {
       stripHeight = TiebaFeedRowLayout.stripHeight(for: shownMedia, columnWidth: textWidth)
     } else if let first = media.first {
       singleMediaHeight = TiebaFeedRowLayout.singleMediaHeight(for: first, columnWidth: textWidth)
@@ -328,7 +340,7 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
       // 视频 poster：MediaPager heightOf(0) 在无图时兜底 260（MULTI_MEDIA_HEIGHT）。
       singleMediaHeight = TiebaFeedRowLayout.mediaFallbackHeight
     }
-    let mediaHeight = stripHeight ?? singleMediaHeight
+    let mediaHeight = gridHeight ?? stripHeight ?? singleMediaHeight
     let showsMedia = mediaHeight != nil
     // 图片带每张图宽 = 行高 × w/h（MultiImageStrip itemWidths）。
     let mediaItemWidths: [CGFloat] = {
@@ -523,6 +535,8 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
       bodyHeight: bodyHeight,
       mediaHeight: mediaHeight,
       mediaIsStrip: mediaIsStrip,
+      mediaIsGrid: mediaIsGrid,
+      mediaGridCells: gridCells,
       mediaItemWidths: mediaItemWidths,
       quoteHeight: quoteHeight,
       quoteForumHeight: quoteForumLineHeight,
@@ -576,7 +590,8 @@ public nonisolated final class TiebaFeedRowModel: @unchecked Sendable {
     self.singleMediaHeight = singleMediaHeight
     self.stripHeight = stripHeight
     self.mediaIsStrip = mediaIsStrip
-    self.showsVideoPoster = !mediaIsStrip && media.isEmpty && poster != nil
+    self.mediaIsGrid = mediaIsGrid
+    self.showsVideoPoster = !mediaIsStrip && !mediaIsGrid && media.isEmpty && poster != nil
     self.showsMedia = showsMedia
     self.quoteForumText = quoteForumText
     self.quoteTitleText = quoteTitleText

@@ -2096,16 +2096,18 @@ extension TiebaKindListContentView: UICollectionViewDataSourcePrefetching {
         guard let row = feedModel(at: path.item), !row.isTopBanner else { continue }
         append(row.avatarURL, maxPixel: TiebaFeedRowLayout.avatarSize * scale, mode: .fit)
         if row.showsMedia {
-          if row.mediaIsStrip {
+          if row.mediaIsStrip || row.mediaIsGrid {
             // 带的显示目标 = 帧计划里那一格的真实尺寸（与展示侧 loadDisplay 同口径）。
             // **只预取初始窗口**（可见 + 2 格，口径同 TiebaFeedRowView.extendStripLoadWindow）：
             // 展示侧已经改成懒加载，这里若仍预取全部 9 张，等于把省下的解码又做了一遍。
+            // 网格没有横向滚动，stripPrefetchRange 会把 6 格全算进窗口，正好一次取完。
+            let cellRadius: CGFloat = row.mediaIsGrid ? TiebaPostRowLayout.imageRadius : 0
             for index in stripPrefetchRange(row) {
               let media = row.media[index]
               appendDisplay(
                 media.url,
                 size: row.plan.mediaItemFrames[index].size,
-                radius: 0
+                radius: cellRadius
               )
             }
           } else {

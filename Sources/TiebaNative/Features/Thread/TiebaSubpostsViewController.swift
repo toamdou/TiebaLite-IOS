@@ -434,6 +434,12 @@ final class TiebaSubpostsViewController: TiebaPostListPageController, TiebaNativ
     publish(fresh: replacing)
   }
 
+  /// 外观/字号/网格开关变化后重推之前：父楼模型单独挂在列表之外，它的重建判据
+  /// 只有宽度与帖子 id，看不见这些偏好 —— 不清掉就会拿旧几何顶回去。
+  override func discardReuseMemoForAppearance() {
+    parentModel = nil
+  }
+
   override var driverKeyPrefix: String { "subposts-\(threadId)-\(postId)" }
 
   /// 后台测量结果盒：prepare 在 detached 上写、land 在主线程读，同一 Task 内顺序 await。
