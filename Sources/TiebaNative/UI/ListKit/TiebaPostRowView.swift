@@ -243,9 +243,13 @@ final class TiebaPostRowView: UIView {
       levelLabel.frame = frame
       // 文案由 plan 决定（头衔放不下时它已退成「Lv.N」）。
       levelLabel.text = plan.levelRenderText ?? model.levelText
-      // 等级不再使用彩虹色；所有等级徽标统一为中性小 chip，只保留楼主为品牌蓝强调。
-      levelLabel.textColor = model.palette.text
-      levelLabel.backgroundColor = .tertiarySystemFill
+      // 等级色恢复 Kotlin getIconColorByLevel + greifyColor(0.2) 的分档：
+      // Lv1-3 青 / 4-9 蓝 / 10-15 橙 / 16-18 深橙 / 其余灰，字用等级色、底用 25% 同色。
+      // 上一版统一成中性灰 chip 是把「颜色系统」误用到了语义色上：等级色不是主题色，
+      // 它本身就是信息（一眼分辨老吧友/新号），不能跟着主题走。
+      let levelTint = model.levelColor ?? model.palette.text
+      levelLabel.textColor = levelTint
+      levelLabel.backgroundColor = levelTint.withAlphaComponent(0.25)
     }
     lzLabel.isHidden = plan.lzFrame == nil
     if let frame = plan.lzFrame {
