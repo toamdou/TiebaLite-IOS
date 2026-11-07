@@ -741,15 +741,28 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   /// 收藏态落 UI（乐观写入与失败回滚**同一份**）：isCollected + 浮条星标。
   private func applyCollectedState(_ value: Bool) {
     isCollected = value
+    syncFloatingBar()
+  }
+
+  /// 浮条（底栏）三态落 UI：赞/踩数、已赞、已收藏。thread 尚未回来时按未赞/0 显示。
+  private func syncFloatingBar() {
     floatingBar.configure(
       hasAgree: thread?.hasAgree ?? false,
       zanNum: thread?.zanNum ?? 0,
-      isCollected: value,
+      isCollected: isCollected,
       palette: list.palette.base
     )
   }
 
   private func toggleAgree(_ post: TiebaThreadPost) {
+    // 主贴（1 楼）的赞在服务端是**帖级赞**：obj_type=3 + 首楼 pid。拿 obj_type=1 打首楼
+    // 会被服务端按"楼层不存在"拒绝——issue #13 反馈的"帖子页主贴右上角红心 100% 失败"，
+    // 而底栏浮条用同一个 pid + obj_type=3 是成功的。所以主贴红心改走帖级链路，
+    // 并同步翻转/回滚浮条与主贴行两处显示，避免两个显示面状态漂移。
+    if let mainPost, post.id == mainPost.id {
+      agreeMainPost(post)
+      return
+    }
     guard requireLogin(), runOnce("agree:\(post.id)") else { return }
     let next = !post.isAgree
     patchPost(post.id) {
@@ -778,6 +791,55 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
         pill.showResult(success: false, text: "点赞失败，请稍后重试")
       }
     }
+  }
+
+  /// 主贴红心 = 帖级点赞（见 toggleAgree 顶部注释）：与底栏浮条同一条链路，
+  /// 额外同步主贴行的 isAgree/agreeNum（两处显示同一个"已赞"状态）。
+  private func agreeMainPost(_ post: TiebaThreadPost) {
+    guard requireLogin(), runOnce("threadAgree") else { return }
+    TiebaSceneHaptics.fire("like")
+    // 优先信 thread（浮条的数据源）；线程信息还没回来时退回主贴行自己。
+    let next = !(thread?.hasAgree ?? post.isAgree)
+    applyAgreeState(next, toMainPostId: post.id)
+    Task { @MainActor in
+      defer { finishOnce("threadAgree") }
+      do {
+        try await TiebaThreadActionAPI.setAgree(
+          threadId: threadId,
+          postId: firstFloorPostId.isEmpty ? threadId : firstFloorPostId,
+          agree: next,
+          objType: 3
+        )
+        TiebaSceneHaptics.fire("action-success")
+        pill.showResult(success: true, text: next ? "点赞成功" : "已取消点赞")
+      } catch {
+        // 「已经点过赞了」= 目标态已达成（幂等翻转）：保持乐观态不回滚。
+        if let vmError = error as? TiebaViewModelError, vmError.message.contains("点过赞") {
+          TiebaSceneHaptics.fire("action-success")
+          pill.showResult(success: true, text: next ? "点赞成功" : "已取消点赞")
+          return
+        }
+        applyAgreeState(!next, toMainPostId: post.id)
+        TiebaSceneHaptics.fire("action-fail")
+        pill.showResult(success: false, text: "点赞失败，请稍后重试")
+      }
+    }
+  }
+
+  /// 帖级赞的显示态写入（乐观态与失败回滚共用）：thread.hasAgree/zanNum + 浮条 +
+  /// 主贴行的 isAgree/agreeNum。两处显示同一计数，必须一起动。
+  private func applyAgreeState(_ agreed: Bool, toMainPostId mainPostId: String) {
+    if var current = thread {
+      current.hasAgree = agreed
+      current.zanNum = max(0, current.zanNum + (agreed ? 1 : -1))
+      thread = current
+    }
+    patchPost(mainPostId) {
+      $0.isAgree = agreed
+      $0.agreeNum = max(0, $0.agreeNum + (agreed ? 1 : -1))
+    }
+    republishRow(postId: mainPostId)
+    syncFloatingBar()
   }
 
   /// 点赞的单行重建（乐观态与失败回滚同路径）：整页 publish 会把每层楼的富文本
@@ -829,12 +891,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     updated.hasAgree = next
     updated.zanNum = max(0, updated.zanNum + (next ? 1 : -1))
     self.thread = updated
-    floatingBar.configure(
-      hasAgree: updated.hasAgree,
-      zanNum: updated.zanNum,
-      isCollected: isCollected,
-      palette: list.palette.base
-    )
+    syncFloatingBar()
     // 行内容不读 thread.hasAgree/zanNum（浮条是唯一显示面，已在上面 configure），
     // 此前这里的 publish 会触发整页重发布：可见行逐行重贴 attributedText（每个
     // UITextView 一次全文排版，主线程 10-30ms 一卡）——两处 publish 全删。
@@ -862,12 +919,7 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
         rollback.hasAgree = !next
         rollback.zanNum = max(0, rollback.zanNum + (next ? -1 : 1))
         self.thread = rollback
-        floatingBar.configure(
-          hasAgree: rollback.hasAgree,
-          zanNum: rollback.zanNum,
-          isCollected: isCollected,
-          palette: list.palette.base
-        )
+        syncFloatingBar()
         TiebaSceneHaptics.fire("action-fail")
         pill.showResult(success: false, text: "点赞失败，请稍后重试")
       }

@@ -714,13 +714,26 @@ final class TiebaExploreFeedViewController: UIViewController, TiebaTabReselectab
 
     // 与点击同一处解析：回复卡上 id 是 pid，不能当 threadId 发出去（否则赞错对象/请求失败）。
     let target = resolvedThreadTarget(thread)
-    let firstPostId = value(thread, "firstPostId")
+    let knownFirstPostId = value(thread, "firstPostId")
     guard !target.threadId.isEmpty else { return }
-    // 首楼 pid：普通卡缺字段时可用 id 兜（贴吧惯例 tid == 首楼 pid）；回复卡的 id 是**回复 pid**，
-    // 拿它当首楼 pid 会赞错楼 → 这种情况宁可不发这次点赞。
-    let likePostId = firstPostId.isEmpty ? (target.replyPostId == nil ? value(thread, "id") : "") : firstPostId
-    guard !likePostId.isEmpty else { return }
     Task { @MainActor in
+      // 首楼 pid：帖级点赞（obj_type=3）的 post_id 必须是首楼 pid，不能拿帖子 id 顶上
+      //（服务端回"楼层不存在"）——issue #13：分享按钮右侧红心 100% 失败即此。
+      // 推荐流 ThreadInfo 不回首楼字段，缺了就按需解析（帖子页数据缓存可直接命中）。
+      guard let likePostId = await TiebaThreadActionAPI.resolveThreadFirstPostId(
+        threadId: target.threadId,
+        known: knownFirstPostId
+      ) else {
+        likeMirror[id] = latest
+        if let current = items.firstIndex(where: {
+          TiebaSimpleRowParser.string(($0["threadInfo"] as? [String: Any])?["id"]) == id
+        }) {
+          applyLike(current, latest)
+        }
+        TiebaSceneHaptics.fire("action-fail")
+        pill.showResult(success: false, text: "点赞失败，请稍后重试")
+        return
+      }
       do {
         try await TiebaThreadActionAPI.setAgree(
           threadId: target.threadId,

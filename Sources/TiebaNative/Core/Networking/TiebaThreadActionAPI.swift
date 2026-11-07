@@ -23,6 +23,43 @@ enum TiebaThreadActionAPI {
     _ = try await TiebaSocialAPI.signedPost(path: "/c/c/agree/opAgree", fields: fields)
   }
 
+  /// 解析帖级写操作（点赞/收藏）真正的首楼 post id。
+  ///
+  /// 服务端帖级接口（obj_type=3）要求 `post_id` 是**首楼的 post id**，不是帖子 id：
+  /// 拿帖子 id 顶上会回"该楼层不存在"。但推荐流/列表卡的 ThreadInfo 不回
+  /// first_post_id(40)，映射层又不做兜底——卡片的 firstPostId 基本恒为空，
+  /// 旧实现用帖子 id 兜底，点赞就 100% 失败（issue #13：分享按钮右侧红心；
+  /// 帖子页底栏之所以成功，是因为 mainPost.id 就是真首楼 pid）。
+  ///
+  /// 这里按需拉一次帖子第 1 页，从 floor == 1 的楼里取 pid。`known` 不是真首楼 pid
+  /// （空/"0"/等于帖子 id）时一律视为缺失。帖子页数据本身走 TiebaPageCache（SWR），
+  /// 已经打开过的帖子直接命中缓存，不会重复请求。
+  static func resolveThreadFirstPostId(threadId: String, known: String = "") async -> String? {
+    guard !threadId.isEmpty else { return nil }
+    if isUsableFirstFloorPostId(known, threadId: threadId) { return known }
+    guard let page = try? await TiebaThreadAPI.page(
+      threadId: threadId,
+      page: 1,
+      postId: nil,
+      seeLz: false,
+      sort: .asc
+    ) else { return nil }
+    if let first = page.posts.first(where: { $0.floor == 1 })?.id,
+       isUsableFirstFloorPostId(first, threadId: threadId) {
+      return first
+    }
+    if let fromThread = page.thread?.firstPostId,
+       isUsableFirstFloorPostId(fromThread, threadId: threadId) {
+      return fromThread
+    }
+    return nil
+  }
+
+  /// 真首楼 pid 判据：非空、非 "0"、且不等于帖子 id（等于帖子 id 说明是映射层兜底值）。
+  private static func isUsableFirstFloorPostId(_ value: String, threadId: String) -> Bool {
+    !value.isEmpty && value != "0" && value != threadId
+  }
+
   /// 收藏 / 取消收藏（原 JS addStore / removeStore；fid=null 与 user_id 逐字段一致）。
   /// addstore 带 tbs（Kotlin 权威 `(data, tbs, stoken)`；JS 期漏了它，其注释自陈的
   /// "伪成功"即缺 tbs 的表现）。tbs 缺失一律走续期，见 requireTbs 的说明。
