@@ -160,8 +160,23 @@ public final class TiebaKindListContentView: UIView {
       guard contentInsetTop != oldValue else { return }
       // 两份缓存作废与 contentInset 写入都同步做（是后续读的输入，不依赖失效）；
       // 只有布局失效入队。
+      // 静止位一致性（issue #15）：改 contentInset.top **不会**移动内容，内容的
+      // 屏幕位置只由 contentOffset 决定。列表停在顶部时静止位是
+      // contentOffset = -adjustedContentInset.top；若这次内白变化时仍在顶部
+      //（例如楼中楼页 safeAreaInsets/父楼高度在首帧之后才变成最终值），必须把
+      // contentOffset 重新锚到新的静止位，否则内容会相对视口上移一段、首条回复
+      // 被固定在顶部的父楼盖住。
+      let wasAtTop = collectionView.contentOffset.y <= -collectionView.adjustedContentInset.top + 0.5
       headerHeightCache = nil
       applyContentInset()
+      if wasAtTop {
+        withoutScrollCallbacks {
+          collectionView.setContentOffset(
+            CGPoint(x: 0, y: -collectionView.adjustedContentInset.top),
+            animated: false
+          )
+        }
+      }
       geometryInvalidations.invalidate()
       updateVisibleHeader()
     }

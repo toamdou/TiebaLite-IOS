@@ -24,7 +24,10 @@ extension TiebaThreadViewController {
       item.tintColor = TiebaChromeTheme.current.navTint
       return [item]
     }
+    // 头像 + 吧名（issue #8）：只给头像时用户不知道当前是哪个吧，右侧直接带上
+    // 吧名文字（随头像一起作为同一个 bar item 点击进吧）。
     let item = TiebaThreadForumAvatarItem(frame: CGRect(x: 0, y: 0, width: 30, height: 30))
+    item.setForumName(forumName)
     let button = item.button
     button.accessibilityLabel = label
     button.accessibilityHint = "打开吧主页"
@@ -122,26 +125,62 @@ extension TiebaThreadViewController {
 /// iOS 26 会被拉伸（宽 > 高）→ 圆角 15 < 宽/2 即药丸。外壳自己可被拉伸，但把按钮
 /// 恒钉在 30×30 正方里，头像永远是正圆。
 private final class TiebaThreadForumAvatarItem: UIView {
+  private static let avatarSide: CGFloat = 30
+  private static let spacing: CGFloat = 6
+  /// 吧名最大宽度：再长就省略（导航栏右侧两侧都要留出返回按钮的空间）。
+  private static let maxNameWidth: CGFloat = 92
+
   let button = TiebaBarAvatarButton(frame: CGRect(x: 0, y: 0, width: 30, height: 30))
+  private let nameLabel = UILabel()
+  private var contentWidth = TiebaThreadForumAvatarItem.avatarSide
 
   override init(frame: CGRect) {
     super.init(frame: frame)
     addSubview(button)
+    nameLabel.font = TiebaFont.with(size: 13, weight: .semibold)
+    nameLabel.textColor = TiebaChromeTheme.current.navTint
+    nameLabel.lineBreakMode = .byTruncatingTail
+    nameLabel.textAlignment = .left
+    nameLabel.isUserInteractionEnabled = false
+    // 整块 customView 都由按钮 + 文字组成，文字也跟随按钮点击（点在哪都进吧）。
+    addSubview(nameLabel)
   }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-  override var intrinsicContentSize: CGSize { CGSize(width: 30, height: 30) }
+  /// issue #8：头像旁显示吧名（如「iphone吧」→ 已有「吧」后缀时不再重复拼）。
+  func setForumName(_ name: String) {
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+      nameLabel.text = nil
+      contentWidth = Self.avatarSide
+      invalidateIntrinsicContentSize()
+      setNeedsLayout()
+      return
+    }
+    nameLabel.text = trimmed.hasSuffix("吧") ? trimmed : trimmed + "吧"
+    let textWidth = ceil(
+      (nameLabel.text! as NSString).size(
+        withAttributes: [.font: nameLabel.font as Any]
+      ).width)
+    contentWidth = Self.avatarSide + Self.spacing + min(textWidth, Self.maxNameWidth)
+    invalidateIntrinsicContentSize()
+    setNeedsLayout()
+  }
+
+  override var intrinsicContentSize: CGSize { CGSize(width: contentWidth, height: Self.avatarSide) }
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    let side: CGFloat = 30
-    button.frame = CGRect(
-      x: (bounds.width - side) / 2,
-      y: (bounds.height - side) / 2,
-      width: side,
-      height: side
+    let side = Self.avatarSide
+    // 头像钉在最右、文字在左：导航栏右侧 item 的视觉重心与系统返回按钮对称。
+    button.frame = CGRect(x: bounds.width - side, y: (bounds.height - side) / 2, width: side, height: side)
+    nameLabel.frame = CGRect(
+      x: 0,
+      y: 0,
+      width: max(0, bounds.width - side - Self.spacing),
+      height: bounds.height
     )
   }
 }

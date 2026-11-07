@@ -70,7 +70,14 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     let collectSeeLz = TiebaPreferenceSnapshot.bool("collectSeeLz", default: true)
     let collectDescSort = TiebaPreferenceSnapshot.bool("collectDescSort", default: false)
     self.seeLz = seeLz || (fromFavorites && collectSeeLz)
-    self.sort = (fromFavorites && collectDescSort) ? .desc : .hot
+    // 默认回复排序（issue #10）：偏好键 defaultPostSort，value = TiebaThreadSort.rawValue。
+    // 收藏页的"倒序查看"优先于全局默认档。
+    let defaultPostSort = TiebaThreadSort(
+      rawValue: Int(
+        TiebaPreferences.string("defaultPostSort", allowed: ["2", "0", "1"], default: "2")
+      ) ?? TiebaThreadSort.hot.rawValue
+    ) ?? .hot
+    self.sort = (fromFavorites && collectDescSort) ? .desc : defaultPostSort
     self.isCollected = fromFavorites
     super.init(nibName: nil, bundle: nil)
   }

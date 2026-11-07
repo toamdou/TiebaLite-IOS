@@ -12,6 +12,10 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
   private static let sortTypes: [(value: String, label: String)] = [
     ("0", "按回复时间"), ("1", "按发贴时间"),
   ]
+  /// 帖子页回复默认排序（issue #10）；value = TiebaThreadSort.rawValue。
+  private static let postSortTypes: [(value: String, label: String)] = [
+    ("2", "热门"), ("0", "正序"), ("1", "倒序"),
+  ]
   private static let fabFunctions: [(value: String, label: String)] = [
     ("refresh", "刷新"), ("back_to_top", "回到顶部"), ("hide", "不显示"),
   ]
@@ -23,7 +27,8 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
   private static let preferenceKeys = [
     "homePageShowHistoryForum", "forumListSingle", "startTab", "incognitoMode",
     "useBuiltInBrowser",
-    "navBarDoubleTapToTop", "tabBarMinimizeEnabled", "defaultSortType", "hideMedia",
+    "navBarDoubleTapToTop", "tabBarMinimizeEnabled", "defaultSortType", "defaultPostSort",
+    "hideMedia",
     "imageGridLayout",
     "showBothUsername", "showShortcutInThread", "forumFabFunction", "timestampStyle",
     "showIpLocation", "showLevelBadge", "showLevelTitle", "hideBlockedContent", "blockVideo",
@@ -75,6 +80,10 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
       value: TiebaPreferences.string(
         "defaultSortType", allowed: Self.sortTypes.map(\.value), default: "0"))
     form.setValue(
+      id: "defaultPostSort",
+      value: TiebaPreferences.string(
+        "defaultPostSort", allowed: Self.postSortTypes.map(\.value), default: "2"))
+    form.setValue(
       id: "forumFabFunction",
       value: TiebaPreferences.string(
         "forumFabFunction", allowed: Self.fabFunctions.map(\.value), default: "refresh"))
@@ -113,6 +122,8 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
     // 这两个枚举也走白名单（TiebaForumViewController 直接消费，脏值不能直通）。
     let sortType = TiebaPreferences.string(
       "defaultSortType", allowed: Self.sortTypes.map(\.value), default: "0")
+    let postSort = TiebaPreferences.string(
+      "defaultPostSort", allowed: Self.postSortTypes.map(\.value), default: "2")
     let fabFunction = TiebaPreferences.string(
       "forumFabFunction", allowed: Self.fabFunctions.map(\.value), default: "refresh")
 
@@ -158,6 +169,13 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
         rows: [
           toggle("showBothUsername", "显示两个用户名", "person.2.fill", default: false),
           toggle("showShortcutInThread", "贴内显示快捷按钮", "bolt.fill", default: true),
+          TiebaFormRow(
+            id: "defaultPostSort",
+            kind: .picker,
+            title: "帖子回复默认排序",
+            value: postSort,
+            options: options(Self.postSortTypes)
+          ),
           TiebaFormRow(
             id: "forumFabFunction",
             kind: .picker,

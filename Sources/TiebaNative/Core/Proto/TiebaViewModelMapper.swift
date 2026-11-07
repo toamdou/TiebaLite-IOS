@@ -309,6 +309,9 @@ public enum TiebaViewModelMapper {
     // 被推荐的那条回复（"回复了xxx"类卡片）：ThreadInfo.post_id(52) = 回复 pid。
     // 这类卡上 id(1) 不是帖子 id、threadId(2) 才是 —— 导航用 threadId + 这个 pid。
     out["postId"] = str(coalesce(rd["postId"], rd["post_id"], ""))
+    // 帖子/回复已被删除标记（ThreadInfo.is_deleted(181)）。推荐流会把原帖已删的
+    // 卡片继续下发，点进去只剩「帖子已被删除」（issue #14）；feed 过滤要这两个标记。
+    out["isDeleted"] = number(coalesce(rd["isDeleted"], rd["is_deleted"], 0)) != 0
     out["title"] = coalesce(rd["title"], "")!
     out["forumId"] = str(coalesce(rd["forumId"], rd["forum_id"], rd["fid"], forumInfo?["id"], forumDict["id"], ""))
     out["forumName"] = jsOr(resolvedForumName, rd["fname"], "")!
@@ -359,6 +362,8 @@ public enum TiebaViewModelMapper {
         "forumName": coalesce(od["fname"], od["forumName"], "")!,
         // 原帖 thread id（proto tid）：引用卡点击跳原帖用；服务端不回就空串。
         "threadId": coalesce(od["tid"], od["threadId"], od["thread_id"], "")!,
+        // 被引用的原帖是否已删（OriginThreadInfo.is_deleted(9)）。
+        "isDeleted": number(coalesce(od["isDeleted"], od["is_deleted"], 0)) != 0,
         "media": mapMediaList(originRaw),
       ] as [String: Any]
     }

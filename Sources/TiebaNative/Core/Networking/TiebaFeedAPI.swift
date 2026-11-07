@@ -417,6 +417,12 @@ enum TiebaFeedFilter {
     return items.filter { item in
       guard let thread = item["threadInfo"] as? [String: Any] else { return true }
       if filterAds, TiebaViewModelMapper.isAdThreadInfo(thread) { return false }
+      // 无效推荐卡（issue #14）：原帖/被推荐回复已被删除时，服务端仍把卡片下发，
+      // 点进去只有「帖子已被删除」。这类卡对用户是无内容可看的噪声，直接隐藏。
+      let origin = thread["originThreadInfo"] as? [String: Any]
+      if (thread["isDeleted"] as? Bool) == true || (origin?["isDeleted"] as? Bool) == true {
+        return false
+      }
       if !filter.isEmpty {
         let text = "\(thread["title"] as? String ?? "") \(thread["abstract"] as? String ?? "")"
         if filter.isContentBlocked(text) { return false }
