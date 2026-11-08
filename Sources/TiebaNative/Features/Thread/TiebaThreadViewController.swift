@@ -15,7 +15,6 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
   private let postId: String?
   private let fromFavorites: Bool
   let knownSnapshot: TiebaThreadSnapshot?
-  private var knownPostView: TiebaThreadKnownPostView?
   private var seeLz: Bool
   /// 回复排序（三档：热门/正序/倒序）。默认热门——服务端三档里热门是"按热度看帖"
   /// 最常用的入口，正/倒序是浏览顺序。
@@ -97,27 +96,14 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     super.viewDidLoad()
     applyPalette()
     installSharedSubviews()
-    // 主贴预加载占位（原 KnownPostHeader）：只挂在骨架里，首包落地后随骨架一起
-    // 被真实主贴卡替换。
-    if let knownSnapshot {
-      let known = TiebaThreadKnownPostView(snapshot: knownSnapshot)
-      known.applyPalette(list.palette.base)
-      skeletonView.headerView = known
-      knownPostView = known
-    }
+    // 进帖直接显示骨架屏（需求）：不再用列表快照预渲染"已知主贴卡"。
+    // knownSnapshot 仅保留给右上角吧名首帧展示（见 forumBarItems）。
     configureSharedList()
     // 帖子行的 conversation 分隔由 TiebaPostRowPlan 统一画（回复从 body 列起笔），
     // 关闭列表的卡片档行距缝隙，避免双分隔/灰带。
     list.separatorHeight = 0
-    // 转场期给整页轻微压暗（Hero 的 beginWith overlay）：让放大的卡片从背景里浮出来。
-    // 只在本页是"配对目标"（有快照 = 从列表点进来的）时加——深链直达没有源卡片，
-    // 压暗只会让首帧凭空暗一下。
-    if knownSnapshot != nil {
-      TiebaHeroTransition.markBackdrop(view)
-    }
-    // 有已知主贴卡时不放入场动画：那张卡就是列表里被点的那一行，首包落地应当是
-    // 「原地换内容」，而不是行从下往上滑 10pt（用户报的"加载完突然往上瞬移"）。
-    if knownSnapshot != nil { list.entranceAnimationEnabled = false }
+    // 没有已知主贴卡后，进帖转场走系统原生 push（Hero 配对目标已不存在，
+    // 见 TiebaNavigator.armHero），也不再整页压暗；骨架行按常规入场动画出现。
     list.onScroll = { [weak self] scrollView in self?.handleScroll(scrollView) }
     // C1：松手落点若停在"顶部静止位往下 8pt"之内，直接落到静止位。
     // 移植自上游 submodules/ScrollComponent/Sources/ScrollComponent.swift:100-105（contentOffsetWillCommit）：
@@ -188,18 +174,6 @@ final class TiebaThreadViewController: TiebaPostListPageController, TiebaNativeS
     // Conversation reading canvas 与 hero 都回到系统内容面；层级由 hairline/shadow 表达。
     view.backgroundColor = .systemBackground
     list.backgroundColor = .clear
-    knownPostView?.applyPalette(list.palette.base)
-  }
-
-  /// 已知主贴卡的落位与真实主贴卡对齐：真实卡 = 内容顶 + 行内 cardMarginV(4)，
-  /// 骨架的默认内白是 +12 —— 不对齐的话首包落地时整块会往上跳一次（用户实证
-  /// "刚开始位置在正确位置靠下，加载完突然往上顺移"）。
-  override func applyBaseInsets() {
-    super.applyBaseInsets()
-    guard knownPostView != nil else { return }
-    // 楼层行是扁平的（无卡面上边距），骨架顶部只让出安全区；
-    // 以前再加一份 cardMarginV(12)，落地时整页会往上跳 12pt。
-    skeletonView.contentInsets.top = view.safeAreaInsets.top
   }
 
   /// 列表自带 refreshControl 且 contentInsetAdjustmentBehavior = .never：顶部内白自补。

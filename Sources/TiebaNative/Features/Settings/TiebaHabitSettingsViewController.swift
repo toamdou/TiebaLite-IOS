@@ -30,7 +30,8 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
     "navBarDoubleTapToTop", "tabBarMinimizeEnabled", "defaultSortType", "defaultPostSort",
     "hideMedia",
     "imageGridLayout",
-    "showBothUsername", "showShortcutInThread", "forumFabFunction", "timestampStyle",
+    "showBothUsername", "showShortcutInThread", "threadShowForumName", "forumFabFunction",
+    "timestampStyle",
     "showIpLocation", "showLevelBadge", "showLevelTitle", "hideBlockedContent", "blockVideo",
     "filterAdThreads", "collectSeeLz", "collectDescSort",
   ]
@@ -63,6 +64,7 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
     setFlag("imageGridLayout", default: false)
     setFlag("showBothUsername", default: false)
     setFlag("showShortcutInThread", default: true)
+    setFlag("threadShowForumName", default: true)
     setFlag("showIpLocation", default: true)
     setFlag("showLevelBadge", default: true)
     setFlag("showLevelTitle", default: false)
@@ -172,10 +174,13 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
           TiebaFormRow(
             id: "defaultPostSort",
             kind: .picker,
-            title: "帖子回复默认排序",
+            title: "帖子排序规则",
             value: postSort,
             options: options(Self.postSortTypes)
           ),
+          toggle(
+            "threadShowForumName", "帖子页显示吧名", "textformat", default: true,
+            subtitle: "帖子页右上角吧头像旁显示当前吧名（如「iphone吧」）；关闭后只显示头像"),
           TiebaFormRow(
             id: "forumFabFunction",
             kind: .picker,

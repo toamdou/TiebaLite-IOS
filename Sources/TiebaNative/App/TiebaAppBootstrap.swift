@@ -102,6 +102,16 @@ public final class TiebaAppBootstrap {
   /// 与 `tiebalite://<host>/<path>` 同构。
   private func applyLaunchRouteIfNeeded() {
     let args = ProcessInfo.processInfo.arguments
+    // -TiebaRoutePath：直接按内部路由表解析并压栈（深链语法没覆盖的页面，如
+    // settings/habit，仅供无头验证用）。优先级高于 -TiebaRoute。
+    if let flag = args.firstIndex(of: "-TiebaRoutePath"), flag + 1 < args.count {
+      let path = args[flag + 1]
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        let route = TiebaRouteTable.parse(path: path) ?? .notFound(path: path)
+        _ = TiebaNavigator.shared.navigate(route)
+      }
+      return
+    }
     guard let flag = args.firstIndex(of: "-TiebaRoute"), flag + 1 < args.count else { return }
     let route = args[flag + 1]
     guard let url = URL(string: "tiebalite://" + route) else { return }

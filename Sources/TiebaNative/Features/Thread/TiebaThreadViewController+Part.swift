@@ -25,9 +25,11 @@ extension TiebaThreadViewController {
       return [item]
     }
     // 头像 + 吧名（issue #8）：只给头像时用户不知道当前是哪个吧，右侧直接带上
-    // 吧名文字（随头像一起作为同一个 bar item 点击进吧）。
+    // 吧名文字（随头像一起作为同一个 bar item 点击进吧）。吧名文字可由
+    // 「设置 → 贴子 → 帖子页显示吧名」关闭（需求），关闭时只留头像。
+    let showsForumName = TiebaPreferenceSnapshot.bool("threadShowForumName", default: true)
     let item = TiebaThreadForumAvatarItem(frame: CGRect(x: 0, y: 0, width: 30, height: 30))
-    item.setForumName(forumName)
+    item.setForumName(showsForumName ? forumName : "")
     let button = item.button
     button.accessibilityLabel = label
     button.accessibilityHint = "打开吧主页"
@@ -127,6 +129,8 @@ extension TiebaThreadViewController {
 private final class TiebaThreadForumAvatarItem: UIView {
   private static let avatarSide: CGFloat = 30
   private static let spacing: CGFloat = 6
+  /// 胶囊内左右内边距：文字/头像不贴着胶囊边缘（需求：别完全贴着）。
+  private static let horizontalPadding: CGFloat = 6
   /// 吧名最大宽度：再长就省略（导航栏右侧两侧都要留出返回按钮的空间）。
   private static let maxNameWidth: CGFloat = 92
 
@@ -164,7 +168,9 @@ private final class TiebaThreadForumAvatarItem: UIView {
       (nameLabel.text! as NSString).size(
         withAttributes: [.font: nameLabel.font as Any]
       ).width)
-    contentWidth = Self.avatarSide + Self.spacing + min(textWidth, Self.maxNameWidth)
+    contentWidth =
+      Self.horizontalPadding * 2 + Self.avatarSide + Self.spacing
+      + min(textWidth, Self.maxNameWidth)
     invalidateIntrinsicContentSize()
     setNeedsLayout()
   }
@@ -174,12 +180,18 @@ private final class TiebaThreadForumAvatarItem: UIView {
   override func layoutSubviews() {
     super.layoutSubviews()
     let side = Self.avatarSide
+    let pad = Self.horizontalPadding
+    // 只有头像时保持旧的紧凑尺寸（胶囊贴着头像），带吧名时左右各留 pad。
+    let hasName = nameLabel.text?.isEmpty == false
+    let left = hasName ? pad : 0
+    let right = hasName ? pad : 0
     // 头像钉在最右、文字在左：导航栏右侧 item 的视觉重心与系统返回按钮对称。
-    button.frame = CGRect(x: bounds.width - side, y: (bounds.height - side) / 2, width: side, height: side)
+    button.frame = CGRect(
+      x: bounds.width - right - side, y: (bounds.height - side) / 2, width: side, height: side)
     nameLabel.frame = CGRect(
-      x: 0,
+      x: left,
       y: 0,
-      width: max(0, bounds.width - side - Self.spacing),
+      width: max(0, bounds.width - right - side - Self.spacing - left),
       height: bounds.height
     )
   }

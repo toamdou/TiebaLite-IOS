@@ -139,7 +139,7 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
       let nav = TiebaRootNavigationController(rootViewController: host)
       nav.delegate = self
       nav.setNavigationBarHidden(true, animated: false)
-      // Hero 默认关闭，只在"点卡片进帖"那一跳临时开（见 armHero）。
+      // Hero 默认关闭；帖子页改直接骨架屏后连进帖这一跳也不开（见 armHero）。
       // ⚠️ 开启会把现有 delegate 存进 previousNavigationDelegate 并转发 willShow/didShow，
       // 而本仓顶栏系统靠 didShow 驱动 ⇒ 必须先设本仓 delegate 再开 Hero（本行之上已设）。
       nav.hero.navigationAnimationType = .auto
@@ -326,22 +326,20 @@ public final class TiebaNavigator: NSObject, @unchecked Sendable {
     return true
   }
 
-  /// 只有"点信息流/吧页卡片进帖"这一跳开 Hero；其余跳转（进吧、进设置…）走系统原生 push。
-  /// 判据 = 这一刻有没有该帖的快照（只在列表点卡片时写入）——用 peek 只读，消费权归帖子页。
+  /// 当前所有页面跳转都走系统原生 push（Hero 只在"点卡片进帖"那一跳短暂开过，
+  /// 帖子页改为直接骨架屏后配对目标已不存在，见下方实现注释）。
   ///
-  /// 为什么按跳开关：Hero 在没有配对视图时会回落成它自己的 push（整页位移 + 给整棵视图树
-  /// 拍快照），明显慢于系统原生（用户实测"进吧/进设置过渡很卡"）。**返回一律系统原生**：
-  /// 转场结束即关（见 didShow），所以 pop 不会走 Hero。
+  /// 回归说明：Hero 在没有配对视图时会回落成它自己的 push（整页位移 + 给整棵视图树
+  /// 拍快照），明显慢于系统原生（用户实测"进吧/进设置过渡很卡"）。若将来恢复
+  /// "已知主贴预览卡"，再把 fromCard 判据接回来。
   private func armHero(for route: TiebaRoute, target: UINavigationController?) {
     guard let nav = target else { return }
     MainActor.assumeIsolated {
-      var fromCard = false
-      if case .thread(let id, _, _, let fromFavorites) = route, !fromFavorites {
-        fromCard = TiebaThreadSnapshots.peek(id: id) != nil
-      }
-      // 减弱动态效果下回落系统 push：这是全仓幅度最大的页面级动效，其余动效（查看器转场/
-      // 首屏入场/骨架扫光等）都有闸门，唯独这条没有。
-      nav.hero.isEnabled = fromCard && !UIAccessibility.isReduceMotionEnabled
+      // 帖子页已改为"进帖直接骨架屏"（不再有 KnownPostCard 作为 Hero 配对目标）：
+      // Hero 无配对视图会回落成它自己的整页 push（整页位移 + 给整棵视图树拍快照，
+      // 明显慢于系统原生），因此这一跳也改走系统原生 push。
+      // Hero 转场本身未删，将来若恢复"已知主贴预览卡"再把配对逻辑接回来。
+      nav.hero.isEnabled = false
     }
   }
 
