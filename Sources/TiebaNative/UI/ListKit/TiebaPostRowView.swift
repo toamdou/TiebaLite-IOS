@@ -1069,6 +1069,7 @@ final class TiebaPostRowView: UIView {
     toolbarView.layer.cornerCurve = .continuous
     toolbarView.layer.borderWidth = 0
     toolbarView.layer.borderColor = UIColor.clear.cgColor
+    toolbarReplyLabel.numberOfLines = plan.toolbarTextMaxLines
     if let textFrame = plan.toolbarTextFrame {
       toolbarReplyLabel.frame = textFrame
       let reply = TiebaForumFormat.count(toolbar.replyNum)

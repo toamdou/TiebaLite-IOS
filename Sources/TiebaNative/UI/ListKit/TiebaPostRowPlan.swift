@@ -93,6 +93,8 @@ struct TiebaPostRowPlan {
   var toolbarTextFrame: CGRect?
   var toolbarSeeLzFrame: CGRect?
   var toolbarSortFrame: CGRect?
+  /// 工具栏左侧标题最多几行：常规字号固定单行（放不下就截断），AX 纵向布局才允许换行。
+  var toolbarTextMaxLines: Int = 1
 
   init(_ inputs: TiebaPostRowPlanInputs) {
     let width = inputs.containerWidth
@@ -733,9 +735,12 @@ struct TiebaPostRowPlan {
       )
       let titleHeight = titleLineHeight * CGFloat(titleLines)
       let pillsWidth = seeLzWidth + 8 + sortWidth
-      // AX 或常规字号下横向已放不下：masthead 改为纵向，绝不把 tab/标题压成省略号。
-      let verticalToolbar = isAX || pillsWidth + titleWidth + 24 > availableWidth
+      // 常规字号一律单行：标题放不下时截断，绝不把两枚胶囊竖着堆成两行占掉半屏
+      // （用户反馈「只看楼主/热门本来在右边很小，怎么变成左对齐单行占面积」）。
+      // 只有 AX 超大字号、或连两枚胶囊本身都放不下时才纵向堆叠。
+      let verticalToolbar = isAX || pillsWidth + 24 > availableWidth
       if verticalToolbar {
+        toolbarTextMaxLines = min(titleLines, 2)
         var cursorY = toolbarY
         toolbarTextFrame = CGRect(
           x: contentX,
@@ -766,6 +771,7 @@ struct TiebaPostRowPlan {
           height: max(cursorY - toolbarY + 4, pillHitHeight)
         )
       } else {
+        toolbarTextMaxLines = 1
         let toolbarHeight = max(
           TiebaPostRowLayout.toolbarHeight,
           titleLineHeight + 20,
