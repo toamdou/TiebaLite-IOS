@@ -33,7 +33,8 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
     "showBothUsername", "showShortcutInThread", "threadShowForumName", "forumFabFunction",
     "timestampStyle",
     "showIpLocation", "showLevelBadge", "showLevelTitle", "hideBlockedContent", "blockVideo",
-    "filterAdThreads", "collectSeeLz", "collectDescSort",
+    "filterAdThreads", "filterDeletedThreads", "imageFadeIn", "searchImagePortrait916",
+    "collectSeeLz", "collectDescSort",
   ]
 
   /// 观察者是 non-Sendable，deinit 非隔离：与 TiebaHomeViewController 同款声明。
@@ -71,6 +72,9 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
     setFlag("hideBlockedContent", default: false)
     setFlag("blockVideo", default: false)
     setFlag("filterAdThreads", default: true)
+    setFlag("filterDeletedThreads", default: true)
+    setFlag("imageFadeIn", default: true)
+    setFlag("searchImagePortrait916", default: false)
     setFlag("collectSeeLz", default: true)
     setFlag("collectDescSort", default: false)
     form.setValue(
@@ -210,6 +214,15 @@ final class TiebaHabitSettingsViewController: TiebaFormPageController {
           toggle(
             "filterAdThreads", "过滤广告与直播贴", "cup.and.saucer.fill", default: true,
             subtitle: "关闭后信息流与吧内的广告、直播卡片原样展示"),
+          toggle(
+            "filterDeletedThreads", "过滤已删除的动态帖", "trash.slash.fill", default: true,
+            subtitle: "动态流里原帖或引用的回复已删除、点进去只显示「帖子已被删除」的卡片直接隐藏"),
+          toggle(
+            "imageFadeIn", "图片渐显动画", "sparkles", default: true,
+            subtitle: "图片加载完成时淡入；关闭后直接就绪上屏，进帖看图更跟手"),
+          toggle(
+            "searchImagePortrait916", "搜索页图片 9:16", "rectangle.portrait", default: false,
+            subtitle: "搜索结果卡的缩略图按 9:16 竖图比例裁剪，单屏能看到更多信息"),
         ]
       ),
       TiebaFormSection(

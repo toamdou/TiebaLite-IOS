@@ -255,6 +255,20 @@ enum TiebaSearchAPI {
         "index": index,
       ]
     }
+    // issue #16 第 5 点：搜索结果卡图片按 9:16 竖图裁剪，信息密度更高。
+    // 默认关（保持服务端原始宽高比）；设置里打开后把每张图的显示宽高比改成 9:16
+    //（行度量只读宽高比，改 height = width × 16/9 即可，不下载任何额外字节）。
+    if TiebaPreferenceSnapshot.bool("searchImagePortrait916", default: false),
+      var mediaList = thread["mediaList"] as? [[String: Any]]
+    {
+      for index in mediaList.indices {
+        let width = TiebaSimpleRowParser.double(mediaList[index]["width"]) ?? 0
+        let base = width > 0 ? width : 300
+        mediaList[index]["width"] = base
+        mediaList[index]["height"] = base * 16.0 / 9.0
+      }
+      thread["mediaList"] = mediaList
+    }
     var options = TiebaFeedRowBuilder.Options.current()
     options.imageContextMenu = true
     // 搜索结果也走「不感兴趣」三件套（面板 + 上报 + 折叠退场），与动态流同一套菜单项；

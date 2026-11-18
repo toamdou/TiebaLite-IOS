@@ -468,7 +468,10 @@ public enum TiebaNuke {
   ) -> ImageLoadingOptions {
     var options = ImageLoadingOptions()
     options.pipeline = pipeline
-    options.transition = transition ? .fadeIn(duration: 0.2) : nil
+    // issue #11：图片"闪一下"/进帖图片二次渲染。淡入动画是唯一的显示层动效，
+    // 设置里可关（imageFadeIn 默认开）；关闭后图片就绪即直接上屏，不再 0.2s 渐变。
+    let fadeIn = transition && TiebaPreferenceSnapshot.bool("imageFadeIn", default: true)
+    options.transition = fadeIn ? .fadeIn(duration: 0.2) : nil
     options.isProgressiveRenderingEnabled = false
     if let processor {
       options.processors = [processor]
